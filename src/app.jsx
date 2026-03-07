@@ -175,6 +175,8 @@ const GOALS_STORAGE_KEY = "perf_intel_goals_v1";
 const NH_STORAGE_KEY    = "perf_intel_newhires_v1";
 const SHEET_URLS_KEY    = "perf_intel_sheet_urls_v1";
 const DEFAULT_AGENT_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRagC_XDSQ84y25onmWs6MUOZcEdWZNA6fVRRDFUzNWQp3ginYLtOIQsSrwmbAERkOJ-daTvbHqEtoy/pub?gid=667346347&single=true&output=csv";
+const DEFAULT_GOALS_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRagC_XDSQ84y25onmWs6MUOZcEdWZNA6fVRRDFUzNWQp3ginYLtOIQsSrwmbAERkOJ-daTvbHqEtoy/pub?gid=1685208822&single=true&output=csv";
+const DEFAULT_NH_SHEET_URL    = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRagC_XDSQ84y25onmWs6MUOZcEdWZNA6fVRRDFUzNWQp3ginYLtOIQsSrwmbAERkOJ-daTvbHqEtoy/pub?gid=25912283&single=true&output=csv";
 
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -2536,9 +2538,9 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
   const siteActXm  = agents.reduce((s, a) => s + a.xmLines, 0);
 
   // Gainshare attainments for the site (site-tier table)
-  const siteMobileAttain  = sitePlanMetrics ? (totalG       / sitePlanMetrics.goals) * 100 : null;
-  const siteHsdAttain     = sitePlanMetrics ? (siteActHsd   / sitePlanMetrics.hsd)   * 100 : null;
-  const siteCostPerAttain = sitePlanMetrics ? (siteActRgu   / sitePlanMetrics.rgu)   * 100 : null;
+  const siteMobileAttain  = sitePlanMetrics && sitePlanMetrics.goals > 0 ? (totalG       / sitePlanMetrics.goals) * 100 : null;
+  const siteHsdAttain     = sitePlanMetrics && sitePlanMetrics.hsd   > 0 ? (siteActHsd   / sitePlanMetrics.hsd)   * 100 : null;
+  const siteCostPerAttain = sitePlanMetrics && sitePlanMetrics.rgu   > 0 ? (siteActRgu   / sitePlanMetrics.rgu)   * 100 : null;
 
   const regionStats = regions.map(r => {
     const ra = allAgents.filter(a => (a.Region || a.region || "Unknown").trim() === r);
@@ -2566,11 +2568,11 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
     const sitePlanXm    = siteRows.reduce((s, r) => s + computePlanRow(r).xmGoal,    0) || null;
     const sitePlanHours = siteRows.reduce((s, r) => s + computePlanRow(r).hoursGoal, 0) || null;
 
-    const attain = sitePlanGoals ? (totalGoals / sitePlanGoals) * 100 : null;
+    const attain = sitePlanGoals && sitePlanGoals > 0 ? (totalGoals / sitePlanGoals) * 100 : null;
     const hsdAct = pa.reduce((s, a) => s + a.newXI, 0);
-    const hsdAtt = sitePlanHsd  ? (hsdAct / sitePlanHsd) * 100 : null;
+    const hsdAtt = sitePlanHsd && sitePlanHsd > 0  ? (hsdAct / sitePlanHsd) * 100 : null;
     const rguAct = pa.reduce((s, a) => s + a.rgu,   0);
-    const cpAtt  = sitePlanRgu  ? (rguAct / sitePlanRgu) * 100 : null;
+    const cpAtt  = sitePlanRgu && sitePlanRgu > 0  ? (rguAct / sitePlanRgu) * 100 : null;
     const xmAct  = pa.reduce((s, a) => s + a.xmLines, 0);
 
     return { ...p, siteAgents: pa, totalGoals, totalHours, siteGph, distUn, uNames,
@@ -2659,9 +2661,9 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
           costPerAttain={siteCostPerAttain}
           siteMode={true}
           fiscalInfo={fiscalInfo}
-          mobileActual={totalG}      mobilePlan={sitePlanMetrics.goals}
-          hsdActual={siteActHsd}     hsdPlan={sitePlanMetrics.hsd}
-          costPerActual={siteActRgu} costPerPlan={sitePlanMetrics.rgu}
+          mobileActual={totalG}      mobilePlan={sitePlanMetrics?.goals || 0}
+          hsdActual={siteActHsd}     hsdPlan={sitePlanMetrics?.hsd || 0}
+          costPerActual={siteActRgu} costPerPlan={sitePlanMetrics?.rgu || 0}
         />
       )}
 
@@ -5678,9 +5680,12 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
   if (!d) return (
     <div style={{ minHeight: "90vh", display: "flex", alignItems: "center", justifyContent: "center", background: `var(--bg-primary)` }}>
       <div style={{ fontFamily: "monospace", fontSize: "1.05rem", color: `var(--text-dim)`, textAlign: "center" }}>
-        <div style={{ fontSize: "1.8rem", marginBottom: "0.5rem" }}>📡</div>
-        No data available.
-        <div style={{ marginTop: "0.75rem" }}>
+        <div style={{ fontSize: "1.8rem", marginBottom: "0.5rem" }}>{loading ? "\u23F3" : "\uD83D\uDCE1"}</div>
+        {loading ? "Fetching live data..." : "No data available."}
+        <div style={{ marginTop: "0.75rem", display: "flex", gap: "0.5rem", justifyContent: "center" }}>
+          <button onClick={doFetch} style={{ background: "transparent", border: "1px solid #16a34a", borderRadius: "5px", color: "#16a34a", padding: "0.3rem 0.8rem", cursor: "pointer", fontFamily: "monospace", fontSize: "1.11rem" }}>
+            {loading ? "Fetching..." : "Try Auto-Fetch"}
+          </button>
           <button onClick={() => setPasteMode(true)} style={{ background: "transparent", border: "1px solid var(--text-faint)", borderRadius: "5px", color: `var(--text-muted)`, padding: "0.3rem 0.8rem", cursor: "pointer", fontFamily: "monospace", fontSize: "1.11rem" }}>Paste Data</button>
         </div>
       </div>
@@ -5694,15 +5699,23 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.75rem" }}>
         <div>
           <div style={{ fontFamily: "monospace", fontSize: "1.17rem", color: "#16a34a", letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: "0.25rem" }}>
-          ● LIVE · paste fresh data to refresh · last loaded {now}
+          ● LIVE · auto-refreshes every 5 min · last loaded {now}
           </div>
           <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "3rem", color: `var(--text-warm)`, fontWeight: 700 }}>Today's Operations</div>
         </div>
-        <button onClick={() => setPasteMode(true)}
+        <button onClick={async () => {
+            try {
+              await doFetch();
+              // If doFetch succeeded, raw will be updated and paste mode stays off
+              // If it failed silently (caught internally), paste mode was already set
+            } catch(e) {
+              setPasteMode(true);
+            }
+          }}
           style={{ background: "transparent", border: "1px solid var(--text-faint)", borderRadius: "6px",
             color: `var(--text-muted)`, padding: "0.4rem 1rem", fontFamily: "monospace",
             fontSize: "1.11rem", cursor: "pointer" }}>
-          ⟳ Refresh Data
+          {loading ? "Fetching..." : "\u27F3 Refresh Data"}
         </button>
       </div>
 
@@ -6421,8 +6434,8 @@ export default function App() {
     try { localStorage.setItem(SHEET_URLS_KEY, JSON.stringify(urls)); } catch(e) {}
   }, []);
   const agentSheetUrl = sheetUrls.agent || DEFAULT_AGENT_SHEET_URL;
-  const goalsSheetUrl = sheetUrls.goals || "";
-  const nhSheetUrl    = sheetUrls.nh || "";
+  const goalsSheetUrl = sheetUrls.goals || DEFAULT_GOALS_SHEET_URL;
+  const nhSheetUrl    = sheetUrls.nh || DEFAULT_NH_SHEET_URL;
 
   // Goals persisted to localStorage
   const [goalsRaw, _setGoalsRaw] = useState(() => {
@@ -6474,11 +6487,23 @@ export default function App() {
         }
         // Auto-load goals sheet if URL configured
         if (!cancelled && goalsSheetUrl && !goalsRaw) {
-          try { const gRes = await fetch(goalsSheetUrl); if (gRes.ok) { const gRows = parseCSV(await gRes.text()); if (gRows.length > 0) setGoalsRaw(gRows); } } catch(e) {}
+          try {
+            const proxyG = url => `https://corsproxy.io/?${encodeURIComponent(url)}`;
+            let gRes;
+            try { gRes = await fetch(goalsSheetUrl); } catch(e) { gRes = null; }
+            if (!gRes || !gRes.ok) gRes = await fetch(proxyG(goalsSheetUrl));
+            if (gRes.ok) { const gRows = parseCSV(await gRes.text()); if (gRows.length > 0) setGoalsRaw(gRows); }
+          } catch(e) {}
         }
         // Auto-load roster sheet if URL configured
         if (!cancelled && nhSheetUrl && !newHiresRaw) {
-          try { const nRes = await fetch(nhSheetUrl); if (nRes.ok) { const nRows = parseCSV(await nRes.text()); if (nRows.length > 0) setNHRaw(nRows); } } catch(e) {}
+          try {
+            const proxyN = url => `https://corsproxy.io/?${encodeURIComponent(url)}`;
+            let nRes;
+            try { nRes = await fetch(nhSheetUrl); } catch(e) { nRes = null; }
+            if (!nRes || !nRes.ok) nRes = await fetch(proxyN(nhSheetUrl));
+            if (nRes.ok) { const nRows = parseCSV(await nRes.text()); if (nRows.length > 0) setNHRaw(nRows); }
+          } catch(e) {}
         }
       } catch (e) {
         if (!cancelled) setSheetError("Auto-load unavailable — use file upload or paste");
@@ -6592,7 +6617,7 @@ export default function App() {
                 style={{ padding: "0.4rem 1rem", borderRadius: "6px", border: "1px solid var(--border)", background: "transparent", color: `var(--text-muted)`, fontFamily: "monospace", fontSize: "0.95rem", cursor: "pointer" }}>
                 Reset to Defaults
               </button>
-              <button onClick={() => { setShowSettings(false); setRawData(null); }}
+              <button onClick={() => { setShowSettings(false); setRawData(null); setGoalsRaw(null); setNHRaw(null); }}
                 style={{ padding: "0.4rem 1rem", borderRadius: "6px", border: "1px solid #2563eb", background: "#2563eb18", color: "#2563eb", fontFamily: "monospace", fontSize: "0.95rem", cursor: "pointer", fontWeight: 600 }}>
                 Save & Reload
               </button>
