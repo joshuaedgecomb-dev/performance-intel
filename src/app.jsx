@@ -1,4 +1,22 @@
-import { useState, useMemo, useRef, useCallback, useEffect } from "react";
+import React, { useState, useMemo, useRef, useCallback, useEffect, Fragment, Component } from "react";
+
+// ── Error Boundary — catches rendering crashes and shows a recovery UI ──────
+class ErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ padding: "2rem", fontFamily: "monospace", color: "#dc2626", background: "#fef2f2", border: "1px solid #dc2626", borderRadius: "8px", margin: "1rem" }}>
+          <div style={{ fontSize: "1.2rem", fontWeight: 700, marginBottom: "0.5rem" }}>Something went wrong</div>
+          <div style={{ fontSize: "0.9rem", color: "#991b1b", marginBottom: "1rem" }}>{String(this.state.error?.message || this.state.error)}</div>
+          <button onClick={() => this.setState({ error: null })} style={{ padding: "0.3rem 0.8rem", border: "1px solid #dc2626", borderRadius: "5px", background: "transparent", color: "#dc2626", cursor: "pointer", fontFamily: "monospace" }}>Try Again</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // SECTION 1 — CONSTANTS & UTILITIES
@@ -216,7 +234,7 @@ function normalizeAgents(rows = []) {
       const newVideo   = parseNum(r["New Video"]   || r["NewVideo"]   || 0);
       const newVoice   = parseNum(r["NewVoice"]    || r["New Voice"]  || 0);
       const newSecurity= parseNum(r["NewSecurity"] || r["New Security"] || 0);
-      const rawRegion = (r.Region || "Unknown").trim();
+      const rawRegion = (r.Region || r.region || r.REGION || "Unknown").trim();
       const region    = rawRegion === "SD-Xfinty" ? "SD-Xfinity" : rawRegion;
 
       // Exclude rows not belonging to the four recognised regions
@@ -2992,6 +3010,7 @@ function BusinessOverview({ perf, onNav }) {
               ))}
             </div>
             {activeGroup && (
+              <ErrorBoundary>
               <SiteDrilldown
                 siteLabel={activeGroup.label}
                 regions={activeGroup.regions}
@@ -3001,6 +3020,7 @@ function BusinessOverview({ perf, onNav }) {
                 newHireSet={newHireSet}
                 fiscalInfo={fiscalInfo}
               />
+              </ErrorBoundary>
             )}
           </div>
         )}
