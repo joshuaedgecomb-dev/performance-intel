@@ -5205,14 +5205,24 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
     } catch(e) {}
   }, [lastRefresh]);
 
-  // Try a live fetch first; if it fails, fall through to paste mode
+  // Try a live fetch first; if it fails, try CORS proxy, then fall through to paste mode
   const doFetch = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const [otmRes, codeRes] = await Promise.all([fetch(OTM_URL), fetch(CODE_URL)]);
-      const otm  = await otmRes.json();
-      const cArr = await codeRes.json();
+      let otm, cArr;
+      try {
+        // Direct fetch first
+        const [otmRes, codeRes] = await Promise.all([fetch(OTM_URL), fetch(CODE_URL)]);
+        otm  = await otmRes.json();
+        cArr = await codeRes.json();
+      } catch(e) {
+        // If direct fails (CORS), try with no-cors or proxy
+        const proxyUrl = url => `https://corsproxy.io/?${encodeURIComponent(url)}`;
+        const [otmRes, codeRes] = await Promise.all([fetch(proxyUrl(OTM_URL)), fetch(proxyUrl(CODE_URL))]);
+        otm  = await otmRes.json();
+        cArr = await codeRes.json();
+      }
       if (!Array.isArray(otm)) throw new Error("Unexpected response format");
       const cMap = {};
       cArr.forEach(c => { cMap[String(c.cod)] = c.nam; });
@@ -5221,7 +5231,7 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
       setLastRefresh(new Date());
       setPasteMode(false);
     } catch(e) {
-      // Live fetch blocked (sandbox) — switch to paste mode only if no cached data
+      // All fetch methods failed — switch to paste mode only if no cached data
       if (!raw) setPasteMode(true);
     } finally {
       setLoading(false);
