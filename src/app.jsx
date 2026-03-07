@@ -192,6 +192,7 @@ const REGION_TO_SITE = {
 const GOALS_STORAGE_KEY = "perf_intel_goals_v1";
 const NH_STORAGE_KEY    = "perf_intel_newhires_v1";
 const SHEET_URLS_KEY    = "perf_intel_sheet_urls_v1";
+const PRIOR_MONTH_STORAGE_KEY = "perf_intel_prior_month_v1";
 const DEFAULT_AGENT_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRagC_XDSQ84y25onmWs6MUOZcEdWZNA6fVRRDFUzNWQp3ginYLtOIQsSrwmbAERkOJ-daTvbHqEtoy/pub?gid=667346347&single=true&output=csv";
 const DEFAULT_GOALS_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRagC_XDSQ84y25onmWs6MUOZcEdWZNA6fVRRDFUzNWQp3ginYLtOIQsSrwmbAERkOJ-daTvbHqEtoy/pub?gid=1685208822&single=true&output=csv";
 const DEFAULT_NH_SHEET_URL    = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRagC_XDSQ84y25onmWs6MUOZcEdWZNA6fVRRDFUzNWQp3ginYLtOIQsSrwmbAERkOJ-daTvbHqEtoy/pub?gid=25912283&single=true&output=csv";
@@ -3946,95 +3947,447 @@ function TeamsView({ agents, jobType, sphGoal, allAgents }) {
 
 
 // ══════════════════════════════════════════════════════════════════════════════
-// SECTION 12c — SPANISH CALLBACK PANEL
-// Comparative view — data excluded from main stats to avoid double-counting
+// ══════════════════════════════════════════════════════════════════════════════
+// SECTION 12c — CAMPAIGN COMPARISON PANEL (Month-over-Month)
 // ══════════════════════════════════════════════════════════════════════════════
 
-function SpanishCallbackPanel({ sc }) {
-  if (!sc) return null;
-  const { totalHours, totalGoals, gph, uNames, agentList, weeklyTrend, distU } = sc;
-  const maxGph = Math.max(...weeklyTrend.map(w => w.gph), 0.001);
+// Replaces Spanish Callback. Shows all job types with MoM agent
+// job type with MoM agent % to goal comparisons.
+
+function buildMoMAgentStats(currentAgents, priorAgents) {
+  const rollup = (rows) => {
+    const map = {};
+    rows.forEach(a => {
+      const n = a.agentName;
+      if (!n) return;
+      if (!map[n]) map[n] = { hours: 0, goals: 0, goalsNum: 0, newXI: 0, xmLines: 0, newXH: 0, newVideo: 0, newVoice: 0, region: a.region, supervisor: a.supervisor };
+      map[n].hours += a.hours; map[n].goals += a.goals; map[n].goalsNum += a.goalsNum;
+      map[n].newXI += a.newXI; map[n].xmLines += a.xmLines; map[n].newXH += a.newXH;
+      map[n].newVideo += a.newVideo; map[n].newVoice += (a.newVoice || 0);
+    });
+    return map;
+  };
+  const cur = rollup(currentAgents), prev = rollup(priorAgents);
+  const allNames = [...new Set([...Object.keys(cur), ...Object.keys(prev)])].sort();
+  return allNames.map(name => {
+    const c = cur[name] || { hours:0, goals:0, goalsNum:0, newXI:0, xmLines:0, newXH:0, newVideo:0, newVoice:0 };
+    const p = prev[name] || { hours:0, goals:0, goalsNum:0, newXI:0, xmLines:0, newXH:0, newVideo:0, newVoice:0 };
+    const curPct = c.goalsNum > 0 ? (c.goals / c.goalsNum) * 100 : 0;
+    const prevPct = p.goalsNum > 0 ? (p.goals / p.goalsNum) * 100 : 0;
+    const curGph = c.hours > 0 ? c.goals / c.hours : 0;
+    const prevGph = p.hours > 0 ? p.goals / p.hours : 0;
+    return { name, inCurrent: !!cur[name], inPrior: !!prev[name],
+      region: (cur[name]||prev[name]).region||"", supervisor: (cur[name]||prev[name]).supervisor||"",
+      cur: { ...c, pct: curPct, gph: curGph }, prev: { ...p, pct: prevPct, gph: prevGph }, delta: curPct - prevPct };
+  });
+}
+
+function CampaignComparisonPanel({ currentAgents, onNav }) {
+  const [activeJobType, setActiveJobType] = useState(null);
+  const [sortCol, setSortCol] = useState("delta");
+  const [sortDir, setSortDir] = useState(-1);
+  const [siteFilter, setSiteFilter] = useState("ALL"); // ALL | DR | BZ
+  const [hideLeft, setHideLeft] = useState(true);
+  const [expandedAgent, setExpandedAgent] = useState(null);
+
+  // Self-contained prior month data (persisted to localStorage)
+  const [priorRaw, _setPriorRaw] = useState(() => {
+    try { const s = localStorage.getItem(PRIOR_MONTH_STORAGE_KEY); return s ? JSON.parse(s) : null; } catch(e) { return null; }
+  });
+  const setPriorRaw = useCallback(data => {
+    _setPriorRaw(data);
+    try { if (data) localStorage.setItem(PRIOR_MONTH_STORAGE_KEY, JSON.stringify(data)); else localStorage.removeItem(PRIOR_MONTH_STORAGE_KEY); } catch(e) {}
+  }, []);
+  const [priorGoalsRaw, _setPriorGoalsRaw] = useState(() => {
+    try { const s = localStorage.getItem(PRIOR_MONTH_STORAGE_KEY + "_goals"); return s ? JSON.parse(s) : null; } catch(e) { return null; }
+  });
+  const setPriorGoalsRaw = useCallback(data => {
+    _setPriorGoalsRaw(data);
+    try { if (data) localStorage.setItem(PRIOR_MONTH_STORAGE_KEY + "_goals", JSON.stringify(data)); else localStorage.removeItem(PRIOR_MONTH_STORAGE_KEY + "_goals"); } catch(e) {}
+  }, []);
+  const priorDataRef = useRef();
+  const priorGoalsRef = useRef();
+  const loadFileCamp = (f, setter) => { const r = new FileReader(); r.onload = e => setter(parseCSV(e.target.result)); r.readAsText(f); };
+  const priorAgents = useMemo(() => normalizeAgents(priorRaw || []), [priorRaw]);
+  const priorGoalLookup = useMemo(() => buildGoalLookup(priorGoalsRaw), [priorGoalsRaw]);
+
+  // Fiscal pacing from current month data
+  const fiscalInfo = useMemo(() => {
+    const dates = [...new Set(currentAgents.filter(a => a.date).map(a => a.date))];
+    return getFiscalMonthInfo(dates);
+  }, [currentAgents]);
+  const pctElapsed = fiscalInfo ? fiscalInfo.pctElapsed / 100 : 0; // 0-1
+
+  // Site filter helper: map region to DR/BZ
+  const agentSite = (a) => REGION_TO_SITE[a.region] || "DR";
+  const filterBySite = (agents) => {
+    if (siteFilter === "ALL") return agents;
+    return agents.filter(a => agentSite(a) === siteFilter);
+  };
+
+  const allJobTypes = useMemo(() => {
+    const jts = new Set([
+      ...currentAgents.filter(a => !a.isSpanishCallback).map(a => a.jobType),
+      ...priorAgents.filter(a => !a.isSpanishCallback).map(a => a.jobType),
+    ]);
+    return [...jts].filter(Boolean).sort();
+  }, [currentAgents, priorAgents]);
+
+  useEffect(() => { if (allJobTypes.length > 0 && !activeJobType) setActiveJobType(allJobTypes[0]); }, [allJobTypes, activeJobType]);
+
+  const agentStats = useMemo(() => {
+    if (!activeJobType) return [];
+    const curFiltered = filterBySite(currentAgents.filter(a => a.jobType === activeJobType));
+    const prevFiltered = filterBySite(priorAgents.filter(a => a.jobType === activeJobType));
+    const stats = buildMoMAgentStats(curFiltered, prevFiltered);
+    if (pctElapsed > 0) {
+      stats.forEach(a => {
+        if (a.inCurrent && a.cur.goalsNum > 0) {
+          const projectedGoals = a.cur.goals / pctElapsed;
+          a.pacedPct = (projectedGoals / a.cur.goalsNum) * 100;
+        } else { a.pacedPct = null; }
+      });
+    }
+    return stats;
+  }, [activeJobType, currentAgents, priorAgents, siteFilter, pctElapsed]);
+
+  const summary = useMemo(() => {
+    if (!agentStats.length) return null;
+    const withBoth = agentStats.filter(a => a.inCurrent && a.inPrior);
+    const improvedCount = withBoth.filter(a => a.delta > 0).length;
+    const declinedCount = withBoth.filter(a => a.delta < 0).length;
+    const avgDelta = withBoth.length > 0 ? withBoth.reduce((s, a) => s + a.delta, 0) / withBoth.length : 0;
+    const cur = agentStats.filter(a => a.inCurrent), prev = agentStats.filter(a => a.inPrior);
+    const sC = (k) => cur.reduce((s, a) => s + a.cur[k], 0);
+    const sP = (k) => prev.reduce((s, a) => s + a.prev[k], 0);
+    return { curAgents: cur.length, prevAgents: prev.length, improvedCount, declinedCount, avgDelta,
+      curGoals: sC("goals"), prevGoals: sP("goals"), curHours: sC("hours"), prevHours: sP("hours"),
+      curGph: sC("hours") > 0 ? sC("goals") / sC("hours") : 0, prevGph: sP("hours") > 0 ? sP("goals") / sP("hours") : 0,
+      curHsd: sC("newXI"), prevHsd: sP("newXI"), curXm: sC("xmLines"), prevXm: sP("xmLines"),
+      curXh: sC("newXH"), prevXh: sP("newXH"), curXv: sC("newVideo"), prevXv: sP("newVideo"),
+      curPhone: sC("newVoice"), prevPhone: sP("newVoice"),
+      topMovers: [...withBoth].sort((a, b) => b.delta - a.delta).slice(0, 3),
+      bottomMovers: [...withBoth].sort((a, b) => a.delta - b.delta).slice(0, 3),
+      pacedGoals: pctElapsed > 0 ? Math.round(sC("goals") / pctElapsed) : null,
+      pacedHsd: pctElapsed > 0 ? Math.round(sC("newXI") / pctElapsed) : null,
+      pacedXm: pctElapsed > 0 ? Math.round(sC("xmLines") / pctElapsed) : null,
+      pacedXh: pctElapsed > 0 ? Math.round(sC("newXH") / pctElapsed) : null,
+      pacedXv: pctElapsed > 0 ? Math.round(sC("newVideo") / pctElapsed) : null,
+      pacedPhone: pctElapsed > 0 ? Math.round(sC("newVoice") / pctElapsed) : null,
+      pacedHours: pctElapsed > 0 ? Math.round(sC("hours") / pctElapsed) : null,
+      pacedGph: (pctElapsed > 0 && sC("hours") > 0) ? (sC("goals") / sC("hours")) : null };
+  }, [agentStats, pctElapsed]);
+
+  const sorted = useMemo(() => {
+    const arr = [...agentStats];
+    const getVal = (a) => {
+      const m = { name: a.name.toLowerCase(), prevPct: a.prev.pct, curPct: a.cur.pct, delta: a.delta,
+        prevHours: a.prev.hours, curHours: a.cur.hours, curGoals: a.cur.goals, curGph: a.cur.gph, curHsd: a.cur.newXI, curXm: a.cur.xmLines,
+        curXh: a.cur.newXH, curXv: a.cur.newVideo, curPhone: a.cur.newVoice, prevGph: a.prev.gph, curGphCol: a.cur.gph };
+      return m[sortCol] !== undefined ? m[sortCol] : a.delta;
+    };
+    arr.sort((a, b) => { const va = getVal(a), vb = getVal(b);
+      return typeof va === "string" ? sortDir * va.localeCompare(vb) : sortDir * (va - vb); });
+    return arr;
+  }, [agentStats, sortCol, sortDir]);
+
+  const handleSort = (col) => { if (sortCol === col) setSortDir(d => -d); else { setSortCol(col); setSortDir(-1); } };
+  const sortArrow = (col) => sortCol === col ? (sortDir === -1 ? " \u25BC" : " \u25B2") : "";
+
+  const MetricMoM = ({ label, curVal, prevVal, pacedVal, fmtFn }) => {
+    const d = curVal - prevVal;
+    const color = d > 0 ? "#16a34a" : d < 0 ? "#dc2626" : "var(--text-dim)";
+    const arrow = d > 0 ? "\u25B2" : d < 0 ? "\u25BC" : "\u2013";
+    const disp = fmtFn || (v => v.toLocaleString());
+    return (<div style={{ display:"grid", gridTemplateColumns:"7rem 5rem 5rem 5rem 5.5rem", gap:"0.5rem", alignItems:"center", padding:"0.45rem 0", borderBottom:"1px solid var(--bg-tertiary)" }}>
+      <div style={{ fontFamily:"monospace", fontSize:"0.95rem", color:"var(--text-muted)" }}>{label}</div>
+      <div style={{ fontFamily:"monospace", fontSize:"0.95rem", color:"var(--text-dim)", textAlign:"right" }}>{disp(prevVal)}</div>
+      <div style={{ fontFamily:"monospace", fontSize:"0.95rem", color:"var(--text-primary)", textAlign:"right", fontWeight:600 }}>{disp(curVal)}</div>
+      <div style={{ fontFamily:"monospace", fontSize:"0.95rem", color:pacedVal!=null?(pacedVal>prevVal?"#16a34a":pacedVal<prevVal?"#dc2626":"var(--text-dim)"):"var(--text-faint)", textAlign:"right", fontWeight:600, fontStyle:"italic" }}>{pacedVal != null ? disp(Math.round(pacedVal)) : "—"}</div>
+      <div style={{ fontFamily:"monospace", fontSize:"0.95rem", color, textAlign:"right", fontWeight:600 }}>{arrow} {disp(Math.abs(d))}</div>
+    </div>);
+  };
 
   return (
-    <div style={{ background: `var(--bg-secondary)`, border: "1px solid #6366f133", borderRadius: "12px", padding: "1.5rem" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.1rem" }}>
+    <div style={{ padding:"2rem 2.5rem", minHeight:"90vh", background:"var(--bg-primary)" }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"1.5rem" }}>
         <div>
-          <div style={{ fontFamily: "monospace", fontSize: "1.08rem", color: "#6366f1", letterSpacing: "0.12em", textTransform: "uppercase" }}>
-            Spanish Callback — Comparative Only
-          </div>
-          <div style={{ fontFamily: "monospace", fontSize: "1.11rem", color: `var(--text-faint)`, marginTop: "0.2rem" }}>
-            Hours &amp; goals already counted in primary programs · excluded from all main totals
-          </div>
+          <div style={{ fontFamily:"monospace", fontSize:"1.08rem", color:"var(--text-dim)", letterSpacing:"0.15em" }}>CAMPAIGN COMPARISON \u00B7 Month over Month</div>
+          <div style={{ fontFamily:"'Cormorant Garamond', Georgia, serif", fontSize:"3.38rem", color:"var(--text-warm)", fontWeight:700, letterSpacing:"-0.5px", lineHeight:1.1 }}>Campaign Analysis</div>
         </div>
-        <div style={{ display: "flex", gap: "1.5rem", textAlign: "right" }}>
-          {[
-            { v: fmt(totalHours, 1), l: "hrs" },
-            { v: totalGoals, l: "goals" },
-            { v: gph.toFixed(3), l: "GPH" },
-            { v: uNames.length, l: "agents" },
-          ].map(({ v, l }) => (
-            <div key={l}>
-              <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "2.1rem", color: "#6366f1", fontWeight: 700 }}>{v}</div>
-              <div style={{ fontFamily: "monospace", fontSize: "1.17rem", color: `var(--text-dim)` }}>{l}</div>
-            </div>
-          ))}
-        </div>
+        <button onClick={() => onNav(-1)} style={{ background:"transparent", border:"1px solid var(--border-muted)", borderRadius:"5px", color:"var(--text-muted)", padding:"0.3rem 0.8rem", fontFamily:"monospace", fontSize:"1.05rem", cursor:"pointer" }}>{"\u2190"} Back</button>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1rem" }}>
-        {weeklyTrend.length > 1 && (
-          <div>
-            <div style={{ fontFamily: "monospace", fontSize: "1.11rem", color: `var(--text-dim)`, marginBottom: "0.5rem" }}>WEEKLY GPH TREND</div>
-            <div style={{ display: "flex", gap: "4px", alignItems: "flex-end", height: "48px" }}>
-              {weeklyTrend.map(w => {
-                const h = Math.max(3, (w.gph / maxGph) * 44);
-                return (
-                  <div key={w.week} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", gap: "2px" }}>
-                    <div style={{ fontFamily: "monospace", fontSize: "1.08rem", color: "#6366f1" }}>{w.gph.toFixed(2)}</div>
-                    <div style={{ width: "100%", height: `${h}px`, background: "#6366f1", borderRadius: "2px 2px 0 0", opacity: 0.7 }} />
-                    <div style={{ fontFamily: "monospace", fontSize: "1.08rem", color: `var(--text-faint)` }}>W{w.week}</div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-        <div>
-          <div style={{ fontFamily: "monospace", fontSize: "1.11rem", color: `var(--text-dim)`, marginBottom: "0.5rem" }}>AGENT DISTRIBUTION</div>
-          <div style={{ display: "flex", gap: "0.5rem" }}>
-            {["Q1","Q2","Q3","Q4"].map(q => (
-              <div key={q} style={{ flex: 1, padding: "0.4rem", borderRadius: "6px", background: Q[q].color+"12", border: `1px solid ${Q[q].color}30`, textAlign: "center" }}>
-                <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "1.65rem", color: Q[q].color, fontWeight: 700 }}>{distU[q]}</div>
-                <div style={{ fontFamily: "monospace", fontSize: "0.81rem", color: Q[q].color }}>{q}</div>
-              </div>
-            ))}
-          </div>
-        </div>
+      {/* Data upload strip */}
+      <div style={{ background:"var(--bg-secondary)", border:"1px solid var(--border)", borderRadius:"12px", padding:"1.25rem", marginBottom:"1.5rem", display:"flex", gap:"1rem", alignItems:"center", flexWrap:"wrap" }}>
+        <div style={{ fontFamily:"monospace", fontSize:"1.08rem", color:"var(--text-muted)", letterSpacing:"0.1em", marginRight:"0.5rem" }}>DATA</div>
+        <button onClick={() => priorDataRef.current.click()}
+          style={{ background:priorRaw?"#6366f118":"transparent", border:`1px solid ${priorRaw?"#6366f1":"var(--border-muted)"}`, borderRadius:"5px", color:priorRaw?"#6366f1":"var(--text-muted)", padding:"0.35rem 0.9rem", fontFamily:"monospace", fontSize:"1.08rem", cursor:"pointer" }}>
+          {priorRaw ? `Prior Month Data (${priorAgents.length} rows)` : "Upload Prior Month Data"}
+        </button>
+        {priorRaw && <button onClick={() => setPriorRaw(null)} title="Clear" style={{ background:"transparent", border:"1px solid var(--text-faint)", borderRadius:"5px", color:"var(--text-dim)", padding:"0.2rem 0.5rem", fontFamily:"monospace", fontSize:"1.08rem", cursor:"pointer" }}>{"✕"}</button>}
+        <input ref={priorDataRef} type="file" accept=".csv" style={{ display:"none" }} onChange={e => { if (e.target.files[0]) loadFileCamp(e.target.files[0], setPriorRaw); e.target.value=""; }} />
+        <div style={{ width:"1px", height:"24px", background:"var(--border)", margin:"0 0.25rem" }} />
+        <button onClick={() => priorGoalsRef.current.click()}
+          style={{ background:priorGoalsRaw?"#16a34a18":"transparent", border:`1px solid ${priorGoalsRaw?"#16a34a":"var(--border-muted)"}`, borderRadius:"5px", color:priorGoalsRaw?"#16a34a":"var(--text-muted)", padding:"0.35rem 0.9rem", fontFamily:"monospace", fontSize:"1.08rem", cursor:"pointer" }}>
+          {priorGoalsRaw ? "Prior Month Goals" : "Upload Prior Month Goals"}
+        </button>
+        {priorGoalsRaw && <button onClick={() => setPriorGoalsRaw(null)} title="Clear" style={{ background:"transparent", border:"1px solid var(--text-faint)", borderRadius:"5px", color:"var(--text-dim)", padding:"0.2rem 0.5rem", fontFamily:"monospace", fontSize:"1.08rem", cursor:"pointer" }}>{"✕"}</button>}
+        <input ref={priorGoalsRef} type="file" accept=".csv" style={{ display:"none" }} onChange={e => { if (e.target.files[0]) loadFileCamp(e.target.files[0], setPriorGoalsRaw); e.target.value=""; }} />
+        {(priorRaw || priorGoalsRaw) && <div style={{ marginLeft:"auto", fontFamily:"monospace", fontSize:"0.9rem", color:"var(--text-faint)" }}>saved to browser</div>}
       </div>
 
-      <div style={{ borderTop: "1px solid var(--bg-tertiary)", paddingTop: "0.75rem" }}>
-        <div style={{ fontFamily: "monospace", fontSize: "1.11rem", color: `var(--text-dim)`, marginBottom: "0.5rem" }}>AGENT BREAKDOWN</div>
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
-          {agentList.map(a => {
-            const barW = gph > 0 ? Math.min((a.agGph / (gph * 2)) * 100, 100) : 0;
-            return (
-              <div key={a.name} style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                <div style={{ width: "140px", fontFamily: "monospace", fontSize: "1.11rem", color: `var(--text-secondary)`, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.name}</div>
-                <div style={{ flex: 1, height: "5px", background: `var(--bg-tertiary)`, borderRadius: "3px", overflow: "hidden" }}>
-                  <div style={{ width: `${barW}%`, height: "100%", background: Q[a.quartile].color, opacity: 0.7 }} />
-                </div>
-                <div style={{ width: "48px", fontFamily: "monospace", fontSize: "1.11rem", color: Q[a.quartile].color, textAlign: "right", flexShrink: 0 }}>{a.agGph.toFixed(3)}</div>
-                <div style={{ width: "36px", fontFamily: "monospace", fontSize: "1.17rem", color: `var(--text-faint)`, textAlign: "right", flexShrink: 0 }}>{fmt(a.hours, 1)}h</div>
-                <div style={{ width: "28px", fontFamily: "monospace", fontSize: "1.17rem", color: `var(--text-faint)`, textAlign: "right", flexShrink: 0 }}>{a.goals}g</div>
-              </div>
-            );
-          })}
+      {priorAgents.length === 0 ? (
+        <div style={{ background:"var(--bg-secondary)", border:"1px solid #6366f130", borderRadius:"12px", padding:"3rem", textAlign:"center" }}>
+          <div style={{ fontFamily:"Georgia, serif", fontSize:"1.5rem", color:"var(--text-warm)", marginBottom:"0.75rem" }}>Upload Prior Month Data to Begin</div>
+          <div style={{ fontFamily:"monospace", fontSize:"1.11rem", color:"var(--text-dim)", maxWidth:"500px", margin:"0 auto" }}>Use the buttons above to load your prior month performance data CSV and optionally the prior month goals CSV.</div>
         </div>
-      </div>
+      ) : allJobTypes.length === 0 ? (
+        <div style={{ background:"var(--bg-secondary)", border:"1px solid var(--border)", borderRadius:"12px", padding:"3rem", textAlign:"center" }}>
+          <div style={{ fontFamily:"Georgia, serif", fontSize:"1.5rem", color:"var(--text-warm)", marginBottom:"0.75rem" }}>No Job Types Found</div>
+          <div style={{ fontFamily:"monospace", fontSize:"1.11rem", color:"var(--text-dim)" }}>No job types were found across either dataset.</div>
+        </div>
+      ) : (<>
+        <div style={{ display:"flex", gap:"0.4rem", flexWrap:"wrap", marginBottom:"1.5rem" }}>
+          {allJobTypes.map(jt => (<button key={jt} onClick={() => setActiveJobType(jt)}
+            style={{ padding:"0.45rem 1.1rem", borderRadius:"6px", border:`1px solid ${activeJobType===jt?"#d97706":"var(--border)"}`, background:activeJobType===jt?"#d9770618":"transparent", color:activeJobType===jt?"#d97706":"var(--text-muted)", fontFamily:"monospace", fontSize:"1.11rem", cursor:"pointer", fontWeight:activeJobType===jt?600:400 }}>{jt}</button>))}
+        </div>
+        <div style={{ display:"flex", gap:"0.5rem", alignItems:"center", marginBottom:"1.25rem" }}>
+          <div style={{ fontFamily:"monospace", fontSize:"0.95rem", color:"var(--text-faint)", marginRight:"0.25rem" }}>SITE</div>
+          {["ALL","DR","BZ"].map(s => (<button key={s} onClick={() => setSiteFilter(s)}
+            style={{ padding:"0.3rem 0.9rem", borderRadius:"5px", border:`1px solid ${siteFilter===s?"#6366f1":"var(--border)"}`, background:siteFilter===s?"#6366f118":"transparent", color:siteFilter===s?"#818cf8":"var(--text-muted)", fontFamily:"monospace", fontSize:"1.05rem", cursor:"pointer", fontWeight:siteFilter===s?600:400 }}>{s}</button>))}
+          {fiscalInfo && <div style={{ marginLeft:"auto", fontFamily:"monospace", fontSize:"0.95rem", color:"var(--text-faint)" }}>
+            Pacing: {fiscalInfo.elapsedBDays}/{fiscalInfo.totalBDays} biz days ({Math.round(fiscalInfo.pctElapsed)}%) {"·"} through {fiscalInfo.lastDataDate}
+          </div>}
+        </div>
+        {activeJobType && summary && (<>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:"0.75rem", marginBottom:"1.5rem" }}>
+            <StatCard label="Current Agents" value={summary.curAgents} sub={`vs ${summary.prevAgents} prior`} accent="#6366f1" />
+            <StatCard label={`Avg \u0394 % to Goal`} value={`${summary.avgDelta >= 0 ? "+" : ""}${summary.avgDelta.toFixed(1)}%`} sub={`${summary.improvedCount} improved \u00B7 ${summary.declinedCount} declined`} accent={summary.avgDelta >= 0 ? "#16a34a" : "#dc2626"} />
+            <StatCard label="Current Sales" value={summary.curGoals.toLocaleString()} sub={`vs ${summary.prevGoals.toLocaleString()} prior`} accent="#16a34a" />
+            <StatCard label="Current Hours" value={fmt(summary.curHours, 0)} sub={`vs ${fmt(summary.prevHours, 0)} prior`} accent="#2563eb" />
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"1.25rem", marginBottom:"1.5rem" }}>
+            <div style={{ background:"var(--bg-secondary)", border:"1px solid var(--border)", borderRadius:"12px", padding:"1.25rem" }}>
+              <div style={{ fontFamily:"monospace", fontSize:"1.08rem", color:"#d97706", letterSpacing:"0.12em", textTransform:"uppercase", marginBottom:"0.75rem" }}>Month-over-Month Metrics</div>
+              <div style={{ display:"grid", gridTemplateColumns:"7rem 5rem 5rem 5rem 5.5rem", gap:"0.5rem", padding:"0 0 0.4rem 0", borderBottom:"1px solid var(--border)", marginBottom:"0.25rem" }}>
+                {["Metric","Prior","Current","Paced","Change"].map(h => (<div key={h} style={{ fontFamily:"monospace", fontSize:"0.85rem", color:"var(--text-faint)", textTransform:"uppercase", letterSpacing:"0.06em", textAlign:h==="Metric"?"left":"right" }}>{h}</div>))}
+              </div>
+              <MetricMoM label="Hours" curVal={summary.curHours} prevVal={summary.prevHours} pacedVal={summary.pacedHours} fmtFn={v => fmt(v, 0)} />
+              <MetricMoM label="Sales" curVal={summary.curGoals} prevVal={summary.prevGoals} pacedVal={summary.pacedGoals} />
+              <MetricMoM label="GPH" curVal={summary.curGph} prevVal={summary.prevGph} pacedVal={summary.pacedGph} fmtFn={v => typeof v === "number" ? v.toFixed(3) : "0"} />
+              <MetricMoM label="New HSD" curVal={summary.curHsd} prevVal={summary.prevHsd} pacedVal={summary.pacedHsd} />
+              <MetricMoM label="New XM" curVal={summary.curXm} prevVal={summary.prevXm} pacedVal={summary.pacedXm} />
+              <MetricMoM label="New XH" curVal={summary.curXh} prevVal={summary.prevXh} pacedVal={summary.pacedXh} />
+              <MetricMoM label="New XV" curVal={summary.curXv} prevVal={summary.prevXv} pacedVal={summary.pacedXv} />
+              <MetricMoM label="New Phone" curVal={summary.curPhone} prevVal={summary.prevPhone} pacedVal={summary.pacedPhone} />
+            </div>
+            <div style={{ display:"flex", flexDirection:"column", gap:"1rem" }}>
+              <div style={{ background:"var(--bg-secondary)", border:"1px solid #16a34a25", borderRadius:"12px", padding:"1.25rem", flex:1 }}>
+                <div style={{ fontFamily:"monospace", fontSize:"1.08rem", color:"#16a34a", letterSpacing:"0.12em", textTransform:"uppercase", marginBottom:"0.6rem" }}>Top Improvers</div>
+                {summary.topMovers.filter(a => a.delta > 0).length === 0
+                  ? <div style={{ color:"var(--text-faint)", fontFamily:"Georgia, serif" }}>No agents improved</div>
+                  : summary.topMovers.filter(a => a.delta > 0).map((a, i) => (
+                    <div key={a.name} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"0.4rem 0", borderBottom:i<2?"1px solid var(--bg-tertiary)":"none" }}>
+                      <div><div style={{ fontFamily:"Georgia, serif", fontSize:"1.15rem", color:"var(--text-warm)" }}>{a.name}</div>
+                        <div style={{ fontFamily:"monospace", fontSize:"0.9rem", color:"var(--text-dim)" }}>{fmtPct(a.prev.pct)} {"\u2192"} {fmtPct(a.cur.pct)}</div></div>
+                      <div style={{ fontFamily:"'Cormorant Garamond', Georgia, serif", fontSize:"1.65rem", color:"#16a34a", fontWeight:700 }}>+{fmtPct(a.delta)}</div>
+                    </div>))}
+              </div>
+              <div style={{ background:"var(--bg-secondary)", border:"1px solid #dc262625", borderRadius:"12px", padding:"1.25rem", flex:1 }}>
+                <div style={{ fontFamily:"monospace", fontSize:"1.08rem", color:"#dc2626", letterSpacing:"0.12em", textTransform:"uppercase", marginBottom:"0.6rem" }}>Biggest Declines</div>
+                {summary.bottomMovers.filter(a => a.delta < 0).length === 0
+                  ? <div style={{ color:"var(--text-faint)", fontFamily:"Georgia, serif" }}>No agents declined</div>
+                  : summary.bottomMovers.filter(a => a.delta < 0).map((a, i) => (
+                    <div key={a.name} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"0.4rem 0", borderBottom:i<2?"1px solid var(--bg-tertiary)":"none" }}>
+                      <div><div style={{ fontFamily:"Georgia, serif", fontSize:"1.15rem", color:"var(--text-warm)" }}>{a.name}</div>
+                        <div style={{ fontFamily:"monospace", fontSize:"0.9rem", color:"var(--text-dim)" }}>{fmtPct(a.prev.pct)} {"\u2192"} {fmtPct(a.cur.pct)}</div></div>
+                      <div style={{ fontFamily:"'Cormorant Garamond', Georgia, serif", fontSize:"1.65rem", color:"#dc2626", fontWeight:700 }}>{fmtPct(a.delta)}</div>
+                    </div>))}
+              </div>
+            </div>
+          </div>
+          <div style={{ background:"var(--bg-secondary)", border:"1px solid var(--border)", borderRadius:"12px", padding:"1.25rem" }}>
+            <div style={{ fontFamily:"monospace", fontSize:"1.08rem", color:"var(--text-muted)", letterSpacing:"0.12em", textTransform:"uppercase", marginBottom:"0.75rem", display:"flex", alignItems:"center" }}>
+              Agent Detail {"\u2014"} {activeJobType} {"\u00B7"} {sorted.filter(a => !hideLeft || a.inCurrent).length} agents {"\u00B7"} click headers to sort
+                <button onClick={() => setHideLeft(v => !v)}
+                  style={{ marginLeft:"1rem", padding:"0.2rem 0.7rem", borderRadius:"4px", border:`1px solid ${hideLeft?"var(--border)":"#6366f1"}`, background:hideLeft?"transparent":"#6366f118", color:hideLeft?"var(--text-muted)":"#818cf8", fontFamily:"monospace", fontSize:"0.88rem", cursor:"pointer" }}>
+                  {hideLeft ? "Show Removed" : "Hide Removed"}
+                </button>
+            </div>
+            <div style={{ overflowX:"auto" }}>
+              <table style={{ width:"100%", borderCollapse:"collapse", fontFamily:"monospace", fontSize:"0.9rem" }}>
+                <thead><tr style={{ borderBottom:"2px solid var(--border)" }}>
+                  {[{key:"name",label:"Agent",align:"left"},{key:"prevHours",label:"Prev Hrs",align:"right"},{key:"curHours",label:"Hours",align:"right"},{key:"curGoals",label:"Sales",align:"right"},{key:"curGph",label:"GPH",align:"right"},
+                    {key:"curHsd",label:"New HSD",align:"right"},{key:"curXm",label:"New XM",align:"right"},{key:"curXh",label:"New XH",align:"right"},
+                    {key:"curXv",label:"New XV",align:"right"},{key:"curPhone",label:"New Phone",align:"right"},
+                    {key:"prevGph",label:"Prev GPH",align:"right"},{key:"curGphCol",label:"Cur GPH",align:"right"},
+                    {key:"prevPct",label:"Prior %",align:"right"},{key:"curPct",label:"Current %",align:"right"},{key:"delta",label:"\u0394",align:"right"}
+                  ].map(col => (<th key={col.key} onClick={() => handleSort(col.key)}
+                    style={{ padding:"0.5rem 0.6rem", textAlign:col.align, color:"var(--text-muted)", cursor:"pointer", userSelect:"none", whiteSpace:"nowrap", fontWeight:sortCol===col.key?700:400, letterSpacing:"0.04em", fontSize:"0.85rem", borderLeft:["prevGph","curHsd"].includes(col.key)?"2px solid var(--border)":"none" }}>{col.label}{sortArrow(col.key)}</th>))}
+                </tr></thead>
+                <tbody>{sorted.filter(a => !hideLeft || a.inCurrent).flatMap((a, idx) => {
+                  const dColor = a.delta > 0 ? "#16a34a" : a.delta < 0 ? "#dc2626" : "var(--text-dim)";
+                  const stripe = idx % 2 === 1 ? "var(--bg-tertiary)" : "transparent";
+                  const rowBg = a.delta > 15 ? "#16a34a0c" : a.delta < -15 ? "#dc26260c" : stripe;
+                  const rows = [<tr key={a.name} style={{ borderBottom:"1px solid var(--border)", background:rowBg }}>
+                    <td style={{ padding:"0.5rem 0.6rem", color:"var(--text-warm)", fontFamily:"Georgia, serif", fontSize:"1.05rem", whiteSpace:"nowrap", cursor:"pointer" }} onClick={() => setExpandedAgent(expandedAgent === a.name ? null : a.name)}>
+                      <span style={{ borderBottom:expandedAgent===a.name?"2px solid #d97706":"1px dashed var(--border)", paddingBottom:"1px" }}>{a.name}</span>
+                      {!a.inPrior && <span style={{ fontSize:"0.78rem", color:"#d97706", background:"#d9770620", padding:"0.05rem 0.3rem", borderRadius:"2px", marginLeft:"0.3rem" }}>NEW</span>}
+                      {!a.inCurrent && <span style={{ fontSize:"0.78rem", color:"#6366f1", background:"#6366f120", padding:"0.05rem 0.3rem", borderRadius:"2px", marginLeft:"0.3rem" }}>LEFT</span>}
+                    </td>
+                    <td style={{ padding:"0.5rem 0.6rem", textAlign:"right", color:"var(--text-dim)" }}>{a.inPrior ? fmt(a.prev.hours, 1) : "\u2014"}</td>
+                    <td style={{ padding:"0.5rem 0.6rem", textAlign:"right", color:"var(--text-secondary)" }}>{fmt(a.cur.hours, 1)}</td>
+                    <td style={{ padding:"0.5rem 0.6rem", textAlign:"right", color:"var(--text-secondary)" }}>{a.cur.goals}</td>
+                    <td style={{ padding:"0.5rem 0.6rem", textAlign:"right", color:"var(--text-secondary)" }}>{a.cur.gph > 0 ? a.cur.gph.toFixed(3) : "—"}</td>
+                    <td style={{ padding:"0.5rem 0.6rem", textAlign:"right", color:"var(--text-secondary)", borderLeft:"2px solid var(--border)" }}>{a.cur.newXI}</td>
+                    <td style={{ padding:"0.5rem 0.6rem", textAlign:"right", color:"var(--text-secondary)" }}>{a.cur.xmLines}</td>
+                    <td style={{ padding:"0.5rem 0.6rem", textAlign:"right", color:"var(--text-secondary)" }}>{a.cur.newXH}</td>
+                    <td style={{ padding:"0.5rem 0.6rem", textAlign:"right", color:"var(--text-secondary)" }}>{a.cur.newVideo}</td>
+                    <td style={{ padding:"0.5rem 0.6rem", textAlign:"right", color:"var(--text-secondary)" }}>{a.cur.newVoice || 0}</td>
+                    <td style={{ padding:"0.5rem 0.6rem", textAlign:"right", color:"var(--text-dim)", borderLeft:"2px solid var(--border)" }}>{a.inPrior && a.prev.gph > 0 ? a.prev.gph.toFixed(3) : "\u2014"}</td>
+                    <td style={{ padding:"0.5rem 0.6rem", textAlign:"right", color:"var(--text-secondary)" }}>{a.inCurrent && a.cur.gph > 0 ? a.cur.gph.toFixed(3) : "\u2014"}</td>
+                    <td style={{ padding:"0.5rem 0.6rem", textAlign:"right", color:"var(--text-dim)" }}>{a.inPrior ? fmtPct(a.prev.pct) : "\u2014"}</td>
+                    <td style={{ padding:"0.5rem 0.6rem", textAlign:"right", color:attainColor(a.cur.pct), fontWeight:600 }}>{a.inCurrent ? fmtPct(a.cur.pct) : "\u2014"}</td>
+                    <td style={{ padding:"0.5rem 0.6rem", textAlign:"right", color:dColor, fontWeight:700, fontSize:"1.02rem" }}>
+                      {(a.inCurrent && a.inPrior) ? `${a.delta >= 0 ? "+" : ""}${fmtPct(a.delta)}` : "\u2014"}</td>
+                  </tr>];
+                  if (expandedAgent === a.name && a.inCurrent) {
+                    // Build weekly rollup (grouped by Mon of week) with date ranges
+                    const curRows = filterBySite(currentAgents.filter(r => r.agentName === a.name && r.jobType === activeJobType && r.date));
+                    const prevRows = filterBySite(priorAgents.filter(r => r.agentName === a.name && r.jobType === activeJobType && r.date));
+                    const getMonday = (ds) => {
+                      const [y,mo,d] = ds.split("-").map(Number);
+                      const dt = new Date(y, mo-1, d);
+                      const day = dt.getDay(); const diff = day === 0 ? -6 : 1 - day;
+                      dt.setDate(dt.getDate() + diff);
+                      const p = n => String(n).padStart(2,"0");
+                      return dt.getFullYear()+"-"+p(dt.getMonth()+1)+"-"+p(dt.getDate());
+                    };
+                    const rollupByWeek = (rows) => {
+                      const m = {};
+                      rows.forEach(r => {
+                        const mon = getMonday(r.date);
+                        if (!m[mon]) m[mon] = { hours:0, goals:0, goalsNum:0, newXI:0, xmLines:0, newXH:0, newVideo:0, newVoice:0, minD:r.date, maxD:r.date };
+                        const w = m[mon]; w.hours+=r.hours; w.goals+=r.goals; w.goalsNum+=r.goalsNum;
+                        w.newXI+=r.newXI; w.xmLines+=r.xmLines; w.newXH+=r.newXH; w.newVideo+=r.newVideo; w.newVoice+=(r.newVoice||0);
+                        if (r.date < w.minD) w.minD = r.date;
+                        if (r.date > w.maxD) w.maxD = r.date;
+                      });
+                      return m;
+                    };
+                    const fmtRange = (wkData) => {
+                      const a2 = wkData.minD.slice(5), b2 = wkData.maxD.slice(5);
+                      return a2 === b2 ? a2 : a2+" \u2013 "+b2;
+                    };
+                    const curDates = rollupByWeek(curRows);
+                    const prevDates = rollupByWeek(prevRows);
+                    const allDts = [...new Set([...Object.keys(curDates), ...Object.keys(prevDates)])].sort();
+                    const colSpan = 15; // total columns in table
+                    rows.push(
+                      <tr key={a.name+"_detail"}>
+                        <td colSpan={colSpan} style={{ padding:"0.5rem 1rem 1rem 2rem", background:"var(--bg-tertiary)", borderBottom:"2px solid var(--border)" }}>
+                          <div style={{ fontFamily:"monospace", fontSize:"0.88rem", color:"#d97706", letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:"0.5rem" }}>
+                            Week-by-Week {"\u2014"} {a.name} ({activeJobType})
+                          </div>
+                          <table style={{ width:"100%", borderCollapse:"collapse", fontFamily:"monospace", fontSize:"0.85rem" }}>
+                            <thead><tr style={{ borderBottom:"2px solid var(--border)" }}>
+                              <th style={{ padding:"0.3rem 0.5rem", textAlign:"left", color:"var(--text-muted)" }}>Period</th>
+                              <th style={{ padding:"0.3rem 0.5rem", textAlign:"left", color:"var(--text-muted)" }}>Week</th>
+                              <th style={{ padding:"0.3rem 0.5rem", textAlign:"right", color:"var(--text-muted)" }}>Hours</th>
+                              <th style={{ padding:"0.3rem 0.5rem", textAlign:"right", color:"var(--text-muted)" }}>Sales</th>
+                              <th style={{ padding:"0.3rem 0.5rem", textAlign:"right", color:"var(--text-muted)" }}>GPH</th>
+                              <th style={{ padding:"0.3rem 0.5rem", textAlign:"right", color:"var(--text-muted)" }}>HSD</th>
+                              <th style={{ padding:"0.3rem 0.5rem", textAlign:"right", color:"var(--text-muted)" }}>XM</th>
+                              <th style={{ padding:"0.3rem 0.5rem", textAlign:"right", color:"var(--text-muted)" }}>XH</th>
+                              <th style={{ padding:"0.3rem 0.5rem", textAlign:"right", color:"var(--text-muted)" }}>XV</th>
+                              <th style={{ padding:"0.3rem 0.5rem", textAlign:"right", color:"var(--text-muted)" }}>Phone</th>
+                              <th style={{ padding:"0.3rem 0.5rem", textAlign:"right", color:"var(--text-muted)" }}>% Goal</th>
+                            </tr></thead>
+                            <tbody>
+                              {Object.keys(prevDates).length > 0 && (<>
+                                {allDts.filter(dt => prevDates[dt]).map((dt,wi) => {
+                                  const w = prevDates[dt];
+                                  const gph = w.hours > 0 ? (w.goals / w.hours) : 0;
+                                  const pct = w.goalsNum > 0 ? (w.goals / w.goalsNum)*100 : 0;
+                                  return (<tr key={"p"+dt} style={{ background:wi%2===1?"var(--bg-secondary)":"transparent", borderBottom:"1px solid var(--bg-tertiary)" }}>
+                                    {wi===0 && <td rowSpan={allDts.filter(dt2=>prevDates[dt2]).length} style={{ padding:"0.3rem 0.5rem", color:"var(--text-faint)", fontWeight:600, verticalAlign:"top" }}>Prior</td>}
+                                    <td style={{ padding:"0.3rem 0.5rem", color:"var(--text-dim)" }}>  {fmtRange(prevDates[dt])}</td>
+                                    <td style={{ padding:"0.3rem 0.5rem", textAlign:"right", color:"var(--text-dim)" }}>{fmt(w.hours,1)}</td>
+                                    <td style={{ padding:"0.3rem 0.5rem", textAlign:"right", color:"var(--text-dim)" }}>{w.goals}</td>
+                                    <td style={{ padding:"0.3rem 0.5rem", textAlign:"right", color:"var(--text-dim)" }}>{gph.toFixed(3)}</td>
+                                    <td style={{ padding:"0.3rem 0.5rem", textAlign:"right", color:"var(--text-dim)" }}>{w.newXI}</td>
+                                    <td style={{ padding:"0.3rem 0.5rem", textAlign:"right", color:"var(--text-dim)" }}>{w.xmLines}</td>
+                                    <td style={{ padding:"0.3rem 0.5rem", textAlign:"right", color:"var(--text-dim)" }}>{w.newXH}</td>
+                                    <td style={{ padding:"0.3rem 0.5rem", textAlign:"right", color:"var(--text-dim)" }}>{w.newVideo}</td>
+                                    <td style={{ padding:"0.3rem 0.5rem", textAlign:"right", color:"var(--text-dim)" }}>{w.newVoice||0}</td>
+                                    <td style={{ padding:"0.3rem 0.5rem", textAlign:"right", color:attainColor(pct) }}>{fmtPct(pct)}</td>
+                                  </tr>);
+                                })}
+                                <tr style={{ borderBottom:"2px solid var(--border)", background:"var(--bg-secondary)" }}>
+                                  <td colSpan={2} style={{ padding:"0.3rem 0.5rem", color:"var(--text-muted)", fontWeight:700 }}>Prior Total</td>
+                                  <td style={{ padding:"0.3rem 0.5rem", textAlign:"right", fontWeight:700, color:"var(--text-dim)" }}>{fmt(a.prev.hours,1)}</td>
+                                  <td style={{ padding:"0.3rem 0.5rem", textAlign:"right", fontWeight:700, color:"var(--text-dim)" }}>{a.prev.goals}</td>
+                                  <td style={{ padding:"0.3rem 0.5rem", textAlign:"right", fontWeight:700, color:"var(--text-dim)" }}>{a.prev.gph.toFixed(3)}</td>
+                                  <td style={{ padding:"0.3rem 0.5rem", textAlign:"right", fontWeight:700, color:"var(--text-dim)" }}>{a.prev.newXI}</td>
+                                  <td style={{ padding:"0.3rem 0.5rem", textAlign:"right", fontWeight:700, color:"var(--text-dim)" }}>{a.prev.xmLines}</td>
+                                  <td style={{ padding:"0.3rem 0.5rem", textAlign:"right", fontWeight:700, color:"var(--text-dim)" }}>{a.prev.newXH}</td>
+                                  <td style={{ padding:"0.3rem 0.5rem", textAlign:"right", fontWeight:700, color:"var(--text-dim)" }}>{a.prev.newVideo}</td>
+                                  <td style={{ padding:"0.3rem 0.5rem", textAlign:"right", fontWeight:700, color:"var(--text-dim)" }}>{a.prev.newVoice||0}</td>
+                                  <td style={{ padding:"0.3rem 0.5rem", textAlign:"right", fontWeight:700, color:attainColor(a.prev.pct) }}>{fmtPct(a.prev.pct)}</td>
+                                </tr>
+                              </>)}
+                              {allDts.filter(dt => curDates[dt]).map((dt,wi) => {
+                                const w = curDates[dt];
+                                const gph = w.hours > 0 ? (w.goals / w.hours) : 0;
+                                const pct = w.goalsNum > 0 ? (w.goals / w.goalsNum)*100 : 0;
+                                return (<tr key={"c"+dt} style={{ background:wi%2===1?"var(--bg-secondary)":"transparent", borderBottom:"1px solid var(--bg-tertiary)" }}>
+                                  {wi===0 && <td rowSpan={allDts.filter(dt2=>curDates[dt2]).length} style={{ padding:"0.3rem 0.5rem", color:"#d97706", fontWeight:600, verticalAlign:"top" }}>Current</td>}
+                                  <td style={{ padding:"0.3rem 0.5rem", color:"var(--text-secondary)" }}>  {fmtRange(curDates[dt])}</td>
+                                  <td style={{ padding:"0.3rem 0.5rem", textAlign:"right", color:"var(--text-secondary)" }}>{fmt(w.hours,1)}</td>
+                                  <td style={{ padding:"0.3rem 0.5rem", textAlign:"right", color:"var(--text-secondary)" }}>{w.goals}</td>
+                                  <td style={{ padding:"0.3rem 0.5rem", textAlign:"right", color:"var(--text-secondary)" }}>{gph.toFixed(3)}</td>
+                                  <td style={{ padding:"0.3rem 0.5rem", textAlign:"right", color:"var(--text-secondary)" }}>{w.newXI}</td>
+                                  <td style={{ padding:"0.3rem 0.5rem", textAlign:"right", color:"var(--text-secondary)" }}>{w.xmLines}</td>
+                                  <td style={{ padding:"0.3rem 0.5rem", textAlign:"right", color:"var(--text-secondary)" }}>{w.newXH}</td>
+                                  <td style={{ padding:"0.3rem 0.5rem", textAlign:"right", color:"var(--text-secondary)" }}>{w.newVideo}</td>
+                                  <td style={{ padding:"0.3rem 0.5rem", textAlign:"right", color:"var(--text-secondary)" }}>{w.newVoice||0}</td>
+                                  <td style={{ padding:"0.3rem 0.5rem", textAlign:"right", color:attainColor(pct) }}>{fmtPct(pct)}</td>
+                                </tr>);
+                              })}
+                              <tr style={{ borderTop:"2px solid var(--border)", background:"var(--bg-secondary)" }}>
+                                <td colSpan={2} style={{ padding:"0.3rem 0.5rem", color:"#d97706", fontWeight:700 }}>Current Total</td>
+                                <td style={{ padding:"0.3rem 0.5rem", textAlign:"right", fontWeight:700, color:"var(--text-primary)" }}>{fmt(a.cur.hours,1)}</td>
+                                <td style={{ padding:"0.3rem 0.5rem", textAlign:"right", fontWeight:700, color:"var(--text-primary)" }}>{a.cur.goals}</td>
+                                <td style={{ padding:"0.3rem 0.5rem", textAlign:"right", fontWeight:700, color:"var(--text-primary)" }}>{a.cur.gph.toFixed(3)}</td>
+                                <td style={{ padding:"0.3rem 0.5rem", textAlign:"right", fontWeight:700, color:"var(--text-primary)" }}>{a.cur.newXI}</td>
+                                <td style={{ padding:"0.3rem 0.5rem", textAlign:"right", fontWeight:700, color:"var(--text-primary)" }}>{a.cur.xmLines}</td>
+                                <td style={{ padding:"0.3rem 0.5rem", textAlign:"right", fontWeight:700, color:"var(--text-primary)" }}>{a.cur.newXH}</td>
+                                <td style={{ padding:"0.3rem 0.5rem", textAlign:"right", fontWeight:700, color:"var(--text-primary)" }}>{a.cur.newVideo}</td>
+                                <td style={{ padding:"0.3rem 0.5rem", textAlign:"right", fontWeight:700, color:"var(--text-primary)" }}>{a.cur.newVoice||0}</td>
+                                <td style={{ padding:"0.3rem 0.5rem", textAlign:"right", fontWeight:700, color:attainColor(a.cur.pct) }}>{fmtPct(a.cur.pct)}</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </td>
+                      </tr>
+                    );
+                  }
+                  return rows;
+                })}</tbody>
+              </table>
+            </div>
+          </div>
+        </>)}
+      </>)}
     </div>
   );
 }
 
+
+// SECTION 12d — PROGRAM BY-SITE DRILLDOWN
+// For programs that have agents in multiple sites (e.g. DR + BZ), shows
+// per-site campaign KPIs, quartile distribution, goals vs plan, and agent lists.
 
 // ══════════════════════════════════════════════════════════════════════════════
 // SECTION 12d — PROGRAM BY-SITE DRILLDOWN
@@ -6485,8 +6838,7 @@ export default function App() {
 
   const perf = usePerformanceEngine({ rawData, goalsRaw, newHiresRaw });
   const { programs, jobTypes, newHireSet, newHires, allAgentNames } = perf;
-  const hasSpanishCallback = !!perf.spanishCallback;
-  const totalSlides = 1 + programs.length + (hasSpanishCallback ? 1 : 0);
+  const totalSlides = 1 + programs.length + 1; // Overview + programs + Campaign Comparison
 
   // Auto-load agent data from published Google Sheet
   const [sheetLoading, setSheetLoading] = useState(false);
@@ -6750,18 +7102,11 @@ export default function App() {
           />
         ) : isOverview ? (
           <BusinessOverview perf={perf} onNav={navTo} />
-        ) : (slideIndex === 1 + programs.length && hasSpanishCallback) ? (
-          <div style={{ paddingTop: "2rem", paddingBottom: "2rem", paddingLeft: "2.5rem", paddingRight: "2.5rem", minHeight: "90vh", background: `var(--bg-primary)` }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
-              <div style={{ fontFamily: "monospace", fontSize: "1.08rem", color: `var(--text-dim)`, letterSpacing: "0.15em" }}>
-                Program {slideIndex} of {totalSlides - 1} — Spanish Callback
-              </div>
-              <div style={{ display: "flex", gap: "0.5rem" }}>
-                <button onClick={() => navTo(-1)} style={{ background: "transparent", border: "1px solid var(--border-muted)", borderRadius: "5px", color: `var(--text-muted)`, padding: "0.3rem 0.8rem", fontFamily: "monospace", fontSize: "1.05rem", cursor: "pointer" }}>← Back</button>
-              </div>
-            </div>
-            <SpanishCallbackPanel sc={perf.spanishCallback} />
-          </div>
+        ) : (slideIndex === 1 + programs.length) ? (
+          <CampaignComparisonPanel
+            currentAgents={perf.agents}
+            onNav={navTo}
+          />
         ) : program ? (
           <Slide
             key={program.jobType}
