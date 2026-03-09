@@ -646,9 +646,20 @@ function getGoalEntries(goalLookup, jobType, rocCode) {
   }
 
   // 5. Fuzzy: check if any TA contains the jobType (or vice versa) via normKey
-  const fuzzyTAs = Object.keys(byTA).filter(ta =>
-    normKey(ta).includes(normJT) || normJT.includes(normKey(ta))
-  );
+  //    Require the shorter string to be at least 5 chars and match at a word boundary
+  const fuzzyTAs = Object.keys(byTA).filter(ta => {
+    const nta = normKey(ta);
+    if (nta === normJT) return false; // already checked in step 2
+    const shorter = nta.length < normJT.length ? nta : normJT;
+    const longer = nta.length < normJT.length ? normJT : nta;
+    if (shorter.length < 5) return false;
+    // Check word-boundary match: shorter must start at a word boundary in longer
+    const idx = longer.indexOf(shorter);
+    if (idx === -1) return false;
+    const before = idx === 0 || longer[idx - 1] === " ";
+    const after = idx + shorter.length >= longer.length || longer[idx + shorter.length] === " ";
+    return before || after;
+  });
   if (fuzzyTAs.length > 0) {
     return fuzzyTAs.map(ta => ({ targetAudience: ta, siteMap: byTA[ta] }));
   }
@@ -900,7 +911,27 @@ function buildPrograms(agents, goalLookup, newHireSet) {
   const jobTypes = [...new Set(mainAgents.map(a => a.jobType))].sort();
   return jobTypes.map(jt => {
     const progAgents  = selectByProgram(mainAgents, jt);
-    const goalEntries = goalLookup ? getGoalEntries(goalLookup, jt) : [];
+    // Collect ROC codes from agents in this program for precise goal matching
+    const agentRocs = [...new Set(progAgents.map(a => a.rocCode).filter(Boolean))];
+    let goalEntries = [];
+    if (goalLookup) {
+      // Try ROC-based matching first if agents have ROC codes
+      if (agentRocs.length > 0) {
+        agentRocs.forEach(roc => {
+          const rocEntries = getGoalEntries(goalLookup, jt, roc);
+          rocEntries.forEach(e => {
+            // Avoid duplicates
+            if (!goalEntries.some(existing => existing.targetAudience === e.targetAudience)) {
+              goalEntries.push(e);
+            }
+          });
+        });
+      }
+      // Fall back to name-based matching if no ROC matches found
+      if (goalEntries.length === 0) {
+        goalEntries = getGoalEntries(goalLookup, jt);
+      }
+    }
     return buildProgram(progAgents, jt, goalEntries, newHireSet);
   }).sort((a, b) => {
     if (a.attainment !== null && b.attainment !== null) return b.attainment - a.attainment;
@@ -2884,9 +2915,13 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
               { plan: p.sitePlanHsd,   actual: p.hsdAct,     fmtFn: v => v.toLocaleString() },
               { plan: p.sitePlanXm,    actual: p.xmAct,      fmtFn: v => v.toLocaleString() },
             ];
+            const rocCodes = p.goalBreakout ? p.goalBreakout.map(g => g.roc).filter(Boolean).join(", ") : "";
             return (
               <div key={p.jobType} style={{ display: "grid", gridTemplateColumns: gridCols, borderBottom: "1px solid var(--bg-tertiary)", alignItems: "center" }}>
-                <div style={{ padding: "0.5rem 0.75rem", fontFamily: "Georgia, serif", fontSize: "1.2rem", color: `var(--text-warm)` }}>{p.jobType}</div>
+                <div style={{ padding: "0.5rem 0.75rem" }}>
+                  <div style={{ fontFamily: "Georgia, serif", fontSize: "1.2rem", color: `var(--text-warm)` }}>{p.jobType}</div>
+                  {rocCodes && <div style={{ fontFamily: "monospace", fontSize: "0.8rem", color: `var(--text-faint)` }}>{rocCodes}</div>}
+                </div>
                 {renderMetricCells(metrics, false)}
               </div>
             );
