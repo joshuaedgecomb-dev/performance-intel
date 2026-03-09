@@ -6627,6 +6627,7 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
       else if (progSortBy === "hrs") { va = a.hrs; vb = b.hrs; }
       else if (progSortBy === "goals") { va = a.effectiveGoals; vb = b.effectiveGoals; }
       else if (progSortBy === "gph") { va = a.hrs > 0 ? a.effectiveGoals / a.hrs : 0; vb = b.hrs > 0 ? b.effectiveGoals / b.hrs : 0; }
+      else if (progSortBy === "cps") { va = a.effectiveGoals > 0 ? (a.hrs * 19.77) / a.effectiveGoals : a.hrs * 19.77; vb = b.effectiveGoals > 0 ? (b.hrs * 19.77) / b.effectiveGoals : b.hrs * 19.77; }
       else if (progSortBy === "rgu") { va = a.rgu || 0; vb = b.rgu || 0; }
       else if (progSortBy === "pctToGoal") { va = a.pctToGoal ?? -1; vb = b.pctToGoal ?? -1; }
       else { va = a[progSortBy] || 0; vb = b[progSortBy] || 0; }
@@ -7082,6 +7083,7 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
                 { l: "Hours", v: fmt(totHrs, 1), c: "#6366f1" },
                 { l: "Sales", v: totGoals || "—", c: "#d97706" },
                 { l: "GPH", v: totGoals > 0 ? totGph.toFixed(3) : "—", c: "#16a34a" },
+                { l: "CPS", v: totGoals > 0 ? `$${((totHrs * 19.77) / totGoals).toFixed(2)}` : `$${(totHrs * 19.77).toFixed(2)}`, c: (() => { const pv = sortedPrograms.filter(p => p.pctToGoal !== null); return pv.length > 0 ? attainColor(pv.reduce((s,p) => s + p.pctToGoal, 0) / pv.length) : `var(--text-faint)`; })() },
               ].map(({ l, v, c }) => (
                 <div key={l} style={{ textAlign: "center" }}>
                   <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "1.95rem", color: c, fontWeight: 700, lineHeight: 1 }}>{v}</div>
@@ -7102,6 +7104,7 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
                 <ProgSortTh k="hrs"        label="Hours"     right />
                 <ProgSortTh k="goals"      label="Sales"     right />
                 <ProgSortTh k="gph"        label="GPH"       right />
+                <ProgSortTh k="cps"        label="CPS"       right />
                 <ProgSortTh k="rgu"        label="RGU"       right />
                 {progActiveCodes.map(cod => {
                   const lbl = prodLabel(cod, codes);
@@ -7140,6 +7143,7 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
                       <td style={{ padding: "0.4rem 0.75rem", color: "#6366f1", textAlign: "right" }}>{fmt(p.hrs, 2)}</td>
                       <td style={{ padding: "0.4rem 0.75rem", color: eg > 0 ? "#d97706" : `var(--text-faint)`, textAlign: "right" }}>{eg || "—"}</td>
                       <td style={{ padding: "0.4rem 0.75rem", color: eg > 0 ? "#16a34a" : `var(--text-faint)`, textAlign: "right" }}>{eg > 0 ? gph.toFixed(3) : "—"}</td>
+                      <td style={{ padding: "0.4rem 0.75rem", color: p.pctToGoal !== null ? attainColor(p.pctToGoal) : `var(--text-faint)`, textAlign: "right" }}>{eg > 0 ? `$${((p.hrs * 19.77) / eg).toFixed(2)}` : `$${(p.hrs * 19.77).toFixed(2)}`}</td>
                       <td style={{ padding: "0.4rem 0.75rem", color: p.rgu > 0 ? "#2563eb" : `var(--text-faint)`, textAlign: "right" }}>{p.rgu || "—"}</td>
                       {progActiveCodes.map(cod => {
                         const v = p.products?.[cod] || 0;
@@ -7259,6 +7263,7 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
                     <td style={{ padding: "0.5rem 0.75rem", color: "#6366f1", textAlign: "right", fontWeight: 700 }}>{fmt(totHrs, 2)}</td>
                     <td style={{ padding: "0.5rem 0.75rem", color: totGoals > 0 ? "#d97706" : `var(--text-faint)`, textAlign: "right", fontWeight: 700 }}>{totGoals || "—"}</td>
                     <td style={{ padding: "0.5rem 0.75rem", color: totGoals > 0 ? "#16a34a" : `var(--text-faint)`, textAlign: "right", fontWeight: 700 }}>{totGoals > 0 ? totGph.toFixed(3) : "—"}</td>
+                    <td style={{ padding: "0.5rem 0.75rem", color: pctColor, textAlign: "right", fontWeight: 700 }}>{totGoals > 0 ? `$${((totHrs * 19.77) / totGoals).toFixed(2)}` : `$${(totHrs * 19.77).toFixed(2)}`}</td>
                     <td style={{ padding: "0.5rem 0.75rem", color: totRgu > 0 ? "#2563eb" : `var(--text-faint)`, textAlign: "right", fontWeight: 700 }}>{totRgu || "—"}</td>
                     {progActiveCodes.map(cod => {
                       const tot = sortedPrograms.reduce((s, p) => s + (p.products?.[cod] || 0), 0);
@@ -7373,7 +7378,7 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
                     <td style={{ padding: "0.4rem 0.6rem" }}>
                       <span style={{ background: regColor+"18", border: `1px solid ${regColor}40`, borderRadius: "3px", color: regColor, padding: "0.1rem 0.35rem" }}>{a.reg}</span>
                     </td>
-                    <td style={{ padding: "0.4rem 0.6rem", color: `var(--text-muted)` }} title={grpStr}>{grpStr}</td>
+                    <td style={{ padding: "0.4rem 0.6rem", color: `var(--text-muted)`, maxWidth: "140px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={grpStr}>{grpStr}</td>
                     <td style={{ padding: "0.4rem 0.6rem", color: "#6366f1", textAlign: "right" }}>{fmt(a.hrs, 2)}</td>
                     <td style={{ padding: "0.4rem 0.6rem", color: eg > 0 ? "#d97706" : `var(--text-faint)`, textAlign: "right", fontWeight: eg > 0 ? 700 : 400 }}>{eg || "—"}</td>
                     <td style={{ padding: "0.4rem 0.6rem", color: eg > 0 ? "#16a34a" : `var(--text-faint)`, textAlign: "right" }}>{gph}</td>
