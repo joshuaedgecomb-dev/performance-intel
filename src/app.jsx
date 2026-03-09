@@ -24,7 +24,9 @@ class ErrorBoundary extends Component {
 // ══════════════════════════════════════════════════════════════════════════════
 
 function parseCSV(text) {
-  const lines = text.trim().split(/\r?\n/);
+  // Strip UTF-8 BOM if present
+  const clean = text.replace(/^\uFEFF/, "").trim();
+  const lines = clean.split(/\r?\n/);
   if (lines.length < 2) return [];
   const headers = lines[0].split(",").map(h => h.trim().replace(/^"|"$/g, ""));
   return lines.slice(1).filter(l => l.trim()).map(line => {
@@ -256,6 +258,7 @@ function normalizeAgents(rows = []) {
         date:       (r.Date || "").trim(),
         weekNum:    (r["Week Number"] || r["Week"] || "").trim(),
         jobType:    (r["Job Type"] || "Unknown").trim(),
+        rocCode:    (r.Job || r.job || "").trim(),
         region,
         agentName:  (r.AgentName || "").trim(),
         supervisor: (r.SupName || r["Supervisor"] || "").trim(),
@@ -481,7 +484,7 @@ function collapseToUniqueAgents(rows) {
     if (!name) return;
     if (!map[name]) {
       map[name] = { ...a, hours: 0, goals: 0, goalsNum: 0,
-        newXI: 0, xmLines: 0, newXH: 0, newVideo: 0 };
+        newXI: 0, xmLines: 0, newXH: 0, newVideo: 0, rocCodes: new Set() };
     }
     map[name].hours    += a.hours;
     map[name].goals    += a.goals;
@@ -490,6 +493,7 @@ function collapseToUniqueAgents(rows) {
     map[name].xmLines  += (a.xmLines  || 0);
     map[name].newXH    += (a.newXH    || 0);
     map[name].newVideo += (a.newVideo  || 0);
+    if (a.rocCode) map[name].rocCodes.add(a.rocCode);
   });
   return Object.values(map);
 }
@@ -555,19 +559,34 @@ function buildGoalLookup(goalsRows) {
   const byTA      = {};   // { [targetAudience]: { [site]: [row, ...] } }
   const byProject = {};   // { [project]: [targetAudience, ...] } — for fuzzy program matching
   const byROC     = {};   // { [rocCode]: { [site]: [row, ...] } } — direct code matching
+  const byTarget  = {};   // { [fullTargetName]: { [site]: [row, ...] } } — preserves NAT/HQ distinction
 
   goalsRows.forEach(row => {
     const ta      = (findCol(row, "Target Audience", "Target") || "").trim();
+    const target  = (findCol(row, "Target") || "").trim(); // full name like "NAT MAR NS Acquisition WRNS"
     const site    = (findCol(row, "Site") || "").trim().toUpperCase();
     const project = (findCol(row, "Project", "Initiative", "Campaign Type") || "").trim();
     const rocRaw  = (findCol(row, "ROC Numbers", "ROC Number", "ROC", "ROC Code", "GL Code") || "").trim().toUpperCase();
+    const funding = (findCol(row, "Funding") || "").trim();
     const rocCodes = rocRaw ? rocRaw.split(/[,;\s]+/).map(s => s.trim()).filter(Boolean) : [];
     if (!ta || !site) return;
+
+    // Attach funding and full target name to each row for display
+    row._funding = funding;
+    row._target = target;
+    row._roc = rocCodes[0] || "";
 
     // Index by Target Audience
     if (!byTA[ta]) byTA[ta] = {};
     if (!byTA[ta][site]) byTA[ta][site] = [];
     byTA[ta][site].push(row);
+
+    // Index by full Target name (preserves NAT vs HQ)
+    if (target) {
+      if (!byTarget[target]) byTarget[target] = {};
+      if (!byTarget[target][site]) byTarget[target][site] = [];
+      byTarget[target][site].push(row);
+    }
 
     // Index by each ROC code
     rocCodes.forEach(roc => {
@@ -586,7 +605,7 @@ function buildGoalLookup(goalsRows) {
   // Convert Sets to arrays
   Object.keys(byProject).forEach(k => { byProject[k] = [...byProject[k]]; });
 
-  return { byTA, byProject, byROC };
+  return { byTA, byProject, byROC, byTarget };
 }
 
 // Get all goal entries (by Target Audience) that match a job type.
@@ -2180,12 +2199,49 @@ function PacingPanel({ fiscalInfo, metrics, title = "Pacing Analysis" }) {
 }
 
 function GoalsRollup({ agents, goalEntries, goalLookup }) {
-  // Fall back to all entries in goalLookup if no program-specific entries provided
-  const entries = (goalEntries && goalEntries.length > 0)
-    ? goalEntries
-    : goalLookup
-      ? Object.entries(goalLookup.byTA || {}).map(([ta, siteMap]) => ({ targetAudience: ta, siteMap }))
-      : [];
+  // Build entries from byTarget (full name) to preserve NAT/HQ distinction
+  // Fall back to byTA if byTarget is empty
+  const entries = useMemo(() => {
+    if (goalEntries && goalEntries.length > 0) {
+      // Expand goalEntries: for each entry, check if its rows have distinct _target names
+      // If so, split into separate sub-entries
+      const expanded = [];
+      goalEntries.forEach(entry => {
+        const allRows = Object.values(entry.siteMap).flat();
+        const targets = [...new Set(allRows.map(r => r._target).filter(Boolean))];
+        if (targets.length > 1) {
+          // Split by target name
+          targets.forEach(t => {
+            const subMap = {};
+            Object.entries(entry.siteMap).forEach(([site, rows]) => {
+              const filtered = rows.filter(r => r._target === t);
+              if (filtered.length) subMap[site] = filtered;
+            });
+            if (Object.keys(subMap).length > 0) {
+              const roc = allRows.find(r => r._target === t)?._roc || "";
+              const funding = allRows.find(r => r._target === t)?._funding || "";
+              expanded.push({ targetAudience: t, siteMap: subMap, roc, funding });
+            }
+          });
+        } else {
+          const roc = allRows[0]?._roc || "";
+          const funding = allRows[0]?._funding || "";
+          expanded.push({ ...entry, roc, funding });
+        }
+      });
+      return expanded;
+    }
+    if (goalLookup && goalLookup.byTarget) {
+      return Object.entries(goalLookup.byTarget).map(([target, siteMap]) => {
+        const allRows = Object.values(siteMap).flat();
+        return { targetAudience: target, siteMap, roc: allRows[0]?._roc || "", funding: allRows[0]?._funding || "" };
+      });
+    }
+    if (goalLookup) {
+      return Object.entries(goalLookup.byTA || {}).map(([ta, siteMap]) => ({ targetAudience: ta, siteMap, roc: "", funding: "" }));
+    }
+    return [];
+  }, [goalEntries, goalLookup]);
 
   if (entries.length === 0) {
     return (
@@ -2255,7 +2311,7 @@ function GoalsRollup({ agents, goalEntries, goalLookup }) {
   };
 
   // One panel per Target Audience entry
-  const TASection = ({ targetAudience, siteMap }) => {
+  const TASection = ({ targetAudience, siteMap, roc, funding }) => {
     const drRows = siteMap["DR"] || [];
     const bzRows = siteMap["BZ"] || [];
     const allRows = [...drRows, ...bzRows];
@@ -2284,8 +2340,13 @@ function GoalsRollup({ agents, goalEntries, goalLookup }) {
         {/* TA header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
-            <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase" }}>Target Audience</div>
-            <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "2.1rem", color: `var(--text-warm)`, fontWeight: 700, lineHeight: 1.1 }}>{targetAudience}</div>
+            <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase" }}>
+              Target{funding ? ` \u2014 ${funding}` : ""}
+            </div>
+            <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "2.1rem", color: `var(--text-warm)`, fontWeight: 700, lineHeight: 1.1 }}>
+              {targetAudience}
+              {roc && <span style={{ fontFamily: "monospace", fontSize: "1rem", color: `var(--text-dim)`, marginLeft: "0.75rem", fontWeight: 400 }}>{roc}</span>}
+            </div>
           </div>
           <div style={{ fontFamily: "monospace", fontSize: "1.01rem", color: `var(--text-dim)` }}>
             {agents.length} agents · {fmt(agents.reduce((s,a)=>s+a.hours,0),0)} total hrs
@@ -2334,8 +2395,8 @@ function GoalsRollup({ agents, goalEntries, goalLookup }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-      {entries.map(({ targetAudience, siteMap }) => (
-        <TASection key={targetAudience} targetAudience={targetAudience} siteMap={siteMap} />
+      {entries.map(({ targetAudience, siteMap, roc, funding }) => (
+        <TASection key={targetAudience + (roc||"")} targetAudience={targetAudience} siteMap={siteMap} roc={roc} funding={funding} />
       ))}
     </div>
   );
@@ -2587,6 +2648,24 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
     const sitePlanXm    = siteRows.reduce((s, r) => s + computePlanRow(r).xmGoal,    0) || null;
     const sitePlanHours = siteRows.reduce((s, r) => s + computePlanRow(r).hoursGoal, 0) || null;
 
+    // Breakout by Target/ROC within this site (preserves NAT vs HQ)
+    const goalBreakout = [];
+    const targetGroups = {};
+    siteRows.forEach(r => {
+      const t = r._target || "Unknown";
+      if (!targetGroups[t]) targetGroups[t] = { target: t, roc: r._roc || "", funding: r._funding || "", rows: [] };
+      targetGroups[t].rows.push(r);
+    });
+    Object.values(targetGroups).forEach(g => {
+      const pr = g.rows.map(r => computePlanRow(r));
+      goalBreakout.push({
+        target: g.target, roc: g.roc, funding: g.funding,
+        homes: pr.reduce((s, p2) => s + p2.homesGoal, 0),
+        hours: pr.reduce((s, p2) => s + p2.hoursGoal, 0),
+        sph: pr.length > 0 ? pr.reduce((s, p2) => s + p2.sphGoal, 0) / pr.length : 0,
+      });
+    });
+
     const attain = sitePlanGoals && sitePlanGoals > 0 ? (totalGoals / sitePlanGoals) * 100 : null;
     const hsdAct = pa.reduce((s, a) => s + a.newXI, 0);
     const hsdAtt = sitePlanHsd && sitePlanHsd > 0  ? (hsdAct / sitePlanHsd) * 100 : null;
@@ -2595,7 +2674,7 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
     const xmAct  = pa.reduce((s, a) => s + a.xmLines, 0);
 
     return { ...p, siteAgents: pa, totalGoals, totalHours, siteGph, distUn, uNames,
-             attain, hsdAtt, cpAtt, sitePlanGoals, sitePlanHsd, sitePlanXm, sitePlanHours, hsdAct, xmAct };
+             attain, hsdAtt, cpAtt, sitePlanGoals, sitePlanHsd, sitePlanXm, sitePlanHours, hsdAct, xmAct, goalBreakout };
   }).filter(Boolean);
 
   const displayLabel = subRegion || siteLabel;
@@ -2894,6 +2973,26 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
                     </span>
                   )}
                 </div>
+                {/* ROC/Target breakout when multiple funding sources */}
+                {p.goalBreakout && p.goalBreakout.length > 1 && (
+                  <div style={{ marginTop: "0.6rem", borderTop: `1px solid var(--border)`, paddingTop: "0.5rem" }}>
+                    <div style={{ fontFamily: "monospace", fontSize: "0.85rem", color: `var(--text-faint)`, letterSpacing: "0.1em", marginBottom: "0.3rem" }}>GOAL BREAKOUT</div>
+                    {p.goalBreakout.map(g => (
+                      <div key={g.roc || g.target} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.25rem 0", borderBottom: "1px solid var(--bg-tertiary)" }}>
+                        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                          <span style={{ fontFamily: "monospace", fontSize: "0.9rem", color: `var(--text-muted)` }}>{g.roc}</span>
+                          <span style={{ fontFamily: "Georgia, serif", fontSize: "1rem", color: `var(--text-secondary)` }}>{g.target}</span>
+                          {g.funding && <span style={{ fontFamily: "monospace", fontSize: "0.85rem", color: "#6366f1", background: "#6366f108", border: "1px solid #6366f130", borderRadius: "3px", padding: "0 0.3rem" }}>{g.funding}</span>}
+                        </div>
+                        <div style={{ display: "flex", gap: "1rem", fontFamily: "monospace", fontSize: "0.95rem" }}>
+                          <span style={{ color: `var(--text-dim)` }}>{g.homes.toLocaleString()} homes</span>
+                          <span style={{ color: `var(--text-dim)` }}>{Math.round(g.hours).toLocaleString()} hrs</span>
+                          <span style={{ color: `var(--text-dim)` }}>SPH {g.sph.toFixed(3)}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -4690,21 +4789,55 @@ function ProgramBySiteTab({ agents, regions, siteBuckets, jobType, goalEntry, go
 function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal, programs, goalLookup }) {
   const [dailyRegion, setDailyRegion] = useState("Combined");
   const [dailyProgram, setDailyProgram] = useState("All");
+  const [dailyRocFilter, setDailyRocFilter] = useState(null);
 
-  // Determine active agents: filter by selected program if drilled down
+  // Determine active agents: filter by selected program, then by ROC if drilled down
   const activeAgents = useMemo(() => {
-    if (!programs || dailyProgram === "All") return allAgentsProp;
-    return allAgentsProp.filter(a => (a.jobType || "Unknown") === dailyProgram);
-  }, [allAgentsProp, programs, dailyProgram]);
+    let filtered = allAgentsProp;
+    if (programs && dailyProgram !== "All") {
+      filtered = filtered.filter(a => (a.jobType || "Unknown") === dailyProgram);
+    }
+    if (dailyRocFilter) {
+      filtered = filtered.filter(a => a.rocCode === dailyRocFilter);
+    }
+    return filtered;
+  }, [allAgentsProp, programs, dailyProgram, dailyRocFilter]);
 
   // Active sphGoal: use program-specific sphGoal when drilled into a program
   const activeSphGoal = useMemo(() => {
+    // If ROC filter is active, use that ROC's specific SPH goal
+    if (dailyRocFilter && goalLookup && dailyProgram !== "All") {
+      const entries = getGoalEntries(goalLookup, dailyProgram);
+      const allRows = entries.flatMap(e => Object.values(e.siteMap).flat());
+      const rocRows = allRows.filter(r => r._roc === dailyRocFilter);
+      if (rocRows.length > 0) {
+        const vals = rocRows.map(r => computePlanRow(r).sphGoal).filter(v => v > 0);
+        if (vals.length > 0) return vals.reduce((s,v) => s + v, 0) / vals.length;
+      }
+    }
     if (sphGoal) return sphGoal;
     if (!programs || dailyProgram === "All") return null;
-    // Get sphGoal from the first agent row that has one for this program
     const vals = activeAgents.map(a => a.sphGoal).filter(v => v > 0);
     return vals.length > 0 ? vals[0] : null;
-  }, [sphGoal, programs, dailyProgram, activeAgents]);
+  }, [sphGoal, programs, dailyProgram, activeAgents, dailyRocFilter, goalLookup]);
+
+  // ROC-filtered plan totals for display in table header
+  const rocPlanInfo = useMemo(() => {
+    if (!goalLookup || dailyProgram === "All") return null;
+    const entries = getGoalEntries(goalLookup, dailyProgram);
+    const allRows = entries.flatMap(e => Object.values(e.siteMap).flat());
+    const rows = dailyRocFilter ? allRows.filter(r => r._roc === dailyRocFilter) : allRows;
+    if (rows.length === 0) return null;
+    const pr = rows.map(r => computePlanRow(r));
+    const target = rows[0]?._target || "";
+    const funding = rows[0]?._funding || "";
+    return {
+      target, funding,
+      homes: pr.reduce((a, p) => a + p.homesGoal, 0),
+      hours: pr.reduce((a, p) => a + p.hoursGoal, 0),
+      sph: pr.reduce((a, p) => a + p.sphGoal, 0) / pr.length,
+    };
+  }, [goalLookup, dailyProgram, dailyRocFilter]);
 
   // Build region names from active agents — group BZ sites together
   const regionInfo = useMemo(() => {
@@ -4813,6 +4946,11 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
       <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1.5rem" }}>
         <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.75rem" }}>
           Daily Performance Breakdown — {displayLabel}
+          {dailyRocFilter && rocPlanInfo && (
+            <span style={{ marginLeft: "0.75rem", fontSize: "0.95rem", color: "#6366f1", letterSpacing: "0.05em", textTransform: "none" }}>
+              {dailyRocFilter} {rocPlanInfo.funding ? `(${rocPlanInfo.funding})` : ""} — {rocPlanInfo.homes.toLocaleString()} homes / {Math.round(rocPlanInfo.hours).toLocaleString()} hrs / SPH {rocPlanInfo.sph.toFixed(3)}
+            </span>
+          )}
         </div>
 
         {/* Region/site tabs */}
@@ -4843,6 +4981,45 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
         )}
 
         {/* Program drill-down tabs (only in All Programs mode) */}
+        {/* Funding / ROC goal breakout for current program */}
+        {goalLookup && dailyProgram !== "All" && (() => {
+          const entries = getGoalEntries(goalLookup, dailyProgram);
+          const allRows = entries.flatMap(e => Object.values(e.siteMap).flat());
+          let targets = [...new Set(allRows.map(r => r._target).filter(Boolean))];
+          if (dailyRocFilter) targets = targets.filter(t => allRows.some(r => r._target === t && r._roc === dailyRocFilter));
+          if (targets.length === 0) return null;
+          const isBZ = dailyRegion !== "Combined" && dailyRegion.toUpperCase().includes("XOTM");
+          const isDR = dailyRegion !== "Combined" && !isBZ && dailyRegion !== "Combined (BZ)";
+          const isBZCombo = dailyRegion === "Combined (BZ)";
+          const siteKey = isDR ? "DR" : (isBZ || isBZCombo) ? "BZ" : null;
+          return (
+            <div style={{ background: `var(--bg-tertiary)`, borderRadius: "8px", padding: "0.75rem 1rem", marginBottom: "0.75rem" }}>
+              <div style={{ fontFamily: "monospace", fontSize: "0.85rem", color: `var(--text-faint)`, letterSpacing: "0.08em", marginBottom: "0.4rem" }}>GOAL TARGETS BY FUNDING</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem" }}>
+                {targets.map(t => {
+                  const tRows = allRows.filter(r => r._target === t);
+                  const filtered = siteKey ? tRows.filter(r => (findCol(r, "Site") || "").trim().toUpperCase() === siteKey) : tRows;
+                  if (filtered.length === 0) return null;
+                  const pr = filtered.map(r => computePlanRow(r));
+                  const homes = pr.reduce((a, p) => a + p.homesGoal, 0);
+                  const hours = pr.reduce((a, p) => a + p.hoursGoal, 0);
+                  const sphG = pr.length > 0 ? pr.reduce((a, p) => a + p.sphGoal, 0) / pr.length : 0;
+                  const funding = tRows[0]?._funding || "";
+                  const roc = tRows[0]?._roc || "";
+                  return (
+                    <div key={t} style={{ display: "flex", gap: "0.5rem", alignItems: "center", padding: "0.3rem 0.6rem", background: `var(--bg-secondary)`, borderRadius: "6px", border: "1px solid var(--border)" }}>
+                      {funding && <span style={{ fontFamily: "monospace", fontSize: "0.8rem", color: "#6366f1", background: "#6366f108", border: "1px solid #6366f130", borderRadius: "3px", padding: "0 0.25rem" }}>{funding}</span>}
+                      <span style={{ fontFamily: "monospace", fontSize: "0.85rem", color: `var(--text-dim)` }}>{roc}</span>
+                      <span style={{ fontFamily: "monospace", fontSize: "0.9rem", color: `var(--text-secondary)` }}>{homes.toLocaleString()} homes</span>
+                      <span style={{ fontFamily: "monospace", fontSize: "0.9rem", color: `var(--text-dim)` }}>{Math.round(hours).toLocaleString()} hrs</span>
+                      <span style={{ fontFamily: "monospace", fontSize: "0.9rem", color: `var(--text-dim)` }}>SPH {sphG.toFixed(3)}</span>
+                    </div>
+                  );
+                }).filter(Boolean)}
+              </div>
+            </div>
+          );
+        })()}
         {programList.length > 0 && (
           <div style={{ marginBottom: "0.75rem" }}>
             <div style={{ fontFamily: "monospace", fontSize: "0.9rem", color: `var(--text-faint)`, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "0.35rem" }}>Program</div>
@@ -4858,7 +5035,7 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
               {programList.map(p => {
                 const active = dailyProgram === p.jobType;
                 return (
-                  <button key={p.jobType} onClick={() => { setDailyProgram(p.jobType); setDailyRegion("Combined"); }}
+                  <button key={p.jobType} onClick={() => { setDailyProgram(p.jobType); setDailyRegion("Combined"); setDailyRocFilter(null); }}
                     style={{ padding: "0.3rem 0.75rem", borderRadius: "5px",
                       border: `1px solid ${active ? "#2563eb" : `var(--border)`}`,
                       background: active ? "#2563eb18" : "transparent",
@@ -4870,6 +5047,32 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
                 );
               })}
             </div>
+            {/* ROC drilldown buttons — appear when selected program has multiple funding sources */}
+            {dailyProgram !== "All" && goalLookup && (() => {
+              const entries = getGoalEntries(goalLookup, dailyProgram);
+              const allRows = entries.flatMap(e => Object.values(e.siteMap).flat());
+              const targets = [...new Set(allRows.map(r => r._target).filter(Boolean))];
+              if (targets.length <= 1) return null;
+              const opts = targets.map(t => {
+                const row = allRows.find(r => r._target === t);
+                return { target: t, roc: row?._roc || "", funding: row?._funding || "" };
+              });
+              return (
+                <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap", marginTop: "0.5rem" }}>
+                  <button onClick={() => setDailyRocFilter(null)}
+                    style={{ padding: "0.2rem 0.6rem", borderRadius: "5px", border: `1px solid ${!dailyRocFilter ? "#6366f1" : "var(--border)"}`, background: !dailyRocFilter ? "#6366f118" : "transparent", color: !dailyRocFilter ? "#6366f1" : `var(--text-dim)`, fontFamily: "monospace", fontSize: "0.9rem", cursor: "pointer" }}>
+                    All ROCs
+                  </button>
+                  {opts.map(opt => (
+                    <button key={opt.roc} onClick={() => setDailyRocFilter(dailyRocFilter === opt.roc ? null : opt.roc)}
+                      style={{ padding: "0.2rem 0.6rem", borderRadius: "5px", border: `1px solid ${dailyRocFilter === opt.roc ? "#6366f1" : "var(--border)"}`, background: dailyRocFilter === opt.roc ? "#6366f118" : "transparent", color: dailyRocFilter === opt.roc ? "#6366f1" : `var(--text-dim)`, fontFamily: "monospace", fontSize: "0.9rem", cursor: "pointer", display: "flex", gap: "0.3rem", alignItems: "center" }}>
+                      <span>{opt.roc}</span>
+                      {opt.funding && <span style={{ fontSize: "0.8rem", color: dailyRocFilter === opt.roc ? "#818cf8" : `var(--text-faint)` }}>{opt.funding}</span>}
+                    </button>
+                  ))}
+                </div>
+              );
+            })()}
           </div>
         )}
 
@@ -4995,6 +5198,7 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
 
 function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total, onNav, allAgents }) {
   const [tab, setTab] = useState("overview");
+  const [rocFilter, setRocFilter] = useState(null); // null = all, or a specific ROC code
 
   const {
     jobType, agents, regions,
@@ -5010,6 +5214,19 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
   } = program;
 
   const allAgentsCtx = useMemo(() => agents, [agents]);
+
+  // ROC-filtered agents for drilldown
+  const filteredAgents = useMemo(() => {
+    if (!rocFilter) return agents;
+    return agents.filter(a => a.rocCode === rocFilter);
+  }, [agents, rocFilter]);
+  const fTotalHours = rocFilter ? filteredAgents.reduce((s, a) => s + a.hours, 0) : totalHours;
+  const fTotalGoals = rocFilter ? filteredAgents.reduce((s, a) => s + a.goals, 0) : totalGoals;
+  const fGph = fTotalHours > 0 ? fTotalGoals / fTotalHours : 0;
+  const fTotalNewXI = rocFilter ? filteredAgents.reduce((s, a) => s + a.newXI, 0) : totalNewXI;
+  const fTotalXmLines = rocFilter ? filteredAgents.reduce((s, a) => s + a.xmLines, 0) : totalXmLines;
+  const fTotalRgu = rocFilter ? filteredAgents.reduce((s, a) => s + a.rgu, 0) : totalRgu;
+  const fUniqueCount = rocFilter ? uniqueNames(filteredAgents).size : uniqueAgentCount;
   const winInsights  = useMemo(() => generateWinInsights(program), [program]);
   const narrative    = useMemo(() => generateNarrative(program, fiscalInfo, newHireSet), [program, fiscalInfo, newHireSet]);
   const oppInsights  = useMemo(() => generateOppInsights(program, allAgentsCtx, newHireSet), [program, allAgentsCtx, newHireSet]);
@@ -5017,6 +5234,18 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
   const hasSupervisors = agents.some(a => a.supervisor);
   const hasWeeklyData  = agents.some(a => a.weekNum);
   const hasMultipleSites = regions.length > 1;
+
+  // ROC/funding drilldown options
+  const rocOptions = useMemo(() => {
+    if (!goalEntry) return [];
+    const allRows = Object.values(goalEntry).flat();
+    const targets = [...new Set(allRows.map(r => r._target).filter(Boolean))];
+    if (targets.length <= 1) return [];
+    return targets.map(t => {
+      const row = allRows.find(r => r._target === t);
+      return { target: t, roc: row?._roc || "", funding: row?._funding || "" };
+    });
+  }, [goalEntry]);
   const tabs = [
     "overview",
     ...(hasMultipleSites ? ["bysite"] : []),
@@ -5040,6 +5269,21 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
           <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "3.38rem", color: `var(--text-warm)`, fontWeight: 700, letterSpacing: "-0.5px", lineHeight: 1.1 }}>
             {jobType}
           </div>
+          {rocOptions.length > 0 && (
+            <div style={{ display: "flex", gap: "0.35rem", marginTop: "0.4rem", flexWrap: "wrap" }}>
+              <button onClick={() => setRocFilter(null)}
+                style={{ padding: "0.2rem 0.6rem", borderRadius: "5px", border: `1px solid ${!rocFilter ? "#d97706" : "var(--border)"}`, background: !rocFilter ? "#d9770618" : "transparent", color: !rocFilter ? "#d97706" : `var(--text-dim)`, fontFamily: "monospace", fontSize: "0.9rem", cursor: "pointer" }}>
+                All
+              </button>
+              {rocOptions.map(opt => (
+                <button key={opt.roc} onClick={() => setRocFilter(rocFilter === opt.roc ? null : opt.roc)}
+                  style={{ padding: "0.2rem 0.6rem", borderRadius: "5px", border: `1px solid ${rocFilter === opt.roc ? "#6366f1" : "var(--border)"}`, background: rocFilter === opt.roc ? "#6366f118" : "transparent", color: rocFilter === opt.roc ? "#6366f1" : `var(--text-dim)`, fontFamily: "monospace", fontSize: "0.9rem", cursor: "pointer", display: "flex", gap: "0.3rem", alignItems: "center" }}>
+                  <span>{opt.roc}</span>
+                  {opt.funding && <span style={{ fontSize: "0.8rem", color: rocFilter === opt.roc ? "#818cf8" : `var(--text-faint)` }}>{opt.funding}</span>}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
           {tabs.map(t => (
@@ -5059,11 +5303,11 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
           <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
             {/* Stat cards */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "0.75rem" }}>
-              <StatCard label="Q1 Rate"      value={`${q1Rate}%`}           sub={`${distUnique.Q1} of ${uniqueAgentCount} unique agents`} accent="#d97706" />
-              <StatCard label="GPH"          value={fmt(gph, 2)}            sub="sum goals / sum hours"                                   accent="#2563eb" />
-              <StatCard label="Total Goals"  value={totalGoals}             sub={planGoals ? `of ${planGoals} plan (${Math.round(attainment)}%)` : "conversions"} accent="#16a34a" />
-              <StatCard label="Total Hours"  value={fmt(totalHours, 0)}     sub={`${highHoursCount} over 16 hrs`}                         accent="#6366f1" />
-              <StatCard label="Health Score" value={Math.round(healthScore)} sub="0–100 composite"                                         accent={attainColor(healthScore)} />
+              <StatCard label="Agents"       value={fUniqueCount}            sub={rocFilter ? `filtered by ${rocFilter}` : `${distUnique.Q1} Q1 of ${uniqueAgentCount}`} accent="#d97706" />
+              <StatCard label="GPH"          value={fmt(fGph, 2)}            sub="sum goals / sum hours"                                   accent="#2563eb" />
+              <StatCard label="Total Goals"  value={fTotalGoals}             sub={planGoals ? `of ${planGoals} plan (${Math.round(attainment)}%)` : "conversions"} accent="#16a34a" />
+              <StatCard label="Total Hours"  value={fmt(fTotalHours, 0)}     sub={rocFilter ? `${rocFilter} agents` : `${highHoursCount} over 16 hrs`} accent="#6366f1" />
+              <StatCard label="Health Score" value={Math.round(healthScore)} sub="0\u2013100 composite"                                         accent={attainColor(healthScore)} />
             </div>
 
             {/* Narrative Summary */}
@@ -5086,19 +5330,94 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
             )}
 
             {/* Goals vs Plan — immediately after stat cards when goals loaded */}
-            {goalEntry && (
-              <MetricComparePanel
-                title={`Goals vs Plan — ${jobType}`}
-                fiscalInfo={fiscalInfo}
-                metrics={[
-                  { label: "Total Hours",  actual: totalHours,   plan: getPlanForKey(goalEntry, "Hours Goal")      },
-                  { label: "Total Goals",  actual: actGoals,     plan: getPlanForKey(goalEntry, "HOMES GOAL")       },
-                  { label: "Total RGU",    actual: totalRgu,     plan: getPlanForKey(goalEntry, "RGU GOAL")         },
-                  { label: "New XI (HSD)", actual: totalNewXI,   plan: getPlanForKey(goalEntry, "HSD Sell In Goal") },
-                  { label: "XM Lines",     actual: totalXmLines, plan: hasXMLines ? getPlanForKey(goalEntry, "XM GOAL") : null },
-                ]}
-              />
-            )}
+            {goalEntry && (() => {
+              // Filter goalEntry rows by selected ROC if active
+              const filteredEntry = rocFilter ? Object.fromEntries(
+                Object.entries(goalEntry).map(([site, rows]) => [site, rows.filter(r => r._roc === rocFilter)]).filter(([, rows]) => rows.length > 0)
+              ) : goalEntry;
+              const rocLabel = rocFilter ? rocOptions.find(o => o.roc === rocFilter) : null;
+              const title = rocFilter ? `Goals vs Plan — ${rocLabel?.target || rocFilter} (${rocLabel?.funding || ""})` : `Goals vs Plan — ${jobType}`;
+              if (Object.keys(filteredEntry).length === 0) return null;
+              return (
+                <MetricComparePanel
+                  title={title}
+                  fiscalInfo={fiscalInfo}
+                  metrics={[
+                    { label: "Total Hours",  actual: totalHours,   plan: getPlanForKey(filteredEntry, "Hours Goal")      },
+                    { label: "Total Goals",  actual: actGoals,     plan: getPlanForKey(filteredEntry, "HOMES GOAL")       },
+                    { label: "Total RGU",    actual: totalRgu,     plan: getPlanForKey(filteredEntry, "RGU GOAL")         },
+                    { label: "New XI (HSD)", actual: totalNewXI,   plan: getPlanForKey(filteredEntry, "HSD Sell In Goal") },
+                    { label: "XM Lines",     actual: totalXmLines, plan: hasXMLines ? getPlanForKey(filteredEntry, "XM GOAL") : null },
+                  ]}
+                />
+              );
+            })()}
+
+            {/* Funding / ROC breakout — shows goal targets per funding source */}
+            {(() => {
+              if (!goalEntry) return null;
+              const allRows = Object.values(goalEntry).flat();
+              const targets = [...new Set(allRows.map(r => r._target).filter(Boolean))];
+              if (targets.length === 0) return null;
+              const sites = Object.keys(goalEntry);
+              return (
+                <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1.25rem 1.5rem" }}>
+                  <div style={{ fontFamily: "monospace", fontSize: "0.95rem", color: `var(--text-faint)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.75rem" }}>
+                    GOAL BREAKOUT BY FUNDING
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: `2.5fr ${sites.map(() => "1fr 1fr 1fr").join(" ")}`, gap: "0.4rem 0.75rem", alignItems: "center" }}>
+                    {/* Header */}
+                    <div style={{ fontFamily: "monospace", fontSize: "0.85rem", color: `var(--text-faint)` }}>Target</div>
+                    {sites.map(s => (
+                      <Fragment key={s}>
+                        <div style={{ fontFamily: "monospace", fontSize: "0.85rem", color: `var(--text-faint)`, textAlign: "right" }}>{s} Homes</div>
+                        <div style={{ fontFamily: "monospace", fontSize: "0.85rem", color: `var(--text-faint)`, textAlign: "right" }}>{s} Hours</div>
+                        <div style={{ fontFamily: "monospace", fontSize: "0.85rem", color: `var(--text-faint)`, textAlign: "right" }}>{s} SPH</div>
+                      </Fragment>
+                    ))}
+                    {/* Rows per target */}
+                    {targets.map(t => {
+                      const tRows = allRows.filter(r => r._target === t);
+                      const funding = tRows[0]?._funding || "";
+                      const roc = tRows[0]?._roc || "";
+                      return (
+                        <Fragment key={t}>
+                          <div style={{ display: "flex", gap: "0.4rem", alignItems: "center", padding: "0.3rem 0", borderTop: "1px solid var(--bg-tertiary)" }}>
+                            <span style={{ fontFamily: "monospace", fontSize: "0.88rem", color: `var(--text-dim)` }}>{roc}</span>
+                            <span style={{ fontFamily: "Georgia, serif", fontSize: "1rem", color: `var(--text-secondary)` }}>{t}</span>
+                            {funding && <span style={{ fontFamily: "monospace", fontSize: "0.8rem", color: "#6366f1", background: "#6366f108", border: "1px solid #6366f130", borderRadius: "3px", padding: "0 0.25rem" }}>{funding}</span>}
+                          </div>
+                          {sites.map(s => {
+                            const sRows = tRows.filter(r => {
+                              const rSite = (findCol(r, "Site") || "").trim().toUpperCase();
+                              return rSite === s;
+                            });
+                            if (sRows.length === 0) return (
+                              <Fragment key={s}>
+                                <div style={{ textAlign: "right", fontFamily: "monospace", fontSize: "0.95rem", color: `var(--text-faint)`, borderTop: "1px solid var(--bg-tertiary)", padding: "0.3rem 0" }}>{"\u2014"}</div>
+                                <div style={{ textAlign: "right", fontFamily: "monospace", fontSize: "0.95rem", color: `var(--text-faint)`, borderTop: "1px solid var(--bg-tertiary)", padding: "0.3rem 0" }}>{"\u2014"}</div>
+                                <div style={{ textAlign: "right", fontFamily: "monospace", fontSize: "0.95rem", color: `var(--text-faint)`, borderTop: "1px solid var(--bg-tertiary)", padding: "0.3rem 0" }}>{"\u2014"}</div>
+                              </Fragment>
+                            );
+                            const pr = sRows.map(r => computePlanRow(r));
+                            const homes = pr.reduce((a, p) => a + p.homesGoal, 0);
+                            const hours = pr.reduce((a, p) => a + p.hoursGoal, 0);
+                            const sph = pr.length > 0 ? pr.reduce((a, p) => a + p.sphGoal, 0) / pr.length : 0;
+                            return (
+                              <Fragment key={s}>
+                                <div style={{ textAlign: "right", fontFamily: "monospace", fontSize: "0.95rem", color: `var(--text-primary)`, borderTop: "1px solid var(--bg-tertiary)", padding: "0.3rem 0" }}>{homes.toLocaleString()}</div>
+                                <div style={{ textAlign: "right", fontFamily: "monospace", fontSize: "0.95rem", color: `var(--text-primary)`, borderTop: "1px solid var(--bg-tertiary)", padding: "0.3rem 0" }}>{Math.round(hours).toLocaleString()}</div>
+                                <div style={{ textAlign: "right", fontFamily: "monospace", fontSize: "0.95rem", color: `var(--text-primary)`, borderTop: "1px solid var(--bg-tertiary)", padding: "0.3rem 0" }}>{sph.toFixed(3)}</div>
+                              </Fragment>
+                            );
+                          })}
+                        </Fragment>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Quartile breakdown */}
             <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1.5rem" }}>
@@ -5351,7 +5670,7 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
 
         {/* ── DAILY TAB ── */}
         {tab === "daily" && (
-          <DailyBreakdownPanel agents={agents} regions={regions} jobType={jobType} sphGoal={
+          <DailyBreakdownPanel agents={filteredAgents} regions={regions} jobType={jobType} sphGoal={
             goalEntries.length > 0
               ? (() => {
                   const allRows = goalEntries.flatMap(e => Object.values(e.siteMap).flat());
