@@ -3738,10 +3738,30 @@ function buildSupInsights(s, supWeeks, crossProgramMap, lastDataDate, currentJob
 
       // Only flag if total across ALL programs is low for the elapsed days
       if (totalHrsAllJobs < expected * 0.6) {
-        out.push(`${first} logged ${fmt(totalHrsAllJobs, 1)} total hrs in ${weekLabel(wk)} (${elapsedDays}-day week, expected ~${expected} hrs)${otherProgs.length > 0 ? ` — split across: ${currentJobType} (${fmt(hrsThisJob,1)}h), ${otherProgs.map(p => `${p} (${fmt(crossWeek.programs[p]||0,1)}h)`).join(", ")}` : ""}`);
+        const splitDetails = otherProgs.length > 0 ? (() => {
+          const parts = [`${currentJobType} (${fmt(hrsThisJob,1)}h)`];
+          otherProgs.forEach(p => {
+            const pd = crossWeek?.programs?.[p];
+            if (!pd) return;
+            const ph = typeof pd === "number" ? pd : pd?.hrs || 0;
+            const pg = typeof pd === "number" ? 0 : pd?.goals || 0;
+            const pgph = ph > 0 ? (pg / ph).toFixed(3) : "0";
+            parts.push(`${p} (${fmt(ph,1)}h, ${pg} sales, ${pgph} GPH)`);
+          });
+          return ` — split across: ${parts.join(", ")}`;
+        })() : "";
+        out.push(`${first} logged ${fmt(totalHrsAllJobs, 1)} total hrs in ${weekLabel(wk)} (${elapsedDays}-day week, expected ~${expected} hrs)${splitDetails}`);
       } else if (hrsThisJob < expected * 0.5 && otherProgs.length > 0) {
-        // Low in THIS program but fine overall — informational note about split
-        out.push(`${first}: ${fmt(hrsThisJob, 1)} hrs in ${weekLabel(wk)} for this program (${fmt(totalHrsAllJobs, 1)} hrs total — also works: ${otherProgs.join(", ")})`);
+        // Low in THIS program but fine overall — show detailed breakdown of other programs
+        const progDetails = otherProgs.map(p => {
+          const pd = crossWeek?.programs?.[p];
+          if (!pd || typeof pd === "number") return `${p} ${fmt(typeof pd === "number" ? pd : pd?.hrs || 0, 1)}h`;
+          const progGph = pd.hrs > 0 ? (pd.goals / pd.hrs).toFixed(3) : "0";
+          const dateList = pd.dates ? [...pd.dates].sort() : [];
+          const dateRange = dateList.length > 1 ? `${dateList[0]} \u2192 ${dateList[dateList.length-1]}` : dateList[0] || "";
+          return `${p}: ${fmt(pd.hrs, 1)}h, ${pd.goals} sales, ${progGph} GPH${dateRange ? ` (${dateRange})` : ""}`;
+        });
+        out.push(`${first}: ${fmt(hrsThisJob, 1)} hrs in ${weekLabel(wk)} for this program (${fmt(totalHrsAllJobs, 1)} hrs total). Other programs: ${progDetails.join("; ")}`);
       }
     }
 
@@ -3749,7 +3769,33 @@ function buildSupInsights(s, supWeeks, crossProgramMap, lastDataDate, currentJob
     for (let i = 1; i < workedDates.length; i++) {
       const diff = Math.round((new Date(workedDates[i]) - new Date(workedDates[i-1])) / 86400000);
       if (diff >= 5) {
-        out.push(`${first} missed ${diff - 1} days (absent ${workedDates[i-1]} → returned ${workedDates[i]})`);
+        // Show what they did on the days around the gap
+        const returnDate = workedDates[i];
+        const lastBefore = workedDates[i-1];
+        const crossDaily = crossProgramMap[name]?._daily || {};
+
+        // Performance on last day before absence
+        const beforeDay = crossDaily[lastBefore];
+        const beforeDetail = beforeDay ? Object.entries(beforeDay.programs).map(([p, pd]) => {
+          const ph = typeof pd === "number" ? pd : pd?.hrs || 0;
+          const pg = typeof pd === "number" ? 0 : pd?.goals || 0;
+          return `${p}: ${fmt(ph, 1)}h, ${pg} sales`;
+        }).join("; ") : "";
+
+        // Performance on return day
+        const returnDay = crossDaily[returnDate];
+        const returnDetail = returnDay ? Object.entries(returnDay.programs).map(([p, pd]) => {
+          const ph = typeof pd === "number" ? pd : pd?.hrs || 0;
+          const pg = typeof pd === "number" ? 0 : pd?.goals || 0;
+          return `${p}: ${fmt(ph, 1)}h, ${pg} sales`;
+        }).join("; ") : "";
+
+        let gapMsg = `${first} missed ${diff - 1} days (last worked ${lastBefore}`;
+        if (beforeDetail) gapMsg += ` [${beforeDetail}]`;
+        gapMsg += ` \u2192 returned ${returnDate}`;
+        if (returnDetail) gapMsg += ` [${returnDetail}]`;
+        gapMsg += ")";
+        out.push(gapMsg);
         i++;
       }
     }
@@ -3928,20 +3974,27 @@ function TeamsView({ agents, jobType, sphGoal, allAgents }) {
     (allAgents || []).forEach(a => {
       if (!a.agentName || !a.weekNum) return;
       if (!map[a.agentName]) map[a.agentName] = {};
-      if (!map[a.agentName][a.weekNum]) map[a.agentName][a.weekNum] = { totalHrs: 0, programs: {} };
+      if (!map[a.agentName][a.weekNum]) map[a.agentName][a.weekNum] = { totalHrs: 0, totalGoals: 0, programs: {} };
       map[a.agentName][a.weekNum].totalHrs += a.hours;
+      map[a.agentName][a.weekNum].totalGoals += a.goals;
       const jt = a.jobType || "Unknown";
-      map[a.agentName][a.weekNum].programs[jt] = (map[a.agentName][a.weekNum].programs[jt] || 0) + a.hours;
+      if (!map[a.agentName][a.weekNum].programs[jt]) map[a.agentName][a.weekNum].programs[jt] = { hrs: 0, goals: 0, dates: new Set() };
+      map[a.agentName][a.weekNum].programs[jt].hrs += a.hours;
+      map[a.agentName][a.weekNum].programs[jt].goals += a.goals;
+      if (a.date) map[a.agentName][a.weekNum].programs[jt].dates.add(a.date);
     });
     // Also build per-agent per-date cross-program totals
     (allAgents || []).forEach(a => {
       if (!a.agentName || !a.date) return;
       if (!map[a.agentName]) map[a.agentName] = {};
       if (!map[a.agentName]._daily) map[a.agentName]._daily = {};
-      if (!map[a.agentName]._daily[a.date]) map[a.agentName]._daily[a.date] = { totalHrs: 0, programs: {} };
+      if (!map[a.agentName]._daily[a.date]) map[a.agentName]._daily[a.date] = { totalHrs: 0, totalGoals: 0, programs: {} };
       map[a.agentName]._daily[a.date].totalHrs += a.hours;
+      map[a.agentName]._daily[a.date].totalGoals += a.goals;
       const jt = a.jobType || "Unknown";
-      map[a.agentName]._daily[a.date].programs[jt] = (map[a.agentName]._daily[a.date].programs[jt] || 0) + a.hours;
+      if (!map[a.agentName]._daily[a.date].programs[jt]) map[a.agentName]._daily[a.date].programs[jt] = { hrs: 0, goals: 0 };
+      map[a.agentName]._daily[a.date].programs[jt].hrs += a.hours;
+      map[a.agentName]._daily[a.date].programs[jt].goals += a.goals;
     });
     return map;
   }, [allAgents]);
@@ -7099,6 +7152,7 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
                 return (
                   <tr style={{ borderTop: "2px solid var(--border)", background: `var(--bg-row-alt)` }}>
                     <td style={{ padding: "0.5rem 0.75rem", color: `var(--text-warm)`, fontWeight: 700 }}>TOTAL</td>
+                    <td style={{ padding: "0.5rem 0.75rem" }}></td>
                     <td style={{ padding: "0.5rem 0.75rem" }}></td>
                     <td style={{ padding: "0.5rem 0.75rem", color: `var(--text-warm)`, textAlign: "right", fontWeight: 700 }}>{totAgents}</td>
                     <td style={{ padding: "0.5rem 0.75rem", color: "#6366f1", textAlign: "right", fontWeight: 700 }}>{fmt(totHrs, 2)}</td>
