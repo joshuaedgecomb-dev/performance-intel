@@ -7010,14 +7010,10 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
 
                 // If a specific BZ site is selected, show all as flat rows (no grouping)
                 if (bzSiteFilter) {
-                  const displayRows = [];
-                  drRows.forEach(p => displayRows.push({ type: "normal", data: p }));
-                  bzRows.forEach(p => displayRows.push({ type: "normal", data: p }));
-
                   let rowIdx = 0;
-                  return displayRows.map(({ type, data }) => {
+                  return sortedPrograms.map((p) => {
                     rowIdx++;
-                    return renderRow(data, `${data.reg}|${data.grp}`, {
+                    return renderRow(p, `${p.reg}|${p.roc}|${p.grp}`, {
                       background: rowIdx % 2 === 0 ? "transparent" : `var(--bg-row-alt)`,
                     });
                   });
@@ -7033,10 +7029,11 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
                     // DR row — render directly
                     displayRows.push({ type: "normal", data: p });
                   } else {
-                    // BZ row — group with same program name
-                    if (bzProcessed.has(p.grp)) return; // already handled as part of a group
-                    bzProcessed.add(p.grp);
-                    const group = bzRows.filter(r => r.grp === p.grp);
+                    // BZ row — group by program name (grp), combining all ROCs for same program
+                    const groupKey = p.grp;
+                    if (bzProcessed.has(groupKey)) return; // already handled as part of a group
+                    bzProcessed.add(groupKey);
+                    const group = sortedPrograms.filter(r => isBZReg2(r.reg) && r.grp === p.grp);
                     if (group.length > 1) {
                       // Build combined row
                       const combined = {
@@ -7068,19 +7065,19 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
                 return displayRows.map(({ type, data }) => {
                   rowIdx++;
                   if (type === "bzCombined") {
-                    return renderRow(data, `bz-combined-${data.grp}`, {
+                    return renderRow(data, `bz-combined-${data.grp}-${data.roc || ""}`, {
                       background: rowIdx % 2 === 0 ? "transparent" : `var(--bg-row-alt)`,
                     });
                   } else if (type === "bzSub") {
                     const regColor = getRegColor(data.reg);
-                    return renderRow(data, `${data.reg}|${data.grp}`, {
+                    return renderRow(data, `${data.reg}|${data.roc || ""}|${data.grp}`, {
                       background: "#6366f106",
                       borderLeft: `3px solid ${regColor}40`,
                       tdProgram: { paddingLeft: "1.75rem", fontSize: "0.95em", color: `var(--text-muted)` },
                       progLabel: <span style={{ color: `var(--text-muted)` }}>└ {data.grp}</span>,
                     });
                   } else {
-                    return renderRow(data, `${data.reg}|${data.grp}`, {
+                    return renderRow(data, `${data.reg}|${data.roc || ""}|${data.grp}`, {
                       background: rowIdx % 2 === 0 ? "transparent" : `var(--bg-row-alt)`,
                     });
                   }
