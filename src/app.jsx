@@ -1351,6 +1351,192 @@ function generateBusinessNarrative(perf, fiscalInfo) {
   return lines;
 }
 
+function generateSiteNarrative(siteLabel, agents, programs, goalLookup, fiscalInfo, sitePlanKey) {
+  const lines = [];
+  const pct = n => `${Math.round(n)}%`;
+  const f = (n, d=1) => Number(n).toFixed(d);
+  if (!agents.length) return lines;
+
+  const totalHrs = agents.reduce((s, a) => s + a.hours, 0);
+  const totalG = agents.reduce((s, a) => s + a.goals, 0);
+  const gph = totalHrs > 0 ? totalG / totalHrs : 0;
+  const uCount = uniqueNames(agents).size;
+  const distU = uniqueQuartileDist(agents);
+  const q1pct = uCount > 0 ? (distU.Q1 / uCount) * 100 : 0;
+
+  lines.push(`${siteLabel} has ${uCount} active agents producing ${totalG.toLocaleString()} sales across ${f(totalHrs, 0)} hours (${f(gph, 3)} GPH). Q1 density is ${pct(q1pct)} (${distU.Q1} agents at or above goal).`);
+
+  // Site plan attainment
+  if (goalLookup && sitePlanKey) {
+    let planHomes = 0;
+    Object.values(goalLookup.byTA || {}).forEach(siteMap => {
+      (siteMap[sitePlanKey] || []).forEach(r => { planHomes += computePlanRow(r).homesGoal; });
+    });
+    if (planHomes > 0) {
+      const att = (totalG / planHomes) * 100;
+      const pace = fiscalInfo && fiscalInfo.pctElapsed > 0 ? (att > fiscalInfo.pctElapsed * 1.05 ? "ahead of" : att < fiscalInfo.pctElapsed * 0.9 ? "behind" : "tracking with") : "";
+      lines.push(`Site attainment: ${pct(att)} to goal (${totalG.toLocaleString()} of ${planHomes.toLocaleString()} homes).${pace ? ` The site is ${pace} pace.` : ""}`);
+    }
+  }
+
+  // Program breakdown ranked by % to goal
+  const siteProgs = programs.map(p => {
+    const pa = p.agents.filter(a => agents.includes(a));
+    if (!pa.length) return null;
+    const pg = pa.reduce((s, a) => s + a.goals, 0);
+    const ph = pa.reduce((s, a) => s + a.hours, 0);
+    const progGph = ph > 0 ? pg / ph : 0;
+    // Compute site-specific % to goal
+    const siteRows = p.goalEntry ? (p.goalEntry[sitePlanKey] || []) : [];
+    const sitePlanGoals = siteRows.reduce((s2, r) => s2 + computePlanRow(r).homesGoal, 0);
+    const pctToGoal = sitePlanGoals > 0 ? (pg / sitePlanGoals) * 100 : null;
+    return { name: p.jobType, goals: pg, hours: ph, gph: progGph, agents: uniqueNames(pa).size, pctToGoal, sitePlanGoals };
+  }).filter(Boolean);
+
+  // Sort by % to goal descending (null at end)
+  siteProgs.sort((a, b) => (b.pctToGoal ?? -1) - (a.pctToGoal ?? -1));
+
+  if (siteProgs.length > 1) {
+    const top = siteProgs[0];
+    const bot = siteProgs[siteProgs.length - 1];
+    const topDesc = top.pctToGoal !== null ? `${pct(top.pctToGoal)} to goal (${top.goals} of ${top.sitePlanGoals} homes)` : `${top.goals} sales, ${f(top.gph, 3)} GPH`;
+    const botDesc = bot.pctToGoal !== null ? `${pct(bot.pctToGoal)} to goal (${bot.goals} of ${bot.sitePlanGoals} homes)` : `${bot.goals} sales, ${f(bot.gph, 3)} GPH`;
+    lines.push(`Strongest program: ${top.name} at ${topDesc}. Needs attention: ${bot.name} at ${botDesc}.`);
+  } else if (siteProgs.length === 1) {
+    const p = siteProgs[0];
+    const desc = p.pctToGoal !== null ? `${pct(p.pctToGoal)} to goal (${p.goals} of ${p.sitePlanGoals} homes)` : `${p.goals} sales, ${f(p.gph, 3)} GPH`;
+    lines.push(`Program ${p.name}: ${desc} with ${p.agents} agents.`);
+  }
+
+  // Highest risk agents — Q4 with most hours, listed by name
+  const riskAgents = collapseToUniqueAgents(agents.filter(a => a.quartile === "Q4" || a.quartile === "Q3"))
+    .filter(a => a.hours >= 16)
+    .sort((a, b) => b.hours - a.hours);
+
+  if (riskAgents.length > 0) {
+    const q4Risk = riskAgents.filter(a => a.quartile === "Q4");
+    const q3Risk = riskAgents.filter(a => a.quartile === "Q3");
+    if (q4Risk.length > 0) {
+      const named = q4Risk.slice(0, 5).map(a => `${a.agentName} (${f(a.hours, 0)} hrs, ${f(a.hours > 0 ? a.goals / a.hours : 0, 3)} GPH)`);
+      lines.push(`Highest risk — Q4 agents with 16+ hours: ${named.join("; ")}${q4Risk.length > 5 ? ` and ${q4Risk.length - 5} more` : ""}. These agents have volume but zero conversion — immediate coaching intervention needed.`);
+    }
+    if (q3Risk.length > 0) {
+      const named = q3Risk.slice(0, 3).map(a => `${a.agentName} (${f(a.hours, 0)} hrs, ${a.goals} sales)`);
+      lines.push(`Bubble agents — Q3 with 16+ hours: ${named.join("; ")}${q3Risk.length > 3 ? ` and ${q3Risk.length - 3} more` : ""}. Close to Q2 threshold — targeted coaching could push these over.`);
+    }
+  }
+
+  // New hires
+  const nhCount = agents.filter(a => a.isNewHire).length;
+  if (nhCount > 0) {
+    lines.push(`${nhCount} new hire${nhCount > 1 ? "s" : ""} active at this site. Monitor daily performance and ensure coaching cadence is in place.`);
+  }
+
+  return lines;
+}
+
+function generateTeamsNarrative(program, agents) {
+  const lines = [];
+  const f = (n, d=1) => Number(n).toFixed(d);
+  const pct = n => `${Math.round(n)}%`;
+
+  // Build supervisor stats with weekly trends
+  const supMap = {};
+  agents.forEach(a => {
+    const sup = a.supervisor || "Unknown";
+    if (!supMap[sup]) supMap[sup] = { name: sup, agentNames: new Set(), hours: 0, goals: 0, q1: 0, q2: 0, q3: 0, q4: 0, rows: [], newHires: 0 };
+    supMap[sup].agentNames.add(a.agentName);
+    supMap[sup].hours += a.hours;
+    supMap[sup].goals += a.goals;
+    supMap[sup].rows.push(a);
+    if (a.quartile === "Q1") supMap[sup].q1++;
+    if (a.quartile === "Q2") supMap[sup].q2++;
+    if (a.quartile === "Q3") supMap[sup].q3++;
+    if (a.quartile === "Q4") supMap[sup].q4++;
+    if (a.isNewHire) supMap[sup].newHires++;
+  });
+  const sups = Object.values(supMap).map(s => {
+    const count = s.agentNames.size;
+    const gph = s.hours > 0 ? s.goals / s.hours : 0;
+    // Compute weekly GPH trend for this supervisor
+    const weekMap = {};
+    s.rows.forEach(r => {
+      if (!r.weekNum) return;
+      if (!weekMap[r.weekNum]) weekMap[r.weekNum] = { hours: 0, goals: 0 };
+      weekMap[r.weekNum].hours += r.hours;
+      weekMap[r.weekNum].goals += r.goals;
+    });
+    const weekKeys = Object.keys(weekMap).sort();
+    const weeklyGph = weekKeys.map(w => weekMap[w].hours > 0 ? weekMap[w].goals / weekMap[w].hours : 0);
+    // Trend: compare last week to first week
+    const trending = weeklyGph.length >= 2 ? (weeklyGph[weeklyGph.length - 1] > weeklyGph[0] ? "up" : weeklyGph[weeklyGph.length - 1] < weeklyGph[0] * 0.9 ? "down" : "flat") : "unknown";
+    // Q4 agents with high hours (coaching drain)
+    const q4heavy = [...s.agentNames].filter(name => {
+      const aRows = s.rows.filter(r => r.agentName === name);
+      const totalH = aRows.reduce((sum, r) => sum + r.hours, 0);
+      const q = aRows[0]?.quartile;
+      return q === "Q4" && totalH >= 16;
+    });
+    return { ...s, count, gph, trending, weeklyGph, q4heavy, weekKeys };
+  }).filter(s => s.name !== "Unknown").sort((a, b) => b.gph - a.gph);
+
+  if (sups.length === 0) return lines;
+
+  // 1. Coaching efficiency — which sups have the most wasted hours (Q4 agents with high volume)
+  const coachingDrain = [...sups].sort((a, b) => b.q4heavy.length - a.q4heavy.length).filter(s => s.q4heavy.length > 0);
+  if (coachingDrain.length > 0) {
+    const worst = coachingDrain[0];
+    lines.push(`Coaching priority: ${worst.name}'s team has ${worst.q4heavy.length} Q4 agent${worst.q4heavy.length > 1 ? "s" : ""} with 16+ hours (${worst.q4heavy.slice(0, 3).join(", ")}${worst.q4heavy.length > 3 ? "..." : ""}). These agents are producing volume without conversion — the highest-ROI coaching opportunity.`);
+  }
+
+  // 2. Trending — which sups are improving vs declining
+  const trendingUp = sups.filter(s => s.trending === "up");
+  const trendingDown = sups.filter(s => s.trending === "down");
+  if (trendingUp.length > 0 || trendingDown.length > 0) {
+    let trendLine = "";
+    if (trendingUp.length > 0) {
+      trendLine += `Trending up: ${trendingUp.map(s => `${s.name} (${f(s.weeklyGph[0], 3)} \u2192 ${f(s.weeklyGph[s.weeklyGph.length-1], 3)} GPH)`).join("; ")}. `;
+    }
+    if (trendingDown.length > 0) {
+      trendLine += `Trending down: ${trendingDown.map(s => `${s.name} (${f(s.weeklyGph[0], 3)} \u2192 ${f(s.weeklyGph[s.weeklyGph.length-1], 3)} GPH)`).join("; ")}. Investigate what changed.`;
+    }
+    if (trendLine) lines.push(trendLine);
+  }
+
+  // 3. Q1 conversion rate — which sup is best at getting agents to goal
+  if (sups.length > 1) {
+    const byQ1Rate = [...sups].sort((a, b) => (b.q1 / (b.count || 1)) - (a.q1 / (a.count || 1)));
+    const best = byQ1Rate[0];
+    const bestRate = best.count > 0 ? (best.q1 / best.count) * 100 : 0;
+    const worst = byQ1Rate[byQ1Rate.length - 1];
+    const worstRate = worst.count > 0 ? (worst.q1 / worst.count) * 100 : 0;
+    if (bestRate > worstRate + 15) {
+      lines.push(`${best.name} converts ${pct(bestRate)} of agents to Q1 vs ${worst.name} at ${pct(worstRate)}. A ${Math.round(bestRate - worstRate)}-point gap suggests process differences worth investigating through call shadowing or joint coaching sessions.`);
+    }
+  }
+
+  // 4. New hire distribution — are new hires concentrated under one sup?
+  const supsWithNH = sups.filter(s => s.newHires > 0);
+  if (supsWithNH.length > 0) {
+    const totalNH = supsWithNH.reduce((s2, s) => s2 + s.newHires, 0);
+    const heaviest = supsWithNH.sort((a, b) => b.newHires - a.newHires)[0];
+    if (heaviest.newHires > totalNH * 0.6 && totalNH > 2) {
+      lines.push(`${heaviest.name} is carrying ${heaviest.newHires} of ${totalNH} new hires (${pct(heaviest.newHires / totalNH * 100)}). Heavy new hire load limits coaching bandwidth for existing agents. Consider rebalancing.`);
+    }
+  }
+
+  // 5. Team size vs output — identify if small teams are outperforming large ones
+  if (sups.length > 1) {
+    const smallest = [...sups].sort((a, b) => a.count - b.count)[0];
+    const largest = [...sups].sort((a, b) => b.count - a.count)[0];
+    if (smallest.gph > largest.gph && largest.count > smallest.count * 1.5) {
+      lines.push(`${smallest.name}'s smaller team (${smallest.count} agents) outperforms ${largest.name}'s larger team (${largest.count} agents) in GPH (${f(smallest.gph, 3)} vs ${f(largest.gph, 3)}). Smaller teams may benefit from more focused coaching time per agent.`);
+    }
+  }
+
+  return lines;
+}
+
 function generateBusinessInsights({ programs, regions, newHireSet, globalGoals, planTotal }) {
   const results = [];
   if (!programs.length) return results;
@@ -1545,6 +1731,36 @@ function usePerformanceEngine({ rawData, goalsRaw, newHiresRaw }) {
 // SECTION 9 — UI COMPONENTS  (components/)
 // Pure presentation. No heavy computation. Consume pre-built data only.
 // ══════════════════════════════════════════════════════════════════════════════
+
+// ── Collapsible Narrative Panel ───────────────────────────────────────────────
+function CollapsibleNarrative({ title = "Executive Summary", lines = [], defaultOpen = false }) {
+  const [open, setOpen] = useState(defaultOpen);
+  if (!lines || lines.length === 0) return null;
+  return (
+    <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", overflow: "hidden" }}>
+      <div onClick={() => setOpen(v => !v)}
+        style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.85rem 1.5rem", cursor: "pointer", userSelect: "none" }}>
+        <div style={{ fontFamily: "monospace", fontSize: "0.9rem", color: `var(--text-faint)`, letterSpacing: "0.12em", textTransform: "uppercase" }}>{title}</div>
+        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+          <button onClick={e => { e.stopPropagation(); navigator.clipboard?.writeText(lines.join("\n\n")); }}
+            style={{ background: "transparent", border: "1px solid var(--border-muted)", borderRadius: "4px", color: `var(--text-faint)`, padding: "0.1rem 0.4rem", fontFamily: "monospace", fontSize: "0.8rem", cursor: "pointer" }}>
+            Copy
+          </button>
+          <span style={{ fontFamily: "monospace", fontSize: "1.1rem", color: `var(--text-faint)`, transition: "transform 0.2s", transform: open ? "rotate(180deg)" : "rotate(0deg)" }}>{"\u25BC"}</span>
+        </div>
+      </div>
+      {open && (
+        <div style={{ padding: "0 1.5rem 1.25rem" }}>
+          {lines.map((para, i) => (
+            <p key={i} style={{ fontFamily: "Georgia, serif", fontSize: "1.05rem", color: i === 0 ? `var(--text-warm)` : `var(--text-secondary)`, lineHeight: 1.55, margin: i < lines.length - 1 ? "0 0 0.65rem 0" : 0, fontWeight: i === 0 ? 600 : 400 }}>
+              {para}
+            </p>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function StatCard({ label, value, sub, accent }) {
   return (
@@ -2767,6 +2983,13 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
         <StatCard label="Unique Agents" value={uCount}                   sub={`${agents.filter(a=>a.hours>=16).length} at 16+ hrs`} accent="#6366f1" />
       </div>
 
+      {/* Site Executive Summary */}
+      <CollapsibleNarrative
+        title={`Site Summary \u2014 ${displayLabel}`}
+        lines={generateSiteNarrative(displayLabel, agents, programs, goalLookup, fiscalInfo, sitePlanKey)}
+        defaultOpen={false}
+      />
+
       {/* Goals vs Plan */}
       {sitePlanMetrics && (
         <MetricComparePanel
@@ -3182,23 +3405,7 @@ function BusinessOverview({ perf, onNav }) {
         {/* Goals vs Plan metrics row */}
         {(() => {
           const bizNarrative = generateBusinessNarrative(perf, fiscalInfo);
-          return bizNarrative.length > 0 ? (
-            <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1.25rem 1.5rem" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.6rem" }}>
-                <div style={{ fontFamily: "monospace", fontSize: "0.9rem", color: `var(--text-faint)`, letterSpacing: "0.12em", textTransform: "uppercase" }}>Executive Summary</div>
-                <button onClick={() => { navigator.clipboard?.writeText(bizNarrative.join("\n\n")); }}
-                  style={{ background: "transparent", border: "1px solid var(--border-muted)", borderRadius: "4px", color: `var(--text-faint)`, padding: "0.15rem 0.5rem", fontFamily: "monospace", fontSize: "0.85rem", cursor: "pointer" }}
-                  title="Copy to clipboard">
-                  Copy
-                </button>
-              </div>
-              {bizNarrative.map((para, i) => (
-                <p key={i} style={{ fontFamily: "Georgia, serif", fontSize: "1.05rem", color: i === 0 ? `var(--text-warm)` : `var(--text-secondary)`, lineHeight: 1.55, margin: i < bizNarrative.length - 1 ? "0 0 0.65rem 0" : 0, fontWeight: i === 0 ? 600 : 400 }}>
-                  {para}
-                </p>
-              ))}
-            </div>
-          ) : null;
+          return <CollapsibleNarrative title="Executive Summary" lines={bizNarrative} defaultOpen={true} />;
         })()}
         {goalLookup && (
           <MetricComparePanel
@@ -3590,7 +3797,7 @@ function buildSupInsights(s, supWeeks, crossProgramMap, lastDataDate, currentJob
 
 function SupervisorCard({ s, rank, totalSups, maxGph, supWeeks, hasDates, sphGoal, selectedAgent, setSelectedAgent, crossProgramMap, lastDataDate, jobType }) {
   const [showInsights, setShowInsights] = useState(false);
-  const weekPoints = hasDates ? supWeeks.map(w => w.gph) : [];
+  const weekPoints = hasDates ? [...supWeeks].reverse().map(w => w.gph) : [];
   const barW  = (s.gph / maxGph) * 100;
   const color = sphGoal ? attainColor((s.gph / sphGoal) * 100) : attainColor(s.q1Rate);
   const isTop = rank === 0;
@@ -3631,19 +3838,20 @@ function SupervisorCard({ s, rank, totalSups, maxGph, supWeeks, hasDates, sphGoa
         <div style={{ width: `${barW}%`, background: color, borderRadius: "2px", transition: "width 0.5s" }} />
       </div>
 
-      {/* Quartile mix + weekly breakdown */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.6rem", flexWrap: "wrap", gap: "0.5rem" }}>
-        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
-          {["Q1","Q2","Q3","Q4"].map(q => (
-            <span key={q} style={{ fontFamily: "monospace", fontSize: "1.14rem", color: Q[q].color }}>
-              {q}: {s.distU[q]}
-            </span>
-          ))}
-          <span style={{ fontFamily: "monospace", fontSize: "1.14rem", color: "#d97706" }}>Q1 rate: {s.q1Rate.toFixed(0)}%</span>
-        </div>
-        {hasDates && supWeeks.length > 0 && (
-          <div style={{ display: "flex", gap: "1rem" }}>
-            {supWeeks.map(w => (
+      {/* Quartile mix */}
+      <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", marginBottom: "0.5rem" }}>
+        {["Q1","Q2","Q3","Q4"].map(q => (
+          <span key={q} style={{ fontFamily: "monospace", fontSize: "1.14rem", color: Q[q].color }}>
+            {q}: {s.distU[q]}
+          </span>
+        ))}
+        <span style={{ fontFamily: "monospace", fontSize: "1.14rem", color: "#d97706" }}>Q1 rate: {s.q1Rate.toFixed(0)}%</span>
+      </div>
+
+      {/* Weekly breakdown */}
+      {hasDates && supWeeks.length > 0 && (
+        <div style={{ display: "flex", gap: "0.75rem", overflowX: "auto", marginBottom: "0.6rem", paddingBottom: "0.25rem" }}>
+          {[...supWeeks].reverse().map(w => (
               <div key={w.week} style={{ textAlign: "center" }}>
                 <div style={{ fontFamily: "monospace", fontSize: "1.11rem", color: w.gph ? attainColor(sphGoal ? (w.gph/sphGoal)*100 : w.q1Rate) : `var(--text-faint)`, fontWeight: 600 }}>
                   {w.gph ? w.gph.toFixed(3) : "—"}
@@ -3654,7 +3862,6 @@ function SupervisorCard({ s, rank, totalSups, maxGph, supWeeks, hasDates, sphGoa
             ))}
           </div>
         )}
-      </div>
 
       {/* Attendance & consistency insights dropdown */}
       <div style={{ borderTop: "1px solid var(--bg-tertiary)", paddingTop: "0.5rem", marginBottom: "0.5rem" }}>
@@ -3993,14 +4200,21 @@ function TeamsView({ agents, jobType, sphGoal, allAgents }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
 
+      {/* Teams Executive Summary */}
+      <CollapsibleNarrative
+        title={`Teams Summary \u2014 ${jobType}`}
+        lines={generateTeamsNarrative({ jobType, uniqueAgentCount: uniqueNames(agents).size }, agents)}
+        defaultOpen={false}
+      />
+
       {/* Weekly Program Trend */}
       {hasDates && programWeekly.length > 1 && (
         <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1.5rem" }}>
           <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "1.1rem" }}>
             Weekly Trend — {jobType}
           </div>
-          <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end", height: "96px" }}>
-            {programWeekly.map(w => {
+          <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end", minHeight: "96px" }}>
+            {[...programWeekly].reverse().map(w => {
               const maxGph = Math.max(...programWeekly.map(x => x.gph || 0), 0.001);
               const barH   = w.gph ? Math.max(4, (w.gph / maxGph) * 80) : 2;
               const color  = sphGoal ? attainColor((w.gph || 0) / sphGoal * 100) : "#d97706";
@@ -5346,23 +5560,7 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
             </div>
 
             {/* Narrative Summary */}
-            {narrative.length > 0 && (
-              <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1.25rem 1.5rem", position: "relative" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.6rem" }}>
-                  <div style={{ fontFamily: "monospace", fontSize: "0.9rem", color: `var(--text-faint)`, letterSpacing: "0.12em", textTransform: "uppercase" }}>Executive Summary</div>
-                  <button onClick={() => { const text = narrative.join("\n\n"); navigator.clipboard?.writeText(text); }}
-                    style={{ background: "transparent", border: "1px solid var(--border-muted)", borderRadius: "4px", color: `var(--text-faint)`, padding: "0.15rem 0.5rem", fontFamily: "monospace", fontSize: "0.85rem", cursor: "pointer" }}
-                    title="Copy to clipboard">
-                    Copy
-                  </button>
-                </div>
-                {narrative.map((para, i) => (
-                  <p key={i} style={{ fontFamily: "Georgia, serif", fontSize: "1.05rem", color: i === 0 ? `var(--text-warm)` : `var(--text-secondary)`, lineHeight: 1.55, margin: i < narrative.length - 1 ? "0 0 0.65rem 0" : 0, fontWeight: i === 0 ? 600 : 400 }}>
-                    {para}
-                  </p>
-                ))}
-              </div>
-            )}
+            <CollapsibleNarrative title="Executive Summary" lines={narrative} defaultOpen={false} />
 
             {/* Goals vs Plan — immediately after stat cards when goals loaded */}
             {goalEntry && (() => {
