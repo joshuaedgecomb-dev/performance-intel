@@ -1812,6 +1812,7 @@ function InsightCard({ type, insights }) {
 
 function AgentTable({ agents, newHireSet }) {
   const [sort, setSort] = useState({ key: "gph", dir: -1 });
+  const [regionFilter, setRegionFilter] = useState(null);
 
   // Collapse daily rows → one aggregate row per unique agent
   const agentRollups = useMemo(() => {
@@ -1850,14 +1851,33 @@ function AgentTable({ agents, newHireSet }) {
     }));
   }, [agents]);
 
+  // Get unique regions sorted
+  const regionList = useMemo(() => {
+    const regMap = {};
+    agentRollups.forEach(a => {
+      const reg = a.region || "Unknown";
+      if (!regMap[reg]) regMap[reg] = { name: reg, count: 0, hours: 0, goals: 0 };
+      regMap[reg].count++;
+      regMap[reg].hours += a.hours;
+      regMap[reg].goals += a.goals;
+    });
+    return Object.values(regMap).filter(r => r.name !== "Unknown").sort((a, b) => b.goals - a.goals);
+  }, [agentRollups]);
+
+  // Apply region filter
+  const filteredRollups = useMemo(() => {
+    if (!regionFilter) return agentRollups;
+    return agentRollups.filter(a => (a.region || "Unknown") === regionFilter);
+  }, [agentRollups, regionFilter]);
+
   const sorted = useMemo(() => {
-    return [...agentRollups].sort((a, b) => {
+    return [...filteredRollups].sort((a, b) => {
       const va = a[sort.key] ?? 0;
       const vb = b[sort.key] ?? 0;
       if (typeof va === "string") return va.localeCompare(vb) * sort.dir;
       return (va - vb) * sort.dir;
     });
-  }, [agentRollups, sort]);
+  }, [filteredRollups, sort]);
 
   const toggle = key => setSort(s => ({ key, dir: s.key === key ? -s.dir : -1 }));
   const Th = ({ k, label, right }) => (
@@ -1871,6 +1891,25 @@ function AgentTable({ agents, newHireSet }) {
 
   return (
     <div style={{ overflowX: "auto" }}>
+      {/* Region filter */}
+      {regionList.length > 1 && (
+        <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
+          <button onClick={() => setRegionFilter(null)}
+            style={{ padding: "0.25rem 0.7rem", borderRadius: "5px", border: `1px solid ${!regionFilter ? "#d97706" : "var(--border)"}`, background: !regionFilter ? "#d9770618" : "transparent", color: !regionFilter ? "#d97706" : `var(--text-dim)`, fontFamily: "monospace", fontSize: "1rem", cursor: "pointer", fontWeight: !regionFilter ? 700 : 400 }}>
+            All Regions ({agentRollups.length})
+          </button>
+          {regionList.map(r => {
+            const active = regionFilter === r.name;
+            const regGph = r.hours > 0 ? r.goals / r.hours : 0;
+            return (
+              <button key={r.name} onClick={() => setRegionFilter(active ? null : r.name)}
+                style={{ padding: "0.25rem 0.7rem", borderRadius: "5px", border: `1px solid ${active ? "#6366f1" : "var(--border)"}`, background: active ? "#6366f118" : "transparent", color: active ? "#6366f1" : `var(--text-dim)`, fontFamily: "monospace", fontSize: "1rem", cursor: "pointer", fontWeight: active ? 700 : 400 }}>
+                {r.name} <span style={{ opacity: 0.5, fontSize: "0.9rem" }}>{r.count} · {regGph.toFixed(3)}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
       <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "monospace", fontSize: "1.08rem" }}>
         <thead>
           <tr style={{ borderBottom: "2px solid var(--border)" }}>
@@ -1914,7 +1953,7 @@ function AgentTable({ agents, newHireSet }) {
         </tbody>
       </table>
       <div style={{ fontFamily: "monospace", fontSize: "1.11rem", color: `var(--text-faint)`, padding: "0.5rem 0.75rem" }}>
-        {sorted.length} agents · hours and goals summed across all working days
+        {sorted.length} agents{regionFilter ? ` · ${regionFilter}` : ""} · hours and goals summed across all working days
       </div>
     </div>
   );
@@ -4286,60 +4325,122 @@ function TeamsView({ agents, jobType, sphGoal, allAgents }) {
         </div>
       )}
 
-      {/* Supervisor Cards */}
-      {hasSups && (
-        <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1.5rem" }}>
-          <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.75rem" }}>
-            Supervisor Scorecards · {filteredSupStats.filter(s=>s.supervisor!=="Unknown").length} teams
+      {/* Region Drilldown with Supervisor Cards */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+
+        {/* Region tabs */}
+        {uniqueRegions.length > 0 && (
+          <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
+            {["All", ...uniqueRegions].map(r => {
+              const active = teamRegion === r;
+              const btnColor = r === "All" ? `var(--text-muted)` : teamRegColor(r);
+              return (
+                <button key={r} onClick={() => { setTeamRegion(r); setSelectedAgent(null); }}
+                  style={{ background: active ? (r === "All" ? `var(--text-muted)` : btnColor) + "20" : "transparent",
+                    border: `1px solid ${active ? (r === "All" ? `var(--text-muted)` : btnColor) : `var(--border)`}`, borderRadius: "5px",
+                    color: active ? (r === "All" ? `var(--text-muted)` : btnColor) : `var(--text-dim)`,
+                    padding: "0.25rem 0.65rem", fontFamily: "monospace", fontSize: "1.05rem", cursor: "pointer", transition: "all 0.15s" }}>
+                  {r}
+                </button>
+              );
+            })}
           </div>
-          {/* Region tabs */}
-          {uniqueRegions.length > 1 && (
-            <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap", marginBottom: "1rem" }}>
-              {["All", ...uniqueRegions].map(r => {
-                const active = teamRegion === r;
-                const btnColor = r === "All" ? `var(--text-muted)` : teamRegColor(r);
-                return (
-                  <button key={r} onClick={() => { setTeamRegion(r); setSelectedAgent(null); }}
-                    style={{ background: active ? (r === "All" ? `var(--text-muted)` : btnColor) + "20" : "transparent",
-                      border: `1px solid ${active ? (r === "All" ? `var(--text-muted)` : btnColor) : `var(--border)`}`, borderRadius: "5px",
-                      color: active ? (r === "All" ? `var(--text-muted)` : btnColor) : `var(--text-dim)`,
-                      padding: "0.25rem 0.65rem", fontFamily: "monospace", fontSize: "1.05rem", cursor: "pointer", transition: "all 0.15s" }}>
-                    {r}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            {filteredSupStats.filter(s => s.supervisor !== "Unknown").map((s, rank) => (
-              <div key={s.supervisor}>
-                <SupervisorCard
-                  s={s}
-                  rank={rank}
-                  totalSups={filteredSupStats.filter(x=>x.supervisor!=="Unknown").length}
-                  maxGph={Math.max(...filteredSupStats.map(x => x.gph), 0.001)}
-                  supWeeks={bySupervisor[s.supervisor] || []}
-                  hasDates={hasDates}
-                  sphGoal={sphGoal}
-                  selectedAgent={selectedAgent}
-                  setSelectedAgent={setSelectedAgent}
-                  crossProgramMap={crossProgramMap}
-                  lastDataDate={lastDataDate}
-                  jobType={jobType}
-                />
-                {/* Agent Profile panel shown inline below the card that owns the selected agent */}
-                {selectedAgent && agentProfile &&
-                  s.agentList.some(a => a.agentName === selectedAgent) && (
-                  <div style={{ marginTop: "0.75rem" }}>
-                    <AgentProfilePanel profile={agentProfile} />
+        )}
+
+        {/* Region summary cards when "All" is selected */}
+        {teamRegion === "All" && uniqueRegions.length > 1 && (
+          <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.min(uniqueRegions.length, 4)}, 1fr)`, gap: "0.75rem" }}>
+            {uniqueRegions.map(reg => {
+              const regColor = teamRegColor(reg);
+              const ra = agents.filter(a => a.region === reg);
+              const rHrs = ra.reduce((s, a) => s + a.hours, 0);
+              const rGoals = ra.reduce((s, a) => s + a.goals, 0);
+              const rGph = rHrs > 0 ? rGoals / rHrs : 0;
+              const rCount = new Set(ra.map(a => a.agentName).filter(Boolean)).size;
+              const rDistU = uniqueQuartileDist(ra);
+              return (
+                <div key={reg} onClick={() => { setTeamRegion(reg); setSelectedAgent(null); }}
+                  style={{ padding: "0.9rem", borderRadius: "10px", background: regColor + "08", border: `1px solid ${regColor}30`, cursor: "pointer", transition: "all 0.15s" }}>
+                  <div style={{ fontFamily: "Georgia, serif", fontSize: "1.25rem", color: regColor, fontWeight: 700, marginBottom: "0.3rem" }}>{reg}</div>
+                  <div style={{ fontFamily: "monospace", fontSize: "0.9rem", color: `var(--text-dim)` }}>{rCount} agents</div>
+                  <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "2rem", color: `var(--text-warm)`, fontWeight: 700, lineHeight: 1, margin: "0.3rem 0" }}>{rGph.toFixed(3)}</div>
+                  <div style={{ fontFamily: "monospace", fontSize: "0.85rem", color: `var(--text-dim)` }}>GPH {"\u00b7"} {rGoals} sales {"\u00b7"} {fmt(rHrs, 0)} hrs</div>
+                  <div style={{ display: "flex", gap: "0.4rem", marginTop: "0.3rem" }}>
+                    {["Q1","Q2","Q3","Q4"].map(q => (
+                      <span key={q} style={{ fontFamily: "monospace", fontSize: "0.85rem", color: Q[q].color }}>{q}:{rDistU[q]}</span>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Supervisor cards grouped by region */}
+        {(() => {
+          const regionsToShow = teamRegion === "All" ? uniqueRegions : [teamRegion];
+
+          return regionsToShow.map(reg => {
+            const regColor = teamRegColor(reg);
+            const regSups = filteredSupStats.filter(s =>
+              s.supervisor !== "Unknown" && s.agentList.some(a => a.region === reg)
+            );
+            if (regSups.length === 0) return null;
+
+            const regAgentNames = new Set(regSups.flatMap(s => s.agentList.filter(a => a.region === reg).map(a => a.agentName)));
+            const regHrs = regSups.reduce((s2, s) => s2 + s.agentList.filter(a => a.region === reg).reduce((h, a) => h + a.totalHours, 0), 0);
+            const regGoals = regSups.reduce((s2, s) => s2 + s.agentList.filter(a => a.region === reg).reduce((h, a) => h + a.totalGoals, 0), 0);
+            const regGph = regHrs > 0 ? regGoals / regHrs : 0;
+
+            return (
+              <div key={reg}>
+                {/* Region header */}
+                {regionsToShow.length > 1 && (
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.6rem 0.75rem", background: regColor + "10", border: `1px solid ${regColor}30`, borderRadius: "8px", marginBottom: "0.75rem" }}>
+                    <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
+                      <span style={{ fontFamily: "Georgia, serif", fontSize: "1.35rem", color: regColor, fontWeight: 700 }}>{reg}</span>
+                      <span style={{ fontFamily: "monospace", fontSize: "0.95rem", color: `var(--text-dim)` }}>{regAgentNames.size} agents {"\u00b7"} {regSups.length} sup{regSups.length !== 1 ? "s" : ""}</span>
+                    </div>
+                    <div style={{ display: "flex", gap: "1rem", fontFamily: "monospace", fontSize: "0.95rem" }}>
+                      <span style={{ color: "#16a34a" }}>{regGoals} sales</span>
+                      <span style={{ color: "#6366f1" }}>{fmt(regHrs, 0)} hrs</span>
+                      <span style={{ color: regColor, fontWeight: 700 }}>{regGph.toFixed(3)} GPH</span>
+                    </div>
                   </div>
                 )}
+
+                {/* Supervisor cards for this region */}
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginBottom: "1.25rem" }}>
+                  {regSups.map((s, rank) => (
+                    <div key={s.supervisor}>
+                      <SupervisorCard
+                        s={s}
+                        rank={rank}
+                        totalSups={regSups.length}
+                        maxGph={Math.max(...regSups.map(x => x.gph), 0.001)}
+                        supWeeks={bySupervisor[s.supervisor] || []}
+                        hasDates={hasDates}
+                        sphGoal={sphGoal}
+                        selectedAgent={selectedAgent}
+                        setSelectedAgent={setSelectedAgent}
+                        crossProgramMap={crossProgramMap}
+                        lastDataDate={lastDataDate}
+                        jobType={jobType}
+                      />
+                      {selectedAgent && agentProfile &&
+                        s.agentList.some(a => a.agentName === selectedAgent) && (
+                        <div style={{ marginTop: "0.75rem" }}>
+                          <AgentProfilePanel profile={agentProfile} />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
-            ))}
-            ))}
-          </div>
-        </div>
-      )}
+            );
+          });
+        })()}
+      </div>
     </div>
   );
 }
@@ -4347,7 +4448,7 @@ function TeamsView({ agents, jobType, sphGoal, allAgents }) {
 
 
 
-// ══════════════════════════════════════════════════════════════════════════════
+// \u2550/ ══════════════════════════════════════════════════════════════════════════════
 // ══════════════════════════════════════════════════════════════════════════════
 // SECTION 12c — CAMPAIGN COMPARISON PANEL (Month-over-Month)
 // ══════════════════════════════════════════════════════════════════════════════
