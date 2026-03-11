@@ -2870,7 +2870,7 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
   const hasMultipleRegions = regions.length > 1;
 
   const activeRegions = (subRegion && hasMultipleRegions) ? [subRegion] : regions;
-  const agents   = allAgents.filter(a => activeRegions.includes((a.Region || a.region || "Unknown").trim()));
+  const agents   = allAgents.filter(a => !a.isSpanishCallback && activeRegions.includes((a.Region || a.region || "Unknown").trim()));
   const totalHrs = agents.reduce((s, a) => s + a.hours, 0);
   const distU    = uniqueQuartileDist(agents);
   const uCount   = uniqueNames(agents).size;
@@ -3624,7 +3624,7 @@ function BusinessOverview({ perf, onNav }) {
 
         {/* ── DAILY TAB ── */}
         {tab === "daily" && (
-          <DailyBreakdownPanel agents={agents} regions={regions} jobType="All Programs" sphGoal={null} programs={programs} goalLookup={goalLookup} />
+          <DailyBreakdownPanel agents={agents.filter(a => !a.isSpanishCallback)} regions={regions} jobType="All Programs" sphGoal={null} programs={programs} goalLookup={goalLookup} />
         )}
       </div>
 
@@ -4241,6 +4241,73 @@ function TeamsView({ agents, jobType, sphGoal, allAgents }) {
                       </td>
                     </tr>
                   ),
+                  false && (() => {
+                    const wkAgents = activeAgents.filter(a => {
+                      if (!a.date) return false;
+                      const dt = new Date(a.date + "T00:00:00");
+                      const dayOfWeek = dt.getDay();
+                      const mon = new Date(dt);
+                      mon.setDate(dt.getDate() - ((dayOfWeek + 6) % 7));
+                      return mon.toISOString().slice(0, 10) === wg.wk && a.hours > 0;
+                    });
+                    const byJob = {};
+                    wkAgents.forEach(a => {
+                      const jt = a.jobType || "Unknown";
+                      if (!byJob[jt]) byJob[jt] = { hrs: 0, goals: 0, agents: {} };
+                      byJob[jt].hrs += a.hours;
+                      byJob[jt].goals += a.goals;
+                      if (!byJob[jt].agents[a.agentName]) byJob[jt].agents[a.agentName] = { name: a.agentName, sup: a.supervisor, hrs: 0, goals: 0, hsd: 0, xm: 0, quartile: a.quartile };
+                      byJob[jt].agents[a.agentName].hrs += a.hours;
+                      byJob[jt].agents[a.agentName].goals += a.goals;
+                      byJob[jt].agents[a.agentName].hsd += a.newXI || 0;
+                      byJob[jt].agents[a.agentName].xm += a.xmLines || 0;
+                    });
+                    const jobs = Object.entries(byJob).sort((a, b) => b[1].goals - a[1].goals);
+                    return (
+                      <tr key={`wk-detail-${wg.wk}`}><td colSpan={9} style={{ padding: 0 }}>
+                        <div style={{ padding: "0.6rem 1rem", background: "#6366f108", borderLeft: "3px solid #6366f1" }}>
+                          <div style={{ fontFamily: "monospace", fontSize: "0.85rem", color: `var(--text-faint)`, letterSpacing: "0.08em", marginBottom: "0.5rem" }}>
+                            WEEK DETAIL \u2014 Wk {wg.wk.slice(5)} ({wWorked.length} days worked)
+                          </div>
+                          {jobs.map(([jt, data]) => {
+                            const agentList = Object.values(data.agents).sort((x, y) => y.hrs - x.hrs);
+                            return (
+                              <div key={jt} style={{ marginBottom: "0.6rem" }}>
+                                <div style={{ fontFamily: "Georgia, serif", fontSize: "1.05rem", color: `var(--text-warm)`, marginBottom: "0.25rem" }}>
+                                  <span style={{ fontWeight: 700 }}>{jt}</span>
+                                  <span style={{ fontFamily: "monospace", fontSize: "0.9rem", color: `var(--text-dim)`, marginLeft: "0.75rem" }}>{agentList.length} agents \u00b7 {data.goals} sales \u00b7 {data.hrs.toFixed(1)} hrs \u00b7 {data.hrs > 0 ? (data.goals / data.hrs).toFixed(3) : "0"} GPH</span>
+                                </div>
+                                <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "monospace", fontSize: "0.88rem" }}>
+                                  <thead><tr style={{ borderBottom: "1px solid var(--border)" }}>
+                                    {["Agent","Supervisor","Hours","Sales","GPH","HSD","XM"].map(h => (
+                                      <th key={h} style={{ padding: "0.2rem 0.5rem", textAlign: h === "Agent" || h === "Supervisor" ? "left" : "right", color: `var(--text-faint)`, fontWeight: 400 }}>{h}</th>
+                                    ))}
+                                  </tr></thead>
+                                  <tbody>
+                                    {agentList.map((a, ai) => {
+                                      const aGph = a.hrs > 0 ? a.goals / a.hrs : 0;
+                                      const qColor = Q[a.quartile]?.color || `var(--text-faint)`;
+                                      return (
+                                        <tr key={a.name} style={{ borderBottom: "1px solid var(--bg-tertiary)", background: ai % 2 === 0 ? "transparent" : `var(--bg-row-alt)` }}>
+                                          <td style={{ padding: "0.2rem 0.5rem", color: qColor }}>{a.name}</td>
+                                          <td style={{ padding: "0.2rem 0.5rem", color: `var(--text-dim)` }}>{a.sup || "\u2014"}</td>
+                                          <td style={{ padding: "0.2rem 0.5rem", textAlign: "right", color: "#6366f1" }}>{a.hrs.toFixed(1)}</td>
+                                          <td style={{ padding: "0.2rem 0.5rem", textAlign: "right", color: a.goals > 0 ? "#d97706" : `var(--text-faint)`, fontWeight: a.goals > 0 ? 700 : 400 }}>{a.goals || "\u2014"}</td>
+                                          <td style={{ padding: "0.2rem 0.5rem", textAlign: "right", color: sg ? attainColor(aGph / sg * 100) : `var(--text-secondary)` }}>{aGph > 0 ? aGph.toFixed(3) : "\u2014"}</td>
+                                          <td style={{ padding: "0.2rem 0.5rem", textAlign: "right", color: a.hsd > 0 ? "#2563eb" : `var(--text-faint)` }}>{a.hsd || "\u2014"}</td>
+                                          <td style={{ padding: "0.2rem 0.5rem", textAlign: "right", color: a.xm > 0 ? "#8b5cf6" : `var(--text-faint)` }}>{a.xm || "\u2014"}</td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </td></tr>
+                    );
+                  })(),
                 ];
               })}
             </tbody>
@@ -4351,7 +4418,7 @@ function TeamsView({ agents, jobType, sphGoal, allAgents }) {
         {teamRegion === "All" && uniqueRegions.length > 1 && (
           <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.min(uniqueRegions.length, 4)}, 1fr)`, gap: "0.75rem" }}>
             {uniqueRegions.map(reg => {
-              const regColor = teamRegColor(reg);
+              const regClr = teamRegColor(reg);
               const ra = agents.filter(a => a.region === reg);
               const rHrs = ra.reduce((s, a) => s + a.hours, 0);
               const rGoals = ra.reduce((s, a) => s + a.goals, 0);
@@ -4360,11 +4427,11 @@ function TeamsView({ agents, jobType, sphGoal, allAgents }) {
               const rDistU = uniqueQuartileDist(ra);
               return (
                 <div key={reg} onClick={() => { setTeamRegion(reg); setSelectedAgent(null); }}
-                  style={{ padding: "0.9rem", borderRadius: "10px", background: regColor + "08", border: `1px solid ${regColor}30`, cursor: "pointer", transition: "all 0.15s" }}>
-                  <div style={{ fontFamily: "Georgia, serif", fontSize: "1.25rem", color: regColor, fontWeight: 700, marginBottom: "0.3rem" }}>{reg}</div>
+                  style={{ padding: "0.9rem", borderRadius: "10px", background: regClr + "08", border: `1px solid ${regClr}30`, cursor: "pointer", transition: "all 0.15s" }}>
+                  <div style={{ fontFamily: "Georgia, serif", fontSize: "1.25rem", color: regClr, fontWeight: 700, marginBottom: "0.3rem" }}>{reg}</div>
                   <div style={{ fontFamily: "monospace", fontSize: "0.9rem", color: `var(--text-dim)` }}>{rCount} agents</div>
                   <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "2rem", color: `var(--text-warm)`, fontWeight: 700, lineHeight: 1, margin: "0.3rem 0" }}>{rGph.toFixed(3)}</div>
-                  <div style={{ fontFamily: "monospace", fontSize: "0.85rem", color: `var(--text-dim)` }}>GPH {"\u00b7"} {rGoals} sales {"\u00b7"} {fmt(rHrs, 0)} hrs</div>
+                  <div style={{ fontFamily: "monospace", fontSize: "0.85rem", color: `var(--text-dim)` }}>GPH · {rGoals} sales · {fmt(rHrs, 0)} hrs</div>
                   <div style={{ display: "flex", gap: "0.4rem", marginTop: "0.3rem" }}>
                     {["Q1","Q2","Q3","Q4"].map(q => (
                       <span key={q} style={{ fontFamily: "monospace", fontSize: "0.85rem", color: Q[q].color }}>{q}:{rDistU[q]}</span>
@@ -4378,15 +4445,30 @@ function TeamsView({ agents, jobType, sphGoal, allAgents }) {
 
         {/* Supervisor cards grouped by region */}
         {(() => {
-          const regionsToShow = teamRegion === "All" ? uniqueRegions : [teamRegion];
+          const visibleSups = filteredSupStats.filter(s => s.supervisor !== "Unknown");
+          const regionsToShow = teamRegion === "All"
+            ? [...new Set(visibleSups.flatMap(s => s.agentList.map(a => a.region)).filter(Boolean))].sort()
+            : [teamRegion];
+
+          if (regionsToShow.length <= 1 && teamRegion !== "All") {
+            return (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                {visibleSups.map((s, rank) => (
+                  <div key={s.supervisor}>
+                    <SupervisorCard s={s} rank={rank} totalSups={visibleSups.length} maxGph={Math.max(...visibleSups.map(x => x.gph), 0.001)} supWeeks={bySupervisor[s.supervisor] || []} hasDates={hasDates} sphGoal={sphGoal} selectedAgent={selectedAgent} setSelectedAgent={setSelectedAgent} crossProgramMap={crossProgramMap} lastDataDate={lastDataDate} jobType={jobType} />
+                    {selectedAgent && agentProfile && s.agentList.some(a => a.agentName === selectedAgent) && (
+                      <div style={{ marginTop: "0.75rem" }}><AgentProfilePanel profile={agentProfile} /></div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            );
+          }
 
           return regionsToShow.map(reg => {
-            const regColor = teamRegColor(reg);
-            const regSups = filteredSupStats.filter(s =>
-              s.supervisor !== "Unknown" && s.agentList.some(a => a.region === reg)
-            );
+            const regClr = teamRegColor(reg);
+            const regSups = visibleSups.filter(s => s.agentList.some(a => a.region === reg));
             if (regSups.length === 0) return null;
-
             const regAgentNames = new Set(regSups.flatMap(s => s.agentList.filter(a => a.region === reg).map(a => a.agentName)));
             const regHrs = regSups.reduce((s2, s) => s2 + s.agentList.filter(a => a.region === reg).reduce((h, a) => h + a.totalHours, 0), 0);
             const regGoals = regSups.reduce((s2, s) => s2 + s.agentList.filter(a => a.region === reg).reduce((h, a) => h + a.totalGoals, 0), 0);
@@ -4394,44 +4476,25 @@ function TeamsView({ agents, jobType, sphGoal, allAgents }) {
 
             return (
               <div key={reg}>
-                {/* Region header */}
                 {regionsToShow.length > 1 && (
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.6rem 0.75rem", background: regColor + "10", border: `1px solid ${regColor}30`, borderRadius: "8px", marginBottom: "0.75rem" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.6rem 0.75rem", background: regClr + "10", border: `1px solid ${regClr}30`, borderRadius: "8px", marginBottom: "0.75rem" }}>
                     <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
-                      <span style={{ fontFamily: "Georgia, serif", fontSize: "1.35rem", color: regColor, fontWeight: 700 }}>{reg}</span>
-                      <span style={{ fontFamily: "monospace", fontSize: "0.95rem", color: `var(--text-dim)` }}>{regAgentNames.size} agents {"\u00b7"} {regSups.length} sup{regSups.length !== 1 ? "s" : ""}</span>
+                      <span style={{ fontFamily: "Georgia, serif", fontSize: "1.35rem", color: regClr, fontWeight: 700 }}>{reg}</span>
+                      <span style={{ fontFamily: "monospace", fontSize: "0.95rem", color: `var(--text-dim)` }}>{regAgentNames.size} agents · {regSups.length} sup{regSups.length !== 1 ? "s" : ""}</span>
                     </div>
                     <div style={{ display: "flex", gap: "1rem", fontFamily: "monospace", fontSize: "0.95rem" }}>
                       <span style={{ color: "#16a34a" }}>{regGoals} sales</span>
                       <span style={{ color: "#6366f1" }}>{fmt(regHrs, 0)} hrs</span>
-                      <span style={{ color: regColor, fontWeight: 700 }}>{regGph.toFixed(3)} GPH</span>
+                      <span style={{ color: regClr, fontWeight: 700 }}>{regGph.toFixed(3)} GPH</span>
                     </div>
                   </div>
                 )}
-
-                {/* Supervisor cards for this region */}
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginBottom: "1.25rem" }}>
                   {regSups.map((s, rank) => (
                     <div key={s.supervisor}>
-                      <SupervisorCard
-                        s={s}
-                        rank={rank}
-                        totalSups={regSups.length}
-                        maxGph={Math.max(...regSups.map(x => x.gph), 0.001)}
-                        supWeeks={bySupervisor[s.supervisor] || []}
-                        hasDates={hasDates}
-                        sphGoal={sphGoal}
-                        selectedAgent={selectedAgent}
-                        setSelectedAgent={setSelectedAgent}
-                        crossProgramMap={crossProgramMap}
-                        lastDataDate={lastDataDate}
-                        jobType={jobType}
-                      />
-                      {selectedAgent && agentProfile &&
-                        s.agentList.some(a => a.agentName === selectedAgent) && (
-                        <div style={{ marginTop: "0.75rem" }}>
-                          <AgentProfilePanel profile={agentProfile} />
-                        </div>
+                      <SupervisorCard s={s} rank={rank} totalSups={regSups.length} maxGph={Math.max(...regSups.map(x => x.gph), 0.001)} supWeeks={bySupervisor[s.supervisor] || []} hasDates={hasDates} sphGoal={sphGoal} selectedAgent={selectedAgent} setSelectedAgent={setSelectedAgent} crossProgramMap={crossProgramMap} lastDataDate={lastDataDate} jobType={jobType} />
+                      {selectedAgent && agentProfile && s.agentList.some(a => a.agentName === selectedAgent) && (
+                        <div style={{ marginTop: "0.75rem" }}><AgentProfilePanel profile={agentProfile} /></div>
                       )}
                     </div>
                   ))}
@@ -5193,6 +5256,8 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
   const [dailyRegion, setDailyRegion] = useState("Combined");
   const [dailyProgram, setDailyProgram] = useState("All");
   const [dailyRocFilter, setDailyRocFilter] = useState(null);
+  const [selectedDate, setSelectedDate] = useState(null); // date string or "wk-YYYY-MM-DD" for week
+  const [selectedDrillJob, setSelectedDrillJob] = useState(null); // job type within a selected date
 
   // Determine active agents: filter by selected program, then by ROC if drilled down
   const activeAgents = useMemo(() => {
@@ -5427,7 +5492,7 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
           <div style={{ marginBottom: "0.75rem" }}>
             <div style={{ fontFamily: "monospace", fontSize: "0.9rem", color: `var(--text-faint)`, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "0.35rem" }}>Program</div>
             <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
-              <button onClick={() => { setDailyProgram("All"); setDailyRegion("Combined"); }}
+              <button onClick={() => { setDailyProgram("All"); setDailyRocFilter(null); }}
                 style={{ padding: "0.3rem 0.75rem", borderRadius: "5px",
                   border: `1px solid ${dailyProgram === "All" ? "#d97706" : `var(--border)`}`,
                   background: dailyProgram === "All" ? "#d9770618" : "transparent",
@@ -5497,7 +5562,6 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
           ))}
         </div>
 
-        {/* Daily table */}
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "monospace", fontSize: "1.05rem" }}>
             <thead>
@@ -5533,8 +5597,10 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
                     const pctColor = pct !== null ? attainColor(pct) : `var(--text-faint)`;
                     const gphColor = sg && d.gph > 0 ? attainColor((d.gph / sg) * 100) : d.gph > 0 ? `var(--text-secondary)` : `var(--text-faint)`;
                     return (
-                      <tr key={d.date} style={{ borderBottom: "1px solid var(--bg-tertiary)",
-                        background: di % 2 === 0 ? "transparent" : `var(--bg-row-alt)` }}>
+                      <Fragment key={d.date}>
+                      <tr style={{ borderBottom: "1px solid var(--bg-tertiary)",
+                        background: selectedDate === d.date ? "#d9770618" : di % 2 === 0 ? "transparent" : `var(--bg-row-alt)`, cursor: "pointer" }}
+                        onClick={() => { setSelectedDate(selectedDate === d.date ? null : d.date); setSelectedDrillJob(null); }}>
                         <td style={{ padding: "0.35rem 0.6rem", color: `var(--text-secondary)` }}>{d.date?.slice(5)}</td>
                         <td style={{ padding: "0.35rem 0.6rem", color: `var(--text-dim)` }}>{dayLabel(d.date)}</td>
                         <td style={{ padding: "0.35rem 0.6rem", textAlign: "right", color: `var(--text-secondary)` }}>{d.agentCount}</td>
@@ -5551,10 +5617,111 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
                           ) : "—"}
                         </td>
                       </tr>
+                      {selectedDate === d.date && (() => {
+                        let dateAgents = activeAgents.filter(a => a.date === d.date && a.hours > 0);
+                        if (dailyRegion !== "Combined") {
+                          if (dailyRegion === "Combined (BZ)") {
+                            dateAgents = dateAgents.filter(a => regionInfo.bz.includes(a.region));
+                          } else {
+                            dateAgents = dateAgents.filter(a => a.region === dailyRegion);
+                          }
+                        }
+                        const byJob = {};
+                        dateAgents.forEach(a => {
+                          const jt = a.jobType || "Unknown";
+                          if (!byJob[jt]) byJob[jt] = { hrs: 0, goals: 0, hsd: 0, xm: 0, agents: [] };
+                          byJob[jt].hrs += a.hours; byJob[jt].goals += a.goals;
+                          byJob[jt].hsd += a.newXI || 0; byJob[jt].xm += a.xmLines || 0;
+                          byJob[jt].agents.push(a);
+                        });
+                        const jobs = Object.entries(byJob).sort((a, b) => b[1].goals - a[1].goals);
+                        return (
+                          <tr><td colSpan={9} style={{ padding: 0 }}>
+                            <div style={{ padding: "0.6rem 1rem", background: "#d9770608", borderLeft: "3px solid #d97706" }}>
+                              <div style={{ fontFamily: "monospace", fontSize: "0.85rem", color: `var(--text-faint)`, letterSpacing: "0.08em", marginBottom: "0.5rem" }}>
+                                {selectedDrillJob ? "AGENT DETAIL" : "PROGRAM BREAKDOWN"} {"\u2014"} {d.date} ({dayLabel(d.date)})
+                                {selectedDrillJob && (
+                                  <button onClick={e => { e.stopPropagation(); setSelectedDrillJob(null); }}
+                                    style={{ marginLeft: "0.75rem", padding: "0.15rem 0.5rem", borderRadius: "4px", border: "1px solid #d97706", background: "#d9770618", color: "#d97706", fontFamily: "monospace", fontSize: "0.85rem", cursor: "pointer" }}>
+                                    {"\u2190"} Back to Programs
+                                  </button>
+                                )}
+                              </div>
+                              {!selectedDrillJob && (
+                                <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "monospace", fontSize: "0.9rem" }}>
+                                  <thead><tr style={{ borderBottom: "1px solid var(--border)" }}>
+                                    {["Program", "Agents", "Hours", "Sales", "GPH", "CPS", "HSD", "XM"].map(h => (
+                                      <th key={h} style={{ padding: "0.3rem 0.5rem", textAlign: h === "Program" ? "left" : "right", color: `var(--text-faint)`, fontWeight: 400 }}>{h}</th>
+                                    ))}
+                                  </tr></thead>
+                                  <tbody>
+                                    {jobs.map(([jt, data], ji) => {
+                                      const jGph = data.hrs > 0 ? data.goals / data.hrs : 0;
+                                      const jCps = data.goals > 0 ? (data.hrs * 19.77) / data.goals : data.hrs * 19.77;
+                                      const jColor = sg ? attainColor(jGph / sg * 100) : `var(--text-primary)`;
+                                      return (
+                                        <tr key={jt} onClick={e => { e.stopPropagation(); setSelectedDrillJob(jt); }}
+                                          style={{ borderBottom: "1px solid var(--bg-tertiary)", cursor: "pointer", background: ji % 2 === 0 ? "transparent" : `var(--bg-row-alt)` }}>
+                                          <td style={{ padding: "0.3rem 0.5rem", color: `var(--text-warm)`, fontFamily: "Georgia, serif" }}>{jt}</td>
+                                          <td style={{ padding: "0.3rem 0.5rem", textAlign: "right", color: `var(--text-dim)` }}>{data.agents.length}</td>
+                                          <td style={{ padding: "0.3rem 0.5rem", textAlign: "right", color: "#6366f1" }}>{data.hrs.toFixed(1)}</td>
+                                          <td style={{ padding: "0.3rem 0.5rem", textAlign: "right", color: data.goals > 0 ? "#d97706" : `var(--text-faint)`, fontWeight: 700 }}>{data.goals || "\u2014"}</td>
+                                          <td style={{ padding: "0.3rem 0.5rem", textAlign: "right", color: jColor, fontWeight: 600 }}>{jGph > 0 ? jGph.toFixed(3) : "\u2014"}</td>
+                                          <td style={{ padding: "0.3rem 0.5rem", textAlign: "right", color: jColor }}>${jCps.toFixed(2)}</td>
+                                          <td style={{ padding: "0.3rem 0.5rem", textAlign: "right", color: data.hsd > 0 ? "#2563eb" : `var(--text-faint)` }}>{data.hsd || "\u2014"}</td>
+                                          <td style={{ padding: "0.3rem 0.5rem", textAlign: "right", color: data.xm > 0 ? "#8b5cf6" : `var(--text-faint)` }}>{data.xm || "\u2014"}</td>
+                                        </tr>);
+                                    })}
+                                  </tbody>
+                                </table>
+                              )}
+                              {selectedDrillJob && byJob[selectedDrillJob] && (() => {
+                                const data = byJob[selectedDrillJob];
+                                return (
+                                  <div>
+                                    <div style={{ fontFamily: "Georgia, serif", fontSize: "1.05rem", color: `var(--text-warm)`, marginBottom: "0.3rem" }}>
+                                      <span style={{ fontWeight: 700 }}>{selectedDrillJob}</span>
+                                      <span style={{ fontFamily: "monospace", fontSize: "0.9rem", color: `var(--text-dim)`, marginLeft: "0.75rem" }}>{data.agents.length} agents {"\u00b7"} {data.goals} sales {"\u00b7"} {data.hrs.toFixed(1)} hrs</span>
+                                    </div>
+                                    <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "monospace", fontSize: "0.88rem" }}>
+                                      <thead><tr style={{ borderBottom: "1px solid var(--border)" }}>
+                                        {["Agent","Supervisor","Hours","Sales","GPH","CPS","HSD","XM"].map(h => (
+                                          <th key={h} style={{ padding: "0.2rem 0.5rem", textAlign: h === "Agent" || h === "Supervisor" ? "left" : "right", color: `var(--text-faint)`, fontWeight: 400 }}>{h}</th>
+                                        ))}
+                                      </tr></thead>
+                                      <tbody>
+                                        {data.agents.sort((x, y) => y.hours - x.hours).map((a, ai) => {
+                                          const aGph = a.hours > 0 ? a.goals / a.hours : 0;
+                                          const aCps = a.goals > 0 ? (a.hours * 19.77) / a.goals : a.hours * 19.77;
+                                          const qColor = Q[a.quartile]?.color || `var(--text-faint)`;
+                                          const gphClr = sg ? attainColor(aGph / sg * 100) : `var(--text-secondary)`;
+                                          return (
+                                            <tr key={a.agentName} style={{ borderBottom: "1px solid var(--bg-tertiary)", background: ai % 2 === 0 ? "transparent" : `var(--bg-row-alt)` }}>
+                                              <td style={{ padding: "0.2rem 0.5rem", color: qColor }}>{a.agentName}</td>
+                                              <td style={{ padding: "0.2rem 0.5rem", color: `var(--text-dim)` }}>{a.supervisor || "\u2014"}</td>
+                                              <td style={{ padding: "0.2rem 0.5rem", textAlign: "right", color: "#6366f1" }}>{a.hours.toFixed(1)}</td>
+                                              <td style={{ padding: "0.2rem 0.5rem", textAlign: "right", color: a.goals > 0 ? "#d97706" : `var(--text-faint)`, fontWeight: a.goals > 0 ? 700 : 400 }}>{a.goals || "\u2014"}</td>
+                                              <td style={{ padding: "0.2rem 0.5rem", textAlign: "right", color: gphClr }}>{aGph > 0 ? aGph.toFixed(3) : "\u2014"}</td>
+                                              <td style={{ padding: "0.2rem 0.5rem", textAlign: "right", color: gphClr }}>${aCps.toFixed(2)}</td>
+                                              <td style={{ padding: "0.2rem 0.5rem", textAlign: "right", color: (a.newXI || 0) > 0 ? "#2563eb" : `var(--text-faint)` }}>{a.newXI || "\u2014"}</td>
+                                              <td style={{ padding: "0.2rem 0.5rem", textAlign: "right", color: (a.xmLines || 0) > 0 ? "#8b5cf6" : `var(--text-faint)` }}>{a.xmLines || "\u2014"}</td>
+                                            </tr>);
+                                        })}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          </td></tr>
+                        );
+                      })()}
+                      </Fragment>
                     );
                   }),
                   wWorked.length > 0 && (
-                    <tr key={`wk-${wg.wk}`} style={{ borderBottom: "2px solid var(--border)", background: `var(--bg-tertiary)` }}>
+                    <tr key={`wk-${wg.wk}`} style={{ borderBottom: "2px solid var(--border)", background: `var(--bg-tertiary)`, cursor: "pointer" }}
+                      onClick={() => { const wkKey = `wk-${wg.wk}`; setSelectedDate(selectedDate === wkKey ? null : wkKey); }}>
                       <td colSpan={2} style={{ padding: "0.4rem 0.6rem", color: `var(--text-muted)`, fontWeight: 700 }}>
                         Wk {wg.wk.slice(5)}
                       </td>
