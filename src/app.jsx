@@ -2484,7 +2484,7 @@ function PacingPanel({ fiscalInfo, metrics, title = "Pacing Analysis" }) {
   );
 }
 
-function GoalsRollup({ agents, goalEntries, goalLookup }) {
+function GoalsRollup({ agents, goalEntries, goalLookup, fiscalInfo }) {
   // Build entries from byTarget (full name) to preserve NAT/HQ distinction
   // Fall back to byTA if byTarget is empty
   const entries = useMemo(() => {
@@ -2679,8 +2679,155 @@ function GoalsRollup({ agents, goalEntries, goalLookup }) {
     );
   };
 
+  // ── Pacing & Projection calculations ──
+  const pacingData = useMemo(() => {
+    if (!fiscalInfo || !entries.length) return null;
+    const { elapsedBDays, remainingBDays, totalBDays, pctElapsed } = fiscalInfo;
+    if (!totalBDays || !elapsedBDays) return null;
+
+    const results = entries.map(entry => {
+      const allRows = Object.values(entry.siteMap).flat();
+      const planHomes = allRows.reduce((s, r) => s + computePlanRow(r).homesGoal, 0);
+      const planHours = allRows.reduce((s, r) => s + computePlanRow(r).hoursGoal, 0);
+      const planSph = planHours > 0 && planHomes > 0 ? planHomes / planHours : 0;
+      const actualHomes = agents.reduce((s, a) => s + a.goals, 0);
+      const actualHours = agents.reduce((s, a) => s + a.hours, 0);
+      const actualSph = actualHours > 0 ? actualHomes / actualHours : 0;
+
+      const dailyRate = elapsedBDays > 0 ? actualHomes / elapsedBDays : 0;
+      const dailyHrsRate = elapsedBDays > 0 ? actualHours / elapsedBDays : 0;
+      const projectedHomes = Math.round(dailyRate * totalBDays);
+      const projectedHours = Math.round(dailyHrsRate * totalBDays);
+      const homesNeeded = Math.max(0, planHomes - actualHomes);
+      const reqDailyRate = remainingBDays > 0 ? homesNeeded / remainingBDays : 0;
+      const reqSph = remainingBDays > 0 && dailyHrsRate > 0 ? reqDailyRate / dailyHrsRate : 0;
+      const gapPct = planHomes > 0 ? ((projectedHomes - planHomes) / planHomes) * 100 : 0;
+
+      // Per-site breakdown
+      const drRows = entry.siteMap["DR"] || [];
+      const bzRows = entry.siteMap["BZ"] || [];
+      const sites = [];
+      if (drRows.length) {
+        const drAgents = agents.filter(a => !(a.region || "").toUpperCase().includes("XOTM"));
+        const drPlanH = drRows.reduce((s, r) => s + computePlanRow(r).homesGoal, 0);
+        const drActH = drAgents.reduce((s, a) => s + a.goals, 0);
+        const drHrs = drAgents.reduce((s, a) => s + a.hours, 0);
+        const drDailyRate = elapsedBDays > 0 ? drActH / elapsedBDays : 0;
+        const drProj = Math.round(drDailyRate * totalBDays);
+        sites.push({ label: "DR", plan: drPlanH, actual: drActH, projected: drProj, hours: drHrs });
+      }
+      if (bzRows.length) {
+        const bzAgents = agents.filter(a => (a.region || "").toUpperCase().includes("XOTM"));
+        const bzPlanH = bzRows.reduce((s, r) => s + computePlanRow(r).homesGoal, 0);
+        const bzActH = bzAgents.reduce((s, a) => s + a.goals, 0);
+        const bzHrs = bzAgents.reduce((s, a) => s + a.hours, 0);
+        const bzDailyRate = elapsedBDays > 0 ? bzActH / elapsedBDays : 0;
+        const bzProj = Math.round(bzDailyRate * totalBDays);
+        sites.push({ label: "BZ", plan: bzPlanH, actual: bzActH, projected: bzProj, hours: bzHrs });
+      }
+
+      return {
+        name: entry.targetAudience, roc: entry.roc, funding: entry.funding,
+        planHomes, planHours, planSph, actualHomes, actualHours, actualSph,
+        projectedHomes, projectedHours, dailyRate, reqDailyRate, reqSph, homesNeeded, gapPct, sites,
+        pctElapsed, remainingBDays, elapsedBDays
+      };
+    });
+    return results;
+  }, [entries, agents, fiscalInfo]);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+
+      {/* Pacing Dashboard */}
+      {pacingData && pacingData.length > 0 && (
+        <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1.5rem" }}>
+          <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "1rem" }}>
+            Pacing & Projections
+          </div>
+
+          {pacingData.map(p => {
+            const attain = p.planHomes > 0 ? (p.actualHomes / p.planHomes) * 100 : 0;
+            const projAttain = p.planHomes > 0 ? (p.projectedHomes / p.planHomes) * 100 : 0;
+            const onTrack = projAttain >= 95;
+            const atRisk = projAttain < 80;
+            const statusColor = onTrack ? "#16a34a" : atRisk ? "#dc2626" : "#d97706";
+            const statusLabel = onTrack ? "ON TRACK" : atRisk ? "AT RISK" : "MONITOR";
+
+            return (
+              <div key={p.name + p.roc} style={{ marginBottom: "1.5rem" }}>
+                {/* Header */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+                  <div>
+                    <span style={{ fontFamily: "Georgia, serif", fontSize: "1.35rem", color: `var(--text-warm)`, fontWeight: 700 }}>{p.name}</span>
+                    {p.roc && <span style={{ fontFamily: "monospace", fontSize: "0.9rem", color: `var(--text-dim)`, marginLeft: "0.5rem" }}>{p.roc}</span>}
+                    {p.funding && <span style={{ fontFamily: "monospace", fontSize: "0.85rem", color: `var(--text-faint)`, marginLeft: "0.5rem" }}>({p.funding})</span>}
+                  </div>
+                  <span style={{ fontFamily: "monospace", fontSize: "0.95rem", color: statusColor, fontWeight: 700, background: statusColor + "15", border: `1px solid ${statusColor}30`, borderRadius: "4px", padding: "0.2rem 0.6rem" }}>{statusLabel}</span>
+                </div>
+
+                {/* Progress bar */}
+                <div style={{ position: "relative", height: "28px", background: `var(--bg-tertiary)`, borderRadius: "6px", overflow: "hidden", marginBottom: "0.5rem" }}>
+                  <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${Math.min(attain, 100)}%`, background: statusColor + "40", borderRadius: "6px", transition: "width 0.5s" }} />
+                  <div style={{ position: "absolute", left: `${Math.min(p.pctElapsed, 100)}%`, top: 0, height: "100%", width: "2px", background: `var(--text-faint)` }} />
+                  <div style={{ position: "absolute", left: 0, top: 0, height: "100%", display: "flex", alignItems: "center", padding: "0 0.75rem", fontFamily: "monospace", fontSize: "0.9rem", color: `var(--text-warm)`, fontWeight: 700 }}>
+                    {Math.round(attain)}% ({p.actualHomes.toLocaleString()} / {p.planHomes.toLocaleString()})
+                  </div>
+                </div>
+
+                {/* Key metrics grid */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "0.5rem", marginBottom: "0.75rem" }}>
+                  {[
+                    { label: "Projected", value: p.projectedHomes.toLocaleString(), sub: `${Math.round(projAttain)}% of plan`, color: statusColor },
+                    { label: "Homes Needed", value: p.homesNeeded.toLocaleString(), sub: `${p.remainingBDays} days left`, color: p.homesNeeded > 0 ? "#d97706" : "#16a34a" },
+                    { label: "Current Pace", value: `${p.dailyRate.toFixed(1)}/day`, sub: `${p.actualSph.toFixed(3)} SPH`, color: "#6366f1" },
+                    { label: "Required Pace", value: `${p.reqDailyRate.toFixed(1)}/day`, sub: p.reqSph > 0 ? `${p.reqSph.toFixed(3)} SPH needed` : "met", color: p.reqDailyRate > p.dailyRate * 1.2 ? "#dc2626" : "#16a34a" },
+                    { label: "Gap", value: `${p.gapPct >= 0 ? "+" : ""}${Math.round(p.gapPct)}%`, sub: p.gapPct >= 0 ? "surplus" : "shortfall", color: p.gapPct >= 0 ? "#16a34a" : "#dc2626" },
+                  ].map(m => (
+                    <div key={m.label} style={{ padding: "0.6rem", borderRadius: "8px", background: m.color + "08", border: `1px solid ${m.color}20` }}>
+                      <div style={{ fontFamily: "monospace", fontSize: "0.8rem", color: `var(--text-faint)`, letterSpacing: "0.05em", textTransform: "uppercase" }}>{m.label}</div>
+                      <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "1.5rem", color: m.color, fontWeight: 700, lineHeight: 1 }}>{m.value}</div>
+                      <div style={{ fontFamily: "monospace", fontSize: "0.8rem", color: `var(--text-dim)`, marginTop: "0.15rem" }}>{m.sub}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Per-site pacing */}
+                {p.sites.length > 1 && (
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "monospace", fontSize: "0.9rem" }}>
+                    <thead><tr style={{ borderBottom: "1px solid var(--border)" }}>
+                      {["Site", "Plan", "Actual", "Attain", "Projected", "Proj %", "Gap"].map(h => (
+                        <th key={h} style={{ padding: "0.3rem 0.5rem", textAlign: h === "Site" ? "left" : "right", color: `var(--text-faint)`, fontWeight: 600 }}>{h}</th>
+                      ))}
+                    </tr></thead>
+                    <tbody>
+                      {p.sites.map(s => {
+                        const sAtt = s.plan > 0 ? (s.actual / s.plan) * 100 : 0;
+                        const sProjAtt = s.plan > 0 ? (s.projected / s.plan) * 100 : 0;
+                        const sGap = s.projected - s.plan;
+                        const sColor = sProjAtt >= 95 ? "#16a34a" : sProjAtt < 80 ? "#dc2626" : "#d97706";
+                        return (
+                          <tr key={s.label} style={{ borderBottom: "1px solid var(--bg-tertiary)" }}>
+                            <td style={{ padding: "0.3rem 0.5rem", color: s.label === "BZ" ? "#16a34a" : "#6366f1", fontWeight: 700 }}>{s.label === "BZ" ? "Belize" : s.label}</td>
+                            <td style={{ padding: "0.3rem 0.5rem", textAlign: "right", color: `var(--text-dim)` }}>{s.plan.toLocaleString()}</td>
+                            <td style={{ padding: "0.3rem 0.5rem", textAlign: "right", color: `var(--text-warm)` }}>{s.actual.toLocaleString()}</td>
+                            <td style={{ padding: "0.3rem 0.5rem", textAlign: "right", color: attainColor(sAtt), fontWeight: 700 }}>{Math.round(sAtt)}%</td>
+                            <td style={{ padding: "0.3rem 0.5rem", textAlign: "right" }}>{s.projected.toLocaleString()}</td>
+                            <td style={{ padding: "0.3rem 0.5rem", textAlign: "right", color: sColor, fontWeight: 700 }}>{Math.round(sProjAtt)}%</td>
+                            <td style={{ padding: "0.3rem 0.5rem", textAlign: "right", color: sGap >= 0 ? "#16a34a" : "#dc2626" }}>{sGap >= 0 ? "+" : ""}{sGap}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Existing goal-vs-actual detail sections */}
       {entries.map(({ targetAudience, siteMap, roc, funding }) => (
         <TASection key={targetAudience + (roc||"")} targetAudience={targetAudience} siteMap={siteMap} roc={roc} funding={funding} />
       ))}
@@ -2867,6 +3014,7 @@ function DropZone({ onData, goalsRaw, onGoalsLoad, newHiresRaw, onNewHiresLoad }
 
 function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, newHireSet, fiscalInfo }) {
   const [subRegion, setSubRegion] = useState(null);
+  const [siteRankSort, setSiteRankSort] = useState({ key: "pctToGoal", dir: -1 });
   const hasMultipleRegions = regions.length > 1;
 
   const activeRegions = (subRegion && hasMultipleRegions) ? [subRegion] : regions;
@@ -3057,6 +3205,147 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
           costPerActual={siteActRgu} costPerPlan={sitePlanMetrics?.rgu || 0}
         />
       )}
+
+      {/* Supervisor Ranking by % to Goal */}
+      {(() => {
+        const supMap = {};
+        agents.forEach(a => {
+          const sup = a.supervisor || "Unknown";
+          if (!supMap[sup]) supMap[sup] = { name: sup, hours: 0, goals: 0, agents: {}, newXI: 0, xmLines: 0, programs: new Set(), weekData: {} };
+          supMap[sup].hours += a.hours; supMap[sup].goals += a.goals;
+          supMap[sup].newXI += a.newXI || 0; supMap[sup].xmLines += a.xmLines || 0;
+          if (a.jobType) supMap[sup].programs.add(a.jobType);
+          const aName = a.agentName || "";
+          if (aName && !supMap[sup].agents[aName]) supMap[sup].agents[aName] = { hours: 0, goals: 0, goalsNum: 0 };
+          if (aName) { supMap[sup].agents[aName].hours += a.hours; supMap[sup].agents[aName].goals += a.goals; supMap[sup].agents[aName].goalsNum += a.goalsNum || 0; }
+          if (a.weekNum) {
+            if (!supMap[sup].weekData[a.weekNum]) supMap[sup].weekData[a.weekNum] = { hours: 0, goals: 0 };
+            supMap[sup].weekData[a.weekNum].hours += a.hours; supMap[sup].weekData[a.weekNum].goals += a.goals;
+          }
+        });
+
+        // Compute site-wide average SPH goal from all programs at this site
+        const siteAvgSph = sitePlanMetrics && sitePlanMetrics.goals > 0 && sitePlanMetrics.hours > 0
+          ? sitePlanMetrics.goals / sitePlanMetrics.hours : null;
+
+        const sups = Object.values(supMap).filter(s => s.name !== "Unknown").map(s => {
+          const uniqueAgents = Object.entries(s.agents);
+          const count = uniqueAgents.length;
+          let q1 = 0, q2 = 0, q3 = 0, q4 = 0;
+          uniqueAgents.forEach(([name, ag]) => {
+            const pct = ag.goalsNum > 0 ? (ag.goals / ag.goalsNum) * 100 : (ag.goals > 0 ? 50 : 0);
+            if (pct >= 100) q1++; else if (pct >= 75) q2++; else if (pct >= 50) q3++; else q4++;
+          });
+          s.q1 = q1; s.q2 = q2; s.q3 = q3; s.q4 = q4;
+          const gph = s.hours > 0 ? s.goals / s.hours : 0;
+          const pctToGoal = siteAvgSph && siteAvgSph > 0 ? (gph / siteAvgSph) * 100 : null;
+          const cps = s.goals > 0 ? (s.hours * 19.77) / s.goals : s.hours * 19.77;
+          const q1Rate = count > 0 ? (q1 / count) * 100 : 0;
+          const wks = Object.keys(s.weekData).sort();
+          const weeklyGph = wks.map(w => s.weekData[w].hours > 0 ? s.weekData[w].goals / s.weekData[w].hours : 0);
+          const trending = weeklyGph.length >= 2 ? (weeklyGph[weeklyGph.length-1] > weeklyGph[0] ? "up" : weeklyGph[weeklyGph.length-1] < weeklyGph[0] * 0.9 ? "down" : "flat") : null;
+          return { ...s, count, gph, pctToGoal, cps, q1Rate, trending, programList: [...s.programs].join(", ") };
+        }).sort((a, b) => {
+          const va = a[siteRankSort.key] ?? -9999;
+          const vb = b[siteRankSort.key] ?? -9999;
+          if (typeof va === "string") return va.localeCompare(vb) * siteRankSort.dir;
+          return (va - vb) * siteRankSort.dir;
+        });
+
+        if (sups.length === 0) return null;
+
+        const toggleSort = k => setSiteRankSort(s => ({ key: k, dir: s.key === k ? -s.dir : -1 }));
+        const RkTh = ({ k, label, left }) => (
+          <th onClick={() => toggleSort(k)}
+            style={{ padding: "0.4rem 0.5rem", textAlign: left ? "left" : "right", color: siteRankSort.key === k ? "#d97706" : `var(--text-faint)`, fontWeight: 600, fontSize: "0.85rem", whiteSpace: "nowrap", cursor: "pointer", userSelect: "none" }}>
+            {label} {siteRankSort.key === k ? (siteRankSort.dir === -1 ? "\u2193" : "\u2191") : ""}
+          </th>
+        );
+
+        const sTotHrs = sups.reduce((s, x) => s + x.hours, 0);
+        const sTotGoals = sups.reduce((s, x) => s + x.goals, 0);
+        const sTotGph = sTotHrs > 0 ? sTotGoals / sTotHrs : 0;
+        const sTotPct = siteAvgSph ? (sTotGph / siteAvgSph) * 100 : null;
+
+        return (
+          <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1.25rem" }}>
+            <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.75rem" }}>
+              Supervisor Ranking {"\u2014"} {displayLabel} {siteAvgSph ? `\u00b7 Site SPH Goal: ${siteAvgSph.toFixed(3)}` : ""}
+            </div>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "monospace", fontSize: "0.92rem" }}>
+                <thead><tr style={{ borderBottom: "2px solid var(--border)" }}>
+                  <th style={{ padding: "0.4rem 0.5rem", textAlign: "left", color: `var(--text-faint)`, fontWeight: 600, fontSize: "0.85rem" }}>#</th>
+                  <RkTh k="name" label="Supervisor" left />
+                  <RkTh k="count" label="Agents" />
+                  <th style={{ padding: "0.4rem 0.5rem", textAlign: "left", color: `var(--text-faint)`, fontWeight: 600, fontSize: "0.85rem" }}>Programs</th>
+                  <RkTh k="hours" label="Hours" />
+                  <RkTh k="goals" label="Sales" />
+                  <RkTh k="gph" label="GPH" />
+                  <RkTh k="pctToGoal" label="% Goal" />
+                  <RkTh k="cps" label="CPS" />
+                  <RkTh k="q1Rate" label="Q1%" />
+                  <RkTh k="q1" label="Q1" />
+                  <RkTh k="q2" label="Q2" />
+                  <RkTh k="q3" label="Q3" />
+                  <RkTh k="q4" label="Q4" />
+                  <th style={{ padding: "0.4rem 0.5rem", textAlign: "right", color: `var(--text-faint)`, fontWeight: 600, fontSize: "0.85rem" }}>Trend</th>
+                </tr></thead>
+                <tbody>
+                  {sups.map((s, i) => {
+                    const pColor = s.pctToGoal !== null ? attainColor(s.pctToGoal) : `var(--text-dim)`;
+                    const isTop = i === 0 && sups.length > 1;
+                    return (
+                      <tr key={s.name} style={{ borderBottom: "1px solid var(--bg-tertiary)", background: isTop ? "#16a34a08" : i % 2 === 0 ? "transparent" : `var(--bg-row-alt)` }}>
+                        <td style={{ padding: "0.35rem 0.5rem", color: isTop ? "#16a34a" : `var(--text-dim)`, fontWeight: 700 }}>{i + 1}</td>
+                        <td style={{ padding: "0.35rem 0.5rem", color: `var(--text-warm)`, fontFamily: "Georgia, serif" }}>
+                          {s.name}
+                          {isTop && <span style={{ marginLeft: "0.4rem", fontSize: "0.75rem", color: "#16a34a", background: "#16a34a15", border: "1px solid #16a34a30", borderRadius: "3px", padding: "0.05rem 0.25rem" }}>TOP</span>}
+                        </td>
+                        <td style={{ padding: "0.35rem 0.5rem", textAlign: "right", color: `var(--text-dim)` }}>{s.count}</td>
+                        <td style={{ padding: "0.35rem 0.5rem", color: `var(--text-dim)`, fontSize: "0.82rem", maxWidth: "130px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={s.programList}>{s.programList}</td>
+                        <td style={{ padding: "0.35rem 0.5rem", textAlign: "right", color: "#6366f1" }}>{fmt(s.hours, 1)}</td>
+                        <td style={{ padding: "0.35rem 0.5rem", textAlign: "right", color: s.goals > 0 ? "#d97706" : `var(--text-faint)`, fontWeight: 700 }}>{s.goals || "\u2014"}</td>
+                        <td style={{ padding: "0.35rem 0.5rem", textAlign: "right", color: pColor, fontWeight: 600 }}>{s.gph > 0 ? s.gph.toFixed(3) : "\u2014"}</td>
+                        <td style={{ padding: "0.35rem 0.5rem", textAlign: "right" }}>
+                          {s.pctToGoal !== null ? (
+                            <span style={{ color: pColor, fontWeight: 700, background: pColor + "12", border: `1px solid ${pColor}30`, borderRadius: "3px", padding: "0.1rem 0.3rem" }}>{Math.round(s.pctToGoal)}%</span>
+                          ) : "\u2014"}
+                        </td>
+                        <td style={{ padding: "0.35rem 0.5rem", textAlign: "right", color: pColor }}>${s.cps.toFixed(2)}</td>
+                        <td style={{ padding: "0.35rem 0.5rem", textAlign: "right", color: s.q1Rate >= 40 ? "#16a34a" : s.q1Rate >= 20 ? "#d97706" : "#dc2626", fontWeight: 600 }}>{Math.round(s.q1Rate)}%</td>
+                        {["q1","q2","q3","q4"].map(q => (
+                          <td key={q} style={{ padding: "0.35rem 0.4rem", textAlign: "right", color: Q[q.toUpperCase()].color }}>{s[q]}</td>
+                        ))}
+                        <td style={{ padding: "0.35rem 0.5rem", textAlign: "right" }}>
+                          {s.trending === "up" && <span style={{ color: "#16a34a" }}>{"\u2191"}</span>}
+                          {s.trending === "down" && <span style={{ color: "#dc2626" }}>{"\u2193"}</span>}
+                          {s.trending === "flat" && <span style={{ color: `var(--text-faint)` }}>{"\u2192"}</span>}
+                          {!s.trending && "\u2014"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot><tr style={{ borderTop: "2px solid var(--border)", background: `var(--bg-row-alt)` }}>
+                  <td></td>
+                  <td style={{ padding: "0.4rem 0.5rem", fontWeight: 700, color: `var(--text-warm)` }}>TOTAL</td>
+                  <td style={{ padding: "0.4rem 0.5rem", textAlign: "right", fontWeight: 700 }}>{uCount}</td>
+                  <td></td>
+                  <td style={{ padding: "0.4rem 0.5rem", textAlign: "right", fontWeight: 700, color: "#6366f1" }}>{fmt(sTotHrs, 1)}</td>
+                  <td style={{ padding: "0.4rem 0.5rem", textAlign: "right", fontWeight: 700, color: "#d97706" }}>{sTotGoals}</td>
+                  <td style={{ padding: "0.4rem 0.5rem", textAlign: "right", fontWeight: 700 }}>{sTotGph.toFixed(3)}</td>
+                  <td style={{ padding: "0.4rem 0.5rem", textAlign: "right" }}>
+                    {sTotPct !== null ? <span style={{ color: attainColor(sTotPct), fontWeight: 700 }}>{Math.round(sTotPct)}%</span> : "\u2014"}
+                  </td>
+                  <td style={{ padding: "0.4rem 0.5rem", textAlign: "right", fontWeight: 700 }}>${sTotGoals > 0 ? ((sTotHrs * 19.77) / sTotGoals).toFixed(2) : (sTotHrs * 19.77).toFixed(2)}</td>
+                  <td colSpan={6}></td>
+                </tr></tfoot>
+              </table>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Daily Targets — Hours, Homes, HSD & XM Lines required per day to finish on goal */}
       {fiscalInfo && fiscalInfo.remainingBDays > 0 && sitePrograms.some(p => p.sitePlanHsd || p.sitePlanXm || p.sitePlanGoals || p.sitePlanHours) && (() => {
@@ -5769,6 +6058,7 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
 function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total, onNav, allAgents }) {
   const [tab, setTab] = useState("overview");
   const [rocFilter, setRocFilter] = useState(null); // null = all, or a specific ROC code
+  const [rankSort, setRankSort] = useState({ key: "pctToGoal", dir: -1 });
 
   const {
     jobType, agents, regions,
@@ -5859,7 +6149,7 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
           {tabs.map(t => (
             <button key={t} onClick={() => setTab(t)}
               style={{ padding: "0.4rem 0.9rem", borderRadius: "6px", border: `1px solid ${tab===t?"#d97706":`var(--border)`}`, background: tab===t?"#d9770618":"transparent", color: tab===t?"#d97706":`var(--text-muted)`, fontFamily: "monospace", fontSize: "1.14rem", cursor: "pointer", textTransform: "capitalize", letterSpacing: "0.05em" }}>
-              {t === "overview" ? "Overview" : t === "bysite" ? "By Site" : t === "agents" ? "All Agents" : t === "teams" ? "Teams" : t === "goals" ? "Goals" : t === "daily" ? "Daily" : t}
+              {t === "overview" ? "Overview" : t === "bysite" ? "By Site" : t === "agents" ? "All Agents" : t === "teams" ? "Teams" : t === "goals" ? "Ranking" : t === "daily" ? "Daily" : t}
             </button>
           ))}
         </div>
@@ -6217,10 +6507,152 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
           } />
         )}
 
-        {/* ── GOALS TAB ── */}
-        {tab === "goals" && (
-          <GoalsRollup agents={agents} goalEntries={goalEntries} goalLookup={goalLookup} />
-        )}
+        {/* ── SUPERVISOR RANKING TAB ── */}
+        {tab === "goals" && (() => {
+          // Build supervisor stats for this program
+          const supMap = {};
+          const progAgents = filteredAgents;
+          const progSphGoal = goalEntries.length > 0
+            ? (() => { const allRows = goalEntries.flatMap(e => Object.values(e.siteMap).flat()); const vals = allRows.map(r => computePlanRow(r).sphGoal).filter(v => v > 0); return vals.length ? vals.reduce((s,v)=>s+v,0)/vals.length : null; })()
+            : null;
+
+          progAgents.forEach(a => {
+            const sup = a.supervisor || "Unknown";
+            if (!supMap[sup]) supMap[sup] = { name: sup, hours: 0, goals: 0, agents: {}, newXI: 0, xmLines: 0, regions: new Set(), weekData: {} };
+            supMap[sup].hours += a.hours; supMap[sup].goals += a.goals;
+            supMap[sup].newXI += a.newXI || 0; supMap[sup].xmLines += a.xmLines || 0;
+            const aName2 = a.agentName || "";
+            if (aName2 && !supMap[sup].agents[aName2]) supMap[sup].agents[aName2] = { hours: 0, goals: 0, goalsNum: 0 };
+            if (aName2) { supMap[sup].agents[aName2].hours += a.hours; supMap[sup].agents[aName2].goals += a.goals; supMap[sup].agents[aName2].goalsNum += a.goalsNum || 0; }
+            if (a.region) supMap[sup].regions.add(a.region);
+            if (a.weekNum) {
+              if (!supMap[sup].weekData[a.weekNum]) supMap[sup].weekData[a.weekNum] = { hours: 0, goals: 0 };
+              supMap[sup].weekData[a.weekNum].hours += a.hours;
+              supMap[sup].weekData[a.weekNum].goals += a.goals;
+            }
+          });
+
+          const sups = Object.values(supMap).filter(s => s.name !== "Unknown").map(s => {
+            const uniqueAgents = Object.entries(s.agents);
+            const count = uniqueAgents.length;
+            let q1 = 0, q2 = 0, q3 = 0, q4 = 0;
+            uniqueAgents.forEach(([name, ag]) => {
+              const pct = ag.goalsNum > 0 ? (ag.goals / ag.goalsNum) * 100 : (ag.goals > 0 ? 50 : 0);
+              if (pct >= 100) q1++; else if (pct >= 75) q2++; else if (pct >= 50) q3++; else q4++;
+            });
+            s.q1 = q1; s.q2 = q2; s.q3 = q3; s.q4 = q4;
+            const gph = s.hours > 0 ? s.goals / s.hours : 0;
+            const pctToGoal = progSphGoal && progSphGoal > 0 ? (gph / progSphGoal) * 100 : null;
+            const cps = s.goals > 0 ? (s.hours * 19.77) / s.goals : s.hours * 19.77;
+            const q1Rate = count > 0 ? (q1 / count) * 100 : 0;
+            // Weekly trend
+            const wks = Object.keys(s.weekData).sort();
+            const weeklyGph = wks.map(w => s.weekData[w].hours > 0 ? s.weekData[w].goals / s.weekData[w].hours : 0);
+            const trending = weeklyGph.length >= 2 ? (weeklyGph[weeklyGph.length - 1] > weeklyGph[0] ? "up" : weeklyGph[weeklyGph.length - 1] < weeklyGph[0] * 0.9 ? "down" : "flat") : null;
+            return { ...s, count, gph, pctToGoal, cps, q1Rate, weeklyGph, trending, regions: [...s.regions].join(", ") };
+          }).sort((a, b) => {
+            const va = a[rankSort.key] ?? -9999;
+            const vb = b[rankSort.key] ?? -9999;
+            if (typeof va === "string") return va.localeCompare(vb) * rankSort.dir;
+            return (va - vb) * rankSort.dir;
+          });
+
+          const toggleSort = k => setRankSort(s => ({ key: k, dir: s.key === k ? -s.dir : -1 }));
+          const RankTh = ({ k, label, left }) => (
+            <th onClick={() => toggleSort(k)}
+              style={{ padding: "0.4rem 0.5rem", textAlign: left ? "left" : "right", color: rankSort.key === k ? "#d97706" : `var(--text-faint)`, fontWeight: 600, fontSize: "0.85rem", whiteSpace: "nowrap", cursor: "pointer", userSelect: "none" }}>
+              {label} {rankSort.key === k ? (rankSort.dir === -1 ? "\u2193" : "\u2191") : ""}
+            </th>
+          );
+
+          const totHrs = sups.reduce((s, x) => s + x.hours, 0);
+          const totGoals = sups.reduce((s, x) => s + x.goals, 0);
+          const totGph = totHrs > 0 ? totGoals / totHrs : 0;
+          const totPct = progSphGoal ? (totGph / progSphGoal) * 100 : null;
+
+          return (
+            <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+              {/* Header */}
+              <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase" }}>
+                Supervisor Ranking {progSphGoal ? `\u00b7 SPH Goal: ${progSphGoal.toFixed(3)}` : ""}
+              </div>
+
+              {/* Ranking table */}
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "monospace", fontSize: "0.95rem" }}>
+                  <thead><tr style={{ borderBottom: "2px solid var(--border)" }}>
+                    <th style={{ padding: "0.4rem 0.5rem", textAlign: "left", color: `var(--text-faint)`, fontWeight: 600, fontSize: "0.85rem" }}>#</th>
+                    <RankTh k="name" label="Supervisor" left />
+                    <th style={{ padding: "0.4rem 0.5rem", textAlign: "left", color: `var(--text-faint)`, fontWeight: 600, fontSize: "0.85rem" }}>Region</th>
+                    <RankTh k="count" label="Agents" />
+                    <RankTh k="hours" label="Hours" />
+                    <RankTh k="goals" label="Sales" />
+                    <RankTh k="gph" label="GPH" />
+                    <RankTh k="pctToGoal" label="% Goal" />
+                    <RankTh k="cps" label="CPS" />
+                    <RankTh k="q1Rate" label="Q1%" />
+                    <RankTh k="q1" label="Q1" />
+                    <RankTh k="q2" label="Q2" />
+                    <RankTh k="q3" label="Q3" />
+                    <RankTh k="q4" label="Q4" />
+                    <th style={{ padding: "0.4rem 0.5rem", textAlign: "right", color: `var(--text-faint)`, fontWeight: 600, fontSize: "0.85rem" }}>Trend</th>
+                  </tr></thead>
+                  <tbody>
+                    {sups.map((s, i) => {
+                      const pColor = s.pctToGoal !== null ? attainColor(s.pctToGoal) : `var(--text-dim)`;
+                      const isTop = i === 0 && sups.length > 1;
+                      const isBot = i === sups.length - 1 && sups.length > 1;
+                      return (
+                        <tr key={s.name} style={{ borderBottom: "1px solid var(--bg-tertiary)", background: isTop ? "#16a34a08" : isBot ? "#dc262608" : i % 2 === 0 ? "transparent" : `var(--bg-row-alt)` }}>
+                          <td style={{ padding: "0.4rem 0.5rem", color: isTop ? "#16a34a" : isBot ? "#dc2626" : `var(--text-dim)`, fontWeight: 700 }}>{i + 1}</td>
+                          <td style={{ padding: "0.4rem 0.5rem", color: `var(--text-warm)`, fontFamily: "Georgia, serif" }}>
+                            {s.name}
+                            {isTop && <span style={{ marginLeft: "0.4rem", fontSize: "0.8rem", color: "#16a34a", background: "#16a34a15", border: "1px solid #16a34a30", borderRadius: "3px", padding: "0.05rem 0.3rem" }}>TOP</span>}
+                          </td>
+                          <td style={{ padding: "0.4rem 0.5rem", color: `var(--text-dim)`, fontSize: "0.85rem", maxWidth: "120px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={s.regions}>{s.regions}</td>
+                          <td style={{ padding: "0.4rem 0.5rem", textAlign: "right", color: `var(--text-dim)` }}>{s.count}</td>
+                          <td style={{ padding: "0.4rem 0.5rem", textAlign: "right", color: "#6366f1" }}>{fmt(s.hours, 1)}</td>
+                          <td style={{ padding: "0.4rem 0.5rem", textAlign: "right", color: s.goals > 0 ? "#d97706" : `var(--text-faint)`, fontWeight: 700 }}>{s.goals || "\u2014"}</td>
+                          <td style={{ padding: "0.4rem 0.5rem", textAlign: "right", color: pColor, fontWeight: 600 }}>{s.gph > 0 ? s.gph.toFixed(3) : "\u2014"}</td>
+                          <td style={{ padding: "0.4rem 0.5rem", textAlign: "right" }}>
+                            {s.pctToGoal !== null ? (
+                              <span style={{ color: pColor, fontWeight: 700, background: pColor + "12", border: `1px solid ${pColor}30`, borderRadius: "3px", padding: "0.1rem 0.35rem" }}>{Math.round(s.pctToGoal)}%</span>
+                            ) : "\u2014"}
+                          </td>
+                          <td style={{ padding: "0.4rem 0.5rem", textAlign: "right", color: pColor }}>${s.cps.toFixed(2)}</td>
+                          <td style={{ padding: "0.4rem 0.5rem", textAlign: "right", color: s.q1Rate >= 40 ? "#16a34a" : s.q1Rate >= 20 ? "#d97706" : "#dc2626", fontWeight: 600 }}>{Math.round(s.q1Rate)}%</td>
+                          {["q1","q2","q3","q4"].map(q => (
+                            <td key={q} style={{ padding: "0.4rem 0.4rem", textAlign: "right", color: Q[q.toUpperCase()].color }}>{s[q]}</td>
+                          ))}
+                          <td style={{ padding: "0.4rem 0.5rem", textAlign: "right" }}>
+                            {s.trending === "up" && <span style={{ color: "#16a34a" }}>{"\u2191"}</span>}
+                            {s.trending === "down" && <span style={{ color: "#dc2626" }}>{"\u2193"}</span>}
+                            {s.trending === "flat" && <span style={{ color: `var(--text-faint)` }}>{"\u2192"}</span>}
+                            {!s.trending && "\u2014"}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot><tr style={{ borderTop: "2px solid var(--border)", background: `var(--bg-row-alt)` }}>
+                    <td></td>
+                    <td style={{ padding: "0.4rem 0.5rem", fontWeight: 700, color: `var(--text-warm)` }}>TOTAL</td>
+                    <td></td>
+                    <td style={{ padding: "0.4rem 0.5rem", textAlign: "right", fontWeight: 700 }}>{uniqueNames(progAgents).size}</td>
+                    <td style={{ padding: "0.4rem 0.5rem", textAlign: "right", fontWeight: 700, color: "#6366f1" }}>{fmt(totHrs, 1)}</td>
+                    <td style={{ padding: "0.4rem 0.5rem", textAlign: "right", fontWeight: 700, color: "#d97706" }}>{totGoals}</td>
+                    <td style={{ padding: "0.4rem 0.5rem", textAlign: "right", fontWeight: 700 }}>{totGph.toFixed(3)}</td>
+                    <td style={{ padding: "0.4rem 0.5rem", textAlign: "right" }}>
+                      {totPct !== null ? <span style={{ color: attainColor(totPct), fontWeight: 700 }}>{Math.round(totPct)}%</span> : "\u2014"}
+                    </td>
+                    <td style={{ padding: "0.4rem 0.5rem", textAlign: "right", fontWeight: 700 }}>${totGoals > 0 ? ((totHrs * 19.77) / totGoals).toFixed(2) : (totHrs * 19.77).toFixed(2)}</td>
+                    <td colSpan={6}></td>
+                  </tr></tfoot>
+                </table>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* ── DAILY TAB ── */}
         {tab === "daily" && (
