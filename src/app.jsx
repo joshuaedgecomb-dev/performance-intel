@@ -3015,6 +3015,7 @@ function DropZone({ onData, goalsRaw, onGoalsLoad, newHiresRaw, onNewHiresLoad }
 function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, newHireSet, fiscalInfo }) {
   const [subRegion, setSubRegion] = useState(null);
   const [siteRankSort, setSiteRankSort] = useState({ key: "pctToGoal", dir: -1 });
+  const [dtFundingFilter, setDtFundingFilter] = useState(null);
   const hasMultipleRegions = regions.length > 1;
 
   const activeRegions = (subRegion && hasMultipleRegions) ? [subRegion] : regions;
@@ -3356,6 +3357,37 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
           { label: "XM Lines", color: "#8b5cf6", bg: "#8b5cf608" },
         ];
         const dtPrograms = sitePrograms.filter(p => p.sitePlanHsd || p.sitePlanXm || p.sitePlanGoals || p.sitePlanHours);
+        const filteredDtPrograms = (() => {
+          if (!dtFundingFilter) return dtPrograms;
+          // When funding filter active, split programs into per-funding rows
+          const rows = [];
+          dtPrograms.forEach(p => {
+            const matchingBreakouts = (p.goalBreakout || []).filter(g => g.funding === dtFundingFilter);
+            if (matchingBreakouts.length === 0) return; // skip programs with no matching funding
+            matchingBreakouts.forEach(fb => {
+              // Filter agents to only those with matching ROC code
+              const rocAgents = fb.roc ? p.siteAgents.filter(a => a.rocCode === fb.roc) : p.siteAgents;
+              const rocGoals = rocAgents.reduce((s, a) => s + a.goals, 0);
+              const rocHours = rocAgents.reduce((s, a) => s + a.hours, 0);
+              const rocHsd = rocAgents.reduce((s, a) => s + (a.newXI || 0), 0);
+              const rocXm = rocAgents.reduce((s, a) => s + (a.xmLines || 0), 0);
+              rows.push({
+                ...p,
+                _fundingLabel: fb.funding,
+                _fundingRoc: fb.roc,
+                sitePlanHours: fb.hours || 0,
+                sitePlanGoals: fb.homes || 0,
+                totalHours: rocHours,
+                totalGoals: rocGoals,
+                hsdAct: rocHsd,
+                xmAct: rocXm,
+                siteAgents: rocAgents,
+                uNames: new Set(rocAgents.map(a => a.agentName).filter(Boolean)).size,
+              });
+            });
+          });
+          return rows;
+        })();
         const gridCols = "2.2fr 3px 1fr 1fr 1fr 3px 1fr 1fr 1fr 3px 1fr 1fr 1fr 3px 1fr 1fr 1fr";
         // Column indices: 0=prog, 1=div, 2-4=hours, 5=div, 6-8=homes, 9=div, 10-12=hsd, 13=div, 14-16=xm
         const dividerIndices = [1, 5, 9, 13];
@@ -3379,20 +3411,19 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
           const cells = [];
           metrics.forEach((m, gi) => {
             const g = dtColors[gi];
-            const remain = Math.max((m.plan || 0) - (m.actual || 0), 0);
-            const perDay = remain / fiscalInfo.remainingBDays;
+            const diff = (m.actual || 0) - (m.plan || 0);
+            const remain = Math.max(-diff, 0);
+            const perDay = remain > 0 ? remain / fiscalInfo.remainingBDays : 0;
             const onTrack = m.plan ? (m.actual / m.plan) * 100 >= (fiscalInfo.pctElapsed - 5) : true;
-            // divider
+            const isOver = diff > 0;
             cells.push(<Divider key={`d${gi}`} color={`${g.color}40`} />);
-            // plan
             cells.push(
               <DtCell key={`p${gi}`} style={{ background: g.bg }}>
                 <span style={{ fontFamily: "monospace", fontSize: rowBg ? "1.11rem" : "1.08rem", color: `var(--text-dim)`, fontWeight: rowBg ? 700 : 400 }}>
-                  {m.plan ? m.fmtFn(m.plan) : "—"}
+                  {m.plan ? m.fmtFn(m.plan) : "\u2014"}
                 </span>
               </DtCell>
             );
-            // actual
             cells.push(
               <DtCell key={`a${gi}`} style={{ background: g.bg }}>
                 <span style={{ fontFamily: "monospace", fontSize: rowBg ? "1.11rem" : "1.08rem", color: `var(--text-primary)`, fontWeight: rowBg ? 700 : 400 }}>
@@ -3400,16 +3431,19 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
                 </span>
               </DtCell>
             );
-            // per day
             cells.push(
               <DtCell key={`r${gi}`} style={{ background: g.bg }}>
                 {m.plan ? (
-                  remain <= 0
-                    ? <span style={{ fontFamily: "monospace", fontSize: "1.14rem", color: "#16a34a", fontWeight: 700 }}>✓</span>
-                    : <span style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: rowBg ? "1.95rem" : "1.65rem", color: rowBg ? "#d97706" : (onTrack ? "#16a34a" : "#dc2626"), fontWeight: 700, lineHeight: 1 }}>
-                        {perDay < 1 ? perDay.toFixed(1) : Math.ceil(perDay)}
+                  isOver
+                    ? <span style={{ fontFamily: "monospace", fontSize: rowBg ? "1.08rem" : "0.92rem", color: gi === 0 ? "#dc2626" : "#16a34a", fontWeight: 700 }}>
+                        +{m.fmtFn(Math.abs(diff))}
                       </span>
-                ) : <span style={{ fontFamily: "monospace", fontSize: "1.08rem", color: `var(--text-faint)` }}>—</span>}
+                    : remain === 0
+                      ? <span style={{ fontFamily: "monospace", fontSize: "1.05rem", color: "#16a34a", fontWeight: 700 }}>0</span>
+                      : <span style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: rowBg ? "1.95rem" : "1.65rem", color: rowBg ? "#d97706" : (onTrack ? "#16a34a" : "#dc2626"), fontWeight: 700, lineHeight: 1 }}>
+                          {perDay < 1 ? perDay.toFixed(1) : Math.ceil(perDay)}
+                        </span>
+                ) : <span style={{ fontFamily: "monospace", fontSize: "1.08rem", color: `var(--text-faint)` }}>{"\u2014"}</span>}
               </DtCell>
             );
           });
@@ -3431,6 +3465,29 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
               </div>
             </div>
           </div>
+
+          {/* Funding source filter */}
+          {(() => {
+            const fundingSources = [...new Set(dtPrograms.flatMap(p => (p.goalBreakout || []).map(g => g.funding)).filter(Boolean))];
+            if (fundingSources.length <= 1) return null;
+            return (
+              <div style={{ display: "flex", gap: "0.3rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
+                <button onClick={() => setDtFundingFilter(null)}
+                  style={{ padding: "0.2rem 0.6rem", borderRadius: "4px", border: `1px solid ${!dtFundingFilter ? "#d97706" : "var(--border)"}`, background: !dtFundingFilter ? "#d9770618" : "transparent", color: !dtFundingFilter ? "#d97706" : `var(--text-dim)`, fontFamily: "monospace", fontSize: "0.9rem", cursor: "pointer", fontWeight: !dtFundingFilter ? 700 : 400 }}>
+                  All Funding
+                </button>
+                {fundingSources.map(f => {
+                  const active = dtFundingFilter === f;
+                  return (
+                    <button key={f} onClick={() => setDtFundingFilter(active ? null : f)}
+                      style={{ padding: "0.2rem 0.6rem", borderRadius: "4px", border: `1px solid ${active ? "#2563eb" : "var(--border)"}`, background: active ? "#2563eb18" : "transparent", color: active ? "#2563eb" : `var(--text-dim)`, fontFamily: "monospace", fontSize: "0.9rem", cursor: "pointer", fontWeight: active ? 700 : 400 }}>
+                      {f}
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })()}
 
           {/* Group header row */}
           <div style={{ display: "grid", gridTemplateColumns: gridCols, marginBottom: "0" }}>
@@ -3459,19 +3516,19 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
           </div>
 
           {/* Program data rows */}
-          {dtPrograms.map(p => {
+          {filteredDtPrograms.map((p, pi) => {
             const metrics = [
               { plan: p.sitePlanHours, actual: p.totalHours, fmtFn: v => fmt(v, 0) },
               { plan: p.sitePlanGoals, actual: p.totalGoals, fmtFn: v => v.toLocaleString() },
               { plan: p.sitePlanHsd,   actual: p.hsdAct,     fmtFn: v => v.toLocaleString() },
               { plan: p.sitePlanXm,    actual: p.xmAct,      fmtFn: v => v.toLocaleString() },
             ];
-            const rocCodes = p.goalBreakout ? p.goalBreakout.map(g => g.roc).filter(Boolean).join(", ") : "";
+            const rocLabel = p._fundingRoc || (p.goalBreakout ? p.goalBreakout.map(g => g.roc).filter(Boolean).join(", ") : "");
             return (
-              <div key={p.jobType} style={{ display: "grid", gridTemplateColumns: gridCols, borderBottom: "1px solid var(--bg-tertiary)", alignItems: "center" }}>
+              <div key={p.jobType + (p._fundingRoc || String(pi))} style={{ display: "grid", gridTemplateColumns: gridCols, borderBottom: "1px solid var(--bg-tertiary)", alignItems: "center" }}>
                 <div style={{ padding: "0.5rem 0.75rem" }}>
                   <div style={{ fontFamily: "Georgia, serif", fontSize: "1.2rem", color: `var(--text-warm)` }}>{p.jobType}</div>
-                  {rocCodes && <div style={{ fontFamily: "monospace", fontSize: "0.8rem", color: `var(--text-faint)` }}>{rocCodes}</div>}
+                  {rocLabel && <div style={{ fontFamily: "monospace", fontSize: "0.8rem", color: `var(--text-faint)` }}>{rocLabel}</div>}
                 </div>
                 {renderMetricCells(metrics, false)}
               </div>
@@ -3481,10 +3538,10 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
           {/* Totals row */}
           {(() => {
             const tots = [
-              { plan: canonPlanHours, actual: dtPrograms.reduce((s, p) => s + p.totalHours, 0), fmtFn: v => fmt(v, 0) },
-              { plan: canonPlanGoals, actual: dtPrograms.reduce((s, p) => s + p.totalGoals, 0), fmtFn: v => v.toLocaleString() },
-              { plan: canonPlanHsd,   actual: dtPrograms.reduce((s, p) => s + (p.hsdAct || 0), 0), fmtFn: v => v.toLocaleString() },
-              { plan: canonPlanXm,    actual: dtPrograms.reduce((s, p) => s + (p.xmAct || 0), 0), fmtFn: v => v.toLocaleString() },
+              { plan: dtFundingFilter ? filteredDtPrograms.reduce((s, p) => s + (p.sitePlanHours || 0), 0) : canonPlanHours, actual: filteredDtPrograms.reduce((s, p) => s + p.totalHours, 0), fmtFn: v => fmt(v, 0) },
+              { plan: dtFundingFilter ? filteredDtPrograms.reduce((s, p) => s + (p.sitePlanGoals || 0), 0) : canonPlanGoals, actual: filteredDtPrograms.reduce((s, p) => s + p.totalGoals, 0), fmtFn: v => v.toLocaleString() },
+              { plan: dtFundingFilter ? filteredDtPrograms.reduce((s, p) => s + (p.sitePlanHsd || 0), 0) : canonPlanHsd,   actual: filteredDtPrograms.reduce((s, p) => s + (p.hsdAct || 0), 0), fmtFn: v => v.toLocaleString() },
+              { plan: dtFundingFilter ? filteredDtPrograms.reduce((s, p) => s + (p.sitePlanXm || 0), 0) : canonPlanXm,    actual: filteredDtPrograms.reduce((s, p) => s + (p.xmAct || 0), 0), fmtFn: v => v.toLocaleString() },
             ];
             return (
               <div style={{ display: "grid", gridTemplateColumns: gridCols, borderTop: "2px solid var(--border)", marginTop: "0.25rem", alignItems: "center" }}>
