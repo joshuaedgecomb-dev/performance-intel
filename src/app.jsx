@@ -3349,7 +3349,7 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
       })()}
 
       {/* Daily Targets — Hours, Homes, HSD & XM Lines required per day to finish on goal */}
-      {fiscalInfo && fiscalInfo.remainingBDays > 0 && sitePrograms.some(p => p.sitePlanHsd || p.sitePlanXm || p.sitePlanGoals || p.sitePlanHours) && (() => {
+      {fiscalInfo && sitePrograms.some(p => p.sitePlanHsd || p.sitePlanXm || p.sitePlanGoals || p.sitePlanHours) && (() => {
         const dtColors = [
           { label: "Hours",    color: "#6366f1", bg: "#6366f108" },
           { label: "Homes",    color: "#16a34a", bg: "#16a34a08" },
@@ -3413,7 +3413,8 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
             const g = dtColors[gi];
             const diff = (m.actual || 0) - (m.plan || 0);
             const remain = Math.max(-diff, 0);
-            const perDay = remain > 0 ? remain / fiscalInfo.remainingBDays : 0;
+            const noDaysLeft = !fiscalInfo.remainingBDays || fiscalInfo.remainingBDays <= 0;
+            const perDay = remain > 0 && !noDaysLeft ? remain / fiscalInfo.remainingBDays : 0;
             const onTrack = m.plan ? (m.actual / m.plan) * 100 >= (fiscalInfo.pctElapsed - 5) : true;
             const isOver = diff > 0;
             cells.push(<Divider key={`d${gi}`} color={`${g.color}40`} />);
@@ -3440,6 +3441,10 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
                       </span>
                     : remain === 0
                       ? <span style={{ fontFamily: "monospace", fontSize: "1.05rem", color: "#16a34a", fontWeight: 700 }}>0</span>
+                      : noDaysLeft
+                        ? <span style={{ fontFamily: "monospace", fontSize: rowBg ? "1.08rem" : "0.92rem", color: "#dc2626", fontWeight: 700 }}>
+                            -{m.fmtFn(remain)}
+                          </span>
                       : <span style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: rowBg ? "1.95rem" : "1.65rem", color: rowBg ? "#d97706" : (onTrack ? "#16a34a" : "#dc2626"), fontWeight: 700, lineHeight: 1 }}>
                           {perDay < 1 ? perDay.toFixed(1) : Math.ceil(perDay)}
                         </span>
@@ -3461,7 +3466,7 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
                 </span>
               </div>
               <div style={{ fontFamily: "monospace", fontSize: "1.02rem", color: `var(--text-faint)`, marginTop: "0.2rem" }}>
-                Required per day to finish on goal · {fiscalInfo.remainingBDays} business days remaining
+                Required per day to finish on goal · {fiscalInfo.remainingBDays > 0 ? `${fiscalInfo.remainingBDays} business days remaining` : "No scheduled business days remaining"}
               </div>
             </div>
           </div>
