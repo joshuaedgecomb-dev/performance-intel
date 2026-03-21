@@ -238,7 +238,11 @@ function normalizeAgents(rows = []) {
       const newVoice   = parseNum(r["NewVoice"]    || r["New Voice"]  || 0);
       const newSecurity= parseNum(r["NewSecurity"] || r["New Security"] || 0);
       const rawRegion = (r.Region || r.region || r.REGION || "Unknown").trim();
-      const region    = rawRegion === "SD-Xfinty" ? "SD-Xfinity" : rawRegion;
+      const rocCode  = (r.Job || r.job || "").trim().toUpperCase();
+      // SD-Cox agents dialing Xfinity campaigns (GL* ROC codes) get remapped to SD-Xfinity
+      const region    = rawRegion === "SD-Xfinty" ? "SD-Xfinity"
+                      : rawRegion === "SD-Cox" && rocCode.startsWith("GL") ? "SD-Xfinity"
+                      : rawRegion;
 
       // Exclude rows not belonging to the four recognised regions
       if (!VALID_REGIONS.has(region)) return null;
@@ -7025,20 +7029,27 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
       "Belize City-XOTM", "OW-XOTM", "SD-Xfinty", "San Ignacio-XOTM",
       // also accept the corrected spelling just in case
       "SD-Xfinity",
+      // SD-Cox included so GL-job agents can be remapped
+      "SD-Cox",
     ]);
     // Exclude GS jobs and anything with "cox" in the group name
+    // BUT allow SD-Cox agents dialing GL (Xfinity) campaigns
     const filtered = raw.filter(row => {
+      const reg = (row.reg || "").trim();
+      const job = String(row.job || "").trim().toUpperCase();
       const grp = String(row.grp || "").trim().toUpperCase();
-      return ALLOWED_REGIONS.has((row.reg || "").trim()) &&
-        !grp.startsWith("GS") &&
-        !grp.includes("COX");
+      if (!ALLOWED_REGIONS.has(reg)) return false;
+      // SD-Cox: only include if job starts with GL (Xfinity program)
+      if (reg === "SD-Cox") return job.startsWith("GL");
+      // For all other regions, exclude GS jobs and Cox group names
+      return !job.startsWith("GS") && !grp.includes("COX");
     });
 
     // ── Per-unique-agent aggregate ──────────────────────────────────────────
     // Normalize region spelling (match historical data)
     const fixReg = r => {
       const t = (r || "?").trim();
-      return t === "SD-Xfinty" ? "SD-Xfinity" : t;
+      return t === "SD-Xfinty" ? "SD-Xfinity" : t === "SD-Cox" ? "SD-Xfinity" : t;
     };
     const agentMap = {};
     // Per-agent-per-job map for job-level drilldowns
