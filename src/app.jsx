@@ -136,29 +136,29 @@ function calcPacing(actual, plan, elapsedBDays, totalBDays) {
 // ── Gainshare ─────────────────────────────────────────────────────────────────
 // OVERALL (company-wide) — used on program slides
 const GAINSHARE_TIERS = [
-  { min: 126,    max: Infinity, mobile: 4.00, hsd: 4.00, costPer: 2.00, label: "> 126%" },
-  { min: 120,    max: 125.99,   mobile: 3.00, hsd: 3.00, costPer: 1.50, label: "120–126%" },
-  { min: 113,    max: 119.99,   mobile: 2.00, hsd: 2.00, costPer: 1.00, label: "113–119%" },
-  { min: 106,    max: 112.99,   mobile: 1.00, hsd: 1.00, costPer: 0.50, label: "106–112%" },
-  { min: 95,     max: 105.99,   mobile: 0,    hsd: 0,    costPer: 0,    label: "95–105%" },
-  { min: 88,     max: 94.99,    mobile:-1.00, hsd:-1.00, costPer:-0.50, label: "88–94%" },
-  { min: 81,     max: 87.99,    mobile:-2.00, hsd:-2.00, costPer:-1.00, label: "81–87%" },
-  { min: 74,     max: 80.99,    mobile:-3.00, hsd:-3.00, costPer:-1.50, label: "74–80%" },
-  { min: 0,      max: 73.99,    mobile:-4.00, hsd:-4.00, costPer:-2.00, label: "< 74%" },
+  { min: 126,    max: Infinity, mobile: 4.00, hsd: 4.00, costPer: 1.00, sph: 1.00, label: "> 126%" },
+  { min: 120,    max: 125.99,   mobile: 3.00, hsd: 3.00, costPer: 0.75, sph: 0.75, label: "120–126%" },
+  { min: 113,    max: 119.99,   mobile: 2.00, hsd: 2.00, costPer: 0.50, sph: 0.50, label: "113–119%" },
+  { min: 106,    max: 112.99,   mobile: 1.00, hsd: 1.00, costPer: 0.25, sph: 0.25, label: "106–112%" },
+  { min: 95,     max: 105.99,   mobile: 0,    hsd: 0,    costPer: 0,    sph: 0,    label: "95–105%" },
+  { min: 88,     max: 94.99,    mobile:-1.00, hsd:-1.00, costPer:-0.25, sph:-0.25, label: "88–94%" },
+  { min: 81,     max: 87.99,    mobile:-2.00, hsd:-2.00, costPer:-0.50, sph:-0.50, label: "81–87%" },
+  { min: 74,     max: 80.99,    mobile:-3.00, hsd:-3.00, costPer:-0.75, sph:-0.75, label: "74–80%" },
+  { min: 0,      max: 73.99,    mobile:-4.00, hsd:-4.00, costPer:-1.00, sph:-1.00, label: "< 74%" },
 ];
 
 // SITE-LEVEL (BZ / DR breakouts) — used on the By Site drilldown
 const GAINSHARE_SITE_TIERS = [
-  { min: 139, max: Infinity, mobile: 4.00, hsd: 4.00, costPer: 2.50, label: "> 139%" },
-  { min: 129, max: 139,      mobile: 3.00, hsd: 3.00, costPer: 2.00, label: "129–139%" },
-  { min: 118, max: 128.99,   mobile: 2.00, hsd: 2.00, costPer: 1.50, label: "118–128.99%" },
-  { min: 107, max: 117.99,   mobile: 1.00, hsd: 1.00, costPer: 0.50, label: "107–117.99%" },
-  { min: 100, max: 106.99,   mobile: 0,    hsd: 0,    costPer: 0,    label: "100–106.99%" },
-  { min: 95,  max: 99.99,    mobile:-1.00, hsd:-1.00, costPer:-0.50, label: "95–99.99%" },
-  { min: 90,  max: 94.99,    mobile:-2.00, hsd:-2.00, costPer:-1.00, label: "90–94.99%" },
-  { min: 85,  max: 89.99,    mobile:-3.00, hsd:-3.00, costPer:-2.00, label: "85–89.99%" },
-  { min: 80,  max: 84.99,    mobile:-4.00, hsd:-4.00, costPer:-2.50, label: "80–84.99%" },
-  { min: 0,   max: 79.99,    mobile:-5.00, hsd:-5.00, costPer:-3.00, label: "< 79.99%" },
+  { min: 139, max: Infinity, mobile: 4.00, hsd: 4.00, costPer: 2.50, sph: 1.00, label: "> 139%" },
+  { min: 129, max: 139,      mobile: 3.00, hsd: 3.00, costPer: 2.00, sph: 0.75, label: "129–139%" },
+  { min: 118, max: 128.99,   mobile: 2.00, hsd: 2.00, costPer: 1.50, sph: 0.50, label: "118–128.99%" },
+  { min: 107, max: 117.99,   mobile: 1.00, hsd: 1.00, costPer: 0.50, sph: 0.25, label: "107–117.99%" },
+  { min: 100, max: 106.99,   mobile: 0,    hsd: 0,    costPer: 0,    sph: 0,    label: "100–106.99%" },
+  { min: 95,  max: 99.99,    mobile:-1.00, hsd:-1.00, costPer:-0.50, sph:-0.25, label: "95–99.99%" },
+  { min: 90,  max: 94.99,    mobile:-2.00, hsd:-2.00, costPer:-1.00, sph:-0.50, label: "90–94.99%" },
+  { min: 85,  max: 89.99,    mobile:-3.00, hsd:-3.00, costPer:-2.00, sph:-0.75, label: "85–89.99%" },
+  { min: 80,  max: 84.99,    mobile:-4.00, hsd:-4.00, costPer:-2.50, sph:-1.00, label: "80–84.99%" },
+  { min: 0,   max: 79.99,    mobile:-5.00, hsd:-5.00, costPer:-3.00, sph:-1.00, label: "< 79.99%" },
 ];
 
 function getGainshareTier(pct, site = false) {
@@ -2065,97 +2065,100 @@ function GainsharePanel({
   mobileActual, mobilePlan,
   hsdActual, hsdPlan,
   costPerActual, costPerPlan,
+  sphAttain, sphActual, sphPlan,
+  hourAttain, hourActual, hourPlan,
 }) {
-  const [showPacing, setShowPacing] = useState(false);
 
   const mobileTier    = getGainshareTier(mobileAttain, siteMode);
   const hsdTier       = getGainshareTier(hsdAttain, siteMode);
   const costPerTier   = getGainshareTier(costPerAttain, siteMode);
+  const sphTier       = getGainshareTier(sphAttain, siteMode);
   const TIERS         = siteMode ? GAINSHARE_SITE_TIERS : GAINSHARE_TIERS;
 
-  const totalBonus = (mobileTier?.mobile ?? 0) + (hsdTier?.hsd ?? 0) + (costPerTier?.costPer ?? 0);
+  // Hour Attainment gate: no bonus for meeting target, but -2% penalty if below
+  const hourGatePenalty = hourAttain !== null && hourAttain !== undefined && hourAttain < 100 ? -2.00 : 0;
+
+  const totalBonus = (mobileTier?.mobile ?? 0) + (hsdTier?.hsd ?? 0) + (costPerTier?.costPer ?? 0) + (sphTier?.sph ?? 0) + hourGatePenalty;
   const bonusAvailable = mobileAttain !== null || hsdAttain !== null || costPerAttain !== null;
   if (!bonusAvailable) return null;
 
   // Compute pacing projections when fiscalInfo + raw numbers are available
-  const canPace = !!(fiscalInfo && fiscalInfo.elapsedBDays > 0);
-  const pMobile  = canPace && mobilePlan   ? calcPacing(mobileActual,  mobilePlan,  fiscalInfo.elapsedBDays, fiscalInfo.totalBDays) : null;
-  const pHsd     = canPace && hsdPlan      ? calcPacing(hsdActual,     hsdPlan,     fiscalInfo.elapsedBDays, fiscalInfo.totalBDays) : null;
-  const pCostPer = canPace && costPerPlan  ? calcPacing(costPerActual, costPerPlan, fiscalInfo.elapsedBDays, fiscalInfo.totalBDays) : null;
 
-  const projMobilePct  = pMobile  ? pMobile.projectedPct  : null;
-  const projHsdPct     = pHsd     ? pHsd.projectedPct     : null;
-  const projCostPerPct = pCostPer ? pCostPer.projectedPct : null;
+  const ColDef = ({ label, attain, tierKey, tier, actual, plan, isSph, actualHours }) => {
+    // For each tier, compute the target number needed
+    // Cumulative metrics: target = (threshold% / 100) * plan
+    // SPH: target expressed as sales needed = targetSPH * actualHours (so the user sees homes, not SPH)
+    const computeTarget = (thresholdMin) => {
+      if (!plan || plan <= 0) return null;
+      if (isSph) {
+        const targetSph = (thresholdMin / 100) * plan;
+        const salesNeeded = actualHours > 0 ? Math.ceil(targetSph * actualHours) : null;
+        return salesNeeded;
+      }
+      return Math.ceil((thresholdMin / 100) * plan);
+    };
 
-  const projMobileTier  = projMobilePct  !== null ? getGainshareTier(projMobilePct,  siteMode) : null;
-  const projHsdTier     = projHsdPct     !== null ? getGainshareTier(projHsdPct,     siteMode) : null;
-  const projCostPerTier = projCostPerPct !== null ? getGainshareTier(projCostPerPct, siteMode) : null;
+    const currentIdx = tier ? TIERS.indexOf(tier) : -1;
+    const nextTierUp = currentIdx > 0 ? TIERS[currentIdx - 1] : null;
+    const nextTarget = nextTierUp ? computeTarget(nextTierUp.min) : null;
+    const nextDelta = nextTarget !== null && actual !== null ? Math.max(Math.ceil(nextTarget - (isSph && actualHours > 0 ? actual * actualHours : actual)), 0) : null;
 
-  const projTotalBonus = showPacing
-    ? ((projMobileTier?.mobile ?? mobileTier?.mobile ?? 0) +
-       (projHsdTier?.hsd       ?? hsdTier?.hsd       ?? 0) +
-       (projCostPerTier?.costPer ?? costPerTier?.costPer ?? 0))
-    : totalBonus;
+    return (
+      <div style={{ flex: 1 }}>
+        <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-muted)`, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.4rem", textAlign: "center" }}>{label}</div>
 
-  const ColDef = ({ label, attain, tierKey, tier, projAttain, projTier }) => (
-    <div style={{ flex: 1 }}>
-      <div style={{ fontFamily: "monospace", fontSize: "1.17rem", color: `var(--text-muted)`, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "0.5rem", textAlign: "center" }}>{label}</div>
+        {attain !== null && (
+          <div style={{ textAlign: "center", marginBottom: "0.35rem" }}>
+            <span style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "2rem", color: attainColor(attain), fontWeight: 700 }}>{Math.round(attain)}%</span>
+          </div>
+        )}
 
-      {/* Current attainment (always shown) */}
-      {attain !== null && (
-        <div style={{ textAlign: "center", marginBottom: showPacing && projAttain !== null ? "0.2rem" : "0.5rem" }}>
-          <span style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "1.8rem", color: attainColor(attain), fontWeight: 700 }}>{Math.round(attain)}%</span>
-          <span style={{ fontFamily: "monospace", fontSize: "1.02rem", color: `var(--text-dim)`, marginLeft: "0.3rem" }}>to date</span>
-        </div>
-      )}
-
-      {/* Projected attainment (pacing mode only) */}
-      {showPacing && projAttain !== null && (
-        <div style={{ textAlign: "center", marginBottom: "0.5rem", padding: "0.2rem 0.4rem", background: "#d9770615", borderRadius: "4px", border: "1px dashed #d9770650" }}>
-          <span style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "1.65rem", color: "#d97706", fontWeight: 700 }}>{Math.round(projAttain)}%</span>
-          <span style={{ fontFamily: "monospace", fontSize: "0.93rem", color: "#d97706aa", marginLeft: "0.3rem" }}>proj. EOM</span>
-        </div>
-      )}
-
-      {TIERS.map((t, i) => {
-        const isActive    = tier === t;
-        const isProjected = showPacing && projTier && projTier === t && projTier !== tier;
-        const isBoth      = showPacing && projTier && projTier === t && projTier === tier;
-        const val  = t[tierKey];
-        const sign = val > 0 ? "+" : "";
-
-        let bg, border;
-        if (isBoth) {
-          bg     = val > 0 ? "#16a34a28" : val < 0 ? "#dc262628" : "var(--text-faint)22";
-          border = `1px solid ${val > 0 ? "#16a34a70" : val < 0 ? "#dc262670" : "var(--text-faint)70"}`;
-        } else if (isActive) {
-          bg     = val > 0 ? "#16a34a22" : val < 0 ? "#dc262622" : "var(--text-faint)22";
-          border = `1px solid ${val > 0 ? "#16a34a55" : val < 0 ? "#dc262655" : "var(--text-faint)55"}`;
-        } else if (isProjected) {
-          bg     = "#d9770618";
-          border = "1px dashed #d9770660";
-        } else {
-          bg = "transparent"; border = "1px solid transparent";
-        }
-
-        return (
-          <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center",
-            padding: "0.2rem 0.5rem", borderRadius: "4px", marginBottom: "1px", background: bg, border }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.35rem" }}>
-              <span style={{ fontFamily: "monospace", fontSize: "1.42rem", color: (isActive || isProjected || isBoth) ? `var(--text-primary)` : `var(--text-faint)` }}>{t.label}</span>
-              {isProjected && <span style={{ fontFamily: "monospace", fontSize: "0.72rem", color: "#d97706", background: "#d9770622", padding: "0.05rem 0.25rem", borderRadius: "2px" }}>PROJ</span>}
-              {isBoth && <span style={{ fontFamily: "monospace", fontSize: "0.72rem", color: "#16a34a", background: "#16a34a22", padding: "0.05rem 0.25rem", borderRadius: "2px" }}>NOW+PROJ</span>}
-            </div>
-            <span style={{ fontFamily: "monospace", fontSize: (isActive || isProjected || isBoth) ? "1.5rem" : "1.42rem",
-              color: (isActive || isBoth) ? bonusColor(val) : isProjected ? "#d97706" : `var(--text-faint)`,
-              fontWeight: (isActive || isProjected || isBoth) ? 700 : 400 }}>
-              {sign}{val.toFixed(2)}%
+        {nextDelta !== null && nextDelta > 0 && (
+          <div style={{ textAlign: "center", marginBottom: "0.5rem", padding: "0.25rem 0.4rem", background: "#d9770612", borderRadius: "5px", border: "1px solid #d9770630" }}>
+            <span style={{ fontFamily: "monospace", fontSize: "0.82rem", color: "#d97706" }}>
+              {nextDelta} {isSph ? "sales" : label.includes("Hour") ? "hrs" : label.includes("HSD") ? "HSD" : label.includes("Cost") ? "RGU" : "homes"} to next tier ({nextTierUp[tierKey] > 0 ? "+" : ""}{nextTierUp[tierKey].toFixed(2)}%)
             </span>
           </div>
-        );
-      })}
-    </div>
-  );
+        )}
+
+        {TIERS.map((t, i) => {
+          const isActive = tier === t;
+          const val = t[tierKey];
+          const sign = val > 0 ? "+" : "";
+          const target = computeTarget(t.min);
+          const isAbove = target !== null && actual !== null && (isSph ? (actualHours > 0 ? actual * actualHours >= target : false) : actual >= target);
+
+          let bg, border;
+          if (isActive) {
+            bg = val > 0 ? "#16a34a22" : val < 0 ? "#dc262622" : "var(--text-faint)22";
+            border = `2px solid ${val > 0 ? "#16a34a70" : val < 0 ? "#dc262670" : "var(--text-faint)70"}`;
+          } else {
+            bg = "transparent"; border = "1px solid transparent";
+          }
+
+          return (
+            <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center",
+              padding: "0.2rem 0.4rem", borderRadius: "4px", marginBottom: "1px", background: bg, border, gap: "0.3rem" }}>
+              <span style={{ fontFamily: "monospace", fontSize: isActive ? "1.05rem" : "0.95rem",
+                color: isActive ? `var(--text-primary)` : `var(--text-faint)` }}>{t.label}</span>
+
+              <span style={{ fontFamily: "monospace", fontSize: "0.85rem", textAlign: "center", minWidth: "4.5rem",
+                color: isAbove ? "#16a34a" : i === currentIdx - 1 ? "#d97706" : `var(--text-faint)`,
+                fontWeight: isActive || i === currentIdx - 1 ? 700 : 400 }}>
+                {target === null ? "" : isAbove ? "\u2713" : target.toLocaleString()}
+              </span>
+
+              <span style={{ fontFamily: "monospace", fontSize: isActive ? "1.25rem" : "1rem", textAlign: "right",
+                color: isActive ? bonusColor(val) : `var(--text-faint)`,
+                fontWeight: isActive ? 700 : 400 }}>
+                {sign}{val.toFixed(2)}%
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
 
   return (
     <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1.5rem" }}>
@@ -2166,27 +2169,51 @@ function GainsharePanel({
             {siteMode ? "Site Table" : "Overall Table"}
           </span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-          {canPace && (
-            <button onClick={() => setShowPacing(v => !v)}
-              style={{ padding: "0.25rem 0.65rem", borderRadius: "5px", border: `1px solid ${showPacing ? "#d97706" : "var(--border)"}`, background: showPacing ? "#d9770618" : "transparent", color: showPacing ? "#d97706" : "var(--text-muted)", fontFamily: "monospace", fontSize: "1.02rem", cursor: "pointer", letterSpacing: "0.05em" }}>
-              {showPacing ? "📈 PACING ON" : "📈 PACING"}
-            </button>
-          )}
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <span style={{ fontFamily: "monospace", fontSize: "1.17rem", color: `var(--text-dim)` }}>
-              {showPacing ? "Proj. Bonus:" : "Current Bonus:"}
-            </span>
-            <span style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "2.25rem", color: bonusColor(projTotalBonus), fontWeight: 700 }}>
-              {projTotalBonus > 0 ? "+" : ""}{projTotalBonus.toFixed(2)}%
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <span style={{ fontFamily: "monospace", fontSize: "1.17rem", color: `var(--text-dim)` }}>Net Bonus:</span>
+            <span style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "2.25rem", color: bonusColor(totalBonus), fontWeight: 700 }}>
+              {totalBonus > 0 ? "+" : ""}{totalBonus.toFixed(2)}%
             </span>
           </div>
-        </div>
       </div>
       <div style={{ display: "flex", gap: "1rem" }}>
-        {mobileAttain !== null  && <ColDef label="Mobile Attainment"   attain={mobileAttain}  tierKey="mobile"  tier={mobileTier}  projAttain={projMobilePct}  projTier={projMobileTier}  />}
-        {hsdAttain !== null     && <ColDef label="HSD Attainment"      attain={hsdAttain}     tierKey="hsd"     tier={hsdTier}     projAttain={projHsdPct}     projTier={projHsdTier}     />}
-        {costPerAttain !== null && <ColDef label="Cost Per Attainment" attain={costPerAttain} tierKey="costPer" tier={costPerTier} projAttain={projCostPerPct} projTier={projCostPerTier} />}
+        {mobileAttain !== null  && <ColDef label="Mobile Attainment"   attain={mobileAttain}  tierKey="mobile"  tier={mobileTier}  actual={mobileActual}  plan={mobilePlan}  />}
+        {hsdAttain !== null     && <ColDef label="HSD Attainment"      attain={hsdAttain}     tierKey="hsd"     tier={hsdTier}     actual={hsdActual}     plan={hsdPlan}     />}
+        {costPerAttain !== null && <ColDef label="Cost Per Attainment" attain={costPerAttain} tierKey="costPer" tier={costPerTier} actual={costPerActual} plan={costPerPlan} />}
+        {sphAttain !== null     && <ColDef label="SPH Attainment"      attain={sphAttain}     tierKey="sph"     tier={sphTier}     actual={sphActual}     plan={sphPlan}     isSph actualHours={hourActual} />}
+        {/* Hour Attainment Gate Metric */}
+        {hourAttain !== null && hourAttain !== undefined && (() => {
+          const hoursNeeded = hourPlan ? Math.max(Math.ceil(hourPlan - (hourActual || 0)), 0) : 0;
+          const hoursOver = hourPlan ? Math.max(Math.ceil((hourActual || 0) - hourPlan), 0) : 0;
+          return (
+            <div style={{ flex: "0 0 auto", minWidth: "130px", display: "flex", flexDirection: "column", alignItems: "center", padding: "0 0.5rem" }}>
+              <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-muted)`, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.4rem", textAlign: "center" }}>Hour Gate</div>
+              <div style={{ textAlign: "center", marginBottom: "0.35rem" }}>
+                <span style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "2rem", color: hourAttain >= 100 ? "#16a34a" : "#dc2626", fontWeight: 700 }}>{Math.round(hourAttain)}%</span>
+              </div>
+              <div style={{ padding: "0.4rem 0.6rem", borderRadius: "6px", background: hourAttain >= 100 ? "#16a34a10" : "#dc262610", border: `1px solid ${hourAttain >= 100 ? "#16a34a30" : "#dc262630"}`, textAlign: "center", marginBottom: "0.35rem", width: "100%" }}>
+                {hourAttain >= 100 ? (
+                  <div>
+                    <div style={{ fontFamily: "monospace", fontSize: "0.95rem", color: "#16a34a", fontWeight: 700 }}>NO PENALTY</div>
+                    {hoursOver > 0 && <div style={{ fontFamily: "monospace", fontSize: "0.8rem", color: `var(--text-dim)`, marginTop: "0.15rem" }}>+{hoursOver.toLocaleString()} hrs over</div>}
+                  </div>
+                ) : (
+                  <div>
+                    <div style={{ fontFamily: "monospace", fontSize: "1.2rem", color: "#dc2626", fontWeight: 700 }}>-2.00%</div>
+                    <div style={{ fontFamily: "monospace", fontSize: "0.78rem", color: `var(--text-dim)`, marginTop: "0.15rem" }}>credit of invoiced hrs</div>
+                  </div>
+                )}
+              </div>
+              {hourAttain < 100 && hoursNeeded > 0 && (
+                <div style={{ textAlign: "center", padding: "0.25rem 0.4rem", background: "#d9770612", borderRadius: "5px", border: "1px solid #d9770630", width: "100%" }}>
+                  <span style={{ fontFamily: "monospace", fontSize: "0.82rem", color: "#d97706" }}>
+                    +{hoursNeeded.toLocaleString()} hrs to clear gate
+                  </span>
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
@@ -2298,9 +2325,29 @@ function MetricComparePanel({ metrics, title = "Goals vs Plan", fiscalInfo }) {
               <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "2.85rem", color: `var(--text-warm)`, fontWeight: 700, lineHeight: 1 }}>
                 {Math.round(m.actual).toLocaleString()}
               </div>
-              <div style={{ fontFamily: "monospace", fontSize: "1.01rem", color: `var(--text-dim)`, marginTop: "0.2rem", marginBottom: "0.5rem" }}>
+              <div style={{ fontFamily: "monospace", fontSize: "1.01rem", color: `var(--text-dim)`, marginTop: "0.2rem" }}>
                 of {Math.round(m.plan).toLocaleString()} plan
               </div>
+
+              {/* Delta remaining */}
+              {(() => {
+                const remaining = Math.ceil(m.plan - m.actual);
+                if (remaining <= 0) {
+                  return (
+                    <div style={{ fontFamily: "monospace", fontSize: "0.92rem", color: "#16a34a", fontWeight: 700, marginBottom: "0.5rem" }}>
+                      +{Math.abs(remaining).toLocaleString()} over plan
+                    </div>
+                  );
+                }
+                const daysLeft = fiscalInfo ? fiscalInfo.remainingBDays : 0;
+                const perDay = daysLeft > 0 ? (remaining / daysLeft).toFixed(1) : null;
+                return (
+                  <div style={{ fontFamily: "monospace", fontSize: "0.92rem", color: "#dc2626", marginBottom: "0.5rem" }}>
+                    <span style={{ fontWeight: 700 }}>{remaining.toLocaleString()} remaining</span>
+                    {perDay && <span style={{ color: `var(--text-dim)`, marginLeft: "0.3rem" }}>({perDay}/day)</span>}
+                  </div>
+                );
+              })()}
 
               {/* Current attainment bar */}
               <div style={{ position: "relative", height: "6px", background: `var(--bg-tertiary)`, borderRadius: "4px", overflow: "hidden", marginBottom: "0.35rem" }}>
@@ -3016,10 +3063,101 @@ function DropZone({ onData, goalsRaw, onGoalsLoad, newHiresRaw, onNewHiresLoad }
 // Shows all programs for a single region/site, like a mini-overview.
 // ══════════════════════════════════════════════════════════════════════════════
 
+function RankingAgentTray({ sup, colCount, allAgents }) {
+  const [expandedAgent, setExpandedAgent] = useState(null);
+
+  const agentList = Object.entries(sup.agents).map(([name, ag]) => {
+    const gph = ag.hours > 0 ? ag.goals / ag.hours : 0;
+    const cps = ag.goals > 0 ? (ag.hours * 19.77) / ag.goals : ag.hours * 19.77;
+    const pct = ag.goalsNum > 0 ? (ag.goals / ag.goalsNum) * 100 : null;
+    // Check if agent works multiple campaigns
+    const campaigns = allAgents ? (() => {
+      const rows = allAgents.filter(r => r.agentName === name);
+      const byJob = {};
+      rows.forEach(r => {
+        const jt = r.jobType || "Unknown";
+        if (!byJob[jt]) byJob[jt] = { jobType: jt, hours: 0, goals: 0, goalsNum: 0, newXI: 0, xmLines: 0 };
+        byJob[jt].hours += r.hours; byJob[jt].goals += r.goals; byJob[jt].goalsNum += r.goalsNum || 0;
+        byJob[jt].newXI += r.newXI || 0; byJob[jt].xmLines += r.xmLines || 0;
+      });
+      return Object.values(byJob).map(j => ({
+        ...j,
+        gph: j.hours > 0 ? j.goals / j.hours : 0,
+        cps: j.goals > 0 ? (j.hours * 19.77) / j.goals : j.hours * 19.77,
+        pct: j.goalsNum > 0 ? (j.goals / j.goalsNum) * 100 : null,
+      })).sort((a, b) => b.hours - a.hours);
+    })() : [];
+    const multiCampaign = campaigns.length > 1;
+    return { name, ...ag, gph, cps, pct, campaigns, multiCampaign };
+  }).sort((a, b) => b.hours - a.hours);
+
+  return (
+    <tr><td colSpan={colCount} style={{ padding: 0 }}>
+      <div style={{ padding: "0.4rem 0.75rem 0.6rem 2rem", background: "var(--bg-secondary)", borderBottom: "2px solid var(--border)", borderLeft: "3px solid #6366f140" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "monospace", fontSize: "0.85rem" }}>
+          <thead><tr style={{ borderBottom: "1px solid var(--border)" }}>
+            {["Agent", "Program", "Hours", "Sales", "GPH", "% Goal", "CPS"].map(h => (
+              <th key={h} style={{ padding: "0.2rem 0.4rem", textAlign: h === "Agent" ? "left" : "right", color: `var(--text-faint)`, fontWeight: 400 }}>{h}</th>
+            ))}
+          </tr></thead>
+          <tbody>
+            {agentList.map((a, ai) => {
+              const pColor = a.pct !== null ? attainColor(a.pct) : (a.gph > 0 ? `var(--text-dim)` : `var(--text-faint)`);
+              const isExpanded = expandedAgent === a.name;
+              return (
+                <Fragment key={a.name}>
+                  <tr onClick={a.multiCampaign ? () => setExpandedAgent(isExpanded ? null : a.name) : undefined}
+                    style={{ borderBottom: "1px solid var(--border)", background: isExpanded ? "#6366f115" : ai % 2 === 0 ? "transparent" : `var(--bg-row-alt)`, cursor: a.multiCampaign ? "pointer" : "default" }}>
+                    <td style={{ padding: "0.2rem 0.4rem", color: `var(--text-warm)`, fontFamily: "Georgia, serif" }}>
+                      {a.multiCampaign && <span style={{ color: `var(--text-faint)`, marginRight: "0.3rem", fontSize: "0.75rem" }}>{isExpanded ? "\u25BE" : "\u25B8"}</span>}
+                      {a.name}
+                      {a.multiCampaign && <span style={{ marginLeft: "0.3rem", fontFamily: "monospace", fontSize: "0.72rem", color: "#6366f1", background: "#6366f112", border: "1px solid #6366f130", borderRadius: "2px", padding: "0.02rem 0.2rem" }}>{a.campaigns.length} pgms</span>}
+                    </td>
+                    <td style={{ padding: "0.2rem 0.4rem", color: `var(--text-dim)`, fontSize: "0.82rem" }}></td>
+                    <td style={{ padding: "0.2rem 0.4rem", textAlign: "right", color: "#6366f1" }}>{fmt(a.hours, 1)}</td>
+                    <td style={{ padding: "0.2rem 0.4rem", textAlign: "right", color: a.goals > 0 ? "#d97706" : `var(--text-faint)`, fontWeight: a.goals > 0 ? 700 : 400 }}>{a.goals || "\u2014"}</td>
+                    <td style={{ padding: "0.2rem 0.4rem", textAlign: "right", color: pColor, fontWeight: 600 }}>{a.gph > 0 ? a.gph.toFixed(3) : "\u2014"}</td>
+                    <td style={{ padding: "0.2rem 0.4rem", textAlign: "right" }}>
+                      {a.pct !== null ? <span style={{ color: pColor, fontWeight: 700, fontSize: "0.82rem" }}>{Math.round(a.pct)}%</span> : "\u2014"}
+                    </td>
+                    <td style={{ padding: "0.2rem 0.4rem", textAlign: "right", color: pColor }}>${a.cps.toFixed(2)}</td>
+                  </tr>
+                  {isExpanded && a.campaigns.map(c => {
+                    const cColor = c.pct !== null ? attainColor(c.pct) : (c.gph > 0 ? `var(--text-dim)` : `var(--text-faint)`);
+                    return (
+                      <tr key={c.jobType} style={{ background: "#6366f10a", borderBottom: "1px solid var(--border)" }}>
+                        <td></td>
+                        <td style={{ padding: "0.25rem 0.4rem", color: `var(--text-muted)`, fontSize: "0.92rem" }}>
+                          {"\u2514"} {c.jobType}
+                        </td>
+                        <td style={{ padding: "0.25rem 0.4rem", textAlign: "right", color: "#6366f1", fontSize: "0.92rem" }}>{fmt(c.hours, 1)}</td>
+                        <td style={{ padding: "0.25rem 0.4rem", textAlign: "right", color: c.goals > 0 ? "#d97706" : `var(--text-faint)`, fontSize: "0.92rem" }}>{c.goals || "\u2014"}</td>
+                        <td style={{ padding: "0.25rem 0.4rem", textAlign: "right", color: cColor, fontSize: "0.92rem" }}>{c.gph > 0 ? c.gph.toFixed(3) : "\u2014"}</td>
+                        <td style={{ padding: "0.25rem 0.4rem", textAlign: "right", fontSize: "0.92rem" }}>
+                          {c.pct !== null ? <span style={{ color: cColor, fontSize: "0.88rem" }}>{Math.round(c.pct)}%</span> : "\u2014"}
+                        </td>
+                        <td style={{ padding: "0.25rem 0.4rem", textAlign: "right", color: cColor, fontSize: "0.92rem" }}>${c.cps.toFixed(2)}</td>
+                      </tr>
+                    );
+                  })}
+                </Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </td></tr>
+  );
+}
+
 function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, newHireSet, fiscalInfo }) {
   const [subRegion, setSubRegion] = useState(null);
   const [siteRankSort, setSiteRankSort] = useState({ key: "pctToGoal", dir: -1 });
+  const [expandedSup, setExpandedSup] = useState(null);
   const [dtFundingFilter, setDtFundingFilter] = useState(null);
+  const [rankView, setRankView] = useState("supervisors"); // "supervisors" | "agents"
+  const [siteAgentSort, setSiteAgentSort] = useState({ key: "hours", dir: -1 });
+  const [siteExpandedAgent, setSiteExpandedAgent] = useState(null);
   const hasMultipleRegions = regions.length > 1;
 
   const activeRegions = (subRegion && hasMultipleRegions) ? [subRegion] : regions;
@@ -3060,6 +3198,14 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
   const siteMobileAttain  = sitePlanMetrics && sitePlanMetrics.goals > 0 ? (totalG       / sitePlanMetrics.goals) * 100 : null;
   const siteHsdAttain     = sitePlanMetrics && sitePlanMetrics.hsd   > 0 ? (siteActHsd   / sitePlanMetrics.hsd)   * 100 : null;
   const siteCostPerAttain = sitePlanMetrics && sitePlanMetrics.rgu   > 0 ? (siteActRgu   / sitePlanMetrics.rgu)   * 100 : null;
+
+  // SPH Attainment for this site
+  const siteActualSph = totalHrs > 0 ? totalG / totalHrs : 0;
+  const sitePlanSph = sitePlanMetrics && sitePlanMetrics.hours > 0 && sitePlanMetrics.goals > 0 ? sitePlanMetrics.goals / sitePlanMetrics.hours : null;
+  const siteSphAttain = sitePlanSph ? (siteActualSph / sitePlanSph) * 100 : null;
+
+  // Hour Attainment gate for this site
+  const siteHourAttain = sitePlanMetrics && sitePlanMetrics.hours > 0 ? (totalHrs / sitePlanMetrics.hours) * 100 : null;
 
   const regionStats = regions.map(r => {
     const ra = allAgents.filter(a => (a.Region || a.region || "Unknown").trim() === r);
@@ -3175,6 +3321,10 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
         <StatCard label="Unique Agents" value={uCount}                   sub={`${agents.filter(a=>a.hours>=16).length} at 16+ hrs`} accent="#6366f1" />
       </div>
 
+
+      {/* ── AGENTS TAB ── */}
+
+      {/* ── OVERVIEW TAB ── */}
       {/* Site Executive Summary */}
       <CollapsibleNarrative
         title={`Site Summary \u2014 ${displayLabel}`}
@@ -3203,11 +3353,15 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
           mobileAttain={siteMobileAttain}
           hsdAttain={siteHsdAttain}
           costPerAttain={siteCostPerAttain}
+          sphAttain={siteSphAttain}
+          hourAttain={siteHourAttain}
           siteMode={true}
           fiscalInfo={fiscalInfo}
           mobileActual={totalG}      mobilePlan={sitePlanMetrics?.goals || 0}
           hsdActual={siteActHsd}     hsdPlan={sitePlanMetrics?.hsd || 0}
           costPerActual={siteActRgu} costPerPlan={sitePlanMetrics?.rgu || 0}
+          sphActual={siteActualSph}  sphPlan={sitePlanSph}
+          hourActual={totalHrs}      hourPlan={sitePlanMetrics?.hours || 0}
         />
       )}
 
@@ -3277,6 +3431,20 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
             <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.75rem" }}>
               Supervisor Ranking {"\u2014"} {displayLabel} {siteAvgSph ? `\u00b7 Site SPH Goal: ${siteAvgSph.toFixed(3)}` : ""}
             </div>
+
+            {/* Supervisor / Agent toggle */}
+            <div style={{ display: "flex", gap: "0.35rem", marginBottom: "0.75rem" }}>
+              {["supervisors", "agents"].map(v => {
+                const active = rankView === v;
+                return (
+                  <button key={v} onClick={() => { setRankView(v); setSiteExpandedAgent(null); setExpandedSup(null); }}
+                    style={{ padding: "0.2rem 0.65rem", borderRadius: "4px", border: `1px solid ${active ? "#6366f1" : "var(--border)"}`, background: active ? "#6366f118" : "transparent", color: active ? "#6366f1" : `var(--text-dim)`, fontFamily: "monospace", fontSize: "0.95rem", cursor: "pointer", fontWeight: active ? 700 : 400 }}>
+                    {v === "supervisors" ? "By Supervisor" : "By Agent"}
+                  </button>
+                );
+              })}
+            </div>
+            {rankView === "supervisors" && (
             <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "monospace", fontSize: "0.92rem" }}>
                 <thead><tr style={{ borderBottom: "2px solid var(--border)" }}>
@@ -3301,7 +3469,7 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
                     const pColor = s.pctToGoal !== null ? attainColor(s.pctToGoal) : `var(--text-dim)`;
                     const isTop = i === 0 && sups.length > 1;
                     return (
-                      <tr key={s.name} style={{ borderBottom: "1px solid var(--bg-tertiary)", background: isTop ? "#16a34a08" : i % 2 === 0 ? "transparent" : `var(--bg-row-alt)` }}>
+                      <Fragment key={s.name}><tr onClick={() => setExpandedSup(expandedSup === s.name ? null : s.name)} style={{ cursor: "pointer", borderBottom: "1px solid var(--bg-tertiary)", background: isTop ? "#16a34a08" : i % 2 === 0 ? "transparent" : `var(--bg-row-alt)` }}>
                         <td style={{ padding: "0.35rem 0.5rem", color: isTop ? "#16a34a" : `var(--text-dim)`, fontWeight: 700 }}>{i + 1}</td>
                         <td style={{ padding: "0.35rem 0.5rem", color: `var(--text-warm)`, fontFamily: "Georgia, serif" }}>
                           {s.name}
@@ -3329,6 +3497,8 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
                           {!s.trending && "\u2014"}
                         </td>
                       </tr>
+                      {expandedSup === s.name && <RankingAgentTray sup={s} colCount={15} allAgents={allAgents} />}
+                      </Fragment>
                     );
                   })}
                 </tbody>
@@ -3348,6 +3518,111 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
                 </tr></tfoot>
               </table>
             </div>
+            )}
+
+            {rankView === "agents" && (() => {
+              const toggleAgentSort = k => setSiteAgentSort(s => ({ key: k, dir: s.key === k ? -s.dir : -1 }));
+              const AgTh = ({ k, label, left }) => (
+                <th onClick={() => toggleAgentSort(k)}
+                  style={{ padding: "0.4rem 0.5rem", textAlign: left ? "left" : "right", color: siteAgentSort.key === k ? "#d97706" : `var(--text-faint)`, fontWeight: 600, fontSize: "0.85rem", whiteSpace: "nowrap", cursor: "pointer", userSelect: "none" }}>
+                  {label} {siteAgentSort.key === k ? (siteAgentSort.dir === -1 ? "\u2193" : "\u2191") : ""}
+                </th>
+              );
+              const agentMap = {};
+              agents.forEach(a => {
+                const name = a.agentName;
+                if (!name) return;
+                if (!agentMap[name]) agentMap[name] = { name, supervisor: a.supervisor || "Unknown", hours: 0, goals: 0, goalsNum: 0, newXI: 0, xmLines: 0, programs: new Set() };
+                agentMap[name].hours += a.hours; agentMap[name].goals += a.goals; agentMap[name].goalsNum += a.goalsNum || 0;
+                agentMap[name].newXI += a.newXI || 0; agentMap[name].xmLines += a.xmLines || 0;
+                if (a.jobType) agentMap[name].programs.add(a.jobType);
+              });
+              const agentList = Object.values(agentMap).map(a => {
+                const gph = a.hours > 0 ? a.goals / a.hours : 0;
+                const cps = a.goals > 0 ? (a.hours * 19.77) / a.goals : a.hours * 19.77;
+                const pctToGoal = a.goalsNum > 0 ? (a.goals / a.goalsNum) * 100 : null;
+                const programList = [...a.programs].join(", ");
+                const multiCampaign = a.programs.size > 1;
+                const campaigns = (() => {
+                  const rows = agents.filter(r => r.agentName === a.name);
+                  const byJob = {};
+                  rows.forEach(r => { const jt = r.jobType || "Unknown"; if (!byJob[jt]) byJob[jt] = { jobType: jt, hours: 0, goals: 0, goalsNum: 0 }; byJob[jt].hours += r.hours; byJob[jt].goals += r.goals; byJob[jt].goalsNum += r.goalsNum || 0; });
+                  return Object.values(byJob).map(j => ({ ...j, gph: j.hours > 0 ? j.goals / j.hours : 0, cps: j.goals > 0 ? (j.hours * 19.77) / j.goals : j.hours * 19.77, pct: j.goalsNum > 0 ? (j.goals / j.goalsNum) * 100 : null })).sort((b2, c2) => c2.hours - b2.hours);
+                })();
+                return { ...a, gph, cps, pctToGoal, programList, multiCampaign, campaigns, count: a.programs.size };
+              }).sort((a, b) => { const va = a[siteAgentSort.key] ?? -9999; const vb = b[siteAgentSort.key] ?? -9999; if (typeof va === "string") return va.localeCompare(vb) * siteAgentSort.dir; return (va - vb) * siteAgentSort.dir; });
+              const totHrs = agentList.reduce((s2, a) => s2 + a.hours, 0);
+              const totGoals = agentList.reduce((s2, a) => s2 + a.goals, 0);
+              const totGph = totHrs > 0 ? totGoals / totHrs : 0;
+              return (
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "monospace", fontSize: "0.92rem" }}>
+                    <thead><tr style={{ borderBottom: "2px solid var(--border)" }}>
+                      <AgTh k="name" label="Agent" left />
+                      <AgTh k="supervisor" label="Supervisor" left />
+                      <th style={{ padding: "0.4rem 0.5rem", textAlign: "left", color: `var(--text-faint)`, fontWeight: 600, fontSize: "0.85rem" }}>Programs</th>
+                      <AgTh k="hours" label="Hours" />
+                      <AgTh k="goals" label="Sales" />
+                      <AgTh k="gph" label="GPH" />
+                      <AgTh k="pctToGoal" label="% Goal" />
+                      <AgTh k="cps" label="CPS" />
+                    </tr></thead>
+                    <tbody>
+                      {agentList.map((a, i) => {
+                        const pColor = a.pctToGoal !== null ? attainColor(a.pctToGoal) : `var(--text-dim)`;
+                        const isExp = siteExpandedAgent === a.name;
+                        return (
+                          <Fragment key={a.name}>
+                            <tr onClick={a.multiCampaign ? () => setSiteExpandedAgent(isExp ? null : a.name) : undefined}
+                              style={{ borderBottom: "1px solid var(--bg-tertiary)", cursor: a.multiCampaign ? "pointer" : "default", background: isExp ? "#6366f115" : i % 2 === 0 ? "transparent" : `var(--bg-row-alt)` }}>
+                              <td style={{ padding: "0.35rem 0.5rem", color: `var(--text-warm)`, fontFamily: "Georgia, serif" }}>
+                                {a.multiCampaign && <span style={{ color: `var(--text-faint)`, marginRight: "0.3rem", fontSize: "0.75rem" }}>{isExp ? "\u25BE" : "\u25B8"}</span>}
+                                {a.name}
+                                {a.multiCampaign && <span style={{ marginLeft: "0.3rem", fontFamily: "monospace", fontSize: "0.72rem", color: "#6366f1", background: "#6366f112", border: "1px solid #6366f130", borderRadius: "2px", padding: "0.02rem 0.2rem" }}>{a.count} pgms</span>}
+                              </td>
+                              <td style={{ padding: "0.35rem 0.5rem", color: `var(--text-dim)` }}>{a.supervisor}</td>
+                              <td style={{ padding: "0.35rem 0.5rem", color: `var(--text-dim)`, fontSize: "0.82rem", maxWidth: "130px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={a.programList}>{a.programList}</td>
+                              <td style={{ padding: "0.35rem 0.5rem", textAlign: "right", color: "#6366f1" }}>{fmt(a.hours, 1)}</td>
+                              <td style={{ padding: "0.35rem 0.5rem", textAlign: "right", color: a.goals > 0 ? "#d97706" : `var(--text-faint)`, fontWeight: 700 }}>{a.goals || "\u2014"}</td>
+                              <td style={{ padding: "0.35rem 0.5rem", textAlign: "right", color: pColor, fontWeight: 600 }}>{a.gph > 0 ? a.gph.toFixed(3) : "\u2014"}</td>
+                              <td style={{ padding: "0.35rem 0.5rem", textAlign: "right" }}>
+                                {a.pctToGoal !== null ? <span style={{ color: pColor, fontWeight: 700, background: pColor + "12", border: `1px solid ${pColor}30`, borderRadius: "3px", padding: "0.1rem 0.3rem" }}>{Math.round(a.pctToGoal)}%</span> : "\u2014"}
+                              </td>
+                              <td style={{ padding: "0.35rem 0.5rem", textAlign: "right", color: pColor }}>${a.cps.toFixed(2)}</td>
+                            </tr>
+                            {isExp && a.campaigns.map(c2 => {
+                              const cColor = c2.pct !== null ? attainColor(c2.pct) : (c2.gph > 0 ? `var(--text-dim)` : `var(--text-faint)`);
+                              return (
+                                <tr key={c2.jobType} style={{ background: "#6366f10a", borderBottom: "1px solid var(--border)" }}>
+                                  <td></td><td></td>
+                                  <td style={{ padding: "0.25rem 0.5rem", color: `var(--text-muted)`, fontSize: "0.92rem" }}>{"\u2514"} {c2.jobType}</td>
+                                  <td style={{ padding: "0.25rem 0.5rem", textAlign: "right", color: "#6366f1", fontSize: "0.92rem" }}>{fmt(c2.hours, 1)}</td>
+                                  <td style={{ padding: "0.25rem 0.5rem", textAlign: "right", color: c2.goals > 0 ? "#d97706" : `var(--text-faint)`, fontSize: "0.92rem" }}>{c2.goals || "\u2014"}</td>
+                                  <td style={{ padding: "0.25rem 0.5rem", textAlign: "right", color: cColor, fontSize: "0.92rem" }}>{c2.gph > 0 ? c2.gph.toFixed(3) : "\u2014"}</td>
+                                  <td style={{ padding: "0.25rem 0.5rem", textAlign: "right", fontSize: "0.92rem" }}>
+                                    {c2.pct !== null ? <span style={{ color: cColor, fontSize: "0.88rem" }}>{Math.round(c2.pct)}%</span> : "\u2014"}
+                                  </td>
+                                  <td style={{ padding: "0.25rem 0.5rem", textAlign: "right", color: cColor, fontSize: "0.92rem" }}>${c2.cps.toFixed(2)}</td>
+                                </tr>
+                              );
+                            })}
+                          </Fragment>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot><tr style={{ borderTop: "2px solid var(--border)", background: `var(--bg-row-alt)` }}>
+                      <td style={{ padding: "0.4rem 0.5rem", fontWeight: 700, color: `var(--text-warm)` }}>TOTAL ({agentList.length})</td>
+                      <td></td><td></td>
+                      <td style={{ padding: "0.4rem 0.5rem", textAlign: "right", fontWeight: 700, color: "#6366f1" }}>{fmt(totHrs, 1)}</td>
+                      <td style={{ padding: "0.4rem 0.5rem", textAlign: "right", fontWeight: 700, color: "#d97706" }}>{totGoals}</td>
+                      <td style={{ padding: "0.4rem 0.5rem", textAlign: "right", fontWeight: 700 }}>{totGph.toFixed(3)}</td>
+                      <td></td>
+                      <td style={{ padding: "0.4rem 0.5rem", textAlign: "right", fontWeight: 700 }}>${totGoals > 0 ? ((totHrs * 19.77) / totGoals).toFixed(2) : (totHrs * 19.77).toFixed(2)}</td>
+                    </tr></tfoot>
+                  </table>
+                </div>
+              );
+            })()}
           </div>
         );
       })()}
@@ -3700,6 +3975,14 @@ function BusinessOverview({ perf, onNav }) {
   const globalHsdAttain    = globalPlanNewXI  ? (globalNewXI  / globalPlanNewXI)  * 100 : null;
   const globalCostPerAttain = globalPlanRgu ? (globalRgu / globalPlanRgu) * 100 : null;
 
+  // SPH Attainment: (actual SPH / plan SPH) * 100
+  const actualGlobalSph = totalHours > 0 ? globalGoals / totalHours : 0;
+  const planGlobalSph = globalPlanHours > 0 && planTotal > 0 ? planTotal / globalPlanHours : null;
+  const globalSphAttain = planGlobalSph ? (actualGlobalSph / planGlobalSph) * 100 : null;
+
+  // Hour Attainment gate: (actual hours / planned hours) * 100
+  const globalHourAttain = globalPlanHours ? (totalHours / globalPlanHours) * 100 : null;
+
   const kpi1 = goalLookup && planTotal
     ? { label: "Goals vs Plan", value: `${Math.round(goalsAttain)}%`, sub: `${globalGoals.toLocaleString()} of ${planTotal.toLocaleString()}`, accent: attainColor(goalsAttain) }
     : { label: "Q1 Rate",       value: `${Math.round(atGoalRate)}%`,  sub: `${distUnique.Q1 + distUnique.Q2} at/above goal`, accent: attainColor(atGoalRate) };
@@ -3821,10 +4104,14 @@ function BusinessOverview({ perf, onNav }) {
             mobileAttain={goalsAttain}
             hsdAttain={globalHsdAttain}
             costPerAttain={globalCostPerAttain}
+            sphAttain={globalSphAttain}
+            hourAttain={globalHourAttain}
             fiscalInfo={fiscalInfo}
             mobileActual={globalGoals}   mobilePlan={planTotal}
             hsdActual={globalNewXI}      hsdPlan={globalPlanNewXI}
             costPerActual={globalRgu}    costPerPlan={globalPlanRgu}
+            sphActual={actualGlobalSph}  sphPlan={planGlobalSph}
+            hourActual={totalHours}      hourPlan={globalPlanHours}
           />
         )}
 
@@ -6139,6 +6426,7 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
   const [tab, setTab] = useState("overview");
   const [rocFilter, setRocFilter] = useState(null); // null = all, or a specific ROC code
   const [rankSort, setRankSort] = useState({ key: "pctToGoal", dir: -1 });
+  const [expandedRankSup, setExpandedRankSup] = useState(null);
 
   const {
     jobType, agents, regions,
@@ -6683,7 +6971,7 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
                       const isTop = i === 0 && sups.length > 1;
                       const isBot = i === sups.length - 1 && sups.length > 1;
                       return (
-                        <tr key={s.name} style={{ borderBottom: "1px solid var(--bg-tertiary)", background: isTop ? "#16a34a08" : isBot ? "#dc262608" : i % 2 === 0 ? "transparent" : `var(--bg-row-alt)` }}>
+                        <Fragment key={s.name}><tr onClick={() => setExpandedRankSup(expandedRankSup === s.name ? null : s.name)} style={{ cursor: "pointer", borderBottom: "1px solid var(--bg-tertiary)", background: isTop ? "#16a34a08" : isBot ? "#dc262608" : i % 2 === 0 ? "transparent" : `var(--bg-row-alt)` }}>
                           <td style={{ padding: "0.4rem 0.5rem", color: isTop ? "#16a34a" : isBot ? "#dc2626" : `var(--text-dim)`, fontWeight: 700 }}>{i + 1}</td>
                           <td style={{ padding: "0.4rem 0.5rem", color: `var(--text-warm)`, fontFamily: "Georgia, serif" }}>
                             {s.name}
@@ -6710,7 +6998,9 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
                             {s.trending === "flat" && <span style={{ color: `var(--text-faint)` }}>{"\u2192"}</span>}
                             {!s.trending && "\u2014"}
                           </td>
-                        </tr>
+                      </tr>
+                      {expandedRankSup === s.name && <RankingAgentTray sup={s} colCount={15} allAgents={allAgents} />}
+                      </Fragment>
                       );
                     })}
                   </tbody>
