@@ -161,6 +161,19 @@ const GAINSHARE_SITE_TIERS = [
   { min: 0,   max: 79.99,    mobile:-5.00, hsd:-5.00, costPer:-3.00, sph:-1.00, label: "< 79.99%" },
 ];
 
+// Site-level Hour Attainment gate tiers (from the image: 0%, -2%, -4%, -6%)
+const HOUR_GATE_SITE_TIERS = [
+  { min: 100,   max: Infinity, penalty: 0,     label: "\u2265 100%" },
+  { min: 95,    max: 99.99,    penalty: -2.00, label: "95\u201399.99%" },
+  { min: 90,    max: 94.99,    penalty: -4.00, label: "90\u201394.99%" },
+  { min: 0,     max: 89.99,    penalty: -6.00, label: "< 90%" },
+];
+
+function getHourGateTier(pct) {
+  if (pct === null || pct === undefined) return null;
+  return HOUR_GATE_SITE_TIERS.find(t => pct >= t.min && pct <= t.max) || HOUR_GATE_SITE_TIERS[HOUR_GATE_SITE_TIERS.length - 1];
+}
+
 function getGainshareTier(pct, site = false) {
   if (pct === null || pct === undefined) return null;
   const tiers = site ? GAINSHARE_SITE_TIERS : GAINSHARE_TIERS;
@@ -2075,8 +2088,11 @@ function GainsharePanel({
   const sphTier       = getGainshareTier(sphAttain, siteMode);
   const TIERS         = siteMode ? GAINSHARE_SITE_TIERS : GAINSHARE_TIERS;
 
-  // Hour Attainment gate: no bonus for meeting target, but -2% penalty if below
-  const hourGatePenalty = hourAttain !== null && hourAttain !== undefined && hourAttain < 100 ? -2.00 : 0;
+  // Hour Attainment gate: site mode uses tiered penalties, overall uses flat -2%
+  const hourGateTier = siteMode ? getHourGateTier(hourAttain) : null;
+  const hourGatePenalty = siteMode
+    ? (hourGateTier?.penalty ?? 0)
+    : (hourAttain !== null && hourAttain !== undefined && hourAttain < 100 ? -2.00 : 0);
 
   const totalBonus = (mobileTier?.mobile ?? 0) + (hsdTier?.hsd ?? 0) + (costPerTier?.costPer ?? 0) + (sphTier?.sph ?? 0) + hourGatePenalty;
   const bonusAvailable = mobileAttain !== null || hsdAttain !== null || costPerAttain !== null;
@@ -2185,6 +2201,57 @@ function GainsharePanel({
         {hourAttain !== null && hourAttain !== undefined && (() => {
           const hoursNeeded = hourPlan ? Math.max(Math.ceil(hourPlan - (hourActual || 0)), 0) : 0;
           const hoursOver = hourPlan ? Math.max(Math.ceil((hourActual || 0) - hourPlan), 0) : 0;
+
+          // Site mode: show tiered display
+          if (siteMode) {
+            return (
+              <div style={{ flex: 1 }}>
+                <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-muted)`, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.4rem", textAlign: "center" }}>Hour Gate</div>
+                <div style={{ textAlign: "center", marginBottom: "0.35rem" }}>
+                  <span style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "2rem", color: hourAttain >= 100 ? "#16a34a" : "#dc2626", fontWeight: 700 }}>{Math.round(hourAttain)}%</span>
+                </div>
+                {hoursNeeded > 0 && (
+                  <div style={{ textAlign: "center", marginBottom: "0.5rem", padding: "0.25rem 0.4rem", background: "#d9770612", borderRadius: "5px", border: "1px solid #d9770630" }}>
+                    <span style={{ fontFamily: "monospace", fontSize: "0.82rem", color: "#d97706" }}>
+                      {hoursNeeded.toLocaleString()} hrs to clear gate
+                    </span>
+                  </div>
+                )}
+                {hoursOver > 0 && (
+                  <div style={{ textAlign: "center", marginBottom: "0.5rem", padding: "0.25rem 0.4rem", background: "#16a34a12", borderRadius: "5px", border: "1px solid #16a34a30" }}>
+                    <span style={{ fontFamily: "monospace", fontSize: "0.82rem", color: "#16a34a" }}>
+                      +{hoursOver.toLocaleString()} hrs over
+                    </span>
+                  </div>
+                )}
+                {HOUR_GATE_SITE_TIERS.map((t, ti) => {
+                  const isActive = hourGateTier === t;
+                  const target = hourPlan ? Math.ceil((t.min / 100) * hourPlan) : null;
+                  const isAbove = target !== null && (hourActual || 0) >= target;
+                  let bg, border;
+                  if (isActive) {
+                    bg = t.penalty < 0 ? "#dc262622" : "#16a34a22";
+                    border = `2px solid ${t.penalty < 0 ? "#dc262670" : "#16a34a70"}`;
+                  } else {
+                    bg = "transparent"; border = "1px solid transparent";
+                  }
+                  return (
+                    <div key={ti} style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", padding: "0.2rem 0.4rem", borderRadius: "4px", marginBottom: "1px", background: bg, border, gap: "0.3rem" }}>
+                      <span style={{ fontFamily: "monospace", fontSize: isActive ? "1.05rem" : "0.95rem", color: isActive ? `var(--text-primary)` : `var(--text-faint)` }}>{t.label}</span>
+                      <span style={{ fontFamily: "monospace", fontSize: "0.85rem", textAlign: "center", minWidth: "4.5rem", color: isAbove ? "#16a34a" : ti === (HOUR_GATE_SITE_TIERS.indexOf(hourGateTier) - 1) ? "#d97706" : `var(--text-faint)`, fontWeight: isActive || (target && !isAbove && ti === HOUR_GATE_SITE_TIERS.indexOf(hourGateTier) - 1) ? 700 : 400 }}>
+                        {target === null ? "" : isAbove ? "\u2713" : target.toLocaleString()}
+                      </span>
+                      <span style={{ fontFamily: "monospace", fontSize: isActive ? "1.25rem" : "1rem", textAlign: "right", color: isActive ? (t.penalty < 0 ? "#dc2626" : "#16a34a") : `var(--text-faint)`, fontWeight: isActive ? 700 : 400 }}>
+                        {t.penalty === 0 ? "0%" : `${t.penalty.toFixed(2)}%`}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          }
+
+          // Overall mode: simple pass/fail
           return (
             <div style={{ flex: "0 0 auto", minWidth: "130px", display: "flex", flexDirection: "column", alignItems: "center", padding: "0 0.5rem" }}>
               <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-muted)`, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.4rem", textAlign: "center" }}>Hour Gate</div>
@@ -2207,7 +2274,7 @@ function GainsharePanel({
               {hourAttain < 100 && hoursNeeded > 0 && (
                 <div style={{ textAlign: "center", padding: "0.25rem 0.4rem", background: "#d9770612", borderRadius: "5px", border: "1px solid #d9770630", width: "100%" }}>
                   <span style={{ fontFamily: "monospace", fontSize: "0.82rem", color: "#d97706" }}>
-                    +{hoursNeeded.toLocaleString()} hrs to clear gate
+                    {hoursNeeded.toLocaleString()} hrs to clear gate
                   </span>
                 </div>
               )}
@@ -8607,6 +8674,8 @@ export default function App() {
   };
 
   const navTo = delta => setSlideIndex(i => Math.max(0, Math.min(totalSlides - 1, i + delta)));
+  const goToSlide = idx => setSlideIndex(Math.max(0, Math.min(totalSlides - 1, idx)));
+  const [showProgramPicker, setShowProgramPicker] = useState(false);
 
   useEffect(() => {
     const vars = lightMode ? THEMES.light : THEMES.dark;
@@ -8793,7 +8862,35 @@ export default function App() {
             onNav={navTo}
           />
         ) : program ? (
-          <Slide
+          <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+            {/* Program navigation bar */}
+            <div style={{ flexShrink: 0, borderBottom: "1px solid var(--border)", padding: "0.5rem 1.5rem", background: `var(--bg-row-alt)`, display: "flex", alignItems: "center", gap: "0.5rem", overflowX: "auto" }}>
+              <button onClick={() => goToSlide(0)}
+                style={{ padding: "0.25rem 0.6rem", borderRadius: "4px", border: "1px solid var(--border)", background: "transparent", color: `var(--text-muted)`, fontFamily: "monospace", fontSize: "0.88rem", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>
+                {"\u2190"} Overview
+              </button>
+              <div style={{ width: "1px", height: "20px", background: `var(--border)`, flexShrink: 0 }} />
+              {programs.map((p, pi) => ({ p, pi })).sort((a, b) => (b.p.attainment ?? b.p.healthScore ?? 0) - (a.p.attainment ?? a.p.healthScore ?? 0)).map(({ p, pi }) => {
+                const pIdx = pi + 1;
+                const isActive = slideIndex === pIdx;
+                const att = p.attainment;
+                const aColor = att !== null ? attainColor(att) : `var(--text-dim)`;
+                return (
+                  <button key={p.jobType} onClick={() => goToSlide(pIdx)}
+                    style={{ padding: "0.25rem 0.65rem", borderRadius: "4px", border: `1px solid ${isActive ? aColor : "var(--border)"}`, background: isActive ? aColor + "18" : "transparent", color: isActive ? aColor : `var(--text-dim)`, fontFamily: "monospace", fontSize: "0.88rem", cursor: "pointer", fontWeight: isActive ? 700 : 400, whiteSpace: "nowrap", flexShrink: 0, transition: "all 0.15s" }}>
+                    {p.jobType}
+                    {att !== null && <span style={{ marginLeft: "0.3rem", fontSize: "0.78rem", opacity: 0.7 }}>{Math.round(att)}%</span>}
+                  </button>
+                );
+              })}
+              <div style={{ width: "1px", height: "20px", background: `var(--border)`, flexShrink: 0 }} />
+              <button onClick={() => goToSlide(1 + programs.length)}
+                style={{ padding: "0.25rem 0.6rem", borderRadius: "4px", border: `1px solid ${slideIndex === 1 + programs.length ? "#d97706" : "var(--border)"}`, background: slideIndex === 1 + programs.length ? "#d9770618" : "transparent", color: slideIndex === 1 + programs.length ? "#d97706" : `var(--text-dim)`, fontFamily: "monospace", fontSize: "0.88rem", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>
+                MoM Compare
+              </button>
+            </div>
+            <div style={{ flex: 1, overflow: "hidden" }}>
+            <Slide
             key={program.jobType}
             program={program}
             newHireSet={newHireSet}
@@ -8804,6 +8901,8 @@ export default function App() {
             onNav={navTo}
             allAgents={perf.agents}
           />
+            </div>
+          </div>
         ) : (
           <div style={{ minHeight: "90vh", display: "flex", alignItems: "center", justifyContent: "center", color: `var(--text-faint)`, fontFamily: "Georgia, serif" }}>
             No "Job Type" column found in your data.
