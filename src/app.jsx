@@ -185,6 +185,180 @@ function bonusColor(pct) {
   if (pct < 0)  return "#dc2626";
   return `var(--text-dim)`;
 }
+
+// ── Ollama Local AI ──────────────────────────────────────────────────────────
+const AI_COLOR = "#0ea5e9"; // teal/cyan accent for AI-generated content
+
+// Session-level cache: survives tab switches, clears on page close
+const _aiCache = new Map();
+function aiCacheKey(type, jobType, totalGoals) { return `${type}::${jobType}::${totalGoals}`; }
+function getAICache(type, jobType, totalGoals) { return _aiCache.get(aiCacheKey(type, jobType, totalGoals)) || null; }
+function setAICache(type, jobType, totalGoals, data) { _aiCache.set(aiCacheKey(type, jobType, totalGoals), data); }
+function clearAICache(type, jobType, totalGoals) { _aiCache.delete(aiCacheKey(type, jobType, totalGoals)); }
+
+// Concurrency limiter — Ollama handles one request at a time, queue the rest
+const _aiQueue = [];
+let _aiRunning = 0;
+const AI_CONCURRENCY = 1;
+
+async function ollamaGenerate(prompt, model = "qwen3:8b") {
+  // Queue to avoid overwhelming Ollama
+  return new Promise((resolve) => {
+    const run = async () => {
+      _aiRunning++;
+      try {
+        const res = await fetch("http://localhost:11434/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ model, prompt, stream: false, options: { temperature: 0.3, num_predict: 1500 } }),
+        });
+        if (!res.ok) { resolve(null); return; }
+        const data = await res.json();
+        let text = (data.response || "").trim();
+        text = text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+        resolve(text || null);
+      } catch { resolve(null); }
+      finally {
+        _aiRunning--;
+        if (_aiQueue.length > 0) _aiQueue.shift()();
+      }
+    };
+    if (_aiRunning < AI_CONCURRENCY) run();
+    else _aiQueue.push(run);
+  });
+}
+
+function buildAIPrompt(type, data) {
+  const { jobType, uniqueAgentCount, totalHours, totalGoals, gph, attainment, planGoals, actGoals,
+    distUnique, q1Agents, q4Agents, regions, healthScore, totalNewXI, totalXmLines,
+    newHiresInProgram, fiscalInfo, totalRgu, sphActual, sphGoal } = data;
+  const elapsed = fiscalInfo ? `${Math.round(fiscalInfo.pctElapsed)}%` : "unknown";
+  const daysLeft = fiscalInfo ? fiscalInfo.remainingBDays : "unknown";
+  const elapsedDays = fiscalInfo ? fiscalInfo.elapsedBDays : 0;
+  const totalDays = fiscalInfo ? fiscalInfo.totalBDays : 0;
+
+  // Pacing analysis
+  let pacingStr = "unknown";
+  let projectedHomes = null, requiredDaily = null, currentDaily = null;
+  if (fiscalInfo && attainment !== null && fiscalInfo.pctElapsed > 0 && planGoals) {
+    const pace = calcPacing(actGoals, planGoals, fiscalInfo.elapsedBDays, fiscalInfo.totalBDays);
+    if (pace) {
+      pacingStr = pace.projectedPct >= 100 ? "AHEAD of pace" : pace.projectedPct >= 85 ? "NEAR pace" : "BEHIND pace";
+      projectedHomes = pace.projected;
+      requiredDaily = pace.requiredDaily;
+      currentDaily = pace.dailyRate;
+    }
+  }
+
+  // Detailed agent breakdown
+  const totalAgents = uniqueAgentCount || 0;
+  const q1n = distUnique?.Q1 || 0, q2n = distUnique?.Q2 || 0, q3n = distUnique?.Q3 || 0, q4n = distUnique?.Q4 || 0;
+  const q1pct = totalAgents > 0 ? Math.round((q1n / totalAgents) * 100) : 0;
+  const q4pct = totalAgents > 0 ? Math.round((q4n / totalAgents) * 100) : 0;
+
+  // Top performers with full detail
+  const topPerf = (q1Agents || []).filter(a => a.hours >= getMinHours()).slice(0, 5)
+    .map(a => `${a.agentName}: ${a.goals} sales, ${a.hours.toFixed(0)}hrs, ${(a.goals/Math.max(a.hours,1)).toFixed(3)} GPH, ${Math.round(a.pctToGoal||0)}% to goal`).join("\n  ");
+
+  // Risk agents with full detail
+  const riskAgents = (q4Agents || []).filter(a => a.hours >= getMinHours()).slice(0, 5)
+    .map(a => `${a.agentName}: ${a.goals} sales, ${a.hours.toFixed(0)}hrs, ${a.region||"unknown"} site`).join("\n  ");
+
+  // Q3 bubble agents close to Q2
+  const q3Agents = data.q3Agents || [];
+  const bubbleAgents = q3Agents.filter(a => a.hours >= getMinHours() && a.pctToGoal >= 60).slice(0, 3)
+    .map(a => `${a.agentName}: ${Math.round(a.pctToGoal)}% to goal, ${a.hours.toFixed(0)}hrs`).join("; ");
+
+  // Site comparison
+  const siteData = (regions || []).map(r => {
+    const gap = r.avgPct !== undefined ? `${Math.round(r.avgPct)}% avg to goal` : "";
+    return `${r.name}: ${r.count || "?"} agents, ${gap}`;
+  }).join("\n  ");
+
+  // New hires detail
+  const nhList = (newHiresInProgram || []).slice(0, 5).map(a =>
+    `${a.agentName}: ${a.quartile}, ${a.hours?.toFixed(0)||0}hrs, ${a.goals||0} sales`).join("; ");
+
+  // Product mix
+  const productMix = [];
+  if (totalNewXI) productMix.push(`HSD: ${totalNewXI}`);
+  if (totalXmLines) productMix.push(`XM: ${totalXmLines}`);
+  if (totalRgu) productMix.push(`RGU: ${totalRgu}`);
+  const hsdPerSale = totalGoals > 0 && totalNewXI ? (totalNewXI / totalGoals).toFixed(2) : null;
+  const xmPerSale = totalGoals > 0 && totalXmLines ? (totalXmLines / totalGoals).toFixed(2) : null;
+
+  const context = `PROGRAM: ${jobType}
+═══════════════════════════════
+WORKFORCE: ${totalAgents} agents | ${totalHours?.toFixed(0) || 0} total hours | ${totalGoals || 0} total sales | ${gph?.toFixed(3) || "0"} GPH
+GOAL: ${actGoals || 0} of ${planGoals || "no plan"} homes | Attainment: ${attainment !== null ? Math.round(attainment) + "%" : "N/A"}
+${sphActual ? `SPH: ${sphActual.toFixed(3)} actual vs ${sphGoal?.toFixed(3) || "?"} goal` : ""}
+
+PACING (day ${elapsedDays} of ${totalDays}, month ${elapsed} elapsed, ${daysLeft} biz days left):
+  Status: ${pacingStr}
+  Current daily rate: ${currentDaily ? currentDaily.toFixed(1) : "?"} homes/day
+  Required daily rate: ${requiredDaily ? requiredDaily.toFixed(1) : "?"} homes/day
+  Projected EOM: ${projectedHomes !== null ? projectedHomes + " homes" : "N/A"}
+
+QUARTILE DISTRIBUTION:
+  Q1 (≥100%): ${q1n} agents (${q1pct}% of workforce)
+  Q2 (80-99%): ${q2n} agents
+  Q3 (1-79%): ${q3n} agents
+  Q4 (0%): ${q4n} agents (${q4pct}% of workforce)
+  Health Score: ${healthScore ? Math.round(healthScore) : "N/A"}/100
+
+TOP PERFORMERS (Q1, ${getMinHours()}+ hrs):
+  ${topPerf || "None yet"}
+
+RISK AGENTS (Q4, ${getMinHours()}+ hrs, zero sales):
+  ${riskAgents || "None"}
+
+${bubbleAgents ? `BUBBLE AGENTS (Q3, close to Q2 threshold):\n  ${bubbleAgents}` : ""}
+
+SITES:
+  ${siteData || "Single site"}
+
+${(newHiresInProgram || []).length > 0 ? `NEW HIRES (${(newHiresInProgram||[]).length}):\n  ${nhList}` : ""}
+
+PRODUCT MIX: ${productMix.join(" | ") || "N/A"}${hsdPerSale ? `\n  HSD/sale: ${hsdPerSale}` : ""}${xmPerSale ? ` | XM/sale: ${xmPerSale}` : ""}`;
+
+  const sysPrompt = `/no_think\nYou are a senior telesales operations analyst at a cable/telecom company. You analyze agent performance data for door-to-door and telesales programs selling Xfinity services (internet/HSD, mobile, video, phone). Your audience is the program manager who makes daily coaching decisions.\n\nRULES:\n- Every claim must reference a specific number from the data\n- Name specific agents when relevant\n- Compare rates and ratios, not just raw counts\n- Identify the WHY behind patterns, not just the WHAT\n- Be direct — no filler phrases like "it's worth noting" or "interestingly"\n- No markdown formatting, no bullet points, no headers\n`;
+
+  if (type === "narrative") {
+    return `${sysPrompt}\nWrite a 4-6 paragraph executive summary. Start with pacing status and projected finish. Then cover workforce composition and what the quartile distribution signals. Address specific coaching priorities by agent name. End with the single most impactful action for the remaining ${daysLeft} business days.\n\nData:\n${context}`;
+  }
+  if (type === "wins") {
+    return `${sysPrompt}\nIdentify 3-5 specific wins from this data. Each must name an agent, a number, or a rate. Focus on: conversion efficiency, pacing momentum, product mix strength, new hire ramp speed, or site-level standouts. One sentence per win. No generic praise.\n\nData:\n${context}\n\nWins (one per line):`;
+  }
+  if (type === "opps") {
+    return `${sysPrompt}\nIdentify 3-5 specific opportunities. Each must name an agent or a gap, and prescribe a concrete next-day action (not "consider" or "review" — tell the manager exactly what to do). Focus on: Q4 agents with hours, Q3 agents near Q2 threshold, product attach gaps, site parity issues, pacing shortfalls. One sentence per opportunity.\n\nData:\n${context}\n\nOpportunities (one per line):`;
+  }
+  // business overview
+  return `${sysPrompt}\nWrite a 4-6 paragraph business-wide executive summary for leadership. Cover: overall pacing and projected finish across all programs, which programs are driving vs dragging performance, workforce utilization (agents with hours vs at threshold), and the top 2-3 actions that would move the needle most in the remaining ${daysLeft} business days.\n\nData:\n${context}`;
+}
+
+// ── AI Prefetch Engine ───────────────────────────────────────────────────────
+// Fires all AI generations at once when localAI is toggled on.
+// Results land in _aiCache; components just read from cache.
+function prefetchAI(promptDataList) {
+  const tasks = [];
+  for (const { type, data } of promptDataList) {
+    const key = aiCacheKey(type, data.jobType, data.totalGoals);
+    if (_aiCache.has(key)) continue; // already cached
+    const prompt = buildAIPrompt(type, data);
+    const task = ollamaGenerate(prompt).then(result => {
+      if (result) {
+        if (type === "narrative") {
+          setAICache(type, data.jobType, data.totalGoals, result.split(/\n\n+/).filter(l => l.trim()));
+        } else {
+          const items = result.split(/\n/).filter(l => l.trim()).map(l => l.replace(/^[\d\-\.\*\)]+\s*/, "").trim()).filter(Boolean);
+          setAICache(type, data.jobType, data.totalGoals, items);
+        }
+      }
+    });
+    tasks.push(task);
+  }
+  return tasks;
+}
 const GOAL_METRICS = [
   { goalKey: "Hours Goal",       label: "Hours",     actualKey: "hours",    mode: "sum", fmt: "num"  },
   { goalKey: "SPH GOAL",         label: "SPH / GPH", actualKey: "gph",      mode: "avg", fmt: "dec2" },
@@ -476,12 +650,34 @@ function buildAgentDailyProfile(agentName, jobType, allRows) {
 // Pure functions. No side effects. Composable.
 // ══════════════════════════════════════════════════════════════════════════════
 
-const selectQualified   = agents => agents.filter(a => a.hours >= 16);
+// Global hours threshold — configurable, with auto-scaling based on fiscal elapsed days
+// Default full-month threshold: 16 hours. Auto mode scales proportionally.
+const HOURS_THRESHOLD_KEY = "perf_intel_hours_threshold";
+const HOURS_AUTO_KEY      = "perf_intel_hours_auto";
+let _hoursThreshold = 16;
+let _hoursAutoScale = true;
+try {
+  const stored = localStorage.getItem(HOURS_THRESHOLD_KEY);
+  if (stored) _hoursThreshold = parseFloat(stored);
+  const auto = localStorage.getItem(HOURS_AUTO_KEY);
+  if (auto !== null) _hoursAutoScale = auto === "true";
+} catch(e) {}
+
+function computeEffectiveThreshold(baseThreshold, fiscalInfo, autoScale) {
+  if (!autoScale || !fiscalInfo || !fiscalInfo.totalBDays || !fiscalInfo.elapsedBDays) return baseThreshold;
+  // Scale: on day 1 of 22, threshold = 16*(1/22) ≈ 0.7 hrs. By day 11, ~8 hrs. Full month = 16.
+  const ratio = fiscalInfo.elapsedBDays / fiscalInfo.totalBDays;
+  return Math.max(1, Math.round(baseThreshold * ratio * 10) / 10);
+}
+
+// These are the selectors used throughout — they reference the global threshold
+const getMinHours = () => _hoursThreshold;
+const selectQualified   = agents => agents.filter(a => a.hours >= _hoursThreshold);
 const selectQ1          = agents => agents.filter(a => a.quartile === "Q1");
 const selectQ2          = agents => agents.filter(a => a.quartile === "Q2");
 const selectQ3          = agents => agents.filter(a => a.quartile === "Q3");
 const selectQ4          = agents => agents.filter(a => a.quartile === "Q4");
-const selectActive      = agents => agents.filter(a => a.hours > 0 && a.hours < 16);
+const selectActive      = agents => agents.filter(a => a.hours > 0 && a.hours < _hoursThreshold);
 const selectByRegion    = (agents, region) => agents.filter(a => a.region === region);
 const selectByProgram   = (agents, jobType) => agents.filter(a => a.jobType === jobType);
 const selectNewHireOpps = (agents, newHireSet) =>
@@ -846,7 +1042,7 @@ function buildProgram(agents, jobType, goalEntries, newHireSet) {
   // pctToGoal and quartile are already aggregate-stamped on every row
   const uniqueAgents = collapseToUniqueAgents(agents);
 
-  const qualified = uniqueAgents.filter(a => a.hours >= 16);
+  const qualified = uniqueAgents.filter(a => a.hours >= getMinHours());
   const q1 = uniqueAgents.filter(a => a.quartile === "Q1").sort((a, b) => b.hours - a.hours);
   const q2 = uniqueAgents.filter(a => a.quartile === "Q2").sort((a, b) => b.hours - a.hours);
   const q3 = uniqueAgents.filter(a => a.quartile === "Q3");
@@ -877,7 +1073,7 @@ function buildProgram(agents, jobType, goalEntries, newHireSet) {
   const healthScore = calculateHealthScore({ attainment, q1Rate, hoursUtilization, stability });
 
   const topAgent   = q1[0] || null;  // highest-hours Q1 agent
-  const worstAgent = q4.filter(a => a.hours >= 16)[0] || q4[0] || null;
+  const worstAgent = q4.filter(a => a.hours >= getMinHours())[0] || q4[0] || null;
 
   return {
     jobType,
@@ -1103,13 +1299,13 @@ function insight(type, priority, category, text) {
 function generateWinInsights(program) {
   const { q1Agents, q2Agents, regions, topAgent, qualified } = program;
   // q1/q2 are already deduplicated unique agents — filter to 16+ hrs for qualified insights
-  const q1Qual = q1Agents.filter(a => a.hours >= 16);
-  const q2Qual = q2Agents.filter(a => a.hours >= 16);
+  const q1Qual = q1Agents.filter(a => a.hours >= getMinHours());
+  const q2Qual = q2Agents.filter(a => a.hours >= getMinHours());
   const results = [];
 
   if (q1Qual.length === 0 && q2Qual.length === 0) {
     return [insight("win", "low", "performance",
-      "No top-tier performers with 16+ hours in this program yet. Focus energy on getting more agents to the 16-hour threshold while moving Q3 agents toward the 80% goal mark.")];
+      `No top-tier performers with ${getMinHours()}+ hours in this program yet. Focus energy on getting more agents to the ${getMinHours()}-hour threshold while moving Q3 agents toward the 80% goal mark.`)];
   }
 
   if (topAgent) {
@@ -1122,7 +1318,7 @@ function generateWinInsights(program) {
   if (q1Qual.length >= 3) {
     const names = q1Qual.slice(0, 3).map(a => a.agentName).join(", ");
     results.push(insight("win", "high", "performance",
-      `${q1Qual.length} agents with 16+ hours are exceeding 100% of goal, including ${names}. This concentration signals a healthy program culture. Leverage these agents to lead small-group huddles — peer coaching at this level is consistently more effective than top-down training.`));
+      `${q1Qual.length} agents with ${getMinHours()}+ hours are exceeding 100% of goal, including ${names}. This concentration signals a healthy program culture. Leverage these agents to lead small-group huddles — peer coaching at this level is consistently more effective than top-down training.`));
   }
 
   if (q2Qual.length > 0) {
@@ -1145,7 +1341,7 @@ function generateWinInsights(program) {
   }
 
   // Top GPH among 16+ hr agents only — excludes low-volume outliers
-  const topGPH = [...qualified].filter(a => a.hours >= 16 && a.goals > 0).sort((a, b) => (b.goals/b.hours) - (a.goals/a.hours))[0];
+  const topGPH = [...qualified].filter(a => a.hours >= getMinHours() && a.goals > 0).sort((a, b) => (b.goals/b.hours) - (a.goals/a.hours))[0];
   if (topGPH && topGPH.hours > 0) {
     const gph = (topGPH.goals / topGPH.hours).toFixed(3);
     results.push(insight("win", "low", "performance",
@@ -1158,13 +1354,13 @@ function generateWinInsights(program) {
 function generateOppInsights(program, allAgents, newHireSet) {
   const { q4Agents, q3Agents, qualified, agents, jobType } = program;
   // q3/q4 are already deduplicated — filter to 16+ hrs for coaching insights
-  const q3Qual = q3Agents.filter(a => a.hours >= 16);
-  const q4Qual = q4Agents.filter(a => a.hours >= 16);
+  const q3Qual = q3Agents.filter(a => a.hours >= getMinHours());
+  const q4Qual = q4Agents.filter(a => a.hours >= getMinHours());
   const results = [];
 
   const highHoursLow = qualified.filter(a => a.pctToGoal < 50);
   // under16: unique agents with hours logged but not yet qualified
-  const under16     = collapseToUniqueAgents(agents).filter(a => a.hours > 0 && a.hours < 16);
+  const under16     = collapseToUniqueAgents(agents).filter(a => a.hours > 0 && a.hours < getMinHours());
   const newHireOpps = qualified.filter(a =>
     newHireSet.has(a.agentName) && (a.quartile === "Q3" || a.quartile === "Q4")
   );
@@ -1178,7 +1374,7 @@ function generateOppInsights(program, allAgents, newHireSet) {
     const names    = q4Qual.slice(0, 3).map(a => a.agentName).join(", ");
     const totalHrs = q4Qual.reduce((s, a) => s + a.hours, 0);
     results.push(insight("opp", "high", "coaching",
-      `${q4Qual.length} agent${q4Qual.length > 1 ? "s" : ""} with 16+ hours recorded 0% to goal — zero conversions across ${fmt(totalHrs, 0)} invested hours: ${names}${q4Qual.length > 3 ? `, plus ${q4Qual.length - 3} more` : ""}. Pull call recordings within 24 hours and assess pitch delivery, product knowledge, and attendance consistency.`));
+      `${q4Qual.length} agent${q4Qual.length > 1 ? "s" : ""} with ${getMinHours()}+ hours recorded 0% to goal — zero conversions across ${fmt(totalHrs, 0)} invested hours: ${names}${q4Qual.length > 3 ? `, plus ${q4Qual.length - 3} more` : ""}. Pull call recordings within 24 hours and assess pitch delivery, product knowledge, and attendance consistency.`));
   }
 
   if (q3Qual.length > 0) {
@@ -1189,7 +1385,7 @@ function generateOppInsights(program, allAgents, newHireSet) {
     const totalHrs = q3Qual.reduce((s, a) => s + a.hours, 0);
     const lowestQ3 = [...q3Qual].sort((a, b) => a.pctToGoal - b.pctToGoal)[0];
     results.push(insight("opp", "high", "coaching",
-      `${q3Qual.length} agents with 16+ hours in Q3 averaging ${avgPct}% to goal across ${fmt(totalHrs, 0)} total hours. ${lowestQ3.agentName} is furthest from the 80% threshold at ${Math.round(lowestQ3.pctToGoal)}%. Close-rate improvement is the coaching priority.`));
+      `${q3Qual.length} agents with ${getMinHours()}+ hours in Q3 averaging ${avgPct}% to goal across ${fmt(totalHrs, 0)} total hours. ${lowestQ3.agentName} is furthest from the 80% threshold at ${Math.round(lowestQ3.pctToGoal)}%. Close-rate improvement is the coaching priority.`));
   }
 
   const lowQ3 = highHoursLow.filter(a => a.quartile === "Q3");
@@ -1203,13 +1399,13 @@ function generateOppInsights(program, allAgents, newHireSet) {
     const totalHrs = under16.reduce((s, a) => s + a.hours, 0);
     const avgHrs   = (totalHrs / under16.length).toFixed(1);
     results.push(insight("opp", "medium", "volume",
-      `${under16.length} agents are contributing hours but haven't hit the 16-hour threshold (avg ${avgHrs} hrs, ${fmt(totalHrs, 0)} hrs total). Review scheduling constraints — if even half reached 16 hours, goal impact would be significant.`));
+      `${under16.length} agents are contributing hours but haven't hit the ${getMinHours()}-hour threshold (avg ${avgHrs} hrs, ${fmt(totalHrs, 0)} hrs total). Review scheduling constraints — if even half reached ${getMinHours()} hours, goal impact would be significant.`));
   }
 
   if (newHireOpps.length > 0) {
     const names = newHireOpps.map(a => a.agentName).join(", ");
     results.push(insight("opp", "medium", "coaching",
-      `New hire${newHireOpps.length > 1 ? "s" : ""} ${names} have logged 16+ hours but are in lower tiers. Don't benchmark against tenured staff — track weekly trajectory. Escalate to a formal support plan if not trending upward by week 6–8.`));
+      `New hire${newHireOpps.length > 1 ? "s" : ""} ${names} have logged ${getMinHours()}+ hours but are in lower tiers. Don't benchmark against tenured staff — track weekly trajectory. Escalate to a formal support plan if not trending upward by week 6–8.`));
   }
 
   return results;
@@ -1266,17 +1462,17 @@ function generateNarrative(program, fiscalInfo, newHireSet) {
   }
 
   // ── Top performers ──
-  const topQ1 = q1Agents.filter(a => a.hours >= 16).slice(0, 3);
+  const topQ1 = q1Agents.filter(a => a.hours >= getMinHours()).slice(0, 3);
   if (topQ1.length > 0) {
     const names = topQ1.map(a => `${a.agentName} (${f(a.hours, 0)} hrs, ${f(a.hours > 0 ? a.goals / a.hours : 0, 3)} GPH)`);
     lines.push(`Top performers: ${names.join("; ")}. ${topQ1.length > 1 ? "These agents" : topQ1[0].agentName} should be recognized and their approaches documented for coaching replication.`);
   }
 
   // ── Risk agents ──
-  const highHoursLowPerf = q4Agents.filter(a => a.hours >= 16);
+  const highHoursLowPerf = q4Agents.filter(a => a.hours >= getMinHours());
   if (highHoursLowPerf.length > 0) {
     const names = highHoursLowPerf.slice(0, 3).map(a => `${a.agentName} (${f(a.hours, 0)} hrs)`);
-    lines.push(`Key risk: ${highHoursLowPerf.length} agent${highHoursLowPerf.length > 1 ? "s" : ""} with 16+ hours still in Q4 — ${names.join(", ")}. These represent the highest-impact coaching opportunities since they have the volume but not the conversion.`);
+    lines.push(`Key risk: ${highHoursLowPerf.length} agent${highHoursLowPerf.length > 1 ? "s" : ""} with ${getMinHours()}+ hours still in Q4 — ${names.join(", ")}. These represent the highest-impact coaching opportunities since they have the volume but not the conversion.`);
   }
 
   // ── New hires ──
@@ -1427,7 +1623,7 @@ function generateSiteNarrative(siteLabel, agents, programs, goalLookup, fiscalIn
 
   // Highest risk agents — Q4 with most hours, listed by name
   const riskAgents = collapseToUniqueAgents(agents.filter(a => a.quartile === "Q4" || a.quartile === "Q3"))
-    .filter(a => a.hours >= 16)
+    .filter(a => a.hours >= getMinHours())
     .sort((a, b) => b.hours - a.hours);
 
   if (riskAgents.length > 0) {
@@ -1435,11 +1631,11 @@ function generateSiteNarrative(siteLabel, agents, programs, goalLookup, fiscalIn
     const q3Risk = riskAgents.filter(a => a.quartile === "Q3");
     if (q4Risk.length > 0) {
       const named = q4Risk.slice(0, 5).map(a => `${a.agentName} (${f(a.hours, 0)} hrs, ${f(a.hours > 0 ? a.goals / a.hours : 0, 3)} GPH)`);
-      lines.push(`Highest risk — Q4 agents with 16+ hours: ${named.join("; ")}${q4Risk.length > 5 ? ` and ${q4Risk.length - 5} more` : ""}. These agents have volume but zero conversion — immediate coaching intervention needed.`);
+      lines.push(`Highest risk — Q4 agents with ${getMinHours()}+ hours: ${named.join("; ")}${q4Risk.length > 5 ? ` and ${q4Risk.length - 5} more` : ""}. These agents have volume but zero conversion — immediate coaching intervention needed.`);
     }
     if (q3Risk.length > 0) {
       const named = q3Risk.slice(0, 3).map(a => `${a.agentName} (${f(a.hours, 0)} hrs, ${a.goals} sales)`);
-      lines.push(`Bubble agents — Q3 with 16+ hours: ${named.join("; ")}${q3Risk.length > 3 ? ` and ${q3Risk.length - 3} more` : ""}. Close to Q2 threshold — targeted coaching could push these over.`);
+      lines.push(`Bubble agents — Q3 with ${getMinHours()}+ hours: ${named.join("; ")}${q3Risk.length > 3 ? ` and ${q3Risk.length - 3} more` : ""}. Close to Q2 threshold — targeted coaching could push these over.`);
     }
   }
 
@@ -1492,7 +1688,7 @@ function generateTeamsNarrative(program, agents) {
       const aRows = s.rows.filter(r => r.agentName === name);
       const totalH = aRows.reduce((sum, r) => sum + r.hours, 0);
       const q = aRows[0]?.quartile;
-      return q === "Q4" && totalH >= 16;
+      return q === "Q4" && totalH >= getMinHours();
     });
     return { ...s, count, gph, trending, weeklyGph, q4heavy, weekKeys };
   }).filter(s => s.name !== "Unknown").sort((a, b) => b.gph - a.gph);
@@ -1503,7 +1699,7 @@ function generateTeamsNarrative(program, agents) {
   const coachingDrain = [...sups].sort((a, b) => b.q4heavy.length - a.q4heavy.length).filter(s => s.q4heavy.length > 0);
   if (coachingDrain.length > 0) {
     const worst = coachingDrain[0];
-    lines.push(`Coaching priority: ${worst.name}'s team has ${worst.q4heavy.length} Q4 agent${worst.q4heavy.length > 1 ? "s" : ""} with 16+ hours (${worst.q4heavy.slice(0, 3).join(", ")}${worst.q4heavy.length > 3 ? "..." : ""}). These agents are producing volume without conversion — the highest-ROI coaching opportunity.`);
+    lines.push(`Coaching priority: ${worst.name}'s team has ${worst.q4heavy.length} Q4 agent${worst.q4heavy.length > 1 ? "s" : ""} with ${getMinHours()}+ hours (${worst.q4heavy.slice(0, 3).join(", ")}${worst.q4heavy.length > 3 ? "..." : ""}). These agents are producing volume without conversion — the highest-ROI coaching opportunity.`);
   }
 
   // 2. Trending — which sups are improving vs declining
@@ -1569,7 +1765,7 @@ function generateBusinessInsights({ programs, regions, newHireSet, globalGoals, 
   const totalUniqueQ1 = new Set(programs.flatMap(p => p.q1Agents).map(a => a.agentName).filter(Boolean)).size;
   const totalUnique   = new Set(allAgents.map(a => a.agentName).filter(Boolean)).size;
   // under16: collapse all agent rows to unique, then filter
-  const under16All    = collapseToUniqueAgents(allAgents).filter(a => a.hours > 0 && a.hours < 16);
+  const under16All    = collapseToUniqueAgents(allAgents).filter(a => a.hours > 0 && a.hours < getMinHours());
   const activeNH      = newHireSet.size;
 
   // Wins
@@ -1599,17 +1795,17 @@ function generateBusinessInsights({ programs, regions, newHireSet, globalGoals, 
 
   // Opportunities
   // q4Agents per program are already unique — deduplicate across programs by name
-  const allQ4Qualified = programs.flatMap(p => p.q4Agents.filter(a => a.hours >= 16));
+  const allQ4Qualified = programs.flatMap(p => p.q4Agents.filter(a => a.hours >= getMinHours()));
   const uniqueQ4Names  = new Set(allQ4Qualified.map(a => a.agentName).filter(Boolean));
   if (uniqueQ4Names.size > 0) {
     results.push(insight("opp", "high", "coaching",
-      `${uniqueQ4Names.size} unique agent${uniqueQ4Names.size > 1 ? "s" : ""} across the business recorded zero conversions with 16+ hours invested. These represent the most urgent individual coaching cases.`));
+      `${uniqueQ4Names.size} unique agent${uniqueQ4Names.size > 1 ? "s" : ""} across the business recorded zero conversions with ${getMinHours()}+ hours invested. These represent the most urgent individual coaching cases.`));
   }
 
   if (lowProg && (lowProg.attainment ?? lowProg.healthScore) < 80) {
     const metric = lowProg.attainment !== null
       ? `${Math.round(lowProg.attainment)}% of plan`
-      : `${lowProg.q4Agents.filter(a => a.hours >= 16).length} Q4 agents`;
+      : `${lowProg.q4Agents.filter(a => a.hours >= getMinHours()).length} Q4 agents`;
     results.push(insight("opp", "high", "performance",
       `${lowProg.jobType} is the lowest-performing program at ${metric} with ${lowProg.uniqueAgentCount} agents. A targeted recovery plan is needed — not just routine coaching cadence.`));
   }
@@ -1622,7 +1818,7 @@ function generateBusinessInsights({ programs, regions, newHireSet, globalGoals, 
   if (under16All.length >= 15) {
     const hrs = under16All.reduce((s, a) => s + a.hours, 0);
     results.push(insight("opp", "medium", "volume",
-      `${under16All.length} agents across the business are contributing hours but remain under the 16-hour threshold, representing ${fmt(hrs, 0)} hours of potential production not fully activated.`));
+      `${under16All.length} agents across the business are contributing hours but remain under the ${getMinHours()}-hour threshold, representing ${fmt(hrs, 0)} hours of potential production not fully activated.`));
   }
 
   if (activeNH > 0) {
@@ -1750,16 +1946,58 @@ function usePerformanceEngine({ rawData, goalsRaw, newHiresRaw }) {
 // ══════════════════════════════════════════════════════════════════════════════
 
 // ── Collapsible Narrative Panel ───────────────────────────────────────────────
-function CollapsibleNarrative({ title = "Executive Summary", lines = [], defaultOpen = false }) {
+function CollapsibleNarrative({ title = "Executive Summary", lines = [], defaultOpen = false, aiEnabled = false, aiPromptData = null }) {
   const [open, setOpen] = useState(defaultOpen);
-  if (!lines || lines.length === 0) return null;
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState(false);
+  const [, forceUpdate] = useState(0);
+
+  // Read from session cache on every render
+  const aiLines = aiPromptData ? getAICache("narrative", aiPromptData.jobType, aiPromptData.totalGoals) : null;
+
+  // Poll cache periodically while waiting for prefetch
+  useEffect(() => {
+    if (!aiEnabled || aiLines || !aiPromptData) return;
+    setAiLoading(true);
+    const interval = setInterval(() => {
+      const cached = getAICache("narrative", aiPromptData.jobType, aiPromptData.totalGoals);
+      if (cached) { setAiLoading(false); forceUpdate(v => v + 1); clearInterval(interval); }
+    }, 500);
+    // Timeout after 90s — fallback to direct generation
+    const timeout = setTimeout(() => {
+      clearInterval(interval);
+      if (getAICache("narrative", aiPromptData.jobType, aiPromptData.totalGoals)) { setAiLoading(false); forceUpdate(v => v + 1); return; }
+      // Direct generate as fallback
+      const prompt = buildAIPrompt("narrative", aiPromptData);
+      ollamaGenerate(prompt).then(result => {
+        if (result) {
+          setAICache("narrative", aiPromptData.jobType, aiPromptData.totalGoals, result.split(/\n\n+/).filter(l => l.trim()));
+        } else { setAiError(true); }
+        setAiLoading(false);
+        forceUpdate(v => v + 1);
+      });
+    }, 90000);
+    return () => { clearInterval(interval); clearTimeout(timeout); };
+  }, [aiEnabled, aiPromptData?.jobType, aiPromptData?.totalGoals]);
+
+  const displayLines = aiEnabled && aiLines ? aiLines : lines;
+  if ((!displayLines || displayLines.length === 0) && !aiLoading) return null;
+
   return (
-    <div style={{ background: `var(--glass-bg)`, backdropFilter: "blur(12px) saturate(150%)", WebkitBackdropFilter: "blur(12px) saturate(150%)", border: "1px solid var(--glass-border)", borderRadius: "var(--radius-lg, 16px)", overflow: "hidden", boxShadow: `var(--card-glow)` }}>
+    <div style={{ background: `var(--glass-bg)`, backdropFilter: "blur(12px) saturate(150%)", WebkitBackdropFilter: "blur(12px) saturate(150%)", border: `1px solid ${aiEnabled ? AI_COLOR + "20" : "var(--glass-border)"}`, borderRadius: "var(--radius-lg, 16px)", boxShadow: `var(--card-glow)` }}>
       <div onClick={() => setOpen(v => !v)}
         style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "1rem 1.5rem", cursor: "pointer", userSelect: "none" }}>
-        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: `var(--text-muted)`, letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 600 }}>{title}</div>
+        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: aiEnabled ? AI_COLOR : `var(--text-muted)`, letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 600 }}>
+          {aiEnabled ? "AI " : ""}{title}
+        </div>
         <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-          <button onClick={e => { e.stopPropagation(); navigator.clipboard?.writeText(lines.join("\n\n")); }}
+          {aiEnabled && aiLines && (
+            <button onClick={e => { e.stopPropagation(); clearAICache("narrative", aiPromptData.jobType, aiPromptData.totalGoals); forceUpdate(v => v + 1); }}
+              style={{ background: AI_COLOR + "10", border: `1px solid ${AI_COLOR}30`, borderRadius: "var(--radius-sm, 6px)", color: AI_COLOR, padding: "0.2rem 0.55rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.68rem", cursor: "pointer", fontWeight: 500 }}>
+              Regen
+            </button>
+          )}
+          <button onClick={e => { e.stopPropagation(); navigator.clipboard?.writeText(displayLines.join("\n\n")); }}
             style={{ background: "transparent", border: "1px solid var(--border-muted)", borderRadius: "var(--radius-sm, 6px)", color: `var(--text-faint)`, padding: "0.2rem 0.55rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.68rem", cursor: "pointer", fontWeight: 500 }}>
             Copy
           </button>
@@ -1768,8 +2006,16 @@ function CollapsibleNarrative({ title = "Executive Summary", lines = [], default
       </div>
       {open && (
         <div style={{ padding: "0 1.5rem 1.25rem", animation: "fadeIn 0.25s ease" }}>
-          {lines.map((para, i) => (
-            <p key={i} style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.92rem", color: i === 0 ? `var(--text-warm)` : `var(--text-secondary)`, lineHeight: 1.65, margin: i < lines.length - 1 ? "0 0 0.6rem 0" : 0, fontWeight: i === 0 ? 600 : 400 }}>
+          {aiLoading ? (
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.75rem 0" }}>
+              <div style={{ width: "12px", height: "12px", borderRadius: "50%", border: `2px solid ${AI_COLOR}`, borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }} />
+              <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: AI_COLOR }}>Local AI generating insights...</span>
+            </div>
+          ) : aiError ? (
+            <p style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: "#dc2626" }}>AI generation failed — showing template insights instead.</p>
+          ) : null}
+          {(!aiLoading) && displayLines.map((para, i) => (
+            <p key={i} style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.92rem", color: i === 0 ? `var(--text-warm)` : `var(--text-secondary)`, lineHeight: 1.65, margin: i < displayLines.length - 1 ? "0 0 0.6rem 0" : 0, fontWeight: i === 0 ? 600 : 400 }}>
               {para}
             </p>
           ))}
@@ -1802,25 +2048,69 @@ function QBadge({ q, size = "sm" }) {
 }
 
 // InsightCard accepts structured insight objects { type, priority, category, text }
-function InsightCard({ type, insights }) {
+function InsightCard({ type, insights, aiEnabled = false, aiPromptData = null }) {
   const isWin = type === "win";
   const color = isWin ? "#16a34a" : "#dc2626";
   const icon  = isWin ? "🏆" : "⚡";
   const title = isWin ? "Wins & Key Learnings" : "Opportunities & Action Items";
+
+  const aiType = isWin ? "wins" : "opps";
+  const [aiLoading, setAiLoading] = useState(false);
+  const [, forceUpdate] = useState(0);
+
+  // Read from session cache
+  const aiItems = aiPromptData ? getAICache(aiType, aiPromptData.jobType, aiPromptData.totalGoals) : null;
+
+  // Poll cache for prefetch results
+  useEffect(() => {
+    if (!aiEnabled || aiItems || !aiPromptData) return;
+    setAiLoading(true);
+    const interval = setInterval(() => {
+      const cached = getAICache(aiType, aiPromptData.jobType, aiPromptData.totalGoals);
+      if (cached) { setAiLoading(false); forceUpdate(v => v + 1); clearInterval(interval); }
+    }, 500);
+    const timeout = setTimeout(() => {
+      clearInterval(interval);
+      if (getAICache(aiType, aiPromptData.jobType, aiPromptData.totalGoals)) { setAiLoading(false); forceUpdate(v => v + 1); return; }
+      const prompt = buildAIPrompt(aiType, aiPromptData);
+      ollamaGenerate(prompt).then(result => {
+        if (result) {
+          const items = result.split(/\n/).filter(l => l.trim()).map(l => l.replace(/^[\d\-\.\*\)]+\s*/, "").trim()).filter(Boolean);
+          setAICache(aiType, aiPromptData.jobType, aiPromptData.totalGoals, items);
+        }
+        setAiLoading(false);
+        forceUpdate(v => v + 1);
+      });
+    }, 90000);
+    return () => { clearInterval(interval); clearTimeout(timeout); };
+  }, [aiEnabled, aiPromptData?.jobType, aiPromptData?.totalGoals, aiType]);
 
   // Render sorted by priority (high → medium → low)
   const priorityRank = { high: 0, medium: 1, low: 2 };
   const sorted = [...insights].sort((a, b) =>
     (priorityRank[a.priority] ?? 1) - (priorityRank[b.priority] ?? 1));
 
+  const displayItems = aiEnabled && aiItems ? aiItems.map(t => ({ text: t, priority: "medium" })) : sorted;
+
   return (
-    <div style={{ background: `var(--glass-bg)`, backdropFilter: "blur(12px) saturate(150%)", WebkitBackdropFilter: "blur(12px) saturate(150%)", border: `1px solid ${color}20`, borderRadius: "var(--radius-lg, 16px)", padding: "1.5rem 1.75rem", borderLeft: `4px solid ${color}`, boxShadow: `var(--card-glow)` }}>
-      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "1.25rem", display: "flex", alignItems: "center", gap: "0.5rem", fontWeight: 600 }}>
-        <span style={{ fontSize: "1.1rem" }}>{icon}</span> {title}
+    <div style={{ background: `var(--glass-bg)`, backdropFilter: "blur(12px) saturate(150%)", WebkitBackdropFilter: "blur(12px) saturate(150%)", border: `1px solid ${aiEnabled ? AI_COLOR + "20" : color + "20"}`, borderRadius: "var(--radius-lg, 16px)", padding: "1.5rem 1.75rem", borderLeft: `4px solid ${aiEnabled ? AI_COLOR : color}`, boxShadow: `var(--card-glow)` }}>
+      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: aiEnabled ? AI_COLOR : color, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "1.25rem", display: "flex", alignItems: "center", gap: "0.5rem", fontWeight: 600 }}>
+        <span style={{ fontSize: "1.1rem" }}>{icon}</span> {aiEnabled ? "AI " : ""}{title}
+        {aiEnabled && aiItems && (
+          <button onClick={() => { clearAICache(aiType, aiPromptData.jobType, aiPromptData.totalGoals); forceUpdate(v => v + 1); }}
+            style={{ marginLeft: "auto", background: AI_COLOR + "10", border: `1px solid ${AI_COLOR}30`, borderRadius: "var(--radius-sm, 6px)", color: AI_COLOR, padding: "0.15rem 0.45rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.65rem", cursor: "pointer", fontWeight: 500 }}>
+            Regen
+          </button>
+        )}
       </div>
-      {sorted.map((ins, i) => (
-        <div key={i} style={{ display: "flex", gap: "0.75rem", marginBottom: i < sorted.length - 1 ? "0.85rem" : 0, paddingBottom: i < sorted.length - 1 ? "0.85rem" : 0, borderBottom: i < sorted.length - 1 ? `1px solid ${color}10` : "none" }}>
-          <div style={{ color, marginTop: "0.1rem", flexShrink: 0, fontSize: "0.7rem", opacity: 0.8 }}>&#9654;</div>
+      {aiLoading ? (
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.5rem 0" }}>
+          <div style={{ width: "12px", height: "12px", borderRadius: "50%", border: `2px solid ${AI_COLOR}`, borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }} />
+          <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: AI_COLOR }}>Analyzing...</span>
+        </div>
+      ) : displayItems.map((ins, i) => (
+        <div key={i} style={{ display: "flex", gap: "0.75rem", marginBottom: i < displayItems.length - 1 ? "0.85rem" : 0, paddingBottom: i < displayItems.length - 1 ? "0.85rem" : 0, borderBottom: i < displayItems.length - 1 ? `1px solid ${aiEnabled ? AI_COLOR : color}10` : "none" }}>
+          <div style={{ color: aiEnabled ? AI_COLOR : color, marginTop: "0.1rem", flexShrink: 0, fontSize: "0.7rem", opacity: 0.8 }}>&#9654;</div>
           <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.92rem", color: `var(--text-secondary)`, lineHeight: 1.65, fontWeight: 400 }}>{ins.text}</div>
         </div>
       ))}
@@ -1955,7 +2245,7 @@ function AgentTable({ agents, newHireSet }) {
                 <td style={{ padding: "0.5rem 0.75rem", color: `var(--text-warm)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem" }}>{a.agentName}</td>
                 <td style={{ padding: "0.5rem 0.75rem", color: `var(--text-secondary)` }}>{a.region}</td>
                 <td style={{ padding: "0.5rem 0.75rem", color: `var(--text-muted)`, fontSize: "0.82rem" }}>{a.supervisor || "—"}</td>
-                <td style={{ padding: "0.5rem 0.75rem", color: a.hours >= 16 ? "#6366f1" : `var(--text-secondary)`, textAlign: "right" }}>{fmt(a.hours, 1)}</td>
+                <td style={{ padding: "0.5rem 0.75rem", color: a.hours >= getMinHours() ? "#6366f1" : `var(--text-secondary)`, textAlign: "right" }}>{fmt(a.hours, 1)}</td>
                 <td style={{ padding: "0.5rem 0.75rem", color: `var(--text-secondary)`, textAlign: "right" }}>{a.goals}</td>
                 <td style={{ padding: "0.5rem 0.75rem", color, fontWeight: 600, textAlign: "right" }}>{a.gph.toFixed(3)}</td>
                 <td style={{ padding: "0.5rem 0.75rem", color, fontWeight: 700, textAlign: "right" }}>{a.pctToGoal > 0 ? `${Math.round(a.pctToGoal)}%` : "—"}</td>
@@ -3509,7 +3799,7 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
         <StatCard label="GPH"           value={fmt(gph, 2)}              sub="sum goals / sum hours"                    accent="#2563eb" />
         <StatCard label="Total Goals"   value={totalG.toLocaleString()}  sub={`${sitePrograms.length} programs`}        accent="#16a34a" />
         <StatCard label="Total Hours"   value={fmt(totalHrs, 0)}         sub={`${agents.length} rows`}                  accent="#6366f1" />
-        <StatCard label="Unique Agents" value={uCount}                   sub={`${agents.filter(a=>a.hours>=16).length} at 16+ hrs`} accent="#6366f1" />
+        <StatCard label="Unique Agents" value={uCount}                   sub={`${agents.filter(a=>a.hours>=getMinHours()).length} at ${getMinHours()}+ hrs`} accent="#6366f1" />
       </div>
 
 
@@ -4127,7 +4417,7 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
 // Consumes engine output directly. No computation inside.
 // ══════════════════════════════════════════════════════════════════════════════
 
-function BusinessOverview({ perf, onNav }) {
+function BusinessOverview({ perf, onNav, localAI }) {
   const [tab, setTab] = useState("overview");
 
   const {
@@ -4179,7 +4469,7 @@ function BusinessOverview({ perf, onNav }) {
     ? { label: "Goals vs Plan", value: `${Math.round(goalsAttain)}%`, sub: `${globalGoals.toLocaleString()} of ${planTotal.toLocaleString()}`, accent: attainColor(goalsAttain) }
     : { label: "Q1 Rate",       value: `${Math.round(atGoalRate)}%`,  sub: `${distUnique.Q1 + distUnique.Q2} at/above goal`, accent: attainColor(atGoalRate) };
 
-  const globalQ4Priority = programs.flatMap(p => p.q4Agents.filter(a => a.hours >= 16))
+  const globalQ4Priority = programs.flatMap(p => p.q4Agents.filter(a => a.hours >= getMinHours()))
     .sort((a, b) => b.hours - a.hours).slice(0, 8);
 
   const qColor = pct => pct >= 100 ? Q.Q1.color : pct >= 80 ? Q.Q2.color : pct > 0 ? Q.Q3.color : Q.Q4.color;
@@ -4275,7 +4565,8 @@ function BusinessOverview({ perf, onNav }) {
         {/* Goals vs Plan metrics row */}
         {(() => {
           const bizNarrative = generateBusinessNarrative(perf, fiscalInfo);
-          return <CollapsibleNarrative title="Executive Summary" lines={bizNarrative} defaultOpen={true} />;
+          const bizAIData = localAI ? { jobType: "Business Wide", uniqueAgentCount, totalHours, totalGoals: globalGoals, gph: totalHours > 0 ? globalGoals / totalHours : 0, attainment: planTotal ? (globalGoals / planTotal) * 100 : null, planGoals: planTotal, actGoals: globalGoals, distUnique: {}, q1Agents: [], q4Agents: [], regions, healthScore: null, totalNewXI: globalNewXI, totalXmLines: globalXmLines, newHiresInProgram: [], fiscalInfo } : null;
+          return <CollapsibleNarrative title="Executive Summary" lines={bizNarrative} defaultOpen={true} aiEnabled={localAI} aiPromptData={bizAIData} />;
         })()}
         {goalLookup && (
           <MetricComparePanel
@@ -4328,12 +4619,12 @@ function BusinessOverview({ perf, onNav }) {
                   {["Q1","Q2","Q3","Q4"].map(q => {
                     const names   = Object.keys(agentQ).filter(n => agentQ[n] === q);
                     const count   = names.length;
-                    const active  = names.filter(n => (agentHours[n] || 0) >= 16).length;
+                    const active  = names.filter(n => (agentHours[n] || 0) >= getMinHours()).length;
                     const pctTeam = totalUnique ? Math.round(count / totalUnique * 100) : 0;
                     return (
                       <div key={q} style={{ padding: "0.75rem", borderRadius: "var(--radius-md, 10px)", background: Q[q].color+"12", border: `1px solid ${Q[q].color}30`, textAlign: "center" }}>
                         <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "3rem", color: Q[q].color, fontWeight: 700, lineHeight: 1 }}>{active}</div>
-                        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: Q[q].color, marginTop: "0.15rem" }}>{q} · 16+ hrs</div>
+                        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: Q[q].color, marginTop: "0.15rem" }}>{q} {getMinHours()}+ hrs</div>
                         <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)`, marginTop: "0.2rem" }}>{count} total · {pctTeam}%</div>
                       </div>
                     );
@@ -4427,15 +4718,15 @@ function BusinessOverview({ perf, onNav }) {
 
         {/* Wins + Opportunities from engine insights */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.25rem" }}>
-          <InsightCard type="win" insights={wins} />
-          <InsightCard type="opp" insights={opps} />
+          <InsightCard type="win" insights={wins} aiEnabled={localAI} aiPromptData={localAI ? { jobType: "Business Wide", uniqueAgentCount, totalHours, totalGoals: globalGoals, gph: totalHours > 0 ? globalGoals / totalHours : 0, attainment: planTotal ? (globalGoals / planTotal) * 100 : null, planGoals: planTotal, actGoals: globalGoals, distUnique: {}, q1Agents: [], q4Agents: [], regions, healthScore: null, totalNewXI: globalNewXI, totalXmLines: globalXmLines, newHiresInProgram: [], fiscalInfo } : null} />
+          <InsightCard type="opp" insights={opps} aiEnabled={localAI} aiPromptData={localAI ? { jobType: "Business Wide", uniqueAgentCount, totalHours, totalGoals: globalGoals, gph: totalHours > 0 ? globalGoals / totalHours : 0, attainment: planTotal ? (globalGoals / planTotal) * 100 : null, planGoals: planTotal, actGoals: globalGoals, distUnique: {}, q1Agents: [], q4Agents: [], regions, healthScore: null, totalNewXI: globalNewXI, totalXmLines: globalXmLines, newHiresInProgram: [], fiscalInfo } : null} />
         </div>
 
         {/* Priority Coaching — business-wide */}
         {globalQ4Priority.length > 0 && (
           <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem" }}>
             <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "#dc2626", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.35rem" }}>Priority Coaching — Business Wide</div>
-            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)`, marginBottom: "0.9rem" }}>Zero sales · 16+ hours · all programs · ranked by hours</div>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)`, marginBottom: "0.9rem" }}>Zero sales {getMinHours()}+ hours all programs ranked by hours</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "0.5rem 1.5rem" }}>
               {globalQ4Priority.map((a, i) => (
                 <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.5rem 0", borderBottom: "1px solid var(--bg-tertiary)" }}>
@@ -5797,7 +6088,7 @@ function CampaignComparisonPanel({ currentAgents, onNav }) {
 // per-site campaign KPIs, quartile distribution, goals vs plan, and agent lists.
 // ══════════════════════════════════════════════════════════════════════════════
 
-function ProgramBySiteTab({ agents, regions, siteBuckets, jobType, goalEntry, goalLookup, fiscalInfo, newHireSet }) {
+function ProgramBySiteTab({ agents, regions, siteBuckets, jobType, goalEntry, goalLookup, fiscalInfo, newHireSet, localAI }) {
   const [activeSite, setActiveSite] = useState(null);
 
   // Build per-site stats
@@ -5830,7 +6121,7 @@ function ProgramBySiteTab({ agents, regions, siteBuckets, jobType, goalEntry, go
       const rguAttain = sitePlanRgu ? (totalRgu / sitePlanRgu) * 100 : null;
 
       // Top/bottom agents
-      const q1List = uniqueAgents.filter(a => a.quartile === "Q1" && a.hours >= 16).sort((a, b) => b.hours - a.hours);
+      const q1List = uniqueAgents.filter(a => a.quartile === "Q1" && a.hours >= getMinHours()).sort((a, b) => b.hours - a.hours);
       const q4List = uniqueAgents.filter(a => a.quartile === "Q4").sort((a, b) => b.hours - a.hours);
 
       return {
@@ -5952,7 +6243,7 @@ function ProgramBySiteTab({ agents, regions, siteBuckets, jobType, goalEntry, go
               <StatCard label="Q1 Rate" value={`${s.q1Rate.toFixed(1)}%`} sub={`${s.distU.Q1} of ${s.uCount} agents`} accent="#d97706" />
               <StatCard label="GPH" value={fmt(s.gph, 3)} sub="sum goals / sum hours" accent="#2563eb" />
               <StatCard label="Goals" value={s.totalGoals.toLocaleString()} sub={s.sitePlanGoals ? `of ${s.sitePlanGoals.toLocaleString()} plan` : "conversions"} accent="#16a34a" />
-              <StatCard label="Hours" value={fmt(s.totalHours, 0)} sub={`${s.uniqueAgents.filter(a=>a.hours>=16).length} at 16+ hrs`} accent="#6366f1" />
+              <StatCard label="Hours" value={fmt(s.totalHours, 0)} sub={`${s.uniqueAgents.filter(a=>a.hours>=getMinHours()).length} at ${getMinHours()}+ hrs`} accent="#6366f1" />
               <StatCard label="Attainment" value={s.attain !== null ? `${Math.round(s.attain)}%` : "—"} sub={s.sitePlanKey + " site plan"} accent={color} />
             </div>
 
@@ -5995,9 +6286,9 @@ function ProgramBySiteTab({ agents, regions, siteBuckets, jobType, goalEntry, go
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.25rem" }}>
               <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem" }}>
                 <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "#16a34a", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.35rem" }}>Top Performers — {s.label}</div>
-                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)`, marginBottom: "0.9rem" }}>Q1 · 16+ hours</div>
+                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)`, marginBottom: "0.9rem" }}>Q1 {getMinHours()}+ hours</div>
                 {s.q1List.length === 0
-                  ? <div style={{ color: `var(--text-faint)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem" }}>No Q1 agents with 16+ hours at this site</div>
+                  ? <div style={{ color: `var(--text-faint)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem" }}>No Q1 agents with {getMinHours()}+ hours at this site</div>
                   : s.q1List.slice(0, 5).map((a, i) => {
                     const agph = a.hours > 0 ? (a.goals / a.hours).toFixed(3) : "0.000";
                     return (
@@ -6034,6 +6325,35 @@ function ProgramBySiteTab({ agents, regions, siteBuckets, jobType, goalEntry, go
                   ))}
               </div>
             </div>
+
+            {/* AI Site Analysis */}
+            {localAI && (
+              <CollapsibleNarrative
+                title={`Site Analysis — ${s.label}`}
+                lines={[]}
+                defaultOpen={false}
+                aiEnabled={true}
+                aiPromptData={{
+                  jobType: `${jobType} — ${s.label}`,
+                  uniqueAgentCount: s.uCount,
+                  totalHours: s.totalHours,
+                  totalGoals: s.totalGoals,
+                  gph: s.gph,
+                  attainment: s.attain,
+                  planGoals: s.sitePlanGoals,
+                  actGoals: s.totalGoals,
+                  distUnique: s.distU,
+                  q1Agents: s.q1List,
+                  q4Agents: s.q4List,
+                  regions: [],
+                  healthScore: null,
+                  totalNewXI: s.totalNewXI,
+                  totalXmLines: s.totalXmLines,
+                  newHiresInProgram: s.uniqueAgents.filter(a => newHireSet.has(a.agentName)),
+                  fiscalInfo,
+                }}
+              />
+            )}
 
             {/* Sub-region breakdown when viewing BZ (multiple XOTM sites) */}
             {s.regions.length > 1 && (
@@ -6617,7 +6937,7 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
   );
 }
 
-function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total, onNav, allAgents }) {
+function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total, onNav, allAgents, localAI }) {
   const [tab, setTab] = useState("overview");
   const [rocFilter, setRocFilter] = useState(null); // null = all, or a specific ROC code
   const [rankSort, setRankSort] = useState({ key: "pctToGoal", dir: -1 });
@@ -6734,7 +7054,7 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
             </div>
 
             {/* Narrative Summary */}
-            <CollapsibleNarrative title="Executive Summary" lines={narrative} defaultOpen={false} />
+            <CollapsibleNarrative title="Executive Summary" lines={narrative} defaultOpen={false} aiEnabled={localAI} aiPromptData={localAI ? { ...program, fiscalInfo } : null} />
 
             {/* Goals vs Plan — immediately after stat cards when goals loaded */}
             {goalEntry && (() => {
@@ -6850,13 +7170,13 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
                       {["Q1","Q2","Q3","Q4"].map(q => {
                         const inQ    = agentList.filter(a => a.quartile === q);
                         const total  = inQ.length;
-                        const active = inQ.filter(a => a.hours >= 16).length;
+                        const active = inQ.filter(a => a.hours >= getMinHours()).length;
                         const pct    = agentList.length ? Math.round(total / agentList.length * 100) : 0;
                         const qHours = inQ.reduce((s, a) => s + a.hours, 0);
                         return (
                           <div key={q} style={{ padding: "1rem", borderRadius: "var(--radius-md, 10px)", background: Q[q].color+"12", border: `1px solid ${Q[q].color}30`, textAlign: "center" }}>
                             <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "2.5rem", color: Q[q].color, fontWeight: 700, lineHeight: 1 }}>{active}</div>
-                            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: Q[q].color, marginTop: "0.2rem" }}>{q} · 16+ hrs</div>
+                            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: Q[q].color, marginTop: "0.2rem" }}>{q} {getMinHours()}+ hrs</div>
                             <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-muted)`, marginTop: "0.15rem" }}>{Q[q].label}</div>
                             <div style={{ marginTop: "0.5rem", paddingTop: "0.5rem", borderTop: `1px solid ${Q[q].color}20` }}>
                               <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-dim)` }}>{total} total · {pct}%</div>
@@ -6910,7 +7230,7 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
                       rHoursByQ[a.quartile] = (rHoursByQ[a.quartile] || 0) + a.hours;
                     });
                     const totalRHrs = regionAgents.reduce((s, a) => s + a.hours, 0);
-                    const over16    = regionAgents.filter(a => a.hours >= 16).length;
+                    const over16    = regionAgents.filter(a => a.hours >= getMinHours()).length;
                     const rTotal    = regionAgents.length;
                     return (
                       <div key={r.name} style={{ padding: "0.9rem 1rem", background: `var(--bg-primary)`, borderRadius: "var(--radius-md, 10px)", border: "1px solid var(--bg-tertiary)" }}>
@@ -6924,7 +7244,7 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
                         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.4rem", marginBottom: "0.5rem" }}>
                           {["Q1","Q2","Q3","Q4"].map(q => {
                             const inQ    = regionAgents.filter(a => a.quartile === q);
-                            const active = inQ.filter(a => a.hours >= 16).length;
+                            const active = inQ.filter(a => a.hours >= getMinHours()).length;
                             return (
                             <div key={q} style={{ padding: "0.4rem 0.5rem", borderRadius: "var(--radius-sm, 6px)", background: Q[q].color+"15", border: `1px solid ${Q[q].color}30`, textAlign: "center" }}>
                               <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.5rem", color: Q[q].color, fontWeight: 700, lineHeight: 1 }}>{active}</div>
@@ -6963,18 +7283,18 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
 
             {/* Insights */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.25rem" }}>
-              <InsightCard type="win" insights={winInsights} />
-              <InsightCard type="opp" insights={oppInsights} />
+              <InsightCard type="win" insights={winInsights} aiEnabled={localAI} aiPromptData={localAI ? { ...program, fiscalInfo } : null} />
+              <InsightCard type="opp" insights={oppInsights} aiEnabled={localAI} aiPromptData={localAI ? { ...program, fiscalInfo } : null} />
             </div>
 
             {/* Top performers + Priority Coaching */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.25rem" }}>
               <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem" }}>
                 <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "#16a34a", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.35rem" }}>Top Performers</div>
-                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)`, marginBottom: "0.9rem" }}>Q1 & Q2 · 16+ hours only</div>
+                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)`, marginBottom: "0.9rem" }}>Q1 & Q2 {getMinHours()}+ hours only</div>
                 {(() => {
-                  const topList = [...q1Agents, ...q2Agents].filter(a => a.hours >= 16).sort((a, b) => b.hours - a.hours).slice(0, 5);
-                  if (topList.length === 0) return <div style={{ color: `var(--text-faint)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem" }}>No Q1/Q2 agents with 16+ hours yet</div>;
+                  const topList = [...q1Agents, ...q2Agents].filter(a => a.hours >= getMinHours()).sort((a, b) => b.hours - a.hours).slice(0, 5);
+                  if (topList.length === 0) return <div style={{ color: `var(--text-faint)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem" }}>No Q1/Q2 agents with {getMinHours()}+ hours yet</div>;
                   return topList.map((a, i) => {
                     const gph = a.hours > 0 ? (a.goals / a.hours).toFixed(3) : "0.000";
                     const pct = `${Math.round(a.pctToGoal)}%`;
@@ -7042,6 +7362,7 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
               goalLookup={goalLookup}
               fiscalInfo={fiscalInfo}
               newHireSet={newHireSet}
+              localAI={localAI}
             />
           );
         })()}
@@ -8694,8 +9015,31 @@ export default function App() {
   const [slideIndex, setSlideIndex] = useState(0);
   const [showToday,  setShowToday]  = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [localAI, setLocalAI]      = useState(false);
+  const [ollamaAvailable, setOllamaAvailable] = useState(null); // null=checking, true/false
+  const [hoursThreshold, _setHoursThreshold] = useState(_hoursThreshold);
+  const [hoursAutoScale, _setHoursAutoScale] = useState(_hoursAutoScale);
+  const setHoursThreshold = useCallback(v => {
+    const val = Math.max(0.5, Math.min(40, parseFloat(v) || 16));
+    _setHoursThreshold(val);
+    _hoursThreshold = val;
+    try { localStorage.setItem(HOURS_THRESHOLD_KEY, String(val)); } catch(e) {}
+  }, []);
+  const setHoursAutoScale = useCallback(v => {
+    _setHoursAutoScale(v);
+    _hoursAutoScale = v;
+    try { localStorage.setItem(HOURS_AUTO_KEY, String(v)); } catch(e) {}
+  }, []);
   const goalsInputRef               = useRef();
   const nhInputRef                  = useRef();
+
+  // Check Ollama availability on mount
+  useEffect(() => {
+    fetch("http://localhost:11434/api/tags", { signal: AbortSignal.timeout(2000) })
+      .then(r => r.json())
+      .then(d => setOllamaAvailable(d.models && d.models.length > 0))
+      .catch(() => setOllamaAvailable(false));
+  }, []);
 
   // Configurable sheet URLs (persisted to localStorage)
   const [sheetUrls, _setSheetUrls] = useState(() => {
@@ -8736,9 +9080,64 @@ export default function App() {
     } catch(e) {}
   }, []);
 
+  // Compute fiscal info early for threshold auto-scaling
+  const earlyFiscalInfo = useMemo(() => {
+    if (!rawData) return null;
+    const dates = rawData.map(r => (r.Date || r.date || "")).filter(Boolean);
+    return getFiscalMonthInfo(dates);
+  }, [rawData]);
+
+  // Update global threshold before engine runs
+  const effectiveThreshold = useMemo(() => {
+    const eff = computeEffectiveThreshold(hoursThreshold, earlyFiscalInfo, hoursAutoScale);
+    _hoursThreshold = eff;
+    return eff;
+  }, [hoursThreshold, hoursAutoScale, earlyFiscalInfo]);
+
   const perf = usePerformanceEngine({ rawData, goalsRaw, newHiresRaw });
   const { programs, jobTypes, newHireSet, newHires, allAgentNames } = perf;
   const totalSlides = 1 + programs.length + 1; // Overview + programs + Campaign Comparison
+
+  // AI prefetch counter — triggers re-renders as cache fills
+  const [aiPrefetchDone, setAiPrefetchDone] = useState(0);
+
+  // Prefetch all AI summaries when localAI is on and data is loaded
+  useEffect(() => {
+    if (!localAI || !rawData || programs.length === 0) return;
+    const fiscalInfo = perf.fiscalInfo;
+    const promptDataList = [];
+
+    // Business overview
+    const bizData = {
+      jobType: "Business Wide", uniqueAgentCount: perf.uniqueAgentCount,
+      totalHours: perf.totalHours, totalGoals: perf.globalGoals, gph: perf.totalHours > 0 ? perf.globalGoals / perf.totalHours : 0,
+      attainment: perf.planTotal ? (perf.globalGoals / perf.planTotal) * 100 : null,
+      planGoals: perf.planTotal, actGoals: perf.globalGoals,
+      distUnique: {}, q1Agents: [], q4Agents: [], q3Agents: [],
+      regions: perf.regions, healthScore: null,
+      totalNewXI: programs.reduce((s, p) => s + (p.totalNewXI || 0), 0),
+      totalXmLines: programs.reduce((s, p) => s + (p.totalXmLines || 0), 0),
+      totalRgu: programs.reduce((s, p) => s + (p.totalRgu || 0), 0),
+      newHiresInProgram: [], fiscalInfo,
+    };
+    promptDataList.push({ type: "narrative", data: bizData });
+    promptDataList.push({ type: "wins", data: bizData });
+    promptDataList.push({ type: "opps", data: bizData });
+
+    // Each program
+    for (const prog of programs) {
+      const pData = { ...prog, fiscalInfo };
+      promptDataList.push({ type: "narrative", data: pData });
+      promptDataList.push({ type: "wins", data: pData });
+      promptDataList.push({ type: "opps", data: pData });
+    }
+
+    const tasks = prefetchAI(promptDataList);
+    if (tasks.length > 0) {
+      let completed = 0;
+      tasks.forEach(t => t.then(() => { completed++; if (completed === tasks.length) setAiPrefetchDone(v => v + 1); }));
+    }
+  }, [localAI, rawData, programs.length]);
 
   // Auto-load agent data from published Google Sheet
   const [sheetLoading, setSheetLoading] = useState(false);
@@ -8886,6 +9285,36 @@ export default function App() {
                 )}
               </div>
             ))}
+            {/* Hours Threshold */}
+            <div style={{ marginTop: "0.5rem", marginBottom: "1rem", padding: "1rem", background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-md, 10px)" }}>
+              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: "#d97706", letterSpacing: "0.08em", marginBottom: "0.5rem" }}>Qualified Hours Threshold</div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.5rem" }}>
+                <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "var(--text-muted)" }}>Base:</span>
+                <input
+                  type="number" min="0.5" max="40" step="0.5"
+                  value={hoursThreshold}
+                  onChange={e => setHoursThreshold(e.target.value)}
+                  style={{ width: "70px", padding: "0.35rem 0.5rem", fontFamily: "var(--font-data, monospace)", fontSize: "0.95rem", background: "var(--bg-primary)", color: "var(--text-primary)", border: "1px solid var(--border)", borderRadius: "4px", textAlign: "center" }}
+                />
+                <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "var(--text-dim)" }}>hours</span>
+                <div style={{ flex: 1 }} />
+                <button onClick={() => setHoursAutoScale(v => !v)}
+                  style={{ padding: "0.3rem 0.7rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${hoursAutoScale ? "#16a34a50" : "var(--border-muted)"}`, background: hoursAutoScale ? "#16a34a12" : "transparent", color: hoursAutoScale ? "#16a34a" : "var(--text-muted)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", cursor: "pointer", fontWeight: 500 }}>
+                  {hoursAutoScale ? "\u25CF" : "\u25CB"} Auto-Scale
+                </button>
+              </div>
+              {hoursAutoScale && earlyFiscalInfo && (
+                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: "var(--text-dim)", lineHeight: 1.5 }}>
+                  Effective threshold: <strong style={{ color: "var(--text-warm)" }}>{effectiveThreshold} hrs</strong> (day {earlyFiscalInfo.elapsedBDays} of {earlyFiscalInfo.totalBDays} — scales {hoursThreshold} hrs proportionally through the month)
+                </div>
+              )}
+              {!hoursAutoScale && (
+                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: "var(--text-dim)" }}>
+                  Fixed at {hoursThreshold} hours. Enable Auto-Scale to adjust for early-month data.
+                </div>
+              )}
+            </div>
+
             <div style={{ display: "flex", gap: "0.5rem", justifyContent: "space-between", marginTop: "1rem" }}>
               <button onClick={() => { setSheetUrls({}); }}
                 style={{ padding: "0.4rem 1rem", borderRadius: "6px", border: "1px solid var(--border)", background: "transparent", color: `var(--text-muted)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", cursor: "pointer" }}>
@@ -8955,6 +9384,12 @@ export default function App() {
         </div>
         {/* File management row — appears below on hover */}
         <div data-toolbar="" style={{ display: "none", gap: "0.5rem", alignItems: "center", paddingTop: "0.4rem", paddingBottom: "0.15rem", flexWrap: "wrap" }}>
+          {ollamaAvailable && (
+            <button onClick={() => setLocalAI(v => !v)}
+              style={{ background: localAI ? `${AI_COLOR}12` : "transparent", border: `1px solid ${localAI ? `${AI_COLOR}50` : "var(--border-muted)"}`, borderRadius: "var(--radius-sm, 6px)", color: localAI ? AI_COLOR : `var(--text-muted)`, padding: "0.3rem 0.65rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", cursor: "pointer", fontWeight: 500 }}>
+              {localAI ? "\u25CF" : "\u25CB"} Local AI
+            </button>
+          )}
           <button onClick={() => goalsInputRef.current.click()}
             style={{ background: goalsRaw?"#16a34a10":"transparent", border: `1px solid ${goalsRaw?"#16a34a40":`var(--border-muted)`}`, borderRadius: "var(--radius-sm, 6px)", color: goalsRaw?"#16a34a":`var(--text-muted)`, padding: "0.3rem 0.65rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", cursor: "pointer", fontWeight: 500 }}>
             {goalsRaw ? "\u2713 Goals" : "+ Goals"}
@@ -9008,7 +9443,7 @@ export default function App() {
             onNewHiresLoad={setNHRaw}
           />
         ) : isOverview ? (
-          <BusinessOverview perf={perf} onNav={navTo} />
+          <BusinessOverview perf={perf} onNav={navTo} localAI={localAI} />
         ) : (slideIndex === 1 + programs.length) ? (
           <CampaignComparisonPanel
             currentAgents={perf.agents}
@@ -9054,6 +9489,7 @@ export default function App() {
             total={totalSlides}
             onNav={navTo}
             allAgents={perf.agents}
+            localAI={localAI}
           />
             </div>
           </div>
