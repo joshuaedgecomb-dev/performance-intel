@@ -5484,7 +5484,7 @@ function CampaignComparisonPanel({ currentAgents, onNav }) {
     const getVal = (a) => {
       const m = { name: a.name.toLowerCase(), prevPct: a.prev.pct, curPct: a.cur.pct, delta: a.delta,
         prevHours: a.prev.hours, curHours: a.cur.hours, curGoals: a.cur.goals, curGph: a.cur.gph, curHsd: a.cur.newXI, curXm: a.cur.xmLines,
-        curXh: a.cur.newXH, curXv: a.cur.newVideo, curPhone: a.cur.newVoice, prevGph: a.prev.gph, curGphCol: a.cur.gph };
+        curXh: a.cur.newXH, curXv: a.cur.newVideo, curPhone: a.cur.newVoice, prevGoals: a.prev.goals, prevGph: a.prev.gph, curGphCol: a.cur.gph };
       return m[sortCol] !== undefined ? m[sortCol] : a.delta;
     };
     arr.sort((a, b) => { const va = getVal(a), vb = getVal(b);
@@ -5622,10 +5622,10 @@ function CampaignComparisonPanel({ currentAgents, onNav }) {
                   {[{key:"name",label:"Agent",align:"left"},{key:"prevHours",label:"Prev Hrs",align:"right"},{key:"curHours",label:"Hours",align:"right"},{key:"curGoals",label:"Sales",align:"right"},{key:"curGph",label:"GPH",align:"right"},
                     {key:"curHsd",label:"New HSD",align:"right"},{key:"curXm",label:"New XM",align:"right"},{key:"curXh",label:"New XH",align:"right"},
                     {key:"curXv",label:"New XV",align:"right"},{key:"curPhone",label:"New Phone",align:"right"},
-                    {key:"prevGph",label:"Prev GPH",align:"right"},{key:"curGphCol",label:"Cur GPH",align:"right"},
+                    {key:"prevGoals",label:"Prev Sales",align:"right"},{key:"prevGph",label:"Prev GPH",align:"right"},{key:"curGphCol",label:"Cur GPH",align:"right"},
                     {key:"prevPct",label:"Prior %",align:"right"},{key:"curPct",label:"Current %",align:"right"},{key:"delta",label:"\u0394",align:"right"}
                   ].map(col => (<th key={col.key} onClick={() => handleSort(col.key)}
-                    style={{ padding:"0.5rem 0.6rem", textAlign:col.align, color:"var(--text-muted)", cursor:"pointer", userSelect:"none", whiteSpace:"nowrap", fontWeight:sortCol===col.key?700:400, letterSpacing:"0.04em", fontSize:"0.85rem", borderLeft:["prevGph","curHsd"].includes(col.key)?"2px solid var(--border)":"none" }}>{col.label}{sortArrow(col.key)}</th>))}
+                    style={{ padding:"0.5rem 0.6rem", textAlign:col.align, color:"var(--text-muted)", cursor:"pointer", userSelect:"none", whiteSpace:"nowrap", fontWeight:sortCol===col.key?700:400, letterSpacing:"0.04em", fontSize:"0.85rem", borderLeft:["prevGoals","curHsd"].includes(col.key)?"2px solid var(--border)":"none" }}>{col.label}{sortArrow(col.key)}</th>))}
                 </tr></thead>
                 <tbody>{sorted.filter(a => !hideLeft || a.inCurrent).flatMap((a, idx) => {
                   const dColor = a.delta > 0 ? "#16a34a" : a.delta < 0 ? "#dc2626" : "var(--text-dim)";
@@ -5646,7 +5646,8 @@ function CampaignComparisonPanel({ currentAgents, onNav }) {
                     <td style={{ padding:"0.5rem 0.6rem", textAlign:"right", color:"var(--text-secondary)" }}>{a.cur.newXH}</td>
                     <td style={{ padding:"0.5rem 0.6rem", textAlign:"right", color:"var(--text-secondary)" }}>{a.cur.newVideo}</td>
                     <td style={{ padding:"0.5rem 0.6rem", textAlign:"right", color:"var(--text-secondary)" }}>{a.cur.newVoice || 0}</td>
-                    <td style={{ padding:"0.5rem 0.6rem", textAlign:"right", color:"var(--text-dim)", borderLeft:"2px solid var(--border)" }}>{a.inPrior && a.prev.gph > 0 ? a.prev.gph.toFixed(3) : "\u2014"}</td>
+                    <td style={{ padding:"0.5rem 0.6rem", textAlign:"right", color:"var(--text-dim)", borderLeft:"2px solid var(--border)" }}>{a.inPrior ? a.prev.goals : "\u2014"}</td>
+                    <td style={{ padding:"0.5rem 0.6rem", textAlign:"right", color:"var(--text-dim)" }}>{a.inPrior && a.prev.gph > 0 ? a.prev.gph.toFixed(3) : "\u2014"}</td>
                     <td style={{ padding:"0.5rem 0.6rem", textAlign:"right", color:"var(--text-secondary)" }}>{a.inCurrent && a.cur.gph > 0 ? a.cur.gph.toFixed(3) : "\u2014"}</td>
                     <td style={{ padding:"0.5rem 0.6rem", textAlign:"right", color:"var(--text-dim)" }}>{a.inPrior ? fmtPct(a.prev.pct) : "\u2014"}</td>
                     <td style={{ padding:"0.5rem 0.6rem", textAlign:"right", color:attainColor(a.cur.pct), fontWeight:600 }}>{a.inCurrent ? fmtPct(a.cur.pct) : "\u2014"}</td>
