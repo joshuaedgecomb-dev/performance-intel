@@ -2182,7 +2182,7 @@ function GainsharePanel({
     const showProj = projPct !== null && projTierIdx !== currentIdx;
 
     return (
-      <div style={{ flex: 1 }}>
+      <div style={{ flex: "1 1 140px", minWidth: "140px" }}>
         <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)`, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.4rem", textAlign: "center" }}>{label}</div>
 
         {attain !== null && (
@@ -2225,24 +2225,24 @@ function GainsharePanel({
 
           return (
             <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center",
-              padding: "0.2rem 0.4rem", borderRadius: "var(--radius-sm, 6px)", marginBottom: "1px", background: bg, border, gap: "0.3rem", position: "relative" }}>
+              padding: "0.2rem 0.25rem", borderRadius: "var(--radius-sm, 6px)", marginBottom: "1px", background: bg, border, gap: "0.2rem", position: "relative" }}>
               {isProj && (
                 <span style={{ position: "absolute", left: "-0.1rem", top: "50%", transform: "translateY(-50%)", fontSize: "0.6rem", color: PACE_COLOR, fontWeight: 700, lineHeight: 1 }}>▸</span>
               )}
-              <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: isActive ? "1.05rem" : isProj ? "1rem" : "0.95rem",
-                color: isActive ? `var(--text-primary)` : isProj ? PACE_COLOR : `var(--text-faint)` }}>{t.label}</span>
+              <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: isActive ? "0.95rem" : isProj ? "0.9rem" : "0.85rem",
+                color: isActive ? `var(--text-primary)` : isProj ? PACE_COLOR : `var(--text-faint)`, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{t.label}</span>
 
-              <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", textAlign: "center", minWidth: "4.5rem",
+              <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", textAlign: "center", minWidth: "3rem",
                 color: isAbove ? "#16a34a" : i === currentIdx - 1 ? "#d97706" : isProj ? PACE_COLOR : `var(--text-faint)`,
                 fontWeight: isActive || i === currentIdx - 1 || isProj ? 700 : 400 }}>
                 {target === null ? "" : isAbove ? "\u2713" : target.toLocaleString()}
               </span>
 
-              <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: isActive ? "1.25rem" : isProj ? "1.1rem" : "1rem", textAlign: "right",
+              <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: isActive ? "1.05rem" : isProj ? "0.95rem" : "0.88rem", textAlign: "right",
                 color: isActive ? bonusColor(val) : isProj ? PACE_COLOR : `var(--text-faint)`,
-                fontWeight: isActive || isProj ? 700 : 400 }}>
+                fontWeight: isActive || isProj ? 700 : 400, whiteSpace: "nowrap" }}>
                 {sign}{val.toFixed(2)}%
-                {isProj && <span style={{ fontSize: "0.6rem", display: "block", color: PACE_COLOR, fontWeight: 500 }}>PROJ.</span>}
+                {isProj && <span style={{ fontSize: "0.55rem", display: "block", color: PACE_COLOR, fontWeight: 500 }}>PROJ.</span>}
               </span>
             </div>
           );
@@ -2252,7 +2252,7 @@ function GainsharePanel({
   };
 
   return (
-    <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.5rem" }}>
+    <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "clamp(0.75rem, 3vw, 1.5rem)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem", flexWrap: "wrap", gap: "0.5rem" }}>
         <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase" }}>
           Gainshare — Telesales
@@ -2260,17 +2260,17 @@ function GainsharePanel({
             {siteMode ? "Site Table" : "Overall Table"}
           </span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "1.25rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap", justifyContent: "flex-end" }}>
           <div style={{ textAlign: "right" }}>
             <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: `var(--text-dim)`, textTransform: "uppercase", letterSpacing: "0.05em" }}>Net Bonus</span>
-            <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "2.25rem", color: bonusColor(totalBonus), fontWeight: 700, lineHeight: 1 }}>
+            <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "clamp(1.5rem, 5vw, 2.25rem)", color: bonusColor(totalBonus), fontWeight: 700, lineHeight: 1 }}>
               {totalBonus > 0 ? "+" : ""}{totalBonus.toFixed(2)}%
             </div>
           </div>
           {hasProjBonus && projTotalBonus !== totalBonus && (
-            <div style={{ textAlign: "right", paddingLeft: "1rem", borderLeft: `2px solid ${PACE_COLOR}30` }}>
+            <div style={{ textAlign: "right", paddingLeft: "0.75rem", borderLeft: `2px solid ${PACE_COLOR}30` }}>
               <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: PACE_COLOR, textTransform: "uppercase", letterSpacing: "0.05em" }}>Proj. Bonus</span>
-              <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "2.25rem", color: PACE_COLOR, fontWeight: 700, lineHeight: 1 }}>
+              <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "clamp(1.5rem, 5vw, 2.25rem)", color: PACE_COLOR, fontWeight: 700, lineHeight: 1 }}>
                 {projTotalBonus > 0 ? "+" : ""}{projTotalBonus.toFixed(2)}%
               </div>
               {projTotalBonus !== totalBonus && (
@@ -2282,7 +2282,7 @@ function GainsharePanel({
           )}
         </div>
       </div>
-      <div style={{ display: "flex", gap: "1rem" }}>
+      <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
         {mobileAttain !== null  && <ColDef label="Mobile Attainment"   attain={mobileAttain}  tierKey="mobile"  tier={mobileTier}  actual={mobileActual}  plan={mobilePlan}  />}
         {hsdAttain !== null     && <ColDef label="HSD Attainment"      attain={hsdAttain}     tierKey="hsd"     tier={hsdTier}     actual={hsdActual}     plan={hsdPlan}     />}
         {costPerAttain !== null && <ColDef label="Cost Per Attainment" attain={costPerAttain} tierKey="costPer" tier={costPerTier} actual={costPerActual} plan={costPerPlan} />}
@@ -2295,7 +2295,7 @@ function GainsharePanel({
           // Site mode: show tiered display
           if (siteMode) {
             return (
-              <div style={{ flex: 1 }}>
+              <div style={{ flex: "1 1 140px", minWidth: "140px" }}>
                 <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)`, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.4rem", textAlign: "center" }}>Hour Gate</div>
                 <div style={{ textAlign: "center", marginBottom: "0.35rem" }}>
                   <span style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "2rem", color: hourAttain >= 100 ? "#16a34a" : "#dc2626", fontWeight: 700 }}>{Math.round(hourAttain)}%</span>
