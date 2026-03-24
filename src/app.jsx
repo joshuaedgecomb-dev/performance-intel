@@ -7,10 +7,10 @@ class ErrorBoundary extends Component {
   render() {
     if (this.state.error) {
       return (
-        <div style={{ padding: "2rem", fontFamily: "monospace", color: "#dc2626", background: "#fef2f2", border: "1px solid #dc2626", borderRadius: "8px", margin: "1rem" }}>
-          <div style={{ fontSize: "1.2rem", fontWeight: 700, marginBottom: "0.5rem" }}>Something went wrong</div>
+        <div style={{ padding: "2rem", fontFamily: "var(--font-ui, Inter, sans-serif)", color: "#dc2626", background: "#fef2f2", border: "1px solid #dc2626", borderRadius: "var(--radius-md, 10px)", margin: "1rem" }}>
+          <div style={{ fontSize: "0.88rem", fontWeight: 700, marginBottom: "0.5rem" }}>Something went wrong</div>
           <div style={{ fontSize: "0.9rem", color: "#991b1b", marginBottom: "1rem" }}>{String(this.state.error?.message || this.state.error)}</div>
-          <button onClick={() => this.setState({ error: null })} style={{ padding: "0.3rem 0.8rem", border: "1px solid #dc2626", borderRadius: "5px", background: "transparent", color: "#dc2626", cursor: "pointer", fontFamily: "monospace" }}>Try Again</button>
+          <button onClick={() => this.setState({ error: null })} style={{ padding: "0.3rem 0.8rem", border: "1px solid #dc2626", borderRadius: "var(--radius-sm, 6px)", background: "transparent", color: "#dc2626", cursor: "pointer", fontFamily: "var(--font-ui, Inter, sans-serif)" }}>Try Again</button>
         </div>
       );
     }
@@ -1754,22 +1754,22 @@ function CollapsibleNarrative({ title = "Executive Summary", lines = [], default
   const [open, setOpen] = useState(defaultOpen);
   if (!lines || lines.length === 0) return null;
   return (
-    <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", overflow: "hidden" }}>
+    <div style={{ background: `var(--glass-bg)`, backdropFilter: "blur(12px) saturate(150%)", WebkitBackdropFilter: "blur(12px) saturate(150%)", border: "1px solid var(--glass-border)", borderRadius: "var(--radius-lg, 16px)", overflow: "hidden", boxShadow: `var(--card-glow)` }}>
       <div onClick={() => setOpen(v => !v)}
-        style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.85rem 1.5rem", cursor: "pointer", userSelect: "none" }}>
-        <div style={{ fontFamily: "monospace", fontSize: "0.9rem", color: `var(--text-faint)`, letterSpacing: "0.12em", textTransform: "uppercase" }}>{title}</div>
+        style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "1rem 1.5rem", cursor: "pointer", userSelect: "none" }}>
+        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: `var(--text-muted)`, letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 600 }}>{title}</div>
         <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
           <button onClick={e => { e.stopPropagation(); navigator.clipboard?.writeText(lines.join("\n\n")); }}
-            style={{ background: "transparent", border: "1px solid var(--border-muted)", borderRadius: "4px", color: `var(--text-faint)`, padding: "0.1rem 0.4rem", fontFamily: "monospace", fontSize: "0.8rem", cursor: "pointer" }}>
+            style={{ background: "transparent", border: "1px solid var(--border-muted)", borderRadius: "var(--radius-sm, 6px)", color: `var(--text-faint)`, padding: "0.2rem 0.55rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.68rem", cursor: "pointer", fontWeight: 500 }}>
             Copy
           </button>
-          <span style={{ fontFamily: "monospace", fontSize: "1.1rem", color: `var(--text-faint)`, transition: "transform 0.2s", transform: open ? "rotate(180deg)" : "rotate(0deg)" }}>{"\u25BC"}</span>
+          <span style={{ fontSize: "0.75rem", color: `var(--text-faint)`, transition: "transform 0.25s cubic-bezier(0.4,0,0.2,1)", transform: open ? "rotate(180deg)" : "rotate(0deg)", display: "inline-block" }}>{"\u25BC"}</span>
         </div>
       </div>
       {open && (
-        <div style={{ padding: "0 1.5rem 1.25rem" }}>
+        <div style={{ padding: "0 1.5rem 1.25rem", animation: "fadeIn 0.25s ease" }}>
           {lines.map((para, i) => (
-            <p key={i} style={{ fontFamily: "Georgia, serif", fontSize: "1.05rem", color: i === 0 ? `var(--text-warm)` : `var(--text-secondary)`, lineHeight: 1.55, margin: i < lines.length - 1 ? "0 0 0.65rem 0" : 0, fontWeight: i === 0 ? 600 : 400 }}>
+            <p key={i} style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.92rem", color: i === 0 ? `var(--text-warm)` : `var(--text-secondary)`, lineHeight: 1.65, margin: i < lines.length - 1 ? "0 0 0.6rem 0" : 0, fontWeight: i === 0 ? 600 : 400 }}>
               {para}
             </p>
           ))}
@@ -1781,21 +1781,22 @@ function CollapsibleNarrative({ title = "Executive Summary", lines = [], default
 
 function StatCard({ label, value, sub, accent }) {
   return (
-    <div style={{ background: `var(--bg-secondary)`, border: `1px solid ${accent}22`, borderRadius: "10px", padding: "1.25rem", borderTop: `3px solid ${accent}` }}>
-      <div style={{ fontFamily: "monospace", fontSize: "1.08rem", color: `var(--text-muted)`, textTransform: "uppercase", letterSpacing: "0.12em" }}>{label}</div>
-      <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "3.15rem", color: `var(--text-warm)`, fontWeight: 700, marginTop: "0.1rem", lineHeight: 1 }}>{value}</div>
-      {sub && <div style={{ fontFamily: "monospace", fontSize: "1.08rem", color: `var(--text-dim)`, marginTop: "0.3rem" }}>{sub}</div>}
+    <div style={{ background: `var(--glass-bg)`, backdropFilter: "blur(12px) saturate(150%)", WebkitBackdropFilter: "blur(12px) saturate(150%)", border: `1px solid ${accent}18`, borderRadius: "var(--radius-lg, 16px)", padding: "1.35rem 1.5rem", borderTop: `3px solid ${accent}`, boxShadow: `var(--card-glow)`, transition: "all 250ms cubic-bezier(0.4,0,0.2,1)" }}>
+      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", color: `var(--text-muted)`, textTransform: "uppercase", letterSpacing: "0.1em", fontWeight: 600 }}>{label}</div>
+      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "2.5rem", color: `var(--text-warm)`, fontWeight: 800, marginTop: "0.25rem", lineHeight: 1, letterSpacing: "-0.02em" }}>{value}</div>
+      {sub && <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "0.8rem", color: `var(--text-dim)`, marginTop: "0.4rem", letterSpacing: "0.02em" }}>{sub}</div>}
     </div>
   );
 }
 
 function QBadge({ q, size = "sm" }) {
   const cfg = Q[q] || Q.Q4;
-  const pad = size === "sm" ? "0.15rem 0.5rem" : "0.3rem 0.75rem";
-  const fs  = size === "sm" ? "0.6rem" : "0.75rem";
+  const pad = size === "sm" ? "0.2rem 0.6rem" : "0.35rem 0.85rem";
+  const fs  = size === "sm" ? "0.65rem" : "0.78rem";
   return (
-    <span style={{ background: cfg.color + "22", color: cfg.color, border: `1px solid ${cfg.color}44`, borderRadius: "4px", padding: pad, fontFamily: "monospace", fontSize: fs, fontWeight: 700, letterSpacing: "0.05em", whiteSpace: "nowrap" }}>
-      {q} · {cfg.badge}
+    <span style={{ background: cfg.color + "15", color: cfg.color, border: `1px solid ${cfg.color}30`, borderRadius: "6px", padding: pad, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: fs, fontWeight: 600, letterSpacing: "0.04em", whiteSpace: "nowrap", display: "inline-flex", alignItems: "center", gap: "0.3rem" }}>
+      <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: cfg.color, display: "inline-block", flexShrink: 0 }} />
+      {q} {cfg.badge}
     </span>
   );
 }
@@ -1813,14 +1814,14 @@ function InsightCard({ type, insights }) {
     (priorityRank[a.priority] ?? 1) - (priorityRank[b.priority] ?? 1));
 
   return (
-    <div style={{ background: `var(--bg-secondary)`, border: `1px solid ${color}33`, borderRadius: "12px", padding: "1.5rem", borderLeft: `4px solid ${color}` }}>
-      <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color, letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: "1.25rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-        <span>{icon}</span> {title}
+    <div style={{ background: `var(--glass-bg)`, backdropFilter: "blur(12px) saturate(150%)", WebkitBackdropFilter: "blur(12px) saturate(150%)", border: `1px solid ${color}20`, borderRadius: "var(--radius-lg, 16px)", padding: "1.5rem 1.75rem", borderLeft: `4px solid ${color}`, boxShadow: `var(--card-glow)` }}>
+      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "1.25rem", display: "flex", alignItems: "center", gap: "0.5rem", fontWeight: 600 }}>
+        <span style={{ fontSize: "1.1rem" }}>{icon}</span> {title}
       </div>
       {sorted.map((ins, i) => (
-        <div key={i} style={{ display: "flex", gap: "0.75rem", marginBottom: i < sorted.length - 1 ? "1rem" : 0, paddingBottom: i < sorted.length - 1 ? "1rem" : 0, borderBottom: i < sorted.length - 1 ? `1px solid ${color}18` : "none" }}>
-          <div style={{ color, marginTop: "0.15rem", flexShrink: 0, fontSize: "1.05rem" }}>▸</div>
-          <div style={{ fontFamily: "Georgia, serif", fontSize: "1.23rem", color: `var(--text-secondary)`, lineHeight: 1.65 }}>{ins.text}</div>
+        <div key={i} style={{ display: "flex", gap: "0.75rem", marginBottom: i < sorted.length - 1 ? "0.85rem" : 0, paddingBottom: i < sorted.length - 1 ? "0.85rem" : 0, borderBottom: i < sorted.length - 1 ? `1px solid ${color}10` : "none" }}>
+          <div style={{ color, marginTop: "0.1rem", flexShrink: 0, fontSize: "0.7rem", opacity: 0.8 }}>&#9654;</div>
+          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.92rem", color: `var(--text-secondary)`, lineHeight: 1.65, fontWeight: 400 }}>{ins.text}</div>
         </div>
       ))}
     </div>
@@ -1899,10 +1900,10 @@ function AgentTable({ agents, newHireSet }) {
   const toggle = key => setSort(s => ({ key, dir: s.key === key ? -s.dir : -1 }));
   const Th = ({ k, label, right }) => (
     <th onClick={() => toggle(k)}
-      style={{ padding: "0.5rem 0.75rem", textAlign: right ? "right" : "left",
-        color: sort.key === k ? "#d97706" : `var(--text-dim)`, fontWeight: 400, cursor: "pointer",
-        whiteSpace: "nowrap", userSelect: "none" }}>
-      {label} {sort.key === k ? (sort.dir === -1 ? "↓" : "↑") : ""}
+      style={{ padding: "0.55rem 0.75rem", textAlign: right ? "right" : "left",
+        color: sort.key === k ? "#d97706" : `var(--text-dim)`, fontWeight: sort.key === k ? 600 : 500, cursor: "pointer",
+        whiteSpace: "nowrap", userSelect: "none", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", letterSpacing: "0.04em", textTransform: "uppercase", transition: "color 150ms" }}>
+      {label} {sort.key === k ? (sort.dir === -1 ? "\u2193" : "\u2191") : ""}
     </th>
   );
 
@@ -1910,27 +1911,27 @@ function AgentTable({ agents, newHireSet }) {
     <div style={{ overflowX: "auto" }}>
       {/* Region filter */}
       {regionList.length > 1 && (
-        <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
+        <div style={{ display: "flex", gap: "0.3rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
           <button onClick={() => setRegionFilter(null)}
-            style={{ padding: "0.25rem 0.7rem", borderRadius: "5px", border: `1px solid ${!regionFilter ? "#d97706" : "var(--border)"}`, background: !regionFilter ? "#d9770618" : "transparent", color: !regionFilter ? "#d97706" : `var(--text-dim)`, fontFamily: "monospace", fontSize: "1rem", cursor: "pointer", fontWeight: !regionFilter ? 700 : 400 }}>
-            All Regions ({agentRollups.length})
+            style={{ padding: "0.3rem 0.7rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${!regionFilter ? "#d9770650" : "transparent"}`, background: !regionFilter ? "#d9770612" : "transparent", color: !regionFilter ? "#d97706" : `var(--text-dim)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", cursor: "pointer", fontWeight: !regionFilter ? 600 : 400 }}>
+            All ({agentRollups.length})
           </button>
           {regionList.map(r => {
             const active = regionFilter === r.name;
             const regGph = r.hours > 0 ? r.goals / r.hours : 0;
             return (
               <button key={r.name} onClick={() => setRegionFilter(active ? null : r.name)}
-                style={{ padding: "0.25rem 0.7rem", borderRadius: "5px", border: `1px solid ${active ? "#6366f1" : "var(--border)"}`, background: active ? "#6366f118" : "transparent", color: active ? "#6366f1" : `var(--text-dim)`, fontFamily: "monospace", fontSize: "1rem", cursor: "pointer", fontWeight: active ? 700 : 400 }}>
-                {r.name} <span style={{ opacity: 0.5, fontSize: "0.9rem" }}>{r.count} · {regGph.toFixed(3)}</span>
+                style={{ padding: "0.3rem 0.7rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${active ? "#6366f150" : "transparent"}`, background: active ? "#6366f112" : "transparent", color: active ? "#6366f1" : `var(--text-dim)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", cursor: "pointer", fontWeight: active ? 600 : 400 }}>
+                {r.name} <span style={{ opacity: 0.5, fontSize: "0.7rem", fontFamily: "var(--font-data, monospace)" }}>{r.count} <span style={{ display: "inline-block", width: "0.5em" }} /> {regGph.toFixed(3)}</span>
               </button>
             );
           })}
         </div>
       )}
-      <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "monospace", fontSize: "1.08rem" }}>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "var(--font-data, monospace)", fontSize: "0.82rem" }}>
         <thead>
           <tr style={{ borderBottom: "2px solid var(--border)" }}>
-            <th style={{ padding: "0.5rem 0.75rem", color: `var(--text-dim)`, fontWeight: 400 }}>Q</th>
+            <th style={{ padding: "0.55rem 0.75rem", color: `var(--text-dim)`, fontWeight: 500, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.04em" }}>Q</th>
             <Th k="agentName"  label="Agent"      />
             <Th k="region"     label="Region"     />
             <Th k="supervisor" label="Supervisor" />
@@ -1951,9 +1952,9 @@ function AgentTable({ agents, newHireSet }) {
             return (
               <tr key={a.agentName} style={{ borderBottom: "1px solid var(--bg-tertiary)", background: i % 2 === 0 ? "transparent" : `var(--bg-row-alt)` }}>
                 <td style={{ padding: "0.5rem 0.75rem" }}><QBadge q={a.quartile} /></td>
-                <td style={{ padding: "0.5rem 0.75rem", color: `var(--text-warm)`, fontFamily: "Georgia, serif", fontSize: "1.2rem" }}>{a.agentName}</td>
+                <td style={{ padding: "0.5rem 0.75rem", color: `var(--text-warm)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem" }}>{a.agentName}</td>
                 <td style={{ padding: "0.5rem 0.75rem", color: `var(--text-secondary)` }}>{a.region}</td>
-                <td style={{ padding: "0.5rem 0.75rem", color: `var(--text-muted)`, fontSize: "1.14rem" }}>{a.supervisor || "—"}</td>
+                <td style={{ padding: "0.5rem 0.75rem", color: `var(--text-muted)`, fontSize: "0.82rem" }}>{a.supervisor || "—"}</td>
                 <td style={{ padding: "0.5rem 0.75rem", color: a.hours >= 16 ? "#6366f1" : `var(--text-secondary)`, textAlign: "right" }}>{fmt(a.hours, 1)}</td>
                 <td style={{ padding: "0.5rem 0.75rem", color: `var(--text-secondary)`, textAlign: "right" }}>{a.goals}</td>
                 <td style={{ padding: "0.5rem 0.75rem", color, fontWeight: 600, textAlign: "right" }}>{a.gph.toFixed(3)}</td>
@@ -1962,14 +1963,14 @@ function AgentTable({ agents, newHireSet }) {
                 <td style={{ padding: "0.5rem 0.75rem", color: a.xmLines > 0 ? `var(--text-secondary)` : `var(--text-faint)`, textAlign: "right" }}>{a.xmLines || "—"}</td>
                 <td style={{ padding: "0.5rem 0.75rem", color: a.rgu > 0 ? `var(--text-secondary)` : `var(--text-faint)`, textAlign: "right" }}>{a.rgu || "—"}</td>
                 <td style={{ padding: "0.5rem 0.75rem", whiteSpace: "nowrap" }}>
-                  {isNew && <span style={{ background: "#d9770620", color: "#d97706", border: "1px solid #d9770640", borderRadius: "3px", padding: "0.1rem 0.4rem", fontSize: "1.14rem" }}>NEW HIRE</span>}
+                  {isNew && <span style={{ background: "var(--nh-bg, #92400e18)", color: "var(--nh-color, #92400e)", border: "1px solid var(--nh-border, #92400e40)", borderRadius: "3px", padding: "0.1rem 0.4rem", fontSize: "0.82rem" }}>NEW HIRE</span>}
                 </td>
               </tr>
             );
           })}
         </tbody>
       </table>
-      <div style={{ fontFamily: "monospace", fontSize: "1.11rem", color: `var(--text-faint)`, padding: "0.5rem 0.75rem" }}>
+      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-faint)`, padding: "0.5rem 0.75rem" }}>
         {sorted.length} agents{regionFilter ? ` · ${regionFilter}` : ""} · hours and goals summed across all working days
       </div>
     </div>
@@ -1980,17 +1981,17 @@ function AgentTable({ agents, newHireSet }) {
 function RegionComparePanel({ regionStats, agents = [] }) {
   if (regionStats.length < 2) {
     return (
-      <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1.5rem" }}>
-        <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.75rem" }}>Region Breakdown</div>
+      <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.5rem" }}>
+        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.75rem" }}>Region Breakdown</div>
         {regionStats.length === 1 && (
-          <div style={{ display: "flex", gap: "1.5rem", fontFamily: "monospace", fontSize: "1.05rem", color: `var(--text-muted)` }}>
+          <div style={{ display: "flex", gap: "1.5rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: `var(--text-muted)` }}>
             <span>{regionStats[0].name}</span>
             <span>{regionStats[0].count} agents</span>
             <span>{fmt(regionStats[0].totalHours, 0)} hrs total</span>
             <span>{fmtPct(regionStats[0].avgPct)} avg to goal</span>
           </div>
         )}
-        {regionStats.length === 0 && <div style={{ color: `var(--text-dim)`, fontFamily: "Georgia, serif", fontSize: "1.27rem" }}>No region data found.</div>}
+        {regionStats.length === 0 && <div style={{ color: `var(--text-dim)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "1.27rem" }}>No region data found.</div>}
       </div>
     );
   }
@@ -2002,19 +2003,19 @@ function RegionComparePanel({ regionStats, agents = [] }) {
   const maxHours = Math.max(...regionStats.map(r => r.totalHours));
 
   return (
-    <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1.5rem" }}>
+    <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.5rem" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.25rem" }}>
-        <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: "#d97706", letterSpacing: "0.12em", textTransform: "uppercase" }}>Regional Variance Analysis</div>
+        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "#d97706", letterSpacing: "0.12em", textTransform: "uppercase" }}>Regional Variance Analysis</div>
         <div style={{ textAlign: "right" }}>
-          <div style={{ fontFamily: "monospace", fontSize: "1.08rem", color: parseFloat(variance) > 20 ? "#dc2626" : parseFloat(variance) > 10 ? "#d97706" : "#16a34a" }}>
+          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: parseFloat(variance) > 20 ? "#dc2626" : parseFloat(variance) > 10 ? "#d97706" : "#16a34a" }}>
             {variance}% spread
           </div>
-          <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-dim)` }}>{regionStats.length} regions</div>
+          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)` }}>{regionStats.length} regions</div>
         </div>
       </div>
 
       {parseFloat(variance) > 15 && (
-        <div style={{ background: "#d9770610", border: "1px solid #d9770630", borderRadius: "8px", padding: "0.75rem 1rem", marginBottom: "1.25rem", fontFamily: "Georgia, serif", fontSize: "1.17rem", color: "#fde68a", lineHeight: 1.5 }}>
+        <div style={{ background: "#d9770610", border: "1px solid #d9770630", borderRadius: "var(--radius-md, 10px)", padding: "0.75rem 1rem", marginBottom: "1.25rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "#fde68a", lineHeight: 1.5 }}>
           {variance}% variance between {best.name} ({fmtPct(best.avgPct)}) and {worst.name} ({fmtPct(worst.avgPct)}). Regional coaching alignment is recommended.
         </div>
       )}
@@ -2027,38 +2028,38 @@ function RegionComparePanel({ regionStats, agents = [] }) {
         const delta     = (r.avgPct - best.avgPct).toFixed(1);
         const over16    = agents.filter(a => a.region === r.name && a.hours > 16).length;
         return (
-          <div key={r.name} style={{ marginBottom: "1rem", padding: "0.9rem 1rem", background: isTop ? "#ffffff05" : "transparent", border: isTop ? "1px solid #ffffff0a" : "1px solid transparent", borderRadius: "8px" }}>
+          <div key={r.name} style={{ marginBottom: "1rem", padding: "0.9rem 1rem", background: isTop ? "#ffffff05" : "transparent", border: isTop ? "1px solid #ffffff0a" : "1px solid transparent", borderRadius: "var(--radius-md, 10px)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-                {isTop && <span style={{ fontFamily: "monospace", fontSize: "1.08rem", color: "#d97706", background: "#d9770620", padding: "0.1rem 0.4rem", borderRadius: "3px" }}>BEST</span>}
-                <span style={{ color: `var(--text-primary)`, fontFamily: "Georgia, serif", fontSize: "1.32rem" }}>{r.name}</span>
-                <span style={{ fontFamily: "monospace", fontSize: "1.08rem", color: `var(--text-muted)` }}>{r.count} agents</span>
+                {isTop && <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "#d97706", background: "#d9770620", padding: "0.1rem 0.4rem", borderRadius: "3px" }}>BEST</span>}
+                <span style={{ color: `var(--text-primary)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "1.32rem" }}>{r.name}</span>
+                <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-muted)` }}>{r.count} agents</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                {i > 0 && <span style={{ fontFamily: "monospace", fontSize: "1.08rem", color: "#dc2626" }}>{delta}%</span>}
-                <span style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "1.95rem", color: qColor, fontWeight: 700 }}>{fmtPct(r.avgPct)}</span>
+                {i > 0 && <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "#dc2626" }}>{delta}%</span>}
+                <span style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.95rem", color: qColor, fontWeight: 700 }}>{fmtPct(r.avgPct)}</span>
               </div>
             </div>
             <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", marginBottom: "0.4rem" }}>
-              <div style={{ width: "5rem", fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-dim)`, textAlign: "right", flexShrink: 0 }}>% to goal</div>
-              <div style={{ flex: 1, background: `var(--bg-tertiary)`, borderRadius: "4px", height: "5px", overflow: "hidden" }}>
-                <div style={{ width: `${barW}%`, height: "100%", background: qColor, borderRadius: "4px", transition: "width 0.7s ease" }} />
+              <div style={{ width: "5rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)`, textAlign: "right", flexShrink: 0 }}>% to goal</div>
+              <div style={{ flex: 1, background: `var(--bg-tertiary)`, borderRadius: "var(--radius-sm, 6px)", height: "5px", overflow: "hidden" }}>
+                <div style={{ width: `${barW}%`, height: "100%", background: qColor, borderRadius: "var(--radius-sm, 6px)", transition: "width 0.7s ease" }} />
               </div>
             </div>
             <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", marginBottom: "0.5rem" }}>
-              <div style={{ width: "5rem", fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-dim)`, textAlign: "right", flexShrink: 0 }}>hours</div>
-              <div style={{ flex: 1, background: `var(--bg-tertiary)`, borderRadius: "4px", height: "5px", overflow: "hidden" }}>
-                <div style={{ width: `${hoursBarW}%`, height: "100%", background: "#6366f1", borderRadius: "4px", transition: "width 0.7s ease" }} />
+              <div style={{ width: "5rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)`, textAlign: "right", flexShrink: 0 }}>hours</div>
+              <div style={{ flex: 1, background: `var(--bg-tertiary)`, borderRadius: "var(--radius-sm, 6px)", height: "5px", overflow: "hidden" }}>
+                <div style={{ width: `${hoursBarW}%`, height: "100%", background: "#6366f1", borderRadius: "var(--radius-sm, 6px)", transition: "width 0.7s ease" }} />
               </div>
             </div>
             <div style={{ display: "flex", gap: "1.25rem", paddingLeft: "5.5rem" }}>
-              <span style={{ fontFamily: "monospace", fontSize: "1.17rem", color: `var(--text-muted)` }}>GPH {fmt(r.avgGPH, 2)}</span>
-              <span style={{ fontFamily: "monospace", fontSize: "1.17rem", color: `var(--text-muted)` }}>{fmt(r.totalHours, 0)} hrs</span>
-              <span style={{ fontFamily: "monospace", fontSize: "1.17rem", color: Q.Q1.color }}>Q1: {r.q1Count}</span>
-              <span style={{ fontFamily: "monospace", fontSize: "1.17rem", color: Q.Q2.color }}>Q2: {r.q2Count}</span>
-              <span style={{ fontFamily: "monospace", fontSize: "1.17rem", color: Q.Q3.color }}>Q3: {r.q3Count}</span>
-              <span style={{ fontFamily: "monospace", fontSize: "1.17rem", color: Q.Q4.color }}>Q4: {r.q4Count}</span>
-              {over16 > 0 && <span style={{ fontFamily: "monospace", fontSize: "1.17rem", color: "#6366f1" }}>{over16} over 16hr</span>}
+              <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)` }}>GPH {fmt(r.avgGPH, 2)}</span>
+              <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)` }}>{fmt(r.totalHours, 0)} hrs</span>
+              <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: Q.Q1.color }}>Q1: {r.q1Count}</span>
+              <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: Q.Q2.color }}>Q2: {r.q2Count}</span>
+              <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: Q.Q3.color }}>Q3: {r.q3Count}</span>
+              <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: Q.Q4.color }}>Q4: {r.q4Count}</span>
+              {over16 > 0 && <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "#6366f1" }}>{over16} over 16hr</span>}
             </div>
           </div>
         );
@@ -2080,6 +2081,7 @@ function GainsharePanel({
   costPerActual, costPerPlan,
   sphAttain, sphActual, sphPlan,
   hourAttain, hourActual, hourPlan,
+  homesActual, homesPlan,
 }) {
 
   const mobileTier    = getGainshareTier(mobileAttain, siteMode);
@@ -2100,6 +2102,61 @@ function GainsharePanel({
 
   // Compute pacing projections when fiscalInfo + raw numbers are available
 
+  // Projected attainment via pacing (used for persistent pacing indicator on tiers)
+  const projAttainFn = (actual, plan, isSph, actualHours) => {
+    if (!fiscalInfo || !fiscalInfo.elapsedBDays || !fiscalInfo.totalBDays || !plan) return null;
+    if (isSph) {
+      // SPH is a ratio: Actual Homes / Actual Hours vs Planned Homes / Planned Hours
+      // Project homes and hours independently, then compute projected SPH attainment
+      const hAct = homesActual || (mobileActual ?? 0);
+      const hPlan = homesPlan || (mobilePlan ?? 0);
+      const hrAct = actualHours || 0;
+      const hrPlan = hourPlan || 0;
+      if (!hPlan || !hrPlan || !hrAct) return null;
+      const homesPace = calcPacing(hAct, hPlan, fiscalInfo.elapsedBDays, fiscalInfo.totalBDays);
+      const hoursPace = calcPacing(hrAct, hrPlan, fiscalInfo.elapsedBDays, fiscalInfo.totalBDays);
+      if (!homesPace || !hoursPace || hoursPace.projected <= 0) return null;
+      const projSph = homesPace.projected / hoursPace.projected;
+      const goalSph = plan; // plan = SPH goal
+      return goalSph > 0 ? (projSph / goalSph) * 100 : null;
+    }
+    const pace = calcPacing(actual, plan, fiscalInfo.elapsedBDays, fiscalInfo.totalBDays);
+    return pace ? pace.projectedPct : null;
+  };
+
+  // Find which tier a projected attainment would land in
+  const getProjTierIdx = (projPct) => {
+    if (projPct === null) return -1;
+    for (let i = 0; i < TIERS.length; i++) {
+      if (projPct >= TIERS[i].min) return i;
+    }
+    return TIERS.length - 1;
+  };
+
+  const PACE_COLOR = "#8b5cf6"; // purple — distinct from current tier colors
+
+  // Compute projected net bonus from projected tier landings
+  const projMobilePct  = mobileAttain !== null  ? projAttainFn(mobileActual, mobilePlan, false, null) : null;
+  const projHsdPct     = hsdAttain !== null      ? projAttainFn(hsdActual, hsdPlan, false, null) : null;
+  const projCostPerPct = costPerAttain !== null  ? projAttainFn(costPerActual, costPerPlan, false, null) : null;
+  const projSphPct     = sphAttain !== null      ? projAttainFn(sphActual, sphPlan, true, hourActual) : null;
+  const projHourPct    = hourAttain !== null      ? projAttainFn(hourActual, hourPlan, false, null) : null;
+
+  const projMobileTier  = projMobilePct !== null  ? getGainshareTier(projMobilePct, siteMode) : null;
+  const projHsdTier     = projHsdPct !== null      ? getGainshareTier(projHsdPct, siteMode) : null;
+  const projCostPerTier = projCostPerPct !== null  ? getGainshareTier(projCostPerPct, siteMode) : null;
+  const projSphTier     = projSphPct !== null      ? getGainshareTier(projSphPct, siteMode) : null;
+  const projHourGatePenalty = siteMode
+    ? (projHourPct !== null ? (getHourGateTier(projHourPct)?.penalty ?? 0) : 0)
+    : (projHourPct !== null && projHourPct < 100 ? -2.00 : 0);
+
+  const projTotalBonus = (projMobileTier?.mobile ?? mobileTier?.mobile ?? 0)
+    + (projHsdTier?.hsd ?? hsdTier?.hsd ?? 0)
+    + (projCostPerTier?.costPer ?? costPerTier?.costPer ?? 0)
+    + (projSphTier?.sph ?? sphTier?.sph ?? 0)
+    + projHourGatePenalty;
+  const hasProjBonus = fiscalInfo && fiscalInfo.elapsedBDays > 0;
+
   const ColDef = ({ label, attain, tierKey, tier, actual, plan, isSph, actualHours }) => {
     // For each tier, compute the target number needed
     // Cumulative metrics: target = (threshold% / 100) * plan
@@ -2119,19 +2176,29 @@ function GainsharePanel({
     const nextTarget = nextTierUp ? computeTarget(nextTierUp.min) : null;
     const nextDelta = nextTarget !== null && actual !== null ? Math.max(Math.ceil(nextTarget - (isSph && actualHours > 0 ? actual * actualHours : actual)), 0) : null;
 
+    // Projected EOM tier
+    const projPct = projAttainFn(actual, plan, isSph, actualHours);
+    const projTierIdx = getProjTierIdx(projPct);
+    const showProj = projPct !== null && projTierIdx !== currentIdx;
+
     return (
       <div style={{ flex: 1 }}>
-        <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-muted)`, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.4rem", textAlign: "center" }}>{label}</div>
+        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)`, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.4rem", textAlign: "center" }}>{label}</div>
 
         {attain !== null && (
           <div style={{ textAlign: "center", marginBottom: "0.35rem" }}>
-            <span style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "2rem", color: attainColor(attain), fontWeight: 700 }}>{Math.round(attain)}%</span>
+            <span style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "2rem", color: attainColor(attain), fontWeight: 700 }}>{Math.round(attain)}%</span>
+            {projPct !== null && (
+              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: PACE_COLOR, marginTop: "0.1rem" }}>
+                proj. {Math.round(projPct)}%
+              </div>
+            )}
           </div>
         )}
 
         {nextDelta !== null && nextDelta > 0 && (
-          <div style={{ textAlign: "center", marginBottom: "0.5rem", padding: "0.25rem 0.4rem", background: "#d9770612", borderRadius: "5px", border: "1px solid #d9770630" }}>
-            <span style={{ fontFamily: "monospace", fontSize: "0.82rem", color: "#d97706" }}>
+          <div style={{ textAlign: "center", marginBottom: "0.5rem", padding: "0.25rem 0.4rem", background: "#d9770612", borderRadius: "var(--radius-sm, 6px)", border: "1px solid #d9770630" }}>
+            <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "#d97706" }}>
               {nextDelta} {isSph ? "sales" : label.includes("Hour") ? "hrs" : label.includes("HSD") ? "HSD" : label.includes("Cost") ? "RGU" : "homes"} to next tier ({nextTierUp[tierKey] > 0 ? "+" : ""}{nextTierUp[tierKey].toFixed(2)}%)
             </span>
           </div>
@@ -2139,6 +2206,7 @@ function GainsharePanel({
 
         {TIERS.map((t, i) => {
           const isActive = tier === t;
+          const isProj = showProj && i === projTierIdx;
           const val = t[tierKey];
           const sign = val > 0 ? "+" : "";
           const target = computeTarget(t.min);
@@ -2148,26 +2216,33 @@ function GainsharePanel({
           if (isActive) {
             bg = val > 0 ? "#16a34a22" : val < 0 ? "#dc262622" : "var(--text-faint)22";
             border = `2px solid ${val > 0 ? "#16a34a70" : val < 0 ? "#dc262670" : "var(--text-faint)70"}`;
+          } else if (isProj) {
+            bg = PACE_COLOR + "14";
+            border = `2px dashed ${PACE_COLOR}60`;
           } else {
             bg = "transparent"; border = "1px solid transparent";
           }
 
           return (
             <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center",
-              padding: "0.2rem 0.4rem", borderRadius: "4px", marginBottom: "1px", background: bg, border, gap: "0.3rem" }}>
-              <span style={{ fontFamily: "monospace", fontSize: isActive ? "1.05rem" : "0.95rem",
-                color: isActive ? `var(--text-primary)` : `var(--text-faint)` }}>{t.label}</span>
+              padding: "0.2rem 0.4rem", borderRadius: "var(--radius-sm, 6px)", marginBottom: "1px", background: bg, border, gap: "0.3rem", position: "relative" }}>
+              {isProj && (
+                <span style={{ position: "absolute", left: "-0.1rem", top: "50%", transform: "translateY(-50%)", fontSize: "0.6rem", color: PACE_COLOR, fontWeight: 700, lineHeight: 1 }}>▸</span>
+              )}
+              <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: isActive ? "1.05rem" : isProj ? "1rem" : "0.95rem",
+                color: isActive ? `var(--text-primary)` : isProj ? PACE_COLOR : `var(--text-faint)` }}>{t.label}</span>
 
-              <span style={{ fontFamily: "monospace", fontSize: "0.85rem", textAlign: "center", minWidth: "4.5rem",
-                color: isAbove ? "#16a34a" : i === currentIdx - 1 ? "#d97706" : `var(--text-faint)`,
-                fontWeight: isActive || i === currentIdx - 1 ? 700 : 400 }}>
+              <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", textAlign: "center", minWidth: "4.5rem",
+                color: isAbove ? "#16a34a" : i === currentIdx - 1 ? "#d97706" : isProj ? PACE_COLOR : `var(--text-faint)`,
+                fontWeight: isActive || i === currentIdx - 1 || isProj ? 700 : 400 }}>
                 {target === null ? "" : isAbove ? "\u2713" : target.toLocaleString()}
               </span>
 
-              <span style={{ fontFamily: "monospace", fontSize: isActive ? "1.25rem" : "1rem", textAlign: "right",
-                color: isActive ? bonusColor(val) : `var(--text-faint)`,
-                fontWeight: isActive ? 700 : 400 }}>
+              <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: isActive ? "1.25rem" : isProj ? "1.1rem" : "1rem", textAlign: "right",
+                color: isActive ? bonusColor(val) : isProj ? PACE_COLOR : `var(--text-faint)`,
+                fontWeight: isActive || isProj ? 700 : 400 }}>
                 {sign}{val.toFixed(2)}%
+                {isProj && <span style={{ fontSize: "0.6rem", display: "block", color: PACE_COLOR, fontWeight: 500 }}>PROJ.</span>}
               </span>
             </div>
           );
@@ -2177,20 +2252,35 @@ function GainsharePanel({
   };
 
   return (
-    <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1.5rem" }}>
+    <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.5rem" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem", flexWrap: "wrap", gap: "0.5rem" }}>
-        <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase" }}>
+        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase" }}>
           Gainshare — Telesales
-          <span style={{ marginLeft: "0.6rem", color: `var(--text-faint)`, fontSize: "1.14rem" }}>
+          <span style={{ marginLeft: "0.6rem", color: `var(--text-faint)`, fontSize: "0.82rem" }}>
             {siteMode ? "Site Table" : "Overall Table"}
           </span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <span style={{ fontFamily: "monospace", fontSize: "1.17rem", color: `var(--text-dim)` }}>Net Bonus:</span>
-            <span style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "2.25rem", color: bonusColor(totalBonus), fontWeight: 700 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "1.25rem" }}>
+          <div style={{ textAlign: "right" }}>
+            <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: `var(--text-dim)`, textTransform: "uppercase", letterSpacing: "0.05em" }}>Net Bonus</span>
+            <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "2.25rem", color: bonusColor(totalBonus), fontWeight: 700, lineHeight: 1 }}>
               {totalBonus > 0 ? "+" : ""}{totalBonus.toFixed(2)}%
-            </span>
+            </div>
           </div>
+          {hasProjBonus && projTotalBonus !== totalBonus && (
+            <div style={{ textAlign: "right", paddingLeft: "1rem", borderLeft: `2px solid ${PACE_COLOR}30` }}>
+              <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: PACE_COLOR, textTransform: "uppercase", letterSpacing: "0.05em" }}>Proj. Bonus</span>
+              <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "2.25rem", color: PACE_COLOR, fontWeight: 700, lineHeight: 1 }}>
+                {projTotalBonus > 0 ? "+" : ""}{projTotalBonus.toFixed(2)}%
+              </div>
+              {projTotalBonus !== totalBonus && (
+                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: projTotalBonus > totalBonus ? "#16a34a" : "#dc2626", marginTop: "0.15rem" }}>
+                  {projTotalBonus > totalBonus ? "▲" : "▼"} {Math.abs(projTotalBonus - totalBonus).toFixed(2)}% {projTotalBonus > totalBonus ? "gain" : "loss"} at pace
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
       <div style={{ display: "flex", gap: "1rem" }}>
         {mobileAttain !== null  && <ColDef label="Mobile Attainment"   attain={mobileAttain}  tierKey="mobile"  tier={mobileTier}  actual={mobileActual}  plan={mobilePlan}  />}
@@ -2206,20 +2296,20 @@ function GainsharePanel({
           if (siteMode) {
             return (
               <div style={{ flex: 1 }}>
-                <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-muted)`, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.4rem", textAlign: "center" }}>Hour Gate</div>
+                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)`, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.4rem", textAlign: "center" }}>Hour Gate</div>
                 <div style={{ textAlign: "center", marginBottom: "0.35rem" }}>
-                  <span style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "2rem", color: hourAttain >= 100 ? "#16a34a" : "#dc2626", fontWeight: 700 }}>{Math.round(hourAttain)}%</span>
+                  <span style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "2rem", color: hourAttain >= 100 ? "#16a34a" : "#dc2626", fontWeight: 700 }}>{Math.round(hourAttain)}%</span>
                 </div>
                 {hoursNeeded > 0 && (
-                  <div style={{ textAlign: "center", marginBottom: "0.5rem", padding: "0.25rem 0.4rem", background: "#d9770612", borderRadius: "5px", border: "1px solid #d9770630" }}>
-                    <span style={{ fontFamily: "monospace", fontSize: "0.82rem", color: "#d97706" }}>
+                  <div style={{ textAlign: "center", marginBottom: "0.5rem", padding: "0.25rem 0.4rem", background: "#d9770612", borderRadius: "var(--radius-sm, 6px)", border: "1px solid #d9770630" }}>
+                    <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "#d97706" }}>
                       {hoursNeeded.toLocaleString()} hrs to clear gate
                     </span>
                   </div>
                 )}
                 {hoursOver > 0 && (
-                  <div style={{ textAlign: "center", marginBottom: "0.5rem", padding: "0.25rem 0.4rem", background: "#16a34a12", borderRadius: "5px", border: "1px solid #16a34a30" }}>
-                    <span style={{ fontFamily: "monospace", fontSize: "0.82rem", color: "#16a34a" }}>
+                  <div style={{ textAlign: "center", marginBottom: "0.5rem", padding: "0.25rem 0.4rem", background: "#16a34a12", borderRadius: "var(--radius-sm, 6px)", border: "1px solid #16a34a30" }}>
+                    <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "#16a34a" }}>
                       +{hoursOver.toLocaleString()} hrs over
                     </span>
                   </div>
@@ -2236,12 +2326,12 @@ function GainsharePanel({
                     bg = "transparent"; border = "1px solid transparent";
                   }
                   return (
-                    <div key={ti} style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", padding: "0.2rem 0.4rem", borderRadius: "4px", marginBottom: "1px", background: bg, border, gap: "0.3rem" }}>
-                      <span style={{ fontFamily: "monospace", fontSize: isActive ? "1.05rem" : "0.95rem", color: isActive ? `var(--text-primary)` : `var(--text-faint)` }}>{t.label}</span>
-                      <span style={{ fontFamily: "monospace", fontSize: "0.85rem", textAlign: "center", minWidth: "4.5rem", color: isAbove ? "#16a34a" : ti === (HOUR_GATE_SITE_TIERS.indexOf(hourGateTier) - 1) ? "#d97706" : `var(--text-faint)`, fontWeight: isActive || (target && !isAbove && ti === HOUR_GATE_SITE_TIERS.indexOf(hourGateTier) - 1) ? 700 : 400 }}>
+                    <div key={ti} style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", padding: "0.2rem 0.4rem", borderRadius: "var(--radius-sm, 6px)", marginBottom: "1px", background: bg, border, gap: "0.3rem" }}>
+                      <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: isActive ? "1.05rem" : "0.95rem", color: isActive ? `var(--text-primary)` : `var(--text-faint)` }}>{t.label}</span>
+                      <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", textAlign: "center", minWidth: "4.5rem", color: isAbove ? "#16a34a" : ti === (HOUR_GATE_SITE_TIERS.indexOf(hourGateTier) - 1) ? "#d97706" : `var(--text-faint)`, fontWeight: isActive || (target && !isAbove && ti === HOUR_GATE_SITE_TIERS.indexOf(hourGateTier) - 1) ? 700 : 400 }}>
                         {target === null ? "" : isAbove ? "\u2713" : target.toLocaleString()}
                       </span>
-                      <span style={{ fontFamily: "monospace", fontSize: isActive ? "1.25rem" : "1rem", textAlign: "right", color: isActive ? (t.penalty < 0 ? "#dc2626" : "#16a34a") : `var(--text-faint)`, fontWeight: isActive ? 700 : 400 }}>
+                      <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: isActive ? "1.25rem" : "1rem", textAlign: "right", color: isActive ? (t.penalty < 0 ? "#dc2626" : "#16a34a") : `var(--text-faint)`, fontWeight: isActive ? 700 : 400 }}>
                         {t.penalty === 0 ? "0%" : `${t.penalty.toFixed(2)}%`}
                       </span>
                     </div>
@@ -2254,26 +2344,26 @@ function GainsharePanel({
           // Overall mode: simple pass/fail
           return (
             <div style={{ flex: "0 0 auto", minWidth: "130px", display: "flex", flexDirection: "column", alignItems: "center", padding: "0 0.5rem" }}>
-              <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-muted)`, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.4rem", textAlign: "center" }}>Hour Gate</div>
+              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)`, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.4rem", textAlign: "center" }}>Hour Gate</div>
               <div style={{ textAlign: "center", marginBottom: "0.35rem" }}>
-                <span style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "2rem", color: hourAttain >= 100 ? "#16a34a" : "#dc2626", fontWeight: 700 }}>{Math.round(hourAttain)}%</span>
+                <span style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "2rem", color: hourAttain >= 100 ? "#16a34a" : "#dc2626", fontWeight: 700 }}>{Math.round(hourAttain)}%</span>
               </div>
               <div style={{ padding: "0.4rem 0.6rem", borderRadius: "6px", background: hourAttain >= 100 ? "#16a34a10" : "#dc262610", border: `1px solid ${hourAttain >= 100 ? "#16a34a30" : "#dc262630"}`, textAlign: "center", marginBottom: "0.35rem", width: "100%" }}>
                 {hourAttain >= 100 ? (
                   <div>
-                    <div style={{ fontFamily: "monospace", fontSize: "0.95rem", color: "#16a34a", fontWeight: 700 }}>NO PENALTY</div>
-                    {hoursOver > 0 && <div style={{ fontFamily: "monospace", fontSize: "0.8rem", color: `var(--text-dim)`, marginTop: "0.15rem" }}>+{hoursOver.toLocaleString()} hrs over</div>}
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: "#16a34a", fontWeight: 700 }}>NO PENALTY</div>
+                    {hoursOver > 0 && <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-dim)`, marginTop: "0.15rem" }}>+{hoursOver.toLocaleString()} hrs over</div>}
                   </div>
                 ) : (
                   <div>
-                    <div style={{ fontFamily: "monospace", fontSize: "1.2rem", color: "#dc2626", fontWeight: 700 }}>-2.00%</div>
-                    <div style={{ fontFamily: "monospace", fontSize: "0.78rem", color: `var(--text-dim)`, marginTop: "0.15rem" }}>credit of invoiced hrs</div>
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem", color: "#dc2626", fontWeight: 700 }}>-2.00%</div>
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: `var(--text-dim)`, marginTop: "0.15rem" }}>credit of invoiced hrs</div>
                   </div>
                 )}
               </div>
               {hourAttain < 100 && hoursNeeded > 0 && (
-                <div style={{ textAlign: "center", padding: "0.25rem 0.4rem", background: "#d9770612", borderRadius: "5px", border: "1px solid #d9770630", width: "100%" }}>
-                  <span style={{ fontFamily: "monospace", fontSize: "0.82rem", color: "#d97706" }}>
+                <div style={{ textAlign: "center", padding: "0.25rem 0.4rem", background: "#d9770612", borderRadius: "var(--radius-sm, 6px)", border: "1px solid #d9770630", width: "100%" }}>
+                  <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "#d97706" }}>
                     {hoursNeeded.toLocaleString()} hrs to clear gate
                   </span>
                 </div>
@@ -2295,17 +2385,17 @@ function FiscalPacingBanner({ fiscalInfo, title = "PACING — BUSINESS WIDE" }) 
   const pct = Math.min(pctElapsed, 100);
 
   return (
-    <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "10px", padding: "0.85rem 1.25rem" }}>
+    <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-md, 10px)", padding: "0.85rem 1.25rem" }}>
       {/* Top row: title + date range + day counters */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.65rem" }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
             <span style={{ fontSize: "1.13rem" }}>📅</span>
-            <span style={{ fontFamily: "monospace", fontSize: "1.08rem", color: "#d97706", letterSpacing: "0.15em", textTransform: "uppercase", fontWeight: 700 }}>
+            <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "#d97706", letterSpacing: "0.15em", textTransform: "uppercase", fontWeight: 700 }}>
               {title}
             </span>
           </div>
-          <div style={{ fontFamily: "monospace", fontSize: "0.96rem", color: `var(--text-faint)`, marginTop: "0.2rem" }}>
+          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.96rem", color: `var(--text-faint)`, marginTop: "0.2rem" }}>
             Fiscal {fiscalStart} → {fiscalEnd} · data through {lastDataDate}
           </div>
         </div>
@@ -2316,8 +2406,8 @@ function FiscalPacingBanner({ fiscalInfo, title = "PACING — BUSINESS WIDE" }) 
             { value: totalBDays,   label: "Total BDays", color: `var(--text-muted)` },
           ].map(({ value, label, color }) => (
             <div key={label} style={{ textAlign: "center" }}>
-              <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "2.63rem", color, fontWeight: 700, lineHeight: 1 }}>{value}</div>
-              <div style={{ fontFamily: "monospace", fontSize: "0.9rem", color: `var(--text-faint)`, marginTop: "0.1rem" }}>{label}</div>
+              <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.75rem", color, fontWeight: 700, lineHeight: 1 }}>{value}</div>
+              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem", color: `var(--text-faint)`, marginTop: "0.1rem" }}>{label}</div>
             </div>
           ))}
         </div>
@@ -2325,11 +2415,11 @@ function FiscalPacingBanner({ fiscalInfo, title = "PACING — BUSINESS WIDE" }) 
 
       {/* Progress bar row */}
       <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-        <span style={{ fontFamily: "monospace", fontSize: "0.96rem", color: `var(--text-faint)`, flexShrink: 0 }}>Month elapsed</span>
-        <div style={{ flex: 1, position: "relative", height: "6px", background: `var(--bg-tertiary)`, borderRadius: "4px", overflow: "hidden" }}>
-          <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${pct}%`, background: "#d97706", borderRadius: "4px", transition: "width 0.8s ease" }} />
+        <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.96rem", color: `var(--text-faint)`, flexShrink: 0 }}>Month elapsed</span>
+        <div style={{ flex: 1, position: "relative", height: "6px", background: `var(--bg-tertiary)`, borderRadius: "var(--radius-sm, 6px)", overflow: "hidden" }}>
+          <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${pct}%`, background: "#d97706", borderRadius: "var(--radius-sm, 6px)", transition: "width 0.8s ease" }} />
         </div>
-        <span style={{ fontFamily: "monospace", fontSize: "0.96rem", color: "#d97706", flexShrink: 0, minWidth: "7rem", textAlign: "right" }}>
+        <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.96rem", color: "#d97706", flexShrink: 0, minWidth: "7rem", textAlign: "right" }}>
           {pct.toFixed(0)}% of fiscal month
         </span>
       </div>
@@ -2352,13 +2442,13 @@ function MetricComparePanel({ metrics, title = "Goals vs Plan", fiscalInfo }) {
   const cols    = metrics.filter(m => m.plan > 0).length;
 
   return (
-    <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1.5rem" }}>
+    <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.5rem" }}>
       {/* Header row */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
-        <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase" }}>{title}</div>
+        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase" }}>{title}</div>
         {canPace && (
           <button onClick={() => setShowPacing(v => !v)}
-            style={{ padding: "0.25rem 0.65rem", borderRadius: "5px", border: `1px solid ${showPacing ? "#d97706" : "var(--border)"}`, background: showPacing ? "#d9770618" : "transparent", color: showPacing ? "#d97706" : "var(--text-muted)", fontFamily: "monospace", fontSize: "1.02rem", cursor: "pointer", letterSpacing: "0.05em" }}>
+            style={{ padding: "0.25rem 0.65rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${showPacing ? "#d97706" : "var(--border)"}`, background: showPacing ? "#d9770618" : "transparent", color: showPacing ? "#d97706" : "var(--text-muted)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "1.02rem", cursor: "pointer", letterSpacing: "0.05em" }}>
             {showPacing ? "📈 PACING ON" : "📈 PACING"}
           </button>
         )}
@@ -2384,89 +2474,119 @@ function MetricComparePanel({ metrics, title = "Goals vs Plan", fiscalInfo }) {
           const isAhead    = pace ? pace.delta >= 0 : false;
 
           return (
-            <div key={i} style={{ background: `var(--bg-primary)`, border: `1px solid ${color}25`, borderRadius: "10px", padding: "1rem", borderTop: `3px solid ${color}` }}>
+            <div key={i} style={{ background: `var(--bg-primary)`, border: `1px solid ${color}25`, borderRadius: "var(--radius-md, 10px)", padding: "1rem", borderTop: `3px solid ${color}` }}>
               {/* Label */}
-              <div style={{ fontFamily: "monospace", fontSize: "1.17rem", color: `var(--text-muted)`, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "0.6rem" }}>{m.label}</div>
+              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)`, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "0.6rem" }}>{m.label}</div>
 
               {/* Actual big number */}
-              <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "2.85rem", color: `var(--text-warm)`, fontWeight: 700, lineHeight: 1 }}>
+              <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "2rem", color: `var(--text-warm)`, fontWeight: 700, lineHeight: 1 }}>
                 {Math.round(m.actual).toLocaleString()}
               </div>
-              <div style={{ fontFamily: "monospace", fontSize: "1.01rem", color: `var(--text-dim)`, marginTop: "0.2rem" }}>
+              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: `var(--text-dim)`, marginTop: "0.2rem" }}>
                 of {Math.round(m.plan).toLocaleString()} plan
               </div>
 
-              {/* Delta remaining */}
+              {/* Current attainment bar */}
+              <div style={{ position: "relative", height: "6px", background: `var(--bg-tertiary)`, borderRadius: "var(--radius-sm, 6px)", overflow: "hidden", marginTop: "0.5rem", marginBottom: "0.35rem" }}>
+                <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${barW}%`, background: color, borderRadius: "var(--radius-sm, 6px)", transition: "width 0.6s ease" }} />
+                <div style={{ position: "absolute", left: "calc(100% - 1px)", top: 0, width: "1px", height: "100%", background: `var(--text-faint)` }} />
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: pace ? "0.75rem" : 0 }}>
+                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color, fontWeight: 700 }}>
+                  {attain !== null ? `${Math.round(attain)}%` : "—"}
+                </div>
+                {overBy > 0 && !pace && (
+                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: Q.Q1.color }}>+{Math.round(overBy)}% over</div>
+                )}
+                {pace && (
+                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem", color: `var(--text-faint)` }}>to date</div>
+                )}
+              </div>
+
+              {/* Remaining / Per Day stats row — color graded by pacing */}
               {(() => {
                 const remaining = Math.ceil(m.plan - m.actual);
                 if (remaining <= 0) {
                   return (
-                    <div style={{ fontFamily: "monospace", fontSize: "0.92rem", color: "#16a34a", fontWeight: 700, marginBottom: "0.5rem" }}>
-                      +{Math.abs(remaining).toLocaleString()} over plan
+                    <div style={{ display: "flex", justifyContent: "center", padding: "0.45rem 0", marginTop: "0.35rem", borderTop: "1px solid var(--bg-tertiary)" }}>
+                      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: "#16a34a", fontWeight: 700 }}>
+                        +{Math.abs(remaining).toLocaleString()} over plan
+                      </div>
                     </div>
                   );
                 }
                 const daysLeft = fiscalInfo ? fiscalInfo.remainingBDays : 0;
-                const perDay = daysLeft > 0 ? (remaining / daysLeft).toFixed(1) : null;
+                const perDayVal = daysLeft > 0 ? remaining / daysLeft : 0;
+                const perDay = daysLeft > 0 ? perDayVal.toFixed(1) : null;
+
+                // Color grade: compare current daily avg vs required daily rate
+                // pctOfRequired: how much of the required daily rate you're actually hitting
+                // 100%+ = on/ahead of pace (green), 80-99% = near (blue), 1-79% = behind (amber), 0% = no activity (red)
+                const pacing = fiscalInfo && fiscalInfo.elapsedBDays > 0
+                  ? calcPacing(m.actual, m.plan, fiscalInfo.elapsedBDays, fiscalInfo.totalBDays) : null;
+                let pctOfRequired = 100; // default: assume on pace
+                if (pacing && pacing.requiredDaily > 0) {
+                  pctOfRequired = (pacing.dailyRate / pacing.requiredDaily) * 100;
+                }
+                const remainColor = pctOfRequired >= 100 ? "#16a34a" : pctOfRequired >= 80 ? "#2563eb" : pctOfRequired > 0 ? "#d97706" : "#dc2626";
+                const remainBg    = remainColor + "08";
+                const remainBdr   = remainColor + "15";
+
+                // Per day color: green if daily rate covers it, grades to red as gap widens
+                const perDayColor = pctOfRequired >= 100 ? "#16a34a" : pctOfRequired >= 80 ? "#2563eb" : pctOfRequired > 0 ? "#d97706" : "#dc2626";
+                const perDayBg    = perDayColor + "08";
+                const perDayBdr   = perDayColor + "15";
+
                 return (
-                  <div style={{ fontFamily: "monospace", fontSize: "0.92rem", color: "#dc2626", marginBottom: "0.5rem" }}>
-                    <span style={{ fontWeight: 700 }}>{remaining.toLocaleString()} remaining</span>
-                    {perDay && <span style={{ color: `var(--text-dim)`, marginLeft: "0.3rem" }}>({perDay}/day)</span>}
+                  <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.35rem", borderTop: "1px solid var(--bg-tertiary)", paddingTop: "0.5rem" }}>
+                    <div style={{ flex: 1, textAlign: "center", padding: "0.3rem 0", background: remainBg, borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${remainBdr}` }}>
+                      <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.1rem", fontWeight: 700, color: remainColor, lineHeight: 1.2 }}>{remaining.toLocaleString()}</div>
+                      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.68rem", color: `var(--text-dim)`, textTransform: "uppercase", letterSpacing: "0.05em", marginTop: "0.1rem" }}>remaining</div>
+                    </div>
+                    {perDay && (
+                      <div style={{ flex: 1, textAlign: "center", padding: "0.3rem 0", background: perDayBg, borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${perDayBdr}` }}>
+                        <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.1rem", fontWeight: 700, color: perDayColor, lineHeight: 1.2 }}>{perDay}</div>
+                        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.68rem", color: `var(--text-dim)`, textTransform: "uppercase", letterSpacing: "0.05em", marginTop: "0.1rem" }}>per day</div>
+                      </div>
+                    )}
                   </div>
                 );
               })()}
-
-              {/* Current attainment bar */}
-              <div style={{ position: "relative", height: "6px", background: `var(--bg-tertiary)`, borderRadius: "4px", overflow: "hidden", marginBottom: "0.35rem" }}>
-                <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${barW}%`, background: color, borderRadius: "4px", transition: "width 0.6s ease" }} />
-                <div style={{ position: "absolute", left: "calc(100% - 1px)", top: 0, width: "1px", height: "100%", background: `var(--text-faint)` }} />
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: pace ? "0.75rem" : 0 }}>
-                <div style={{ fontFamily: "monospace", fontSize: "1.17rem", color, fontWeight: 700 }}>
-                  {attain !== null ? `${Math.round(attain)}%` : "—"}
-                </div>
-                {overBy > 0 && !pace && (
-                  <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: Q.Q1.color }}>+{Math.round(overBy)}% over</div>
-                )}
-                {pace && (
-                  <div style={{ fontFamily: "monospace", fontSize: "0.9rem", color: `var(--text-faint)` }}>to date</div>
-                )}
-              </div>
 
               {/* Projected EOM section — only when pacing on */}
               {pace && (
                 <div style={{ borderTop: "1px solid var(--bg-tertiary)", paddingTop: "0.6rem" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "0.3rem" }}>
-                    <span style={{ fontFamily: "monospace", fontSize: "0.78rem", color: "var(--text-dim)" }}>PROJ. EOM</span>
-                    <span style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "2.1rem", color: projColor, fontWeight: 700, lineHeight: 1 }}>
+                    <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: "var(--text-dim)" }}>PROJ. EOM</span>
+                    <span style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.5rem", color: projColor, fontWeight: 700, lineHeight: 1 }}>
                       {pace.projected.toLocaleString()}
                     </span>
                   </div>
                   {/* Projected bar */}
-                  <div style={{ position: "relative", height: "8px", background: `var(--bg-tertiary)`, borderRadius: "4px", overflow: "hidden", marginBottom: "0.35rem" }}>
-                    <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${projBarW}%`, background: projColor, borderRadius: "4px", transition: "width 0.6s ease" }} />
+                  <div style={{ position: "relative", height: "8px", background: `var(--bg-tertiary)`, borderRadius: "var(--radius-sm, 6px)", overflow: "hidden", marginBottom: "0.35rem" }}>
+                    <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${projBarW}%`, background: projColor, borderRadius: "var(--radius-sm, 6px)", transition: "width 0.6s ease" }} />
                     <div style={{ position: "absolute", left: "calc(100% - 1px)", top: 0, width: "1px", height: "100%", background: `var(--text-faint)` }} />
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
                     <div>
-                      <span style={{ fontFamily: "monospace", fontSize: "1.05rem", color: projColor, fontWeight: 700 }}>
+                      <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: projColor, fontWeight: 700 }}>
                         {Math.round(pace.projectedPct)}% of plan
                       </span>
                       {!isAhead && (
-                        <div style={{ fontFamily: "monospace", fontSize: "0.98rem", color: "#dc2626", fontWeight: 700, marginTop: "0.2rem" }}>
+                        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.98rem", color: "#dc2626", fontWeight: 700, marginTop: "0.2rem" }}>
                           ▼ -{Math.abs(pace.delta).toLocaleString()}
                         </div>
                       )}
                       {isAhead && (
-                        <div style={{ fontFamily: "monospace", fontSize: "0.98rem", color: "#16a34a", fontWeight: 700, marginTop: "0.2rem" }}>
+                        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.98rem", color: "#16a34a", fontWeight: 700, marginTop: "0.2rem" }}>
                           ▲ +{Math.abs(pace.delta).toLocaleString()}
                         </div>
                       )}
                     </div>
                     {!isAhead && pace.requiredDaily !== null && (
                       <div style={{ textAlign: "right" }}>
-                        <div style={{ fontFamily: "monospace", fontSize: "0.78rem", color: `var(--text-dim)`, marginBottom: "0.1rem" }}>NEED/DAY TO CLOSE</div>
-                        <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "1.65rem", color: "#dc2626", fontWeight: 700, lineHeight: 1 }}>
+                        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: `var(--text-dim)`, marginBottom: "0.1rem" }}>NEED/DAY TO CLOSE</div>
+                        <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.15rem", color: "#dc2626", fontWeight: 700, lineHeight: 1 }}>
                           {Math.ceil(pace.requiredDaily).toLocaleString()}
                         </div>
                       </div>
@@ -2496,14 +2616,14 @@ function PacingPanel({ fiscalInfo, metrics, title = "Pacing Analysis" }) {
   const monthBarW = Math.min(pctElapsed, 100);
 
   return (
-    <div style={{ background: "var(--bg-secondary)", border: "1px solid #d9770640", borderRadius: "12px", padding: "1.5rem", borderLeft: "4px solid #d97706" }}>
+    <div style={{ background: "var(--bg-secondary)", border: "1px solid #d9770640", borderRadius: "var(--radius-lg, 16px)", padding: "1.5rem", borderLeft: "4px solid #d97706" }}>
       {/* Header row */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.25rem", flexWrap: "wrap", gap: "0.75rem" }}>
         <div>
-          <div style={{ fontFamily: "monospace", fontSize: "0.98rem", color: "#d97706", letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: "0.25rem" }}>
+          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.98rem", color: "#d97706", letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: "0.25rem" }}>
             📈 {title}
           </div>
-          <div style={{ fontFamily: "monospace", fontSize: "0.81rem", color: "var(--text-dim)" }}>
+          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.81rem", color: "var(--text-dim)" }}>
             Fiscal {fiscalStart} → {fiscalEnd} · data through {lastDataDate}
           </div>
         </div>
@@ -2514,8 +2634,8 @@ function PacingPanel({ fiscalInfo, metrics, title = "Pacing Analysis" }) {
             { v: totalBDays,     l: "Total BDays",c: "var(--text-dim)" },
           ].map(({ v, l, c }) => (
             <div key={l} style={{ textAlign: "center" }}>
-              <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "2.4rem", color: c, fontWeight: 700, lineHeight: 1 }}>{v}</div>
-              <div style={{ fontFamily: "monospace", fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "0.1rem" }}>{l}</div>
+              <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.75rem", color: c, fontWeight: 700, lineHeight: 1 }}>{v}</div>
+              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "0.1rem" }}>{l}</div>
             </div>
           ))}
         </div>
@@ -2524,11 +2644,11 @@ function PacingPanel({ fiscalInfo, metrics, title = "Pacing Analysis" }) {
       {/* Month progress bar */}
       <div style={{ marginBottom: "1.5rem" }}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.3rem" }}>
-          <span style={{ fontFamily: "monospace", fontSize: "0.83rem", color: "var(--text-muted)" }}>Month elapsed</span>
-          <span style={{ fontFamily: "monospace", fontSize: "0.83rem", color: "#d97706", fontWeight: 700 }}>{Math.round(pctElapsed)}% of fiscal month</span>
+          <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.83rem", color: "var(--text-muted)" }}>Month elapsed</span>
+          <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.83rem", color: "#d97706", fontWeight: 700 }}>{Math.round(pctElapsed)}% of fiscal month</span>
         </div>
-        <div style={{ height: "8px", background: "var(--bg-tertiary)", borderRadius: "4px", overflow: "hidden" }}>
-          <div style={{ width: `${monthBarW}%`, height: "100%", background: "#d97706", borderRadius: "4px", transition: "width 0.6s" }} />
+        <div style={{ height: "8px", background: "var(--bg-tertiary)", borderRadius: "var(--radius-sm, 6px)", overflow: "hidden" }}>
+          <div style={{ width: `${monthBarW}%`, height: "100%", background: "#d97706", borderRadius: "var(--radius-sm, 6px)", transition: "width 0.6s" }} />
         </div>
       </div>
 
@@ -2544,15 +2664,15 @@ function PacingPanel({ fiscalInfo, metrics, title = "Pacing Analysis" }) {
           const projBarW    = Math.min((p.projected / m.plan) * 100, 100);
 
           return (
-            <div key={i} style={{ background: "var(--bg-primary)", border: `1px solid ${color}25`, borderRadius: "10px", padding: "1rem", borderTop: `3px solid ${color}` }}>
+            <div key={i} style={{ background: "var(--bg-primary)", border: `1px solid ${color}25`, borderRadius: "var(--radius-md, 10px)", padding: "1rem", borderTop: `3px solid ${color}` }}>
               {/* Metric label */}
-              <div style={{ fontFamily: "monospace", fontSize: "0.84rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "0.75rem" }}>{m.label}</div>
+              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.84rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "0.75rem" }}>{m.label}</div>
 
               {/* Actual so far */}
               <div style={{ marginBottom: "0.6rem" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.2rem" }}>
-                  <span style={{ fontFamily: "monospace", fontSize: "0.75rem", color: "var(--text-dim)" }}>Actual · {Math.round(pctElapsed)}% thru</span>
-                  <span style={{ fontFamily: "monospace", fontSize: "0.87rem", color: "var(--text-primary)", fontWeight: 600 }}>{Math.round(m.actual).toLocaleString()}</span>
+                  <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", color: "var(--text-dim)" }}>Actual · {Math.round(pctElapsed)}% thru</span>
+                  <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.87rem", color: "var(--text-primary)", fontWeight: 600 }}>{Math.round(m.actual).toLocaleString()}</span>
                 </div>
                 <div style={{ height: "4px", background: "var(--bg-tertiary)", borderRadius: "2px", overflow: "hidden" }}>
                   <div style={{ width: `${actualBarW}%`, height: "100%", background: "var(--text-dim)", borderRadius: "2px" }} />
@@ -2562,8 +2682,8 @@ function PacingPanel({ fiscalInfo, metrics, title = "Pacing Analysis" }) {
               {/* Projected EOM */}
               <div style={{ marginBottom: "0.75rem" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "0.2rem" }}>
-                  <span style={{ fontFamily: "monospace", fontSize: "0.75rem", color: "var(--text-dim)" }}>Proj. end-of-month</span>
-                  <span style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "1.95rem", color, fontWeight: 700, lineHeight: 1 }}>{p.projected.toLocaleString()}</span>
+                  <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", color: "var(--text-dim)" }}>Proj. end-of-month</span>
+                  <span style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.95rem", color, fontWeight: 700, lineHeight: 1 }}>{p.projected.toLocaleString()}</span>
                 </div>
                 <div style={{ height: "6px", background: "var(--bg-tertiary)", borderRadius: "3px", overflow: "hidden" }}>
                   <div style={{ width: `${projBarW}%`, height: "100%", background: color, borderRadius: "3px", transition: "width 0.6s" }} />
@@ -2573,23 +2693,23 @@ function PacingPanel({ fiscalInfo, metrics, title = "Pacing Analysis" }) {
               {/* Bottom stats: % of plan + gap/pace */}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", borderTop: `1px solid ${color}22`, paddingTop: "0.5rem" }}>
                 <div>
-                  <div style={{ fontFamily: "monospace", fontSize: "0.98rem", color, fontWeight: 700 }}>
+                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.98rem", color, fontWeight: 700 }}>
                     {Math.round(p.projectedPct)}% of plan
                   </div>
-                  <div style={{ fontFamily: "monospace", fontSize: "0.78rem", color: isAhead ? "#16a34a" : "#dc2626", marginTop: "0.1rem" }}>
+                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: isAhead ? "#16a34a" : "#dc2626", marginTop: "0.1rem" }}>
                     {isAhead ? "▲ +" : "▼ "}{Math.abs(p.delta).toLocaleString()} vs plan
                   </div>
                 </div>
                 <div style={{ textAlign: "right" }}>
                   {!isAhead && p.requiredDaily !== null ? (
                     <>
-                      <div style={{ fontFamily: "monospace", fontSize: "0.72rem", color: "var(--text-dim)" }}>need/day to close</div>
-                      <div style={{ fontFamily: "monospace", fontSize: "1.05rem", color: "#dc2626", fontWeight: 700 }}>{Math.ceil(p.requiredDaily).toLocaleString()}</div>
+                      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "var(--text-dim)" }}>need/day to close</div>
+                      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: "#dc2626", fontWeight: 700 }}>{Math.ceil(p.requiredDaily).toLocaleString()}</div>
                     </>
                   ) : (
                     <>
-                      <div style={{ fontFamily: "monospace", fontSize: "0.72rem", color: "var(--text-dim)" }}>pace / day</div>
-                      <div style={{ fontFamily: "monospace", fontSize: "1.05rem", color: "#16a34a", fontWeight: 700 }}>{Math.round(p.dailyRate).toLocaleString()}</div>
+                      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "var(--text-dim)" }}>pace / day</div>
+                      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: "#16a34a", fontWeight: 700 }}>{Math.round(p.dailyRate).toLocaleString()}</div>
                     </>
                   )}
                 </div>
@@ -2649,9 +2769,9 @@ function GoalsRollup({ agents, goalEntries, goalLookup, fiscalInfo }) {
 
   if (entries.length === 0) {
     return (
-      <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "2rem", textAlign: "center" }}>
-        <div style={{ color: `var(--text-faint)`, fontFamily: "Georgia, serif", fontSize: "1.35rem" }}>No goal data loaded.</div>
-        <div style={{ color: `var(--text-faint)`, fontFamily: "monospace", fontSize: "1.11rem", marginTop: "0.4rem" }}>Upload a goals CSV using the ⊕ GOALS button above.</div>
+      <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "2rem", textAlign: "center" }}>
+        <div style={{ color: `var(--text-faint)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.92rem" }}>No goal data loaded.</div>
+        <div style={{ color: `var(--text-faint)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", marginTop: "0.4rem" }}>Upload a goals CSV using the ⊕ GOALS button above.</div>
       </div>
     );
   }
@@ -2686,7 +2806,7 @@ function GoalsRollup({ agents, goalEntries, goalLookup, fiscalInfo }) {
   const ColHeaders = () => (
     <div style={{ display: "grid", gridTemplateColumns: "8rem 1fr 5.5rem 5.5rem 4.5rem", gap: "0.75rem", padding: "0 0 0.4rem 0", borderBottom: "1px solid var(--border)", marginBottom: "0.25rem" }}>
       {["Metric","","Goal","Actual","Attain"].map(h => (
-        <div key={h} style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-faint)`, textTransform: "uppercase", letterSpacing: "0.08em", textAlign: h === "Metric" || h === "" ? "left" : "right" }}>{h}</div>
+        <div key={h} style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-faint)`, textTransform: "uppercase", letterSpacing: "0.08em", textAlign: h === "Metric" || h === "" ? "left" : "right" }}>{h}</div>
       ))}
     </div>
   );
@@ -2699,15 +2819,15 @@ function GoalsRollup({ agents, goalEntries, goalLookup, fiscalInfo }) {
     const isNoData  = actual === null;
     return (
       <div style={{ display: "grid", gridTemplateColumns: "8rem 1fr 5.5rem 5.5rem 4.5rem", gap: "0.75rem", alignItems: "center", padding: "0.55rem 0", borderBottom: "1px solid var(--bg-tertiary)" }}>
-        <div style={{ fontFamily: "monospace", fontSize: "1.11rem", color: `var(--text-muted)` }}>{metric.label}</div>
+        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-muted)` }}>{metric.label}</div>
         <div style={{ background: `var(--bg-tertiary)`, borderRadius: "3px", height: "5px", overflow: "hidden" }}>
           <div style={{ width: `${Math.min(attain || 0, 100)}%`, height: "100%", background: isNoData ? `var(--border)` : color, borderRadius: "3px", transition: "width 0.5s ease" }} />
         </div>
-        <div style={{ fontFamily: "monospace", fontSize: "0.95rem", color: `var(--text-dim)`, textAlign: "right" }}>{goalNum > 0 ? fmtGoal(goalNum, metric.fmt) : "—"}</div>
-        <div style={{ fontFamily: "monospace", fontSize: "0.95rem", color: isNoData ? `var(--text-faint)` : `var(--text-primary)`, textAlign: "right", fontStyle: isNoData ? "italic" : "normal" }}>
+        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: `var(--text-dim)`, textAlign: "right" }}>{goalNum > 0 ? fmtGoal(goalNum, metric.fmt) : "—"}</div>
+        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: isNoData ? `var(--text-faint)` : `var(--text-primary)`, textAlign: "right", fontStyle: isNoData ? "italic" : "normal" }}>
           {isNoData ? "no data" : fmtGoal(actualNum, metric.fmt)}
         </div>
-        <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color, textAlign: "right", fontWeight: 700 }}>
+        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color, textAlign: "right", fontWeight: 700 }}>
           {attain !== null ? fmtPct(attain) : "—"}
         </div>
       </div>
@@ -2740,26 +2860,26 @@ function GoalsRollup({ agents, goalEntries, goalLookup, fiscalInfo }) {
     ];
 
     return (
-      <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1.5rem", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+      <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.5rem", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
         {/* TA header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
-            <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase" }}>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase" }}>
               Target{funding ? ` \u2014 ${funding}` : ""}
             </div>
-            <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "2.1rem", color: `var(--text-warm)`, fontWeight: 700, lineHeight: 1.1 }}>
+            <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.5rem", color: `var(--text-warm)`, fontWeight: 700, lineHeight: 1.1 }}>
               {targetAudience}
-              {roc && <span style={{ fontFamily: "monospace", fontSize: "1rem", color: `var(--text-dim)`, marginLeft: "0.75rem", fontWeight: 400 }}>{roc}</span>}
+              {roc && <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-dim)`, marginLeft: "0.75rem", fontWeight: 400 }}>{roc}</span>}
             </div>
           </div>
-          <div style={{ fontFamily: "monospace", fontSize: "1.01rem", color: `var(--text-dim)` }}>
+          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: `var(--text-dim)` }}>
             {agents.length} agents · {fmt(agents.reduce((s,a)=>s+a.hours,0),0)} total hrs
           </div>
         </div>
 
         {/* Global rollup for this TA */}
         <div>
-          <div style={{ fontFamily: "monospace", fontSize: "1.08rem", color: `var(--text-muted)`, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "0.75rem" }}>All Sites Combined</div>
+          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-muted)`, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "0.75rem" }}>All Sites Combined</div>
           <ColHeaders />
           {filteredMetrics.map(m => (
             <MetricRow key={m.goalKey} metric={m} planVal={globalPlan[m.goalKey]} actual={getActual(agents, m.actualKey)} />
@@ -2769,7 +2889,7 @@ function GoalsRollup({ agents, goalEntries, goalLookup, fiscalInfo }) {
         {/* Per-site breakdown */}
         {SITE_DEFS.length > 1 && (
           <div>
-            <div style={{ fontFamily: "monospace", fontSize: "1.08rem", color: `var(--text-muted)`, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "0.75rem" }}>By Site</div>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-muted)`, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "0.75rem" }}>By Site</div>
             {SITE_DEFS.map(s => {
               const sAgents  = agents.filter(a => s.regions.includes((a.Region || a.region || "Unknown").trim()));
               const hasPlan  = s.rows && s.rows.length > 0;
@@ -2779,8 +2899,8 @@ function GoalsRollup({ agents, goalEntries, goalLookup, fiscalInfo }) {
               return (
                 <div key={s.label} style={{ marginBottom: "1.5rem" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.6rem" }}>
-                    <div style={{ fontFamily: "monospace", fontSize: "1.08rem", color: s.label.includes("Combined") ? "#16a34a" : "#d97706", background: s.label.includes("Combined") ? "#16a34a15" : "#d9770615", border: `1px solid ${s.label.includes("Combined") ? "#16a34a30" : "#d9770630"}`, borderRadius: "4px", padding: "0.15rem 0.5rem" }}>{s.label}</div>
-                    <span style={{ fontFamily: "monospace", fontSize: "1.01rem", color: `var(--text-dim)` }}>
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: s.label.includes("Combined") ? "#16a34a" : "#d97706", background: s.label.includes("Combined") ? "#16a34a15" : "#d9770615", border: `1px solid ${s.label.includes("Combined") ? "#16a34a30" : "#d9770630"}`, borderRadius: "var(--radius-sm, 6px)", padding: "0.15rem 0.5rem" }}>{s.label}</div>
+                    <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: `var(--text-dim)` }}>
                       {sAgents.length} agents · {fmt(sAgents.reduce((a,ag)=>a+ag.hours,0), 0)} hrs
                     </span>
                   </div>
@@ -2859,8 +2979,8 @@ function GoalsRollup({ agents, goalEntries, goalLookup, fiscalInfo }) {
 
       {/* Pacing Dashboard */}
       {pacingData && pacingData.length > 0 && (
-        <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1.5rem" }}>
-          <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "1rem" }}>
+        <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.5rem" }}>
+          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "1rem" }}>
             Pacing & Projections
           </div>
 
@@ -2877,18 +2997,18 @@ function GoalsRollup({ agents, goalEntries, goalLookup, fiscalInfo }) {
                 {/* Header */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
                   <div>
-                    <span style={{ fontFamily: "Georgia, serif", fontSize: "1.35rem", color: `var(--text-warm)`, fontWeight: 700 }}>{p.name}</span>
-                    {p.roc && <span style={{ fontFamily: "monospace", fontSize: "0.9rem", color: `var(--text-dim)`, marginLeft: "0.5rem" }}>{p.roc}</span>}
-                    {p.funding && <span style={{ fontFamily: "monospace", fontSize: "0.85rem", color: `var(--text-faint)`, marginLeft: "0.5rem" }}>({p.funding})</span>}
+                    <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.92rem", color: `var(--text-warm)`, fontWeight: 700 }}>{p.name}</span>
+                    {p.roc && <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem", color: `var(--text-dim)`, marginLeft: "0.5rem" }}>{p.roc}</span>}
+                    {p.funding && <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: `var(--text-faint)`, marginLeft: "0.5rem" }}>({p.funding})</span>}
                   </div>
-                  <span style={{ fontFamily: "monospace", fontSize: "0.95rem", color: statusColor, fontWeight: 700, background: statusColor + "15", border: `1px solid ${statusColor}30`, borderRadius: "4px", padding: "0.2rem 0.6rem" }}>{statusLabel}</span>
+                  <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: statusColor, fontWeight: 700, background: statusColor + "15", border: `1px solid ${statusColor}30`, borderRadius: "var(--radius-sm, 6px)", padding: "0.2rem 0.6rem" }}>{statusLabel}</span>
                 </div>
 
                 {/* Progress bar */}
                 <div style={{ position: "relative", height: "28px", background: `var(--bg-tertiary)`, borderRadius: "6px", overflow: "hidden", marginBottom: "0.5rem" }}>
                   <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${Math.min(attain, 100)}%`, background: statusColor + "40", borderRadius: "6px", transition: "width 0.5s" }} />
                   <div style={{ position: "absolute", left: `${Math.min(p.pctElapsed, 100)}%`, top: 0, height: "100%", width: "2px", background: `var(--text-faint)` }} />
-                  <div style={{ position: "absolute", left: 0, top: 0, height: "100%", display: "flex", alignItems: "center", padding: "0 0.75rem", fontFamily: "monospace", fontSize: "0.9rem", color: `var(--text-warm)`, fontWeight: 700 }}>
+                  <div style={{ position: "absolute", left: 0, top: 0, height: "100%", display: "flex", alignItems: "center", padding: "0 0.75rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem", color: `var(--text-warm)`, fontWeight: 700 }}>
                     {Math.round(attain)}% ({p.actualHomes.toLocaleString()} / {p.planHomes.toLocaleString()})
                   </div>
                 </div>
@@ -2902,17 +3022,17 @@ function GoalsRollup({ agents, goalEntries, goalLookup, fiscalInfo }) {
                     { label: "Required Pace", value: `${p.reqDailyRate.toFixed(1)}/day`, sub: p.reqSph > 0 ? `${p.reqSph.toFixed(3)} SPH needed` : "met", color: p.reqDailyRate > p.dailyRate * 1.2 ? "#dc2626" : "#16a34a" },
                     { label: "Gap", value: `${p.gapPct >= 0 ? "+" : ""}${Math.round(p.gapPct)}%`, sub: p.gapPct >= 0 ? "surplus" : "shortfall", color: p.gapPct >= 0 ? "#16a34a" : "#dc2626" },
                   ].map(m => (
-                    <div key={m.label} style={{ padding: "0.6rem", borderRadius: "8px", background: m.color + "08", border: `1px solid ${m.color}20` }}>
-                      <div style={{ fontFamily: "monospace", fontSize: "0.8rem", color: `var(--text-faint)`, letterSpacing: "0.05em", textTransform: "uppercase" }}>{m.label}</div>
-                      <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "1.5rem", color: m.color, fontWeight: 700, lineHeight: 1 }}>{m.value}</div>
-                      <div style={{ fontFamily: "monospace", fontSize: "0.8rem", color: `var(--text-dim)`, marginTop: "0.15rem" }}>{m.sub}</div>
+                    <div key={m.label} style={{ padding: "0.6rem", borderRadius: "var(--radius-md, 10px)", background: m.color + "08", border: `1px solid ${m.color}20` }}>
+                      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-faint)`, letterSpacing: "0.05em", textTransform: "uppercase" }}>{m.label}</div>
+                      <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.5rem", color: m.color, fontWeight: 700, lineHeight: 1 }}>{m.value}</div>
+                      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-dim)`, marginTop: "0.15rem" }}>{m.sub}</div>
                     </div>
                   ))}
                 </div>
 
                 {/* Per-site pacing */}
                 {p.sites.length > 1 && (
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "monospace", fontSize: "0.9rem" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem" }}>
                     <thead><tr style={{ borderBottom: "1px solid var(--border)" }}>
                       {["Site", "Plan", "Actual", "Attain", "Projected", "Proj %", "Gap"].map(h => (
                         <th key={h} style={{ padding: "0.3rem 0.5rem", textAlign: h === "Site" ? "left" : "right", color: `var(--text-faint)`, fontWeight: 600 }}>{h}</th>
@@ -2982,47 +3102,51 @@ function DropZone({ onData, goalsRaw, onGoalsLoad, newHiresRaw, onNewHiresLoad }
 
   const MiniDrop = ({ label, num, icon, color, dragging, onDragOver, onDragLeave, onDrop, onClick, inputRef, onChange, loaded, loadedLabel, hint }) => (
     <div>
-      <div style={{ fontFamily: "monospace", fontSize: "1.17rem", color: loaded ? color : `var(--text-muted)`, letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: "0.6rem" }}>
-        {num} {label} {!loaded && <span style={{ color: `var(--text-faint)` }}>optional</span>}
-        {loaded && <span style={{ marginLeft: "0.5rem", color }}>✓</span>}
+      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: loaded ? color : `var(--text-muted)`, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "0.5rem", fontWeight: 600 }}>
+        {label} {!loaded && <span style={{ color: `var(--text-faint)`, fontWeight: 400 }}>optional</span>}
+        {loaded && <span style={{ marginLeft: "0.35rem" }}>{"\u2713"}</span>}
       </div>
       <div onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop} onClick={onClick}
-        style={{ border: `2px dashed ${loaded ? color+"55" : dragging ? color : `var(--border)`}`, borderRadius: "12px", padding: "2rem 1rem", textAlign: "center", cursor: "pointer", background: loaded ? color+"08" : dragging ? color+"08" : `var(--bg-secondary)`, transition: "all 0.2s ease", minHeight: "130px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-        <div style={{ fontSize: "2.63rem", marginBottom: "0.6rem" }}>{loaded ? "✅" : icon}</div>
+        style={{ border: `1.5px dashed ${loaded ? color+"40" : dragging ? color : `var(--border-muted)`}`, borderRadius: "var(--radius-lg, 16px)", padding: "1.75rem 1rem", textAlign: "center", cursor: "pointer", background: loaded ? color+"08" : dragging ? color+"06" : `var(--glass-bg)`, backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", transition: "all 250ms cubic-bezier(0.4,0,0.2,1)", minHeight: "120px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", boxShadow: loaded ? `0 0 16px ${color}10` : "var(--card-glow)" }}>
+        <div style={{ width: "36px", height: "36px", borderRadius: "var(--radius-md, 10px)", background: loaded ? color+"15" : `var(--bg-tertiary)`, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "0.65rem", border: `1px solid ${loaded ? color+"25" : "var(--border-muted)"}` }}>
+          <span style={{ fontSize: "1.1rem" }}>{loaded ? "\u2713" : icon}</span>
+        </div>
         {loaded
-          ? <div style={{ color, fontFamily: "Georgia, serif", fontSize: "1.2rem" }}>{loadedLabel}</div>
-          : <div style={{ color: `var(--text-secondary)`, fontFamily: "Georgia, serif", fontSize: "1.2rem" }}>Drop CSV or <span style={{ color }}>browse</span></div>}
-        <div style={{ fontFamily: "monospace", fontSize: "0.99rem", color: `var(--text-faint)`, marginTop: "0.35rem" }}>{loaded ? "click to replace" : hint}</div>
+          ? <div style={{ color, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", fontWeight: 500 }}>{loadedLabel}</div>
+          : <div style={{ color: `var(--text-secondary)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem" }}>Drop CSV or <span style={{ color, fontWeight: 600 }}>browse</span></div>}
+        <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "0.7rem", color: `var(--text-faint)`, marginTop: "0.3rem" }}>{loaded ? "click to replace" : hint}</div>
         <input ref={inputRef} type="file" accept=".csv" style={{ display: "none" }} onChange={onChange} />
       </div>
     </div>
   );
 
   return (
-    <div style={{ minHeight: "100vh", background: `var(--bg-primary)`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start", padding: "3rem 2rem 4rem", overflowY: "auto" }}>
-      <div style={{ textAlign: "center", marginBottom: "3rem" }}>
-        <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: "#d97706", letterSpacing: "0.3em", textTransform: "uppercase", marginBottom: "1rem" }}>Campaign Intelligence Suite</div>
-        <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "6rem", fontWeight: 700, color: `var(--text-warm)`, letterSpacing: "-2px", lineHeight: 0.95 }}>
-          Performance<br /><span style={{ color: "#d97706" }}>Insights</span>
+    <div style={{ minHeight: "100vh", background: `var(--bg-primary)`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start", padding: "3.5rem 2rem 4rem", overflowY: "auto" }}>
+      <div style={{ textAlign: "center", marginBottom: "3rem", animation: "fadeInUp 0.6s cubic-bezier(0.4,0,0.2,1)" }}>
+        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "#d97706", letterSpacing: "0.25em", textTransform: "uppercase", marginBottom: "1.25rem", fontWeight: 600 }}>Campaign Intelligence Suite</div>
+        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "4.5rem", fontWeight: 800, color: `var(--text-warm)`, letterSpacing: "-0.03em", lineHeight: 0.95 }}>
+          Performance<br /><span style={{ background: "linear-gradient(135deg, #d97706, #f59e0b)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" }}>Insights</span>
         </div>
-        <div style={{ color: `var(--text-dim)`, fontFamily: "Georgia, serif", fontSize: "1.23rem", marginTop: "1.25rem" }}>
+        <div style={{ color: `var(--text-dim)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", marginTop: "1.25rem", fontWeight: 400 }}>
           Load your files below, then generate your program analysis.
         </div>
       </div>
 
-      <div style={{ width: "100%", maxWidth: "720px", marginBottom: "1.25rem" }}>
-        <div style={{ fontFamily: "monospace", fontSize: "1.08rem", color: "#d97706", letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: "0.6rem" }}>
-          ① Agent Data <span style={{ color: "#dc2626" }}>required</span>
+      <div style={{ width: "100%", maxWidth: "720px", marginBottom: "1.25rem", animation: "fadeInUp 0.6s cubic-bezier(0.4,0,0.2,1) 0.1s both" }}>
+        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "#d97706", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.6rem", fontWeight: 600 }}>
+          Agent Data <span style={{ color: "#dc2626", fontWeight: 500 }}>required</span>
         </div>
         <div
           onDragOver={e => { e.preventDefault(); setDraggingAgent(true); }}
           onDragLeave={() => setDraggingAgent(false)}
           onDrop={e => { e.preventDefault(); setDraggingAgent(false); readFile(e.dataTransfer.files[0], onData); }}
           onClick={() => agentRef.current.click()}
-          style={{ border: `2px dashed ${draggingAgent ? "#d97706" : `var(--border)`}`, borderRadius: "12px", padding: "2.5rem 2rem", textAlign: "center", cursor: "pointer", background: draggingAgent ? "#d9770608" : `var(--bg-secondary)`, transition: "all 0.2s ease" }}>
-          <div style={{ fontSize: "3.38rem", marginBottom: "0.75rem" }}>📊</div>
-          <div style={{ color: `var(--text-secondary)`, fontFamily: "Georgia, serif", fontSize: "1.35rem" }}>Drop your agent CSV here, or <span style={{ color: "#d97706" }}>click to browse</span></div>
-          <div style={{ fontFamily: "monospace", fontSize: "1.08rem", color: `var(--text-faint)`, marginTop: "0.4rem" }}>Job Type · Region · AgentName · Hours · Goals · GPH · % to Goal</div>
+          style={{ border: `2px dashed ${draggingAgent ? "#d97706" : `var(--border-muted)`}`, borderRadius: "var(--radius-lg, 16px)", padding: "2.5rem 2rem", textAlign: "center", cursor: "pointer", background: draggingAgent ? "#d9770608" : `var(--glass-bg)`, backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)", transition: "all 250ms cubic-bezier(0.4,0,0.2,1)", boxShadow: draggingAgent ? "0 0 24px rgba(217,119,6,0.15)" : "var(--card-glow)" }}>
+          <div style={{ width: "48px", height: "48px", borderRadius: "var(--radius-lg, 16px)", background: "#d9770612", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1rem", border: "1px solid #d9770620" }}>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          </div>
+          <div style={{ color: `var(--text-secondary)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", fontWeight: 400 }}>Drop your agent CSV here, or <span style={{ color: "#d97706", fontWeight: 600 }}>click to browse</span></div>
+          <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "0.75rem", color: `var(--text-faint)`, marginTop: "0.5rem", letterSpacing: "0.02em" }}>Job Type · Region · AgentName · Hours · Goals · GPH · % to Goal</div>
           <input ref={agentRef} type="file" accept=".csv" style={{ display: "none" }} onChange={e => readFile(e.target.files[0], onData)} />
         </div>
       </div>
@@ -3057,10 +3181,10 @@ function DropZone({ onData, goalsRaw, onGoalsLoad, newHiresRaw, onNewHiresLoad }
       </div>
 
       {!newHiresRaw && (
-        <div style={{ width: "100%", maxWidth: "720px", background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "8px", padding: "0.85rem 1.25rem", marginBottom: "2rem", display: "flex", gap: "1rem", alignItems: "center" }}>
-          <span style={{ fontFamily: "monospace", fontSize: "1.17rem", color: `var(--text-dim)` }}>ROSTER FORMAT →</span>
-          <code style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-muted)` }}>First Name, Last Name, Hire Date, End Date</code>
-          <code style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-faint)` }}>Agents hired within 180 days auto-flagged as new hires</code>
+        <div style={{ width: "100%", maxWidth: "720px", background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-md, 10px)", padding: "0.85rem 1.25rem", marginBottom: "2rem", display: "flex", gap: "1rem", alignItems: "center" }}>
+          <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)` }}>ROSTER FORMAT →</span>
+          <code style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)` }}>First Name, Last Name, Hire Date, End Date</code>
+          <code style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-faint)` }}>Agents hired within 180 days auto-flagged as new hires</code>
         </div>
       )}
 
@@ -3068,21 +3192,21 @@ function DropZone({ onData, goalsRaw, onGoalsLoad, newHiresRaw, onNewHiresLoad }
       {pasteMode && (
         <div style={{ position: "fixed", inset: 0, zIndex: 999, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}
           onClick={e => { if (e.target === e.currentTarget) { setPasteMode(false); setPasteTarget(null); } }}>
-          <div style={{ background: `var(--bg-primary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1.5rem", width: "100%", maxWidth: "600px", maxHeight: "80vh", display: "flex", flexDirection: "column" }}>
-            <div style={{ fontFamily: "monospace", fontSize: "1.08rem", color: "#d97706", letterSpacing: "0.1em", marginBottom: "0.75rem" }}>
+          <div style={{ background: `var(--bg-primary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.5rem", width: "100%", maxWidth: "600px", maxHeight: "80vh", display: "flex", flexDirection: "column" }}>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "#d97706", letterSpacing: "0.1em", marginBottom: "0.75rem" }}>
               PASTE {pasteTarget === "agent" ? "AGENT DATA" : pasteTarget === "goals" ? "GOALS" : "ROSTER"} CSV
             </div>
-            <div style={{ fontFamily: "monospace", fontSize: "0.9rem", color: `var(--text-dim)`, marginBottom: "0.5rem" }}>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem", color: `var(--text-dim)`, marginBottom: "0.5rem" }}>
               Open the CSV file, Select All, Copy, then paste below
             </div>
             <textarea value={pasteText} onChange={e => setPasteText(e.target.value)}
               placeholder="Paste CSV content here..."
-              style={{ flex: 1, minHeight: "200px", fontFamily: "monospace", fontSize: "0.9rem", background: `var(--bg-secondary)`, color: `var(--text-primary)`, border: "1px solid var(--border)", borderRadius: "8px", padding: "0.75rem", resize: "vertical" }} />
+              style={{ flex: 1, minHeight: "200px", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem", background: `var(--bg-secondary)`, color: `var(--text-primary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-md, 10px)", padding: "0.75rem", resize: "vertical" }} />
             <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.75rem", justifyContent: "flex-end" }}>
               <button onClick={() => { setPasteMode(false); setPasteTarget(null); setPasteText(""); }}
-                style={{ padding: "0.4rem 1rem", borderRadius: "6px", border: "1px solid var(--border)", background: "transparent", color: `var(--text-muted)`, fontFamily: "monospace", fontSize: "1rem", cursor: "pointer" }}>Cancel</button>
+                style={{ padding: "0.4rem 1rem", borderRadius: "6px", border: "1px solid var(--border)", background: "transparent", color: `var(--text-muted)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", cursor: "pointer" }}>Cancel</button>
               <button onClick={handlePasteSubmit}
-                style={{ padding: "0.4rem 1rem", borderRadius: "6px", border: "1px solid #d97706", background: "#d9770618", color: "#d97706", fontFamily: "monospace", fontSize: "1rem", cursor: "pointer", fontWeight: 600 }}>Load Data</button>
+                style={{ padding: "0.4rem 1rem", borderRadius: "6px", border: "1px solid #d97706", background: "#d9770618", color: "#d97706", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", cursor: "pointer", fontWeight: 600 }}>Load Data</button>
             </div>
           </div>
         </div>
@@ -3090,33 +3214,33 @@ function DropZone({ onData, goalsRaw, onGoalsLoad, newHiresRaw, onNewHiresLoad }
 
       {/* Mobile helper: paste buttons below the main drop zones */}
       <div style={{ width: "100%", maxWidth: "720px", display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "1.25rem", justifyContent: "center" }}>
-        <div style={{ fontFamily: "monospace", fontSize: "0.88rem", color: `var(--text-faint)`, width: "100%", textAlign: "center", marginBottom: "0.25rem" }}>On mobile? Paste CSV text instead</div>
+        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem", color: `var(--text-faint)`, width: "100%", textAlign: "center", marginBottom: "0.25rem" }}>On mobile? Paste CSV text instead</div>
         <button onClick={() => { setPasteTarget("agent"); setPasteMode(true); }}
-          style={{ padding: "0.35rem 0.8rem", borderRadius: "5px", border: "1px solid #d97706", background: "transparent", color: "#d97706", fontFamily: "monospace", fontSize: "0.95rem", cursor: "pointer" }}>
+          style={{ padding: "0.35rem 0.8rem", borderRadius: "var(--radius-sm, 6px)", border: "1px solid #d97706", background: "transparent", color: "#d97706", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", cursor: "pointer" }}>
           Paste Agent Data
         </button>
         <button onClick={() => { setPasteTarget("goals"); setPasteMode(true); }}
-          style={{ padding: "0.35rem 0.8rem", borderRadius: "5px", border: "1px solid #16a34a", background: "transparent", color: "#16a34a", fontFamily: "monospace", fontSize: "0.95rem", cursor: "pointer" }}>
+          style={{ padding: "0.35rem 0.8rem", borderRadius: "var(--radius-sm, 6px)", border: "1px solid #16a34a", background: "transparent", color: "#16a34a", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", cursor: "pointer" }}>
           Paste Goals
         </button>
         <button onClick={() => { setPasteTarget("nh"); setPasteMode(true); }}
-          style={{ padding: "0.35rem 0.8rem", borderRadius: "5px", border: "1px solid #6366f1", background: "transparent", color: "#6366f1", fontFamily: "monospace", fontSize: "0.95rem", cursor: "pointer" }}>
+          style={{ padding: "0.35rem 0.8rem", borderRadius: "var(--radius-sm, 6px)", border: "1px solid #6366f1", background: "transparent", color: "#6366f1", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", cursor: "pointer" }}>
           Paste Roster
         </button>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.75rem", maxWidth: "720px", width: "100%" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.6rem", maxWidth: "720px", width: "100%", animation: "fadeInUp 0.6s cubic-bezier(0.4,0,0.2,1) 0.3s both" }}>
         {[
           ["Job Type", "One slide per program"],
-          ["Region",   "SD-Xfinity · BZ sites"],
+          ["Region",   "SD-Xfinity / BZ sites"],
           ["% to Goal","Quartile ranking engine"],
-          ["AgentName · Hours","Agent-level detail & flags"],
-          ["Goals · GPH","Conversion metrics"],
-          ["New XI · XM Lines","Optional sub-metrics"],
+          ["AgentName / Hours","Agent-level detail & flags"],
+          ["Goals / GPH","Conversion metrics"],
+          ["New XI / XM Lines","Optional sub-metrics"],
         ].map(([title, desc]) => (
-          <div key={title} style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "8px", padding: "0.75rem 1rem" }}>
-            <div style={{ fontFamily: "monospace", fontSize: "0.99rem", color: "#d97706", letterSpacing: "0.08em", marginBottom: "0.25rem" }}>{title}</div>
-            <div style={{ color: `var(--text-muted)`, fontSize: "1.17rem", fontFamily: "Georgia, serif" }}>{desc}</div>
+          <div key={title} style={{ background: `var(--glass-bg-subtle)`, backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", border: "1px solid var(--glass-border)", borderRadius: "var(--radius-md, 10px)", padding: "0.75rem 1rem" }}>
+            <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "0.72rem", color: "#d97706", letterSpacing: "0.06em", marginBottom: "0.2rem", fontWeight: 500 }}>{title}</div>
+            <div style={{ color: `var(--text-muted)`, fontSize: "0.85rem", fontFamily: "var(--font-ui, Inter, sans-serif)" }}>{desc}</div>
           </div>
         ))}
       </div>
@@ -3161,7 +3285,7 @@ function RankingAgentTray({ sup, colCount, allAgents }) {
   return (
     <tr><td colSpan={colCount} style={{ padding: 0 }}>
       <div style={{ padding: "0.4rem 0.75rem 0.6rem 2rem", background: "var(--bg-secondary)", borderBottom: "2px solid var(--border)", borderLeft: "3px solid #6366f140" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "monospace", fontSize: "0.85rem" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem" }}>
           <thead><tr style={{ borderBottom: "1px solid var(--border)" }}>
             {["Agent", "Program", "Hours", "Sales", "GPH", "% Goal", "CPS"].map(h => (
               <th key={h} style={{ padding: "0.2rem 0.4rem", textAlign: h === "Agent" ? "left" : "right", color: `var(--text-faint)`, fontWeight: 400 }}>{h}</th>
@@ -3175,10 +3299,10 @@ function RankingAgentTray({ sup, colCount, allAgents }) {
                 <Fragment key={a.name}>
                   <tr onClick={a.multiCampaign ? () => setExpandedAgent(isExpanded ? null : a.name) : undefined}
                     style={{ borderBottom: "1px solid var(--border)", background: isExpanded ? "#6366f115" : ai % 2 === 0 ? "transparent" : `var(--bg-row-alt)`, cursor: a.multiCampaign ? "pointer" : "default" }}>
-                    <td style={{ padding: "0.2rem 0.4rem", color: `var(--text-warm)`, fontFamily: "Georgia, serif" }}>
+                    <td style={{ padding: "0.2rem 0.4rem", color: `var(--text-warm)`, fontFamily: "var(--font-ui, Inter, sans-serif)" }}>
                       {a.multiCampaign && <span style={{ color: `var(--text-faint)`, marginRight: "0.3rem", fontSize: "0.75rem" }}>{isExpanded ? "\u25BE" : "\u25B8"}</span>}
                       {a.name}
-                      {a.multiCampaign && <span style={{ marginLeft: "0.3rem", fontFamily: "monospace", fontSize: "0.72rem", color: "#6366f1", background: "#6366f112", border: "1px solid #6366f130", borderRadius: "2px", padding: "0.02rem 0.2rem" }}>{a.campaigns.length} pgms</span>}
+                      {a.multiCampaign && <span style={{ marginLeft: "0.3rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "#6366f1", background: "#6366f112", border: "1px solid #6366f130", borderRadius: "2px", padding: "0.02rem 0.2rem" }}>{a.campaigns.length} pgms</span>}
                     </td>
                     <td style={{ padding: "0.2rem 0.4rem", color: `var(--text-dim)`, fontSize: "0.82rem" }}></td>
                     <td style={{ padding: "0.2rem 0.4rem", textAlign: "right", color: "#6366f1" }}>{fmt(a.hours, 1)}</td>
@@ -3336,16 +3460,16 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
 
       {/* Sub-region tabs — only shown when group has multiple regions */}
       {hasMultipleRegions && (
-        <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1.25rem" }}>
-          <div style={{ fontFamily: "monospace", fontSize: "1.17rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.9rem" }}>Site Breakdown</div>
+        <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem" }}>
+          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.9rem" }}>Site Breakdown</div>
           <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "1rem" }}>
             <button onClick={() => setSubRegion(null)}
-              style={{ padding: "0.35rem 0.9rem", borderRadius: "6px", border: `1px solid ${!subRegion?"#d97706":`var(--border)`}`, background: !subRegion?"#d9770618":"transparent", color: !subRegion?"#d97706":`var(--text-muted)`, fontFamily: "monospace", fontSize: "1.11rem", cursor: "pointer" }}>
+              style={{ padding: "0.35rem 0.9rem", borderRadius: "6px", border: `1px solid ${!subRegion?"#d97706":`var(--border)`}`, background: !subRegion?"#d9770618":"transparent", color: !subRegion?"#d97706":`var(--text-muted)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", cursor: "pointer" }}>
               All Combined
             </button>
             {regions.map(r => (
               <button key={r} onClick={() => setSubRegion(r)}
-                style={{ padding: "0.35rem 0.9rem", borderRadius: "6px", border: `1px solid ${subRegion===r?"#6366f1":`var(--border)`}`, background: subRegion===r?"#6366f118":"transparent", color: subRegion===r?"#818cf8":`var(--text-muted)`, fontFamily: "monospace", fontSize: "1.11rem", cursor: "pointer" }}>
+                style={{ padding: "0.35rem 0.9rem", borderRadius: "6px", border: `1px solid ${subRegion===r?"#6366f1":`var(--border)`}`, background: subRegion===r?"#6366f118":"transparent", color: subRegion===r?"#818cf8":`var(--text-muted)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", cursor: "pointer" }}>
                 {r}
               </button>
             ))}
@@ -3358,15 +3482,15 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
               const isActive = !subRegion || subRegion === r.name;
               return (
                 <div key={r.name} onClick={() => setSubRegion(subRegion === r.name ? null : r.name)}
-                  style={{ cursor: "pointer", padding: "0.6rem 0.75rem", borderRadius: "8px", background: subRegion===r.name?"#6366f115":"transparent", border: `1px solid ${subRegion===r.name?"#6366f140":`var(--bg-tertiary)`}`, opacity: isActive ? 1 : 0.45, transition: "all 0.2s" }}>
+                  style={{ cursor: "pointer", padding: "0.6rem 0.75rem", borderRadius: "var(--radius-md, 10px)", background: subRegion===r.name?"#6366f115":"transparent", border: `1px solid ${subRegion===r.name?"#6366f140":`var(--bg-tertiary)`}`, opacity: isActive ? 1 : 0.45, transition: "all 0.2s" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.3rem" }}>
-                    <span style={{ fontFamily: "Georgia, serif", fontSize: "1.2rem", color: `var(--text-primary)` }}>{r.name}</span>
+                    <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem", color: `var(--text-primary)` }}>{r.name}</span>
                     <div style={{ display: "flex", gap: "1rem" }}>
-                      <span style={{ fontFamily: "monospace", fontSize: "1.14rem", color: "#16a34a" }}>{r.goals.toLocaleString()} goals</span>
-                      <span style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-muted)` }}>GPH {fmt(r.gph, 2)}</span>
-                      <span style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-muted)` }}>{r.unique} agents</span>
-                      <span style={{ fontFamily: "monospace", fontSize: "1.14rem", color: Q.Q1.color }}>Q1: {r.dist.Q1}</span>
-                      <span style={{ fontFamily: "monospace", fontSize: "1.14rem", color: Q.Q4.color }}>Q4: {r.dist.Q4}</span>
+                      <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "#16a34a" }}>{r.goals.toLocaleString()} goals</span>
+                      <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)` }}>GPH {fmt(r.gph, 2)}</span>
+                      <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)` }}>{r.unique} agents</span>
+                      <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: Q.Q1.color }}>Q1: {r.dist.Q1}</span>
+                      <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: Q.Q4.color }}>Q4: {r.dist.Q4}</span>
                     </div>
                   </div>
                   <div style={{ display: "flex", height: "4px", background: `var(--bg-tertiary)`, borderRadius: "2px", overflow: "hidden" }}>
@@ -3429,6 +3553,7 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
           costPerActual={siteActRgu} costPerPlan={sitePlanMetrics?.rgu || 0}
           sphActual={siteActualSph}  sphPlan={sitePlanSph}
           hourActual={totalHrs}      hourPlan={sitePlanMetrics?.hours || 0}
+          homesActual={totalG}       homesPlan={sitePlanMetrics?.goals || 0}
         />
       )}
 
@@ -3494,9 +3619,9 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
         const sTotPct = siteAvgSph ? (sTotGph / siteAvgSph) * 100 : null;
 
         return (
-          <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1.25rem" }}>
-            <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.75rem" }}>
-              Supervisor Ranking {"\u2014"} {displayLabel} {siteAvgSph ? `\u00b7 Site SPH Goal: ${siteAvgSph.toFixed(3)}` : ""}
+          <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem" }}>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.75rem" }}>
+              Supervisor Ranking {"\u2014"} {displayLabel} {siteAvgSph ? ` | Site SPH Goal: ${siteAvgSph.toFixed(3)}` : ""}
             </div>
 
             {/* Supervisor / Agent toggle */}
@@ -3505,7 +3630,7 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
                 const active = rankView === v;
                 return (
                   <button key={v} onClick={() => { setRankView(v); setSiteExpandedAgent(null); setExpandedSup(null); }}
-                    style={{ padding: "0.2rem 0.65rem", borderRadius: "4px", border: `1px solid ${active ? "#6366f1" : "var(--border)"}`, background: active ? "#6366f118" : "transparent", color: active ? "#6366f1" : `var(--text-dim)`, fontFamily: "monospace", fontSize: "0.95rem", cursor: "pointer", fontWeight: active ? 700 : 400 }}>
+                    style={{ padding: "0.2rem 0.65rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${active ? "#6366f1" : "var(--border)"}`, background: active ? "#6366f118" : "transparent", color: active ? "#6366f1" : `var(--text-dim)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", cursor: "pointer", fontWeight: active ? 700 : 400 }}>
                     {v === "supervisors" ? "By Supervisor" : "By Agent"}
                   </button>
                 );
@@ -3513,7 +3638,7 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
             </div>
             {rankView === "supervisors" && (
             <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "monospace", fontSize: "0.92rem" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.92rem" }}>
                 <thead><tr style={{ borderBottom: "2px solid var(--border)" }}>
                   <th style={{ padding: "0.4rem 0.5rem", textAlign: "left", color: `var(--text-faint)`, fontWeight: 600, fontSize: "0.85rem" }}>#</th>
                   <RkTh k="name" label="Supervisor" left />
@@ -3538,7 +3663,7 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
                     return (
                       <Fragment key={s.name}><tr onClick={() => setExpandedSup(expandedSup === s.name ? null : s.name)} style={{ cursor: "pointer", borderBottom: "1px solid var(--bg-tertiary)", background: isTop ? "#16a34a08" : i % 2 === 0 ? "transparent" : `var(--bg-row-alt)` }}>
                         <td style={{ padding: "0.35rem 0.5rem", color: isTop ? "#16a34a" : `var(--text-dim)`, fontWeight: 700 }}>{i + 1}</td>
-                        <td style={{ padding: "0.35rem 0.5rem", color: `var(--text-warm)`, fontFamily: "Georgia, serif" }}>
+                        <td style={{ padding: "0.35rem 0.5rem", color: `var(--text-warm)`, fontFamily: "var(--font-ui, Inter, sans-serif)" }}>
                           {s.name}
                           {isTop && <span style={{ marginLeft: "0.4rem", fontSize: "0.75rem", color: "#16a34a", background: "#16a34a15", border: "1px solid #16a34a30", borderRadius: "3px", padding: "0.05rem 0.25rem" }}>TOP</span>}
                         </td>
@@ -3623,7 +3748,7 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
               const totGph = totHrs > 0 ? totGoals / totHrs : 0;
               return (
                 <div style={{ overflowX: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "monospace", fontSize: "0.92rem" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.92rem" }}>
                     <thead><tr style={{ borderBottom: "2px solid var(--border)" }}>
                       <AgTh k="name" label="Agent" left />
                       <AgTh k="supervisor" label="Supervisor" left />
@@ -3642,10 +3767,10 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
                           <Fragment key={a.name}>
                             <tr onClick={a.multiCampaign ? () => setSiteExpandedAgent(isExp ? null : a.name) : undefined}
                               style={{ borderBottom: "1px solid var(--bg-tertiary)", cursor: a.multiCampaign ? "pointer" : "default", background: isExp ? "#6366f115" : i % 2 === 0 ? "transparent" : `var(--bg-row-alt)` }}>
-                              <td style={{ padding: "0.35rem 0.5rem", color: `var(--text-warm)`, fontFamily: "Georgia, serif" }}>
+                              <td style={{ padding: "0.35rem 0.5rem", color: `var(--text-warm)`, fontFamily: "var(--font-ui, Inter, sans-serif)" }}>
                                 {a.multiCampaign && <span style={{ color: `var(--text-faint)`, marginRight: "0.3rem", fontSize: "0.75rem" }}>{isExp ? "\u25BE" : "\u25B8"}</span>}
                                 {a.name}
-                                {a.multiCampaign && <span style={{ marginLeft: "0.3rem", fontFamily: "monospace", fontSize: "0.72rem", color: "#6366f1", background: "#6366f112", border: "1px solid #6366f130", borderRadius: "2px", padding: "0.02rem 0.2rem" }}>{a.count} pgms</span>}
+                                {a.multiCampaign && <span style={{ marginLeft: "0.3rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "#6366f1", background: "#6366f112", border: "1px solid #6366f130", borderRadius: "2px", padding: "0.02rem 0.2rem" }}>{a.count} pgms</span>}
                               </td>
                               <td style={{ padding: "0.35rem 0.5rem", color: `var(--text-dim)` }}>{a.supervisor}</td>
                               <td style={{ padding: "0.35rem 0.5rem", color: `var(--text-dim)`, fontSize: "0.82rem", maxWidth: "130px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={a.programList}>{a.programList}</td>
@@ -3766,14 +3891,14 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
             cells.push(<Divider key={`d${gi}`} color={`${g.color}40`} />);
             cells.push(
               <DtCell key={`p${gi}`} style={{ background: g.bg }}>
-                <span style={{ fontFamily: "monospace", fontSize: rowBg ? "1.11rem" : "1.08rem", color: `var(--text-dim)`, fontWeight: rowBg ? 700 : 400 }}>
+                <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: rowBg ? "1.11rem" : "1.08rem", color: `var(--text-dim)`, fontWeight: rowBg ? 700 : 400 }}>
                   {m.plan ? m.fmtFn(m.plan) : "\u2014"}
                 </span>
               </DtCell>
             );
             cells.push(
               <DtCell key={`a${gi}`} style={{ background: g.bg }}>
-                <span style={{ fontFamily: "monospace", fontSize: rowBg ? "1.11rem" : "1.08rem", color: `var(--text-primary)`, fontWeight: rowBg ? 700 : 400 }}>
+                <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: rowBg ? "1.11rem" : "1.08rem", color: `var(--text-primary)`, fontWeight: rowBg ? 700 : 400 }}>
                   {m.actual ? m.fmtFn(m.actual) : "0"}
                 </span>
               </DtCell>
@@ -3782,19 +3907,19 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
               <DtCell key={`r${gi}`} style={{ background: g.bg }}>
                 {m.plan ? (
                   isOver
-                    ? <span style={{ fontFamily: "monospace", fontSize: rowBg ? "1.08rem" : "0.92rem", color: gi === 0 ? "#dc2626" : "#16a34a", fontWeight: 700 }}>
+                    ? <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: rowBg ? "1.08rem" : "0.92rem", color: gi === 0 ? "#dc2626" : "#16a34a", fontWeight: 700 }}>
                         +{m.fmtFn(Math.abs(diff))}
                       </span>
                     : remain === 0
-                      ? <span style={{ fontFamily: "monospace", fontSize: "1.05rem", color: "#16a34a", fontWeight: 700 }}>0</span>
+                      ? <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: "#16a34a", fontWeight: 700 }}>0</span>
                       : noDaysLeft
-                        ? <span style={{ fontFamily: "monospace", fontSize: rowBg ? "1.08rem" : "0.92rem", color: "#dc2626", fontWeight: 700 }}>
+                        ? <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: rowBg ? "1.08rem" : "0.92rem", color: "#dc2626", fontWeight: 700 }}>
                             -{m.fmtFn(remain)}
                           </span>
-                      : <span style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: rowBg ? "1.95rem" : "1.65rem", color: rowBg ? "#d97706" : (onTrack ? "#16a34a" : "#dc2626"), fontWeight: 700, lineHeight: 1 }}>
+                      : <span style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: rowBg ? "1.95rem" : "1.65rem", color: rowBg ? "#d97706" : (onTrack ? "#16a34a" : "#dc2626"), fontWeight: 700, lineHeight: 1 }}>
                           {perDay < 1 ? perDay.toFixed(1) : Math.ceil(perDay)}
                         </span>
-                ) : <span style={{ fontFamily: "monospace", fontSize: "1.08rem", color: `var(--text-faint)` }}>{"\u2014"}</span>}
+                ) : <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-faint)` }}>{"\u2014"}</span>}
               </DtCell>
             );
           });
@@ -3802,16 +3927,16 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
         };
 
         return (
-        <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1.5rem" }}>
+        <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.5rem" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                 <span style={{ fontSize: "1.5rem" }}>🎯</span>
-                <span style={{ fontFamily: "monospace", fontSize: "1.17rem", color: "#d97706", letterSpacing: "0.12em", textTransform: "uppercase", fontWeight: 700 }}>
+                <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "#d97706", letterSpacing: "0.12em", textTransform: "uppercase", fontWeight: 700 }}>
                   Daily Targets — {displayLabel}
                 </span>
               </div>
-              <div style={{ fontFamily: "monospace", fontSize: "1.02rem", color: `var(--text-faint)`, marginTop: "0.2rem" }}>
+              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "1.02rem", color: `var(--text-faint)`, marginTop: "0.2rem" }}>
                 Required per day to finish on goal · {fiscalInfo.remainingBDays > 0 ? `${fiscalInfo.remainingBDays} business days remaining` : "No scheduled business days remaining"}
               </div>
             </div>
@@ -3824,14 +3949,14 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
             return (
               <div style={{ display: "flex", gap: "0.3rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
                 <button onClick={() => setDtFundingFilter(null)}
-                  style={{ padding: "0.2rem 0.6rem", borderRadius: "4px", border: `1px solid ${!dtFundingFilter ? "#d97706" : "var(--border)"}`, background: !dtFundingFilter ? "#d9770618" : "transparent", color: !dtFundingFilter ? "#d97706" : `var(--text-dim)`, fontFamily: "monospace", fontSize: "0.9rem", cursor: "pointer", fontWeight: !dtFundingFilter ? 700 : 400 }}>
+                  style={{ padding: "0.2rem 0.6rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${!dtFundingFilter ? "#d97706" : "var(--border)"}`, background: !dtFundingFilter ? "#d9770618" : "transparent", color: !dtFundingFilter ? "#d97706" : `var(--text-dim)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem", cursor: "pointer", fontWeight: !dtFundingFilter ? 700 : 400 }}>
                   All Funding
                 </button>
                 {fundingSources.map(f => {
                   const active = dtFundingFilter === f;
                   return (
                     <button key={f} onClick={() => setDtFundingFilter(active ? null : f)}
-                      style={{ padding: "0.2rem 0.6rem", borderRadius: "4px", border: `1px solid ${active ? "#2563eb" : "var(--border)"}`, background: active ? "#2563eb18" : "transparent", color: active ? "#2563eb" : `var(--text-dim)`, fontFamily: "monospace", fontSize: "0.9rem", cursor: "pointer", fontWeight: active ? 700 : 400 }}>
+                      style={{ padding: "0.2rem 0.6rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${active ? "#2563eb" : "var(--border)"}`, background: active ? "#2563eb18" : "transparent", color: active ? "#2563eb" : `var(--text-dim)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem", cursor: "pointer", fontWeight: active ? 700 : 400 }}>
                       {f}
                     </button>
                   );
@@ -3847,7 +3972,7 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
               <React.Fragment key={g.label}>
                 <div style={{ background: `${g.color}40` }} />
                 <div style={{ gridColumn: "span 3", textAlign: "center", padding: "0.4rem 0", background: `${g.color}18`, borderBottom: `2px solid ${g.color}40`, borderTop: `2px solid ${g.color}30`, borderRadius: gi === 0 ? "6px 0 0 0" : gi === 3 ? "0 6px 0 0" : "0" }}>
-                  <span style={{ fontFamily: "monospace", fontSize: "1.05rem", color: g.color, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700 }}>{g.label}</span>
+                  <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: g.color, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700 }}>{g.label}</span>
                 </div>
               </React.Fragment>
             ))}
@@ -3855,13 +3980,13 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
 
           {/* Sub-header row */}
           <div style={{ display: "grid", gridTemplateColumns: gridCols, borderBottom: "2px solid var(--border)" }}>
-            <div style={{ padding: "0.35rem 0.75rem", fontFamily: "monospace", fontSize: "0.96rem", color: `var(--text-muted)`, textTransform: "uppercase", letterSpacing: "0.06em" }}>Program</div>
+            <div style={{ padding: "0.35rem 0.75rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.96rem", color: `var(--text-muted)`, textTransform: "uppercase", letterSpacing: "0.06em" }}>Program</div>
             {dtColors.map((g, gi) => (
               <React.Fragment key={gi}>
                 <div style={{ background: `${g.color}25` }} />
-                <div style={{ fontFamily: "monospace", fontSize: "0.96rem", color: `var(--text-faint)`, textAlign: "center", padding: "0.35rem 0", background: g.bg }}>Plan</div>
-                <div style={{ fontFamily: "monospace", fontSize: "0.96rem", color: `var(--text-faint)`, textAlign: "center", padding: "0.35rem 0", background: g.bg }}>Actual</div>
-                <div style={{ fontFamily: "monospace", fontSize: "0.96rem", color: "#d97706", textAlign: "center", padding: "0.35rem 0", fontWeight: 700, background: g.bg }}>/ Day</div>
+                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.96rem", color: `var(--text-faint)`, textAlign: "center", padding: "0.35rem 0", background: g.bg }}>Plan</div>
+                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.96rem", color: `var(--text-faint)`, textAlign: "center", padding: "0.35rem 0", background: g.bg }}>Actual</div>
+                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.96rem", color: "#d97706", textAlign: "center", padding: "0.35rem 0", fontWeight: 700, background: g.bg }}>/ Day</div>
               </React.Fragment>
             ))}
           </div>
@@ -3878,8 +4003,8 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
             return (
               <div key={p.jobType + (p._fundingRoc || String(pi))} style={{ display: "grid", gridTemplateColumns: gridCols, borderBottom: "1px solid var(--bg-tertiary)", alignItems: "center" }}>
                 <div style={{ padding: "0.5rem 0.75rem" }}>
-                  <div style={{ fontFamily: "Georgia, serif", fontSize: "1.2rem", color: `var(--text-warm)` }}>{p.jobType}</div>
-                  {rocLabel && <div style={{ fontFamily: "monospace", fontSize: "0.8rem", color: `var(--text-faint)` }}>{rocLabel}</div>}
+                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem", color: `var(--text-warm)` }}>{p.jobType}</div>
+                  {rocLabel && <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-faint)` }}>{rocLabel}</div>}
                 </div>
                 {renderMetricCells(metrics, false)}
               </div>
@@ -3896,7 +4021,7 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
             ];
             return (
               <div style={{ display: "grid", gridTemplateColumns: gridCols, borderTop: "2px solid var(--border)", marginTop: "0.25rem", alignItems: "center" }}>
-                <div style={{ padding: "0.65rem 0.75rem", fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-muted)`, textTransform: "uppercase", fontWeight: 700 }}>TOTAL</div>
+                <div style={{ padding: "0.65rem 0.75rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)`, textTransform: "uppercase", fontWeight: 700 }}>TOTAL</div>
                 {renderMetricCells(tots, true)}
               </div>
             );
@@ -3906,17 +4031,17 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
       })()}
 
       {/* Quartile bar */}
-      <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1.25rem" }}>
-        <div style={{ fontFamily: "monospace", fontSize: "1.11rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.75rem" }}>Quartile Mix — {displayLabel}</div>
+      <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem" }}>
+        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.75rem" }}>Quartile Mix — {displayLabel}</div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.5rem", marginBottom: "0.75rem" }}>
           {["Q1","Q2","Q3","Q4"].map(q => (
-            <div key={q} style={{ padding: "0.75rem", borderRadius: "8px", background: Q[q].color+"12", border: `1px solid ${Q[q].color}30`, textAlign: "center" }}>
-              <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "3rem", color: Q[q].color, fontWeight: 700 }}>{distU[q]}</div>
-              <div style={{ fontFamily: "monospace", fontSize: "1.17rem", color: Q[q].color }}>{q} · unique</div>
+            <div key={q} style={{ padding: "0.75rem", borderRadius: "var(--radius-md, 10px)", background: Q[q].color+"12", border: `1px solid ${Q[q].color}30`, textAlign: "center" }}>
+              <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "3rem", color: Q[q].color, fontWeight: 700 }}>{distU[q]}</div>
+              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: Q[q].color }}>{q} · unique</div>
             </div>
           ))}
         </div>
-        <div style={{ display: "flex", height: "8px", borderRadius: "4px", overflow: "hidden" }}>
+        <div style={{ display: "flex", height: "8px", borderRadius: "var(--radius-sm, 6px)", overflow: "hidden" }}>
           {["Q1","Q2","Q3","Q4"].map(q => (
             <div key={q} style={{ flex: distU[q] || 0, background: Q[q].color, transition: "flex 0.5s" }} />
           ))}
@@ -3924,27 +4049,27 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
       </div>
 
       {/* Per-program breakdown */}
-      <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1.5rem" }}>
-        <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "1.25rem" }}>Programs — {displayLabel}</div>
+      <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.5rem" }}>
+        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "1.25rem" }}>Programs — {displayLabel}</div>
         <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
           {sitePrograms.map(p => {
             const maxGoals   = Math.max(...sitePrograms.map(x => x.totalGoals), 1);
             const barW       = (p.totalGoals / maxGoals) * 100;
             const color      = p.attain !== null ? attainColor(p.attain) : attainColor((p.distUn.Q1 / (p.uNames||1)) * 100);
             return (
-              <div key={p.jobType} style={{ padding: "1rem", background: `var(--bg-primary)`, borderRadius: "10px", border: `1px solid ${color}20` }}>
+              <div key={p.jobType} style={{ padding: "1rem", background: `var(--bg-primary)`, borderRadius: "var(--radius-md, 10px)", border: `1px solid ${color}20` }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.6rem" }}>
                   <div>
-                    <div style={{ fontFamily: "Georgia, serif", fontSize: "1.42rem", color: `var(--text-warm)` }}>{p.jobType}</div>
-                    <div style={{ fontFamily: "monospace", fontSize: "0.99rem", color: `var(--text-dim)`, marginTop: "0.1rem" }}>
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "1.42rem", color: `var(--text-warm)` }}>{p.jobType}</div>
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: `var(--text-dim)`, marginTop: "0.1rem" }}>
                       {p.uNames} agents · {fmt(p.totalHours, 0)} hrs · GPH {fmt(p.siteGph, 2)}
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
                     {p.attain !== null && (
                       <div style={{ textAlign: "right" }}>
-                        <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "1.95rem", color, fontWeight: 700 }}>{Math.round(p.attain)}%</div>
-                        <div style={{ fontFamily: "monospace", fontSize: "1.08rem", color: `var(--text-dim)` }}>attainment</div>
+                        <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.95rem", color, fontWeight: 700 }}>{Math.round(p.attain)}%</div>
+                        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-dim)` }}>attainment</div>
                       </div>
                     )}
                   </div>
@@ -3954,15 +4079,15 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
                 </div>
                 <div style={{ display: "flex", gap: "0.75rem" }}>
                   {["Q1","Q2","Q3","Q4"].map(q => (
-                    <span key={q} style={{ fontFamily: "monospace", fontSize: "1.14rem", color: Q[q].color }}>
+                    <span key={q} style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: Q[q].color }}>
                       {q}: {p.distUn[q]}
                     </span>
                   ))}
-                  <span style={{ fontFamily: "monospace", fontSize: "1.14rem", color: "#16a34a" }}>
+                  <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "#16a34a" }}>
                     {p.totalGoals.toLocaleString()} goals
                   </span>
                   {p.attain !== null && p.sitePlanGoals && (
-                    <span style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-dim)` }}>
+                    <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)` }}>
                       of {p.sitePlanGoals.toLocaleString()} plan
                     </span>
                   )}
@@ -3970,15 +4095,15 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
                 {/* ROC/Target breakout when multiple funding sources */}
                 {p.goalBreakout && p.goalBreakout.length > 1 && (
                   <div style={{ marginTop: "0.6rem", borderTop: `1px solid var(--border)`, paddingTop: "0.5rem" }}>
-                    <div style={{ fontFamily: "monospace", fontSize: "0.85rem", color: `var(--text-faint)`, letterSpacing: "0.1em", marginBottom: "0.3rem" }}>GOAL BREAKOUT</div>
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: `var(--text-faint)`, letterSpacing: "0.1em", marginBottom: "0.3rem" }}>GOAL BREAKOUT</div>
                     {p.goalBreakout.map(g => (
                       <div key={g.roc || g.target} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.25rem 0", borderBottom: "1px solid var(--bg-tertiary)" }}>
                         <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-                          <span style={{ fontFamily: "monospace", fontSize: "0.9rem", color: `var(--text-muted)` }}>{g.roc}</span>
-                          <span style={{ fontFamily: "Georgia, serif", fontSize: "1rem", color: `var(--text-secondary)` }}>{g.target}</span>
-                          {g.funding && <span style={{ fontFamily: "monospace", fontSize: "0.85rem", color: "#6366f1", background: "#6366f108", border: "1px solid #6366f130", borderRadius: "3px", padding: "0 0.3rem" }}>{g.funding}</span>}
+                          <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem", color: `var(--text-muted)` }}>{g.roc}</span>
+                          <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-secondary)` }}>{g.target}</span>
+                          {g.funding && <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: "#6366f1", background: "#6366f108", border: "1px solid #6366f130", borderRadius: "3px", padding: "0 0.3rem" }}>{g.funding}</span>}
                         </div>
-                        <div style={{ display: "flex", gap: "1rem", fontFamily: "monospace", fontSize: "0.95rem" }}>
+                        <div style={{ display: "flex", gap: "1rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem" }}>
                           <span style={{ color: `var(--text-dim)` }}>{g.homes.toLocaleString()} homes</span>
                           <span style={{ color: `var(--text-dim)` }}>{Math.round(g.hours).toLocaleString()} hrs</span>
                           <span style={{ color: `var(--text-dim)` }}>SPH {g.sph.toFixed(3)}</span>
@@ -4061,23 +4186,24 @@ function BusinessOverview({ perf, onNav }) {
 
   return (
     <div style={{ minHeight: "100vh", background: `var(--bg-primary)`, display: "flex", flexDirection: "column" }}>
-      <div style={{ background: `var(--bg-secondary)`, borderBottom: "1px solid var(--border)", padding: "1.25rem 2.5rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div style={{ background: `var(--glass-bg)`, backdropFilter: "blur(12px) saturate(150%)", WebkitBackdropFilter: "blur(12px) saturate(150%)", borderBottom: "1px solid var(--glass-border)", padding: "1.25rem 2.5rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div>
-          <div style={{ fontFamily: "monospace", fontSize: "1.08rem", color: `var(--text-muted)`, letterSpacing: "0.15em", textTransform: "uppercase" }}>Business Overview</div>
-          <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "3.38rem", color: `var(--text-warm)`, fontWeight: 700, letterSpacing: "-0.5px", lineHeight: 1.1 }}>
+          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: `var(--text-muted)`, letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 600, marginBottom: "0.2rem" }}>Business Overview</div>
+          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "2rem", color: `var(--text-warm)`, fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1.15 }}>
             {tab === "bysite" && activeGroup ? activeGroup.label : tab === "daily" ? "Daily Performance" : "Highlights & Lowlights"}
           </div>
         </div>
-        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: "0.35rem", alignItems: "center", flexWrap: "wrap" }}>
           {[["overview","Overview"],["bysite","By Site"],["daily","Daily"]].map(([t, label]) => (
             <button key={t} onClick={() => setTab(t)}
-              style={{ padding: "0.4rem 0.9rem", borderRadius: "6px", border: `1px solid ${tab===t?"#d97706":`var(--border)`}`, background: tab===t?"#d9770618":"transparent", color: tab===t?"#d97706":`var(--text-muted)`, fontFamily: "monospace", fontSize: "1.14rem", cursor: "pointer", letterSpacing: "0.05em" }}>
+              style={{ padding: "0.4rem 0.85rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${tab===t?"#d9770650":"var(--text-faint)"}`, background: tab===t?"#d9770612":"transparent", color: tab===t?"#d97706":`var(--text-muted)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", cursor: "pointer", fontWeight: tab===t ? 600 : 400, transition: "all 200ms cubic-bezier(0.4,0,0.2,1)" }}>
               {label}
             </button>
           ))}
+          <div style={{ width: "1px", height: "20px", background: "var(--border-muted)", margin: "0 0.2rem" }} />
           <button onClick={() => onNav(1)}
-            style={{ padding: "0.5rem 1.25rem", background: "#d9770618", border: "1px solid #d97706", borderRadius: "6px", color: "#d97706", fontFamily: "monospace", fontSize: "1.17rem", cursor: "pointer" }}>
-            PROGRAMS →
+            style={{ padding: "0.45rem 1rem", background: "linear-gradient(135deg, #d9770620, #f59e0b15)", border: "1px solid #d9770640", borderRadius: "var(--radius-sm, 6px)", color: "#d97706", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", cursor: "pointer", fontWeight: 600, letterSpacing: "0.02em" }}>
+            Programs {"\u2192"}
           </button>
         </div>
       </div>
@@ -4085,11 +4211,11 @@ function BusinessOverview({ perf, onNav }) {
       <div style={{ flex: 1, overflowY: "auto", padding: "2rem 2.5rem", display: "flex", flexDirection: "column", gap: "1.5rem" }}>
 
         {!goalLookup && tab === "overview" && (
-          <div style={{ background: "#d9770610", border: "1px solid #d9770640", borderLeft: "4px solid #d97706", borderRadius: "8px", padding: "0.9rem 1.25rem", display: "flex", alignItems: "center", gap: "0.9rem" }}>
-            <span style={{ fontSize: "1.65rem" }}>🎯</span>
+          <div style={{ background: "#d9770610", border: "1px solid #d9770640", borderLeft: "4px solid #d97706", borderRadius: "var(--radius-md, 10px)", padding: "0.9rem 1.25rem", display: "flex", alignItems: "center", gap: "0.9rem" }}>
+            <span style={{ fontSize: "1.15rem" }}>🎯</span>
             <div>
-              <div style={{ fontFamily: "monospace", fontSize: "1.11rem", color: "#d97706", letterSpacing: "0.1em", textTransform: "uppercase" }}>Goals file not loaded</div>
-              <div style={{ fontFamily: "Georgia, serif", fontSize: "1.17rem", color: `var(--text-secondary)`, marginTop: "0.2rem" }}>
+              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "#d97706", letterSpacing: "0.1em", textTransform: "uppercase" }}>Goals file not loaded</div>
+              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-secondary)`, marginTop: "0.2rem" }}>
                 Upload your goals CSV to unlock Goals vs Plan comparisons and a Goals tab on every program slide. Until then, metrics reflect performance distribution only.
               </div>
             </div>
@@ -4103,9 +4229,9 @@ function BusinessOverview({ perf, onNav }) {
             <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
               {siteGroups.map(g => (
                 <button key={g.label} onClick={() => setSelectedGroup(g)}
-                  style={{ padding: "0.4rem 1rem", borderRadius: "6px", border: `1px solid ${activeGroup?.label===g.label?"#d97706":`var(--border)`}`, background: activeGroup?.label===g.label?"#d9770618":"transparent", color: activeGroup?.label===g.label?"#d97706":`var(--text-muted)`, fontFamily: "monospace", fontSize: "1.14rem", cursor: "pointer" }}>
+                  style={{ padding: "0.4rem 1rem", borderRadius: "6px", border: `1px solid ${activeGroup?.label===g.label?"#d97706":`var(--border)`}`, background: activeGroup?.label===g.label?"#d9770618":"transparent", color: activeGroup?.label===g.label?"#d97706":`var(--text-muted)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", cursor: "pointer" }}>
                   {g.label}
-                  <span style={{ fontFamily: "monospace", fontSize: "1.11rem", color: `var(--text-dim)`, marginLeft: "0.4rem" }}>
+                  <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-dim)`, marginLeft: "0.4rem" }}>
                     ({g.regions.length > 1 ? `${g.regions.length} sites` : g.regions[0]})
                   </span>
                 </button>
@@ -4130,7 +4256,7 @@ function BusinessOverview({ perf, onNav }) {
         {tab === "overview" && (
           <>
             {/* KPI strip */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "0.75rem" }}>
+        <div className="animate-in" style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "0.75rem" }}>
           {[
             kpi1,
             { label: "Unique Agents",  value: uniqueAgentCount,             sub: `${programs.length} programs`,                              accent: "#6366f1" },
@@ -4138,10 +4264,10 @@ function BusinessOverview({ perf, onNav }) {
             { label: "Total Goals",    value: globalGoals.toLocaleString(),  sub: "conversions",                                              accent: "#16a34a" },
             { label: "Q1 Agents",      value: uniqueQ1,                      sub: `${Math.round(uniqueQ1/uniqueAgentCount*100)}% of workforce`, accent: Q.Q1.color },
           ].map(c => (
-            <div key={c.label} style={{ background: `var(--bg-secondary)`, border: `1px solid ${c.accent}22`, borderRadius: "10px", padding: "1.1rem", borderTop: `3px solid ${c.accent}` }}>
-              <div style={{ fontFamily: "monospace", fontSize: "1.17rem", color: `var(--text-muted)`, textTransform: "uppercase", letterSpacing: "0.1em" }}>{c.label}</div>
-              <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "3rem", color: `var(--text-warm)`, fontWeight: 700, marginTop: "0.1rem", lineHeight: 1 }}>{c.value}</div>
-              <div style={{ fontFamily: "monospace", fontSize: "1.01rem", color: `var(--text-dim)`, marginTop: "0.25rem" }}>{c.sub}</div>
+            <div key={c.label} style={{ background: `var(--glass-bg)`, backdropFilter: "blur(12px) saturate(150%)", WebkitBackdropFilter: "blur(12px) saturate(150%)", border: `1px solid ${c.accent}18`, borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem 1.35rem", borderTop: `3px solid ${c.accent}`, boxShadow: `var(--card-glow)`, transition: "all 250ms cubic-bezier(0.4,0,0.2,1)" }}>
+              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: `var(--text-muted)`, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600 }}>{c.label}</div>
+              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "2.25rem", color: `var(--text-warm)`, fontWeight: 800, marginTop: "0.2rem", lineHeight: 1, letterSpacing: "-0.02em" }}>{c.value}</div>
+              <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "0.72rem", color: `var(--text-dim)`, marginTop: "0.35rem" }}>{c.sub}</div>
             </div>
           ))}
         </div>
@@ -4179,12 +4305,13 @@ function BusinessOverview({ perf, onNav }) {
             costPerActual={globalRgu}    costPerPlan={globalPlanRgu}
             sphActual={actualGlobalSph}  sphPlan={planGlobalSph}
             hourActual={totalHours}      hourPlan={globalPlanHours}
+            homesActual={globalGoals}    homesPlan={planTotal}
           />
         )}
 
         {/* Quartile distribution */}
-        <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1.25rem 1.5rem" }}>
-          <div style={{ fontFamily: "monospace", fontSize: "1.11rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.9rem" }}>Workforce Distribution — Unique Agents</div>
+        <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem 1.5rem" }}>
+          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.9rem" }}>Workforce Distribution — Unique Agents</div>
           {(() => {
             // Build one total-hours entry and one quartile per unique agent name
             const agentHours = {};
@@ -4204,15 +4331,15 @@ function BusinessOverview({ perf, onNav }) {
                     const active  = names.filter(n => (agentHours[n] || 0) >= 16).length;
                     const pctTeam = totalUnique ? Math.round(count / totalUnique * 100) : 0;
                     return (
-                      <div key={q} style={{ padding: "0.75rem", borderRadius: "8px", background: Q[q].color+"12", border: `1px solid ${Q[q].color}30`, textAlign: "center" }}>
-                        <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "3rem", color: Q[q].color, fontWeight: 700, lineHeight: 1 }}>{active}</div>
-                        <div style={{ fontFamily: "monospace", fontSize: "1.17rem", color: Q[q].color, marginTop: "0.15rem" }}>{q} · 16+ hrs</div>
-                        <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-dim)`, marginTop: "0.2rem" }}>{count} total · {pctTeam}%</div>
+                      <div key={q} style={{ padding: "0.75rem", borderRadius: "var(--radius-md, 10px)", background: Q[q].color+"12", border: `1px solid ${Q[q].color}30`, textAlign: "center" }}>
+                        <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "3rem", color: Q[q].color, fontWeight: 700, lineHeight: 1 }}>{active}</div>
+                        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: Q[q].color, marginTop: "0.15rem" }}>{q} · 16+ hrs</div>
+                        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)`, marginTop: "0.2rem" }}>{count} total · {pctTeam}%</div>
                       </div>
                     );
                   })}
                 </div>
-                <div style={{ display: "flex", height: "7px", borderRadius: "4px", overflow: "hidden" }}>
+                <div style={{ display: "flex", height: "7px", borderRadius: "var(--radius-sm, 6px)", overflow: "hidden" }}>
                   {["Q1","Q2","Q3","Q4"].map(q => {
                     const c = Object.keys(agentQ).filter(n => agentQ[n] === q).length;
                     return <div key={q} style={{ flex: c||0, background: Q[q].color, transition: "flex 0.6s" }} />;
@@ -4226,10 +4353,10 @@ function BusinessOverview({ perf, onNav }) {
         {/* Program + Region rankings */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.25rem" }}>
           {/* Programs */}
-          <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1.25rem" }}>
+          <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-              <div style={{ fontFamily: "monospace", fontSize: "1.11rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase" }}>Program Rankings</div>
-              <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-faint)` }}>{goalLookup ? "vs plan" : "by health score"}</div>
+              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase" }}>Program Rankings</div>
+              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-faint)` }}>{goalLookup ? "vs plan" : "by health score"}</div>
             </div>
             {programs.map((p, i) => {
               const metric  = p.attainment !== null ? p.attainment : p.healthScore;
@@ -4239,12 +4366,12 @@ function BusinessOverview({ perf, onNav }) {
               return (
                 <div key={p.jobType} onClick={() => onNav(i + 1)} style={{ padding: "0.6rem 0", borderBottom: "1px solid var(--bg-tertiary)", cursor: "pointer" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.3rem" }}>
-                    <span style={{ fontFamily: "Georgia, serif", fontSize: "1.2rem", color: `var(--text-primary)` }}>{p.jobType}</span>
+                    <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem", color: `var(--text-primary)` }}>{p.jobType}</span>
                     <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
-                      <span style={{ fontFamily: "monospace", fontSize: "1.01rem", color: `var(--text-dim)` }}>{p.uniqueAgentCount} agents</span>
+                      <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: `var(--text-dim)` }}>{p.uniqueAgentCount} agents</span>
                       {p.attainment !== null
-                        ? <span style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "1.65rem", color, fontWeight: 700 }}>{Math.round(p.attainment)}%<span style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-dim)` }}> plan</span></span>
-                        : <span style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "1.65rem", color, fontWeight: 700 }}>{p.distUnique.Q1} Q1</span>
+                        ? <span style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.15rem", color, fontWeight: 700 }}>{Math.round(p.attainment)}%<span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)` }}> plan</span></span>
+                        : <span style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.15rem", color, fontWeight: 700 }}>{p.distUnique.Q1} Q1</span>
                       }
                     </div>
                   </div>
@@ -4252,10 +4379,10 @@ function BusinessOverview({ perf, onNav }) {
                     <div style={{ width: `${barW}%`, background: color, borderRadius: "2px", transition: "width 0.6s" }} />
                   </div>
                   <div style={{ display: "flex", gap: "0.75rem", marginTop: "0.25rem" }}>
-                    <span style={{ fontFamily: "monospace", fontSize: "1.14rem", color: Q.Q1.color }}>Q1: {p.distUnique.Q1}</span>
-                    <span style={{ fontFamily: "monospace", fontSize: "1.14rem", color: Q.Q4.color }}>Q4: {p.distUnique.Q4}</span>
-                    {p.planGoals && <span style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-faint)` }}>{p.actGoals} / {p.planGoals} homes</span>}
-                    <span style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-faint)` }}>{fmt(p.totalHours, 0)} hrs</span>
+                    <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: Q.Q1.color }}>Q1: {p.distUnique.Q1}</span>
+                    <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: Q.Q4.color }}>Q4: {p.distUnique.Q4}</span>
+                    {p.planGoals && <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-faint)` }}>{p.actGoals} / {p.planGoals} homes</span>}
+                    <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-faint)` }}>{fmt(p.totalHours, 0)} hrs</span>
                   </div>
                 </div>
               );
@@ -4263,8 +4390,8 @@ function BusinessOverview({ perf, onNav }) {
           </div>
 
           {/* Regions */}
-          <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1.25rem" }}>
-            <div style={{ fontFamily: "monospace", fontSize: "1.11rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "1rem" }}>Region Rankings</div>
+          <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem" }}>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "1rem" }}>Region Rankings</div>
             {regions.map((r, i) => {
               const maxR  = regions[0].avgPct;
               const barW  = maxR > 0 ? Math.min((r.avgPct/maxR)*100, 100) : 0;
@@ -4275,22 +4402,22 @@ function BusinessOverview({ perf, onNav }) {
                 <div key={r.name} style={{ padding: "0.6rem 0", borderBottom: "1px solid var(--bg-tertiary)" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.3rem" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                      {isTop && <span style={{ fontFamily: "monospace", fontSize: "1.08rem", color: "#d97706", background: "#d9770618", padding: "0.05rem 0.3rem", borderRadius: "2px" }}>BEST</span>}
-                      {isBot && <span style={{ fontFamily: "monospace", fontSize: "1.08rem", color: "#dc2626", background: "#dc262618", padding: "0.05rem 0.3rem", borderRadius: "2px" }}>LAGGING</span>}
-                      <span style={{ fontFamily: "Georgia, serif", fontSize: "1.2rem", color: `var(--text-primary)` }}>{r.name}</span>
+                      {isTop && <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "#d97706", background: "#d9770618", padding: "0.05rem 0.3rem", borderRadius: "2px" }}>BEST</span>}
+                      {isBot && <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "#dc2626", background: "#dc262618", padding: "0.05rem 0.3rem", borderRadius: "2px" }}>LAGGING</span>}
+                      <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem", color: `var(--text-primary)` }}>{r.name}</span>
                     </div>
-                    <span style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "1.65rem", color, fontWeight: 700 }}>
-                      {r.totalGoals.toLocaleString()} <span style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-dim)` }}>goals</span>
+                    <span style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.15rem", color, fontWeight: 700 }}>
+                      {r.totalGoals.toLocaleString()} <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)` }}>goals</span>
                     </span>
                   </div>
                   <div style={{ display: "flex", height: "4px", background: `var(--bg-tertiary)`, borderRadius: "2px", overflow: "hidden", marginBottom: "0.25rem" }}>
                     <div style={{ width: `${barW}%`, background: color, borderRadius: "2px", transition: "width 0.6s" }} />
                   </div>
                   <div style={{ display: "flex", gap: "0.75rem" }}>
-                    <span style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-dim)` }}>{r.uniqueAgents} agents</span>
-                    <span style={{ fontFamily: "monospace", fontSize: "1.14rem", color: Q.Q1.color }}>Q1: {r.uniqueQ1}</span>
-                    <span style={{ fontFamily: "monospace", fontSize: "1.14rem", color: Q.Q4.color }}>Q4: {r.uniqueQ4}</span>
-                    <span style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-faint)` }}>{fmt(r.totalHours, 0)} hrs</span>
+                    <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)` }}>{r.uniqueAgents} agents</span>
+                    <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: Q.Q1.color }}>Q1: {r.uniqueQ1}</span>
+                    <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: Q.Q4.color }}>Q4: {r.uniqueQ4}</span>
+                    <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-faint)` }}>{fmt(r.totalHours, 0)} hrs</span>
                   </div>
                 </div>
               );
@@ -4306,22 +4433,22 @@ function BusinessOverview({ perf, onNav }) {
 
         {/* Priority Coaching — business-wide */}
         {globalQ4Priority.length > 0 && (
-          <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1.25rem" }}>
-            <div style={{ fontFamily: "monospace", fontSize: "1.11rem", color: "#dc2626", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.35rem" }}>Priority Coaching — Business Wide</div>
-            <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-dim)`, marginBottom: "0.9rem" }}>Zero sales · 16+ hours · all programs · ranked by hours</div>
+          <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem" }}>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "#dc2626", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.35rem" }}>Priority Coaching — Business Wide</div>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)`, marginBottom: "0.9rem" }}>Zero sales · 16+ hours · all programs · ranked by hours</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "0.5rem 1.5rem" }}>
               {globalQ4Priority.map((a, i) => (
                 <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.5rem 0", borderBottom: "1px solid var(--bg-tertiary)" }}>
                   <div>
-                    <div style={{ color: `var(--text-warm)`, fontFamily: "Georgia, serif", fontSize: "1.2rem" }}>
+                    <div style={{ color: `var(--text-warm)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem" }}>
                       {a.agentName}
-                      {newHireSet.has(a.agentName) && <span style={{ fontFamily: "monospace", fontSize: "1.17rem", color: "#d97706", background: "#d9770620", padding: "0.05rem 0.25rem", borderRadius: "2px", marginLeft: "0.35rem" }}>NEW</span>}
+                      {newHireSet.has(a.agentName) && <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "var(--nh-color)", background: "var(--nh-bg)", padding: "0.05rem 0.25rem", borderRadius: "2px", marginLeft: "0.35rem" }}>NEW</span>}
                     </div>
-                    <div style={{ fontFamily: "monospace", fontSize: "0.99rem", color: `var(--text-dim)` }}>{a.jobType} · {a.region}</div>
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: `var(--text-dim)` }}>{a.jobType} · {a.region}</div>
                   </div>
                   <div style={{ textAlign: "right" }}>
-                    <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "1.5rem", color: "#6366f1", fontWeight: 700 }}>{fmt(a.hours, 1)} hrs</div>
-                    <div style={{ fontFamily: "monospace", fontSize: "1.08rem", color: "#dc2626" }}>0 sales</div>
+                    <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.5rem", color: "#6366f1", fontWeight: 700 }}>{fmt(a.hours, 1)} hrs</div>
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "#dc2626" }}>0 sales</div>
                   </div>
                 </div>
               ))}
@@ -4339,7 +4466,7 @@ function BusinessOverview({ perf, onNav }) {
 
       <div style={{ borderTop: "1px solid var(--border)", padding: "0.9rem 2.5rem", display: "flex", justifyContent: "flex-end", background: `var(--bg-row-alt)` }}>
         <button onClick={() => onNav(1)}
-          style={{ padding: "0.5rem 1.1rem", background: "transparent", border: "1px solid var(--text-faint)", borderRadius: "6px", color: `var(--text-secondary)`, fontFamily: "monospace", fontSize: "1.17rem", cursor: "pointer" }}>
+          style={{ padding: "0.5rem 1.1rem", background: "transparent", border: "1px solid var(--text-faint)", borderRadius: "6px", color: `var(--text-secondary)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", cursor: "pointer" }}>
           NEXT →
         </button>
       </div>
@@ -4387,9 +4514,9 @@ function TrendArrow({ points }) {
   const last = valid[valid.length - 1], first = valid[0];
   const delta = last - first;
   const pct   = first > 0 ? (delta / first) * 100 : 0;
-  if (Math.abs(pct) < 2) return <span style={{ color: `var(--text-dim)`, fontSize: "1.14rem" }}>→</span>;
+  if (Math.abs(pct) < 2) return <span style={{ color: `var(--text-dim)`, fontSize: "0.82rem" }}>→</span>;
   return (
-    <span style={{ color: delta > 0 ? "#16a34a" : "#dc2626", fontSize: "1.14rem", fontWeight: 700 }}>
+    <span style={{ color: delta > 0 ? "#16a34a" : "#dc2626", fontSize: "0.82rem", fontWeight: 700 }}>
       {delta > 0 ? "↑" : "↓"} {Math.abs(pct).toFixed(0)}%
     </span>
   );
@@ -4600,16 +4727,16 @@ function SupervisorCard({ s, rank, totalSups, maxGph, supWeeks, hasDates, sphGoa
   const insights = buildSupInsights(s, supWeeks, crossProgramMap, lastDataDate, jobType);
 
   return (
-    <div style={{ padding: "1rem", background: `var(--bg-primary)`, borderRadius: "10px", border: `1px solid ${color}22` }}>
+    <div style={{ padding: "1rem", background: `var(--bg-primary)`, borderRadius: "var(--radius-md, 10px)", border: `1px solid ${color}22` }}>
       {/* Header row */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.6rem" }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            {isTop && <span style={{ fontFamily: "monospace", fontSize: "1.17rem", color: "#d97706", background: "#d9770618", border: "1px solid #d9770640", borderRadius: "3px", padding: "0.05rem 0.3rem" }}>TOP</span>}
-            {isBot && <span style={{ fontFamily: "monospace", fontSize: "1.17rem", color: "#dc2626", background: "#dc262618", border: "1px solid #dc262640", borderRadius: "3px", padding: "0.05rem 0.3rem" }}>LAGGING</span>}
-            <span style={{ fontFamily: "Georgia, serif", fontSize: "1.38rem", color: `var(--text-warm)` }}>{s.supervisor}</span>
+            {isTop && <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "#d97706", background: "#d9770618", border: "1px solid #d9770640", borderRadius: "3px", padding: "0.05rem 0.3rem" }}>TOP</span>}
+            {isBot && <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "#dc2626", background: "#dc262618", border: "1px solid #dc262640", borderRadius: "3px", padding: "0.05rem 0.3rem" }}>LAGGING</span>}
+            <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "1.38rem", color: `var(--text-warm)` }}>{s.supervisor}</span>
           </div>
-          <div style={{ fontFamily: "monospace", fontSize: "0.99rem", color: `var(--text-dim)`, marginTop: "0.15rem" }}>
+          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: `var(--text-dim)`, marginTop: "0.15rem" }}>
             {s.uNames} agents · {fmt(s.totalHours, 0)} hrs · {s.totalGoals.toLocaleString()} goals · {s.totalHsd} HSD · {s.totalXm} XM
           </div>
         </div>
@@ -4621,8 +4748,8 @@ function SupervisorCard({ s, rank, totalSups, maxGph, supWeeks, hasDates, sphGoa
             </div>
           )}
           <div style={{ textAlign: "right" }}>
-            <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "2.25rem", color, fontWeight: 700, lineHeight: 1 }}>{s.gph.toFixed(3)}</div>
-            <div style={{ fontFamily: "monospace", fontSize: "1.08rem", color: `var(--text-dim)` }}>GPH</div>
+            <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "2.25rem", color, fontWeight: 700, lineHeight: 1 }}>{s.gph.toFixed(3)}</div>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-dim)` }}>GPH</div>
           </div>
         </div>
       </div>
@@ -4635,11 +4762,11 @@ function SupervisorCard({ s, rank, totalSups, maxGph, supWeeks, hasDates, sphGoa
       {/* Quartile mix */}
       <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", marginBottom: "0.5rem" }}>
         {["Q1","Q2","Q3","Q4"].map(q => (
-          <span key={q} style={{ fontFamily: "monospace", fontSize: "1.14rem", color: Q[q].color }}>
+          <span key={q} style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: Q[q].color }}>
             {q}: {s.distU[q]}
           </span>
         ))}
-        <span style={{ fontFamily: "monospace", fontSize: "1.14rem", color: "#d97706" }}>Q1 rate: {s.q1Rate.toFixed(0)}%</span>
+        <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "#d97706" }}>Q1 rate: {s.q1Rate.toFixed(0)}%</span>
       </div>
 
       {/* Weekly breakdown */}
@@ -4647,11 +4774,11 @@ function SupervisorCard({ s, rank, totalSups, maxGph, supWeeks, hasDates, sphGoa
         <div style={{ display: "flex", gap: "0.75rem", overflowX: "auto", marginBottom: "0.6rem", paddingBottom: "0.25rem" }}>
           {[...supWeeks].reverse().map(w => (
               <div key={w.week} style={{ textAlign: "center" }}>
-                <div style={{ fontFamily: "monospace", fontSize: "1.11rem", color: w.gph ? attainColor(sphGoal ? (w.gph/sphGoal)*100 : w.q1Rate) : `var(--text-faint)`, fontWeight: 600 }}>
+                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: w.gph ? attainColor(sphGoal ? (w.gph/sphGoal)*100 : w.q1Rate) : `var(--text-faint)`, fontWeight: 600 }}>
                   {w.gph ? w.gph.toFixed(3) : "—"}
                 </div>
-                <div style={{ fontFamily: "monospace", fontSize: "0.99rem", color: `var(--text-muted)` }}>{weekLabel(w.week)}</div>
-                <div style={{ fontFamily: "monospace", fontSize: "0.81rem", color: `var(--text-faint)` }}>{fmt(w.hours||0, 0)} hours</div>
+                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: `var(--text-muted)` }}>{weekLabel(w.week)}</div>
+                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.81rem", color: `var(--text-faint)` }}>{fmt(w.hours||0, 0)} hours</div>
               </div>
             ))}
           </div>
@@ -4661,15 +4788,15 @@ function SupervisorCard({ s, rank, totalSups, maxGph, supWeeks, hasDates, sphGoa
       <div style={{ borderTop: "1px solid var(--bg-tertiary)", paddingTop: "0.5rem", marginBottom: "0.5rem" }}>
         <button onClick={() => setShowInsights(v => !v)}
           style={{ background: "transparent", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: "0.4rem",
-            fontFamily: "monospace", fontSize: "1.11rem", color: `var(--text-dim)`, padding: 0 }}>
+            fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-dim)`, padding: 0 }}>
           <span>{showInsights ? "▾" : "▸"}</span>
           Attendance &amp; Consistency Insights
         </button>
         {showInsights && (
           <div style={{ marginTop: "0.5rem", display: "flex", flexDirection: "column", gap: "0.3rem" }}>
             {insights.map((txt, i) => (
-              <div key={i} style={{ fontFamily: "monospace", fontSize: "1.11rem", color: `var(--text-secondary)`,
-                background: `var(--bg-secondary)`, borderRadius: "4px", padding: "0.3rem 0.6rem",
+              <div key={i} style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-secondary)`,
+                background: `var(--bg-secondary)`, borderRadius: "var(--radius-sm, 6px)", padding: "0.3rem 0.6rem",
                 borderLeft: `2px solid ${color}66` }}>
                 {txt}
               </div>
@@ -4682,7 +4809,7 @@ function SupervisorCard({ s, rank, totalSups, maxGph, supWeeks, hasDates, sphGoa
       <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
         {s.agentList.map(a => (
           <button key={a.agentName} onClick={() => setSelectedAgent(selectedAgent === a.agentName ? null : a.agentName)}
-            style={{ fontFamily: "monospace", fontSize: "1.08rem", padding: "0.2rem 0.5rem", borderRadius: "3px", cursor: "pointer",
+            style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", padding: "0.2rem 0.5rem", borderRadius: "3px", cursor: "pointer",
               background: selectedAgent===a.agentName ? Q[a.quartile].color+"33" : Q[a.quartile].color+"12",
               border: `1px solid ${Q[a.quartile].color}${selectedAgent===a.agentName?"88":"33"}`,
               color: selectedAgent===a.agentName ? `var(--text-warm)` : Q[a.quartile].color }}>
@@ -4800,7 +4927,7 @@ function TeamsView({ agents, jobType, sphGoal, allAgents }) {
 
   if (!hasSups && !hasDates) {
     return (
-      <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "2rem", textAlign: "center", color: `var(--text-faint)`, fontFamily: "Georgia, serif" }}>
+      <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "2rem", textAlign: "center", color: `var(--text-faint)`, fontFamily: "var(--font-ui, Inter, sans-serif)" }}>
         No supervisor or date data found in this file.
       </div>
     );
@@ -4844,15 +4971,15 @@ function TeamsView({ agents, jobType, sphGoal, allAgents }) {
     };
 
     return (
-      <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1.5rem" }}>
+      <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.5rem" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.25rem" }}>
           <div>
-            <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase" }}>Agent Daily Profile</div>
-            <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "2.25rem", color: `var(--text-warm)`, fontWeight: 700 }}>{profile.agentName}</div>
-            <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-dim)`, marginTop: "0.2rem" }}>{profile.supervisor} · {profile.jobType} · {profile.quartile}</div>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase" }}>Agent Daily Profile</div>
+            <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "2.25rem", color: `var(--text-warm)`, fontWeight: 700 }}>{profile.agentName}</div>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)`, marginTop: "0.2rem" }}>{profile.supervisor} · {profile.jobType} · {profile.quartile}</div>
           </div>
           <button onClick={() => setSelectedAgent(null)}
-            style={{ background: "transparent", border: "1px solid var(--text-faint)", borderRadius: "4px", color: `var(--text-muted)`, fontFamily: "monospace", fontSize: "1.08rem", padding: "0.25rem 0.6rem", cursor: "pointer" }}>✕ close</button>
+            style={{ background: "transparent", border: "1px solid var(--text-faint)", borderRadius: "var(--radius-sm, 6px)", color: `var(--text-muted)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", padding: "0.25rem 0.6rem", cursor: "pointer" }}>✕ close</button>
         </div>
 
         {/* KPI mini-strip */}
@@ -4867,19 +4994,19 @@ function TeamsView({ agents, jobType, sphGoal, allAgents }) {
             { label: "Total HSD",     value: totalHsd,                color: "#2563eb" },
             { label: "Total XM",      value: totalXm,                 color: "#8b5cf6" },
           ].map(c => (
-            <div key={c.label} style={{ background: `var(--bg-primary)`, borderRadius: "8px", padding: "0.5rem", textAlign: "center", border: `1px solid ${c.color}22` }}>
-              <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "1.65rem", color: c.color, fontWeight: 700 }}>{c.value}</div>
-              <div style={{ fontFamily: "monospace", fontSize: "0.9rem", color: `var(--text-dim)`, marginTop: "0.1rem" }}>{c.label}</div>
+            <div key={c.label} style={{ background: `var(--bg-primary)`, borderRadius: "var(--radius-md, 10px)", padding: "0.5rem", textAlign: "center", border: `1px solid ${c.color}22` }}>
+              <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.15rem", color: c.color, fontWeight: 700 }}>{c.value}</div>
+              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem", color: `var(--text-dim)`, marginTop: "0.1rem" }}>{c.label}</div>
             </div>
           ))}
         </div>
 
         {/* Daily performance table — grouped by week */}
-        <div style={{ fontFamily: "monospace", fontSize: "1.08rem", color: `var(--text-muted)`, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "0.5rem" }}>
+        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-muted)`, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "0.5rem" }}>
           Daily Performance Breakdown
         </div>
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "monospace", fontSize: "1.05rem" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem" }}>
             <thead>
               <tr style={{ borderBottom: "2px solid var(--border)" }}>
                 {["Date","Day","Hours","Goals","GPH","HSD","XM","% to Goal"].map(h => (
@@ -4975,18 +5102,18 @@ function TeamsView({ agents, jobType, sphGoal, allAgents }) {
                     return (
                       <tr key={`wk-detail-${wg.wk}`}><td colSpan={9} style={{ padding: 0 }}>
                         <div style={{ padding: "0.6rem 1rem", background: "#6366f108", borderLeft: "3px solid #6366f1" }}>
-                          <div style={{ fontFamily: "monospace", fontSize: "0.85rem", color: `var(--text-faint)`, letterSpacing: "0.08em", marginBottom: "0.5rem" }}>
+                          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: `var(--text-faint)`, letterSpacing: "0.08em", marginBottom: "0.5rem" }}>
                             WEEK DETAIL \u2014 Wk {wg.wk.slice(5)} ({wWorked.length} days worked)
                           </div>
                           {jobs.map(([jt, data]) => {
                             const agentList = Object.values(data.agents).sort((x, y) => y.hrs - x.hrs);
                             return (
                               <div key={jt} style={{ marginBottom: "0.6rem" }}>
-                                <div style={{ fontFamily: "Georgia, serif", fontSize: "1.05rem", color: `var(--text-warm)`, marginBottom: "0.25rem" }}>
+                                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: `var(--text-warm)`, marginBottom: "0.25rem" }}>
                                   <span style={{ fontWeight: 700 }}>{jt}</span>
-                                  <span style={{ fontFamily: "monospace", fontSize: "0.9rem", color: `var(--text-dim)`, marginLeft: "0.75rem" }}>{agentList.length} agents \u00b7 {data.goals} sales \u00b7 {data.hrs.toFixed(1)} hrs \u00b7 {data.hrs > 0 ? (data.goals / data.hrs).toFixed(3) : "0"} GPH</span>
+                                  <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem", color: `var(--text-dim)`, marginLeft: "0.75rem" }}>{agentList.length} agents <span style={{ display: "inline-block", width: "0.6em" }} /> {data.goals} sales <span style={{ display: "inline-block", width: "0.6em" }} /> {data.hrs.toFixed(1)} hrs <span style={{ display: "inline-block", width: "0.6em" }} /> {data.hrs > 0 ? (data.goals / data.hrs).toFixed(3) : "0"} GPH</span>
                                 </div>
-                                <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "monospace", fontSize: "0.88rem" }}>
+                                <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem" }}>
                                   <thead><tr style={{ borderBottom: "1px solid var(--border)" }}>
                                     {["Agent","Supervisor","Hours","Sales","GPH","HSD","XM"].map(h => (
                                       <th key={h} style={{ padding: "0.2rem 0.5rem", textAlign: h === "Agent" || h === "Supervisor" ? "left" : "right", color: `var(--text-faint)`, fontWeight: 400 }}>{h}</th>
@@ -5054,7 +5181,7 @@ function TeamsView({ agents, jobType, sphGoal, allAgents }) {
           return (
             <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginTop: "0.75rem" }}>
               {gaps.map((g, i) => (
-                <div key={i} style={{ fontFamily: "monospace", fontSize: "1.11rem", color: "#d97706", background: "#d9770612", border: "1px solid #d9770630", borderRadius: "4px", padding: "0.2rem 0.5rem" }}>
+                <div key={i} style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "#d97706", background: "#d9770612", border: "1px solid #d9770630", borderRadius: "var(--radius-sm, 6px)", padding: "0.2rem 0.5rem" }}>
                   {g.len}-day gap starting {g.start}
                 </div>
               ))}
@@ -5077,8 +5204,8 @@ function TeamsView({ agents, jobType, sphGoal, allAgents }) {
 
       {/* Weekly Program Trend */}
       {hasDates && programWeekly.length > 1 && (
-        <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1.5rem" }}>
-          <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "1.1rem" }}>
+        <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.5rem" }}>
+          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "1.1rem" }}>
             Weekly Trend — {jobType}
           </div>
           <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end", minHeight: "96px" }}>
@@ -5088,16 +5215,16 @@ function TeamsView({ agents, jobType, sphGoal, allAgents }) {
               const color  = sphGoal ? attainColor((w.gph || 0) / sphGoal * 100) : "#d97706";
               return (
                 <div key={w.week} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "0.25rem", justifyContent: "flex-end" }}>
-                  <div style={{ fontFamily: "monospace", fontSize: "1.08rem", color }}>{w.gph ? w.gph.toFixed(3) : "—"}</div>
+                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color }}>{w.gph ? w.gph.toFixed(3) : "—"}</div>
                   <div style={{ width: "100%", height: `${barH}px`, background: color, borderRadius: "3px 3px 0 0", opacity: 0.85 }} />
-                  <div style={{ fontFamily: "monospace", fontSize: "1.17rem", color: `var(--text-dim)`, textAlign: "center" }}>{weekLabel(w.week)}</div>
-                  <div style={{ fontFamily: "monospace", fontSize: "0.99rem", color: `var(--text-faint)`, textAlign: "center" }}>{fmt(w.hours||0,0)} hours</div>
-                  <div style={{ fontFamily: "monospace", fontSize: "0.81rem", color: `var(--text-faint)` }}>{w.goals}G · {w.agentCount}A</div>
+                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)`, textAlign: "center" }}>{weekLabel(w.week)}</div>
+                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: `var(--text-faint)`, textAlign: "center" }}>{fmt(w.hours||0,0)} hours</div>
+                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.81rem", color: `var(--text-faint)` }}>{w.goals}G · {w.agentCount}A</div>
                 </div>
               );
             })}
           </div>
-          {sphGoal && <div style={{ fontFamily: "monospace", fontSize: "1.11rem", color: `var(--text-dim)`, marginTop: "0.5rem" }}>Goal: {sphGoal.toFixed(3)} GPH</div>}
+          {sphGoal && <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-dim)`, marginTop: "0.5rem" }}>Goal: {sphGoal.toFixed(3)} GPH</div>}
         </div>
       )}
 
@@ -5113,9 +5240,9 @@ function TeamsView({ agents, jobType, sphGoal, allAgents }) {
               return (
                 <button key={r} onClick={() => { setTeamRegion(r); setSelectedAgent(null); }}
                   style={{ background: active ? (r === "All" ? `var(--text-muted)` : btnColor) + "20" : "transparent",
-                    border: `1px solid ${active ? (r === "All" ? `var(--text-muted)` : btnColor) : `var(--border)`}`, borderRadius: "5px",
+                    border: `1px solid ${active ? (r === "All" ? `var(--text-muted)` : btnColor) : `var(--border)`}`, borderRadius: "var(--radius-sm, 6px)",
                     color: active ? (r === "All" ? `var(--text-muted)` : btnColor) : `var(--text-dim)`,
-                    padding: "0.25rem 0.65rem", fontFamily: "monospace", fontSize: "1.05rem", cursor: "pointer", transition: "all 0.15s" }}>
+                    padding: "0.25rem 0.65rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", cursor: "pointer", transition: "all 0.15s" }}>
                   {r}
                 </button>
               );
@@ -5136,14 +5263,14 @@ function TeamsView({ agents, jobType, sphGoal, allAgents }) {
               const rDistU = uniqueQuartileDist(ra);
               return (
                 <div key={reg} onClick={() => { setTeamRegion(reg); setSelectedAgent(null); }}
-                  style={{ padding: "0.9rem", borderRadius: "10px", background: regClr + "08", border: `1px solid ${regClr}30`, cursor: "pointer", transition: "all 0.15s" }}>
-                  <div style={{ fontFamily: "Georgia, serif", fontSize: "1.25rem", color: regClr, fontWeight: 700, marginBottom: "0.3rem" }}>{reg}</div>
-                  <div style={{ fontFamily: "monospace", fontSize: "0.9rem", color: `var(--text-dim)` }}>{rCount} agents</div>
-                  <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "2rem", color: `var(--text-warm)`, fontWeight: 700, lineHeight: 1, margin: "0.3rem 0" }}>{rGph.toFixed(3)}</div>
-                  <div style={{ fontFamily: "monospace", fontSize: "0.85rem", color: `var(--text-dim)` }}>GPH · {rGoals} sales · {fmt(rHrs, 0)} hrs</div>
+                  style={{ padding: "0.9rem", borderRadius: "var(--radius-md, 10px)", background: regClr + "08", border: `1px solid ${regClr}30`, cursor: "pointer", transition: "all 0.15s" }}>
+                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "1.25rem", color: regClr, fontWeight: 700, marginBottom: "0.3rem" }}>{reg}</div>
+                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem", color: `var(--text-dim)` }}>{rCount} agents</div>
+                  <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "2rem", color: `var(--text-warm)`, fontWeight: 700, lineHeight: 1, margin: "0.3rem 0" }}>{rGph.toFixed(3)}</div>
+                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: `var(--text-dim)` }}>GPH · {rGoals} sales · {fmt(rHrs, 0)} hrs</div>
                   <div style={{ display: "flex", gap: "0.4rem", marginTop: "0.3rem" }}>
                     {["Q1","Q2","Q3","Q4"].map(q => (
-                      <span key={q} style={{ fontFamily: "monospace", fontSize: "0.85rem", color: Q[q].color }}>{q}:{rDistU[q]}</span>
+                      <span key={q} style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: Q[q].color }}>{q}:{rDistU[q]}</span>
                     ))}
                   </div>
                 </div>
@@ -5186,12 +5313,12 @@ function TeamsView({ agents, jobType, sphGoal, allAgents }) {
             return (
               <div key={reg}>
                 {regionsToShow.length > 1 && (
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.6rem 0.75rem", background: regClr + "10", border: `1px solid ${regClr}30`, borderRadius: "8px", marginBottom: "0.75rem" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.6rem 0.75rem", background: regClr + "10", border: `1px solid ${regClr}30`, borderRadius: "var(--radius-md, 10px)", marginBottom: "0.75rem" }}>
                     <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
-                      <span style={{ fontFamily: "Georgia, serif", fontSize: "1.35rem", color: regClr, fontWeight: 700 }}>{reg}</span>
-                      <span style={{ fontFamily: "monospace", fontSize: "0.95rem", color: `var(--text-dim)` }}>{regAgentNames.size} agents · {regSups.length} sup{regSups.length !== 1 ? "s" : ""}</span>
+                      <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.92rem", color: regClr, fontWeight: 700 }}>{reg}</span>
+                      <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: `var(--text-dim)` }}>{regAgentNames.size} agents · {regSups.length} sup{regSups.length !== 1 ? "s" : ""}</span>
                     </div>
-                    <div style={{ display: "flex", gap: "1rem", fontFamily: "monospace", fontSize: "0.95rem" }}>
+                    <div style={{ display: "flex", gap: "1rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem" }}>
                       <span style={{ color: "#16a34a" }}>{regGoals} sales</span>
                       <span style={{ color: "#6366f1" }}>{fmt(regHrs, 0)} hrs</span>
                       <span style={{ color: regClr, fontWeight: 700 }}>{regGph.toFixed(3)} GPH</span>
@@ -5725,14 +5852,14 @@ function ProgramBySiteTab({ agents, regions, siteBuckets, jobType, goalEntry, go
       {/* Site selector tabs */}
       <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
         <button onClick={() => setActiveSite(null)}
-          style={{ padding: "0.4rem 1rem", borderRadius: "6px", border: `1px solid ${activeSite===null?"#d97706":`var(--border)`}`, background: activeSite===null?"#d9770618":"transparent", color: activeSite===null?"#d97706":`var(--text-muted)`, fontFamily: "monospace", fontSize: "1.14rem", cursor: "pointer" }}>
+          style={{ padding: "0.4rem 1rem", borderRadius: "6px", border: `1px solid ${activeSite===null?"#d97706":`var(--border)`}`, background: activeSite===null?"#d9770618":"transparent", color: activeSite===null?"#d97706":`var(--text-muted)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", cursor: "pointer" }}>
           All Sites
         </button>
         {siteStats.map(s => (
           <button key={s.label} onClick={() => setActiveSite(activeSite === s.label ? null : s.label)}
-            style={{ padding: "0.4rem 1rem", borderRadius: "6px", border: `1px solid ${activeSite===s.label?"#6366f1":`var(--border)`}`, background: activeSite===s.label?"#6366f118":"transparent", color: activeSite===s.label?"#818cf8":`var(--text-muted)`, fontFamily: "monospace", fontSize: "1.14rem", cursor: "pointer" }}>
+            style={{ padding: "0.4rem 1rem", borderRadius: "6px", border: `1px solid ${activeSite===s.label?"#6366f1":`var(--border)`}`, background: activeSite===s.label?"#6366f118":"transparent", color: activeSite===s.label?"#818cf8":`var(--text-muted)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", cursor: "pointer" }}>
             {s.label}
-            <span style={{ fontFamily: "monospace", fontSize: "1.17rem", color: `var(--text-dim)`, marginLeft: "0.4rem" }}>
+            <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)`, marginLeft: "0.4rem" }}>
               ({s.uCount} agents)
             </span>
           </button>
@@ -5741,8 +5868,8 @@ function ProgramBySiteTab({ agents, regions, siteBuckets, jobType, goalEntry, go
 
       {/* Comparison strip when showing all */}
       {activeSite === null && siteStats.length > 1 && (
-        <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1.5rem" }}>
-          <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: "#d97706", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "1.25rem" }}>
+        <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.5rem" }}>
+          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "#d97706", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "1.25rem" }}>
             Site Comparison — {jobType}
           </div>
           <div style={{ display: "grid", gridTemplateColumns: `repeat(${siteStats.length}, 1fr)`, gap: "1rem" }}>
@@ -5750,8 +5877,8 @@ function ProgramBySiteTab({ agents, regions, siteBuckets, jobType, goalEntry, go
               const color = s.attain !== null ? attainColor(s.attain) : attainColor(s.q1Rate);
               return (
                 <div key={s.label} onClick={() => setActiveSite(s.label)}
-                  style={{ cursor: "pointer", padding: "1.25rem", background: `var(--bg-primary)`, borderRadius: "10px", border: `1px solid ${color}25`, borderTop: `3px solid ${color}`, transition: "all 0.2s" }}>
-                  <div style={{ fontFamily: "Georgia, serif", fontSize: "1.5rem", color: `var(--text-warm)`, marginBottom: "0.75rem", fontWeight: 600 }}>{s.label}</div>
+                  style={{ cursor: "pointer", padding: "1.25rem", background: `var(--bg-primary)`, borderRadius: "var(--radius-md, 10px)", border: `1px solid ${color}25`, borderTop: `3px solid ${color}`, transition: "all 0.2s" }}>
+                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "1.5rem", color: `var(--text-warm)`, marginBottom: "0.75rem", fontWeight: 600 }}>{s.label}</div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem 1rem" }}>
                     {[
                       { l: "Agents", v: s.uCount, c: `var(--text-secondary)` },
@@ -5762,8 +5889,8 @@ function ProgramBySiteTab({ agents, regions, siteBuckets, jobType, goalEntry, go
                       { l: "Attainment", v: s.attain !== null ? `${Math.round(s.attain)}%` : "—", c: color },
                     ].map(({ l, v, c }) => (
                       <div key={l}>
-                        <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "1.88rem", color: c, fontWeight: 700, lineHeight: 1 }}>{v}</div>
-                        <div style={{ fontFamily: "monospace", fontSize: "0.9rem", color: `var(--text-dim)`, marginTop: "0.1rem" }}>{l}</div>
+                        <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.88rem", color: c, fontWeight: 700, lineHeight: 1 }}>{v}</div>
+                        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem", color: `var(--text-dim)`, marginTop: "0.1rem" }}>{l}</div>
                       </div>
                     ))}
                   </div>
@@ -5775,7 +5902,7 @@ function ProgramBySiteTab({ agents, regions, siteBuckets, jobType, goalEntry, go
                   </div>
                   <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.3rem" }}>
                     {["Q1","Q2","Q3","Q4"].map(q => (
-                      <span key={q} style={{ fontFamily: "monospace", fontSize: "0.9rem", color: Q[q].color }}>{q}: {s.distU[q]}</span>
+                      <span key={q} style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem", color: Q[q].color }}>{q}: {s.distU[q]}</span>
                     ))}
                   </div>
                 </div>
@@ -5844,19 +5971,19 @@ function ProgramBySiteTab({ agents, regions, siteBuckets, jobType, goalEntry, go
             )}
 
             {/* Quartile breakdown */}
-            <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1.25rem" }}>
-              <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.75rem" }}>
+            <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem" }}>
+              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.75rem" }}>
                 Quartile Mix — {s.label}
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.5rem", marginBottom: "0.75rem" }}>
                 {["Q1","Q2","Q3","Q4"].map(q => (
-                  <div key={q} style={{ padding: "0.75rem", borderRadius: "8px", background: Q[q].color+"12", border: `1px solid ${Q[q].color}30`, textAlign: "center" }}>
-                    <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "3rem", color: Q[q].color, fontWeight: 700 }}>{s.distU[q]}</div>
-                    <div style={{ fontFamily: "monospace", fontSize: "1.17rem", color: Q[q].color }}>{q} · unique</div>
+                  <div key={q} style={{ padding: "0.75rem", borderRadius: "var(--radius-md, 10px)", background: Q[q].color+"12", border: `1px solid ${Q[q].color}30`, textAlign: "center" }}>
+                    <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "3rem", color: Q[q].color, fontWeight: 700 }}>{s.distU[q]}</div>
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: Q[q].color }}>{q} · unique</div>
                   </div>
                 ))}
               </div>
-              <div style={{ display: "flex", height: "8px", borderRadius: "4px", overflow: "hidden" }}>
+              <div style={{ display: "flex", height: "8px", borderRadius: "var(--radius-sm, 6px)", overflow: "hidden" }}>
                 {["Q1","Q2","Q3","Q4"].map(q => (
                   <div key={q} style={{ flex: s.distU[q] || 0, background: Q[q].color, transition: "flex 0.5s" }} />
                 ))}
@@ -5865,43 +5992,43 @@ function ProgramBySiteTab({ agents, regions, siteBuckets, jobType, goalEntry, go
 
             {/* Top performers + Priority coaching side by side */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.25rem" }}>
-              <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1.25rem" }}>
-                <div style={{ fontFamily: "monospace", fontSize: "1.08rem", color: "#16a34a", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.35rem" }}>Top Performers — {s.label}</div>
-                <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-dim)`, marginBottom: "0.9rem" }}>Q1 · 16+ hours</div>
+              <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem" }}>
+                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "#16a34a", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.35rem" }}>Top Performers — {s.label}</div>
+                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)`, marginBottom: "0.9rem" }}>Q1 · 16+ hours</div>
                 {s.q1List.length === 0
-                  ? <div style={{ color: `var(--text-faint)`, fontFamily: "Georgia, serif", fontSize: "1.2rem" }}>No Q1 agents with 16+ hours at this site</div>
+                  ? <div style={{ color: `var(--text-faint)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem" }}>No Q1 agents with 16+ hours at this site</div>
                   : s.q1List.slice(0, 5).map((a, i) => {
                     const agph = a.hours > 0 ? (a.goals / a.hours).toFixed(3) : "0.000";
                     return (
                       <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.5rem 0", borderBottom: i < Math.min(s.q1List.length, 5) - 1 ? "1px solid var(--bg-tertiary)" : "none" }}>
                         <div>
-                          <div style={{ color: `var(--text-warm)`, fontFamily: "Georgia, serif", fontSize: "1.23rem" }}>
+                          <div style={{ color: `var(--text-warm)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem" }}>
                             {a.agentName}
-                            {newHireSet.has(a.agentName) && <span style={{ fontFamily: "monospace", fontSize: "1.08rem", color: "#d97706", background: "#d9770620", padding: "0.05rem 0.3rem", borderRadius: "2px", marginLeft: "0.35rem" }}>NEW</span>}
+                            {newHireSet.has(a.agentName) && <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "var(--nh-color)", background: "var(--nh-bg)", padding: "0.05rem 0.3rem", borderRadius: "2px", marginLeft: "0.35rem" }}>NEW</span>}
                           </div>
-                          <div style={{ fontFamily: "monospace", fontSize: "1.17rem", color: `var(--text-dim)` }}>{fmt(a.hours, 1)} hrs · {agph} GPH</div>
+                          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)` }}>{fmt(a.hours, 1)} hrs · {agph} GPH</div>
                         </div>
-                        <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "1.65rem", color: Q.Q1.color, fontWeight: 700 }}>{Math.round(a.pctToGoal)}%</div>
+                        <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.15rem", color: Q.Q1.color, fontWeight: 700 }}>{Math.round(a.pctToGoal)}%</div>
                       </div>
                     );
                   })}
               </div>
 
-              <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1.25rem" }}>
-                <div style={{ fontFamily: "monospace", fontSize: "1.08rem", color: "#dc2626", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.35rem" }}>Priority Coaching — {s.label}</div>
-                <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-dim)`, marginBottom: "0.9rem" }}>Zero sales · ranked by hours</div>
+              <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem" }}>
+                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "#dc2626", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.35rem" }}>Priority Coaching — {s.label}</div>
+                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)`, marginBottom: "0.9rem" }}>Zero sales · ranked by hours</div>
                 {s.q4List.length === 0
-                  ? <div style={{ color: `var(--text-faint)`, fontFamily: "Georgia, serif", fontSize: "1.2rem" }}>No Q4 agents at this site — excellent!</div>
+                  ? <div style={{ color: `var(--text-faint)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem" }}>No Q4 agents at this site — excellent!</div>
                   : s.q4List.slice(0, 5).map((a, i) => (
                     <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.5rem 0", borderBottom: i < Math.min(s.q4List.length, 5) - 1 ? "1px solid var(--bg-tertiary)" : "none" }}>
                       <div>
-                        <div style={{ color: `var(--text-warm)`, fontFamily: "Georgia, serif", fontSize: "1.23rem" }}>
+                        <div style={{ color: `var(--text-warm)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem" }}>
                           {a.agentName}
-                          {newHireSet.has(a.agentName) && <span style={{ fontFamily: "monospace", fontSize: "1.08rem", color: "#d97706", background: "#d9770620", padding: "0.05rem 0.3rem", borderRadius: "2px", marginLeft: "0.35rem" }}>NEW</span>}
+                          {newHireSet.has(a.agentName) && <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "var(--nh-color)", background: "var(--nh-bg)", padding: "0.05rem 0.3rem", borderRadius: "2px", marginLeft: "0.35rem" }}>NEW</span>}
                         </div>
-                        <div style={{ fontFamily: "monospace", fontSize: "1.17rem", color: `var(--text-dim)` }}>{a.region} · 0 sales</div>
+                        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)` }}>{a.region} · 0 sales</div>
                       </div>
-                      <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "1.65rem", color: "#6366f1", fontWeight: 700 }}>{fmt(a.hours, 1)} hrs</div>
+                      <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.15rem", color: "#6366f1", fontWeight: 700 }}>{fmt(a.hours, 1)} hrs</div>
                     </div>
                   ))}
               </div>
@@ -5909,8 +6036,8 @@ function ProgramBySiteTab({ agents, regions, siteBuckets, jobType, goalEntry, go
 
             {/* Sub-region breakdown when viewing BZ (multiple XOTM sites) */}
             {s.regions.length > 1 && (
-              <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1.25rem" }}>
-                <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "1rem" }}>
+              <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem" }}>
+                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "1rem" }}>
                   Sub-regions — {s.label}
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
@@ -5924,19 +6051,19 @@ function ProgramBySiteTab({ agents, regions, siteBuckets, jobType, goalEntry, go
                     const maxGoals = Math.max(...s.regions.map(rn => s.siteAgents.filter(a => a.region === rn).reduce((sum, a) => sum + a.goals, 0)), 1);
                     const barW = (rGoals / maxGoals) * 100;
                     return (
-                      <div key={regName} style={{ padding: "0.85rem 1rem", background: `var(--bg-primary)`, borderRadius: "8px", border: "1px solid var(--bg-tertiary)" }}>
+                      <div key={regName} style={{ padding: "0.85rem 1rem", background: `var(--bg-primary)`, borderRadius: "var(--radius-md, 10px)", border: "1px solid var(--bg-tertiary)" }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
-                          <span style={{ fontFamily: "Georgia, serif", fontSize: "1.27rem", color: `var(--text-primary)` }}>{regName}</span>
-                          <span style={{ fontFamily: "monospace", fontSize: "1.17rem", color: `var(--text-muted)` }}>{rU} agents · {fmt(rHours, 0)} hrs</span>
+                          <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "1.27rem", color: `var(--text-primary)` }}>{regName}</span>
+                          <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)` }}>{rU} agents · {fmt(rHours, 0)} hrs</span>
                         </div>
                         <div style={{ display: "flex", height: "5px", background: `var(--bg-tertiary)`, borderRadius: "3px", overflow: "hidden", marginBottom: "0.4rem" }}>
                           <div style={{ width: `${barW}%`, background: "#6366f1", borderRadius: "3px", transition: "width 0.5s" }} />
                         </div>
                         <div style={{ display: "flex", gap: "0.75rem" }}>
-                          <span style={{ fontFamily: "monospace", fontSize: "1.17rem", color: "#16a34a" }}>{rGoals} goals</span>
-                          <span style={{ fontFamily: "monospace", fontSize: "1.17rem", color: `var(--text-muted)` }}>GPH {fmt(rGph, 3)}</span>
+                          <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "#16a34a" }}>{rGoals} goals</span>
+                          <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)` }}>GPH {fmt(rGph, 3)}</span>
                           {["Q1","Q2","Q3","Q4"].map(q => rDist[q] > 0 && (
-                            <span key={q} style={{ fontFamily: "monospace", fontSize: "1.17rem", color: Q[q].color }}>{q}: {rDist[q]}</span>
+                            <span key={q} style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: Q[q].color }}>{q}: {rDist[q]}</span>
                           ))}
                         </div>
                       </div>
@@ -6080,7 +6207,7 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
 
   if (!dailyData || dailyData.allDates.length === 0) {
     return (
-      <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "2rem", textAlign: "center", color: `var(--text-faint)`, fontFamily: "Georgia, serif" }}>
+      <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "2rem", textAlign: "center", color: `var(--text-faint)`, fontFamily: "var(--font-ui, Inter, sans-serif)" }}>
         No date data available for daily breakdown.
       </div>
     );
@@ -6120,11 +6247,11 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-      <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1.5rem" }}>
-        <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.75rem" }}>
+      <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.5rem" }}>
+        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.75rem" }}>
           Daily Performance Breakdown — {displayLabel}
           {dailyRocFilter && rocPlanInfo && (
-            <span style={{ marginLeft: "0.75rem", fontSize: "0.95rem", color: "#6366f1", letterSpacing: "0.05em", textTransform: "none" }}>
+            <span style={{ marginLeft: "0.75rem", fontSize: "0.78rem", color: "#6366f1", letterSpacing: "0.05em", textTransform: "none" }}>
               {dailyRocFilter} {rocPlanInfo.funding ? `(${rocPlanInfo.funding})` : ""} — {rocPlanInfo.homes.toLocaleString()} homes / {Math.round(rocPlanInfo.hours).toLocaleString()} hrs / SPH {rocPlanInfo.sph.toFixed(3)}
             </span>
           )}
@@ -6133,7 +6260,7 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
         {/* Region/site tabs */}
         {regionInfo.tabs.length > 2 && (
           <div style={{ marginBottom: "0.75rem" }}>
-            <div style={{ fontFamily: "monospace", fontSize: "0.9rem", color: `var(--text-faint)`, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "0.35rem" }}>Region</div>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem", color: `var(--text-faint)`, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "0.35rem" }}>Region</div>
             <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap", alignItems: "center" }}>
               {regionInfo.tabs.map(r => {
                 const active = dailyRegion === r;
@@ -6143,11 +6270,11 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
                 const btnColor = isCombined ? "#d97706" : isBzCombo ? "#16a34a" : isBzSite ? "#16a34a" : "#6366f1";
                 return (
                   <button key={r} onClick={() => setDailyRegion(r)}
-                    style={{ padding: "0.25rem 0.7rem", borderRadius: "5px",
+                    style={{ padding: "0.25rem 0.7rem", borderRadius: "var(--radius-sm, 6px)",
                       border: `1px solid ${active ? btnColor : `var(--border)`}`,
                       background: active ? btnColor + "18" : "transparent",
                       color: active ? btnColor : `var(--text-dim)`,
-                      fontFamily: "monospace", fontSize: "1.05rem", cursor: "pointer", transition: "all 0.15s",
+                      fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", cursor: "pointer", transition: "all 0.15s",
                       ...(isBzCombo && !active ? { borderLeftWidth: "3px", borderLeftColor: "#16a34a44" } : {}) }}>
                     {r}
                   </button>
@@ -6170,8 +6297,8 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
           const isBZCombo = dailyRegion === "Combined (BZ)";
           const siteKey = isDR ? "DR" : (isBZ || isBZCombo) ? "BZ" : null;
           return (
-            <div style={{ background: `var(--bg-tertiary)`, borderRadius: "8px", padding: "0.75rem 1rem", marginBottom: "0.75rem" }}>
-              <div style={{ fontFamily: "monospace", fontSize: "0.85rem", color: `var(--text-faint)`, letterSpacing: "0.08em", marginBottom: "0.4rem" }}>GOAL TARGETS BY FUNDING</div>
+            <div style={{ background: `var(--bg-tertiary)`, borderRadius: "var(--radius-md, 10px)", padding: "0.75rem 1rem", marginBottom: "0.75rem" }}>
+              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: `var(--text-faint)`, letterSpacing: "0.08em", marginBottom: "0.4rem" }}>GOAL TARGETS BY FUNDING</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem" }}>
                 {targets.map(t => {
                   const tRows = allRows.filter(r => r._target === t);
@@ -6185,11 +6312,11 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
                   const roc = tRows[0]?._roc || "";
                   return (
                     <div key={t} style={{ display: "flex", gap: "0.5rem", alignItems: "center", padding: "0.3rem 0.6rem", background: `var(--bg-secondary)`, borderRadius: "6px", border: "1px solid var(--border)" }}>
-                      {funding && <span style={{ fontFamily: "monospace", fontSize: "0.8rem", color: "#6366f1", background: "#6366f108", border: "1px solid #6366f130", borderRadius: "3px", padding: "0 0.25rem" }}>{funding}</span>}
-                      <span style={{ fontFamily: "monospace", fontSize: "0.85rem", color: `var(--text-dim)` }}>{roc}</span>
-                      <span style={{ fontFamily: "monospace", fontSize: "0.9rem", color: `var(--text-secondary)` }}>{homes.toLocaleString()} homes</span>
-                      <span style={{ fontFamily: "monospace", fontSize: "0.9rem", color: `var(--text-dim)` }}>{Math.round(hours).toLocaleString()} hrs</span>
-                      <span style={{ fontFamily: "monospace", fontSize: "0.9rem", color: `var(--text-dim)` }}>SPH {sphG.toFixed(3)}</span>
+                      {funding && <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "#6366f1", background: "#6366f108", border: "1px solid #6366f130", borderRadius: "3px", padding: "0 0.25rem" }}>{funding}</span>}
+                      <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: `var(--text-dim)` }}>{roc}</span>
+                      <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem", color: `var(--text-secondary)` }}>{homes.toLocaleString()} homes</span>
+                      <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem", color: `var(--text-dim)` }}>{Math.round(hours).toLocaleString()} hrs</span>
+                      <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem", color: `var(--text-dim)` }}>SPH {sphG.toFixed(3)}</span>
                     </div>
                   );
                 }).filter(Boolean)}
@@ -6199,25 +6326,25 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
         })()}
         {programList.length > 0 && (
           <div style={{ marginBottom: "0.75rem" }}>
-            <div style={{ fontFamily: "monospace", fontSize: "0.9rem", color: `var(--text-faint)`, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "0.35rem" }}>Program</div>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem", color: `var(--text-faint)`, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "0.35rem" }}>Program</div>
             <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
               <button onClick={() => { setDailyProgram("All"); setDailyRocFilter(null); }}
-                style={{ padding: "0.3rem 0.75rem", borderRadius: "5px",
+                style={{ padding: "0.3rem 0.75rem", borderRadius: "var(--radius-sm, 6px)",
                   border: `1px solid ${dailyProgram === "All" ? "#d97706" : `var(--border)`}`,
                   background: dailyProgram === "All" ? "#d9770618" : "transparent",
                   color: dailyProgram === "All" ? "#d97706" : `var(--text-dim)`,
-                  fontFamily: "monospace", fontSize: "1.05rem", cursor: "pointer", fontWeight: dailyProgram === "All" ? 700 : 400 }}>
+                  fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", cursor: "pointer", fontWeight: dailyProgram === "All" ? 700 : 400 }}>
                 All Programs
               </button>
               {programList.map(p => {
                 const active = dailyProgram === p.jobType;
                 return (
                   <button key={p.jobType} onClick={() => { setDailyProgram(p.jobType); setDailyRegion("Combined"); setDailyRocFilter(null); }}
-                    style={{ padding: "0.3rem 0.75rem", borderRadius: "5px",
+                    style={{ padding: "0.3rem 0.75rem", borderRadius: "var(--radius-sm, 6px)",
                       border: `1px solid ${active ? "#2563eb" : `var(--border)`}`,
                       background: active ? "#2563eb18" : "transparent",
                       color: active ? "#2563eb" : `var(--text-dim)`,
-                      fontFamily: "monospace", fontSize: "1.05rem", cursor: "pointer", fontWeight: active ? 700 : 400 }}>
+                      fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", cursor: "pointer", fontWeight: active ? 700 : 400 }}>
                     {p.jobType}
                     <span style={{ opacity: 0.5, marginLeft: "0.3rem", fontSize: "0.9rem" }}>{p.totalGoals}g</span>
                   </button>
@@ -6237,12 +6364,12 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
               return (
                 <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap", marginTop: "0.5rem" }}>
                   <button onClick={() => setDailyRocFilter(null)}
-                    style={{ padding: "0.2rem 0.6rem", borderRadius: "5px", border: `1px solid ${!dailyRocFilter ? "#6366f1" : "var(--border)"}`, background: !dailyRocFilter ? "#6366f118" : "transparent", color: !dailyRocFilter ? "#6366f1" : `var(--text-dim)`, fontFamily: "monospace", fontSize: "0.9rem", cursor: "pointer" }}>
+                    style={{ padding: "0.2rem 0.6rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${!dailyRocFilter ? "#6366f1" : "var(--border)"}`, background: !dailyRocFilter ? "#6366f118" : "transparent", color: !dailyRocFilter ? "#6366f1" : `var(--text-dim)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem", cursor: "pointer" }}>
                     All ROCs
                   </button>
                   {opts.map(opt => (
                     <button key={opt.roc} onClick={() => setDailyRocFilter(dailyRocFilter === opt.roc ? null : opt.roc)}
-                      style={{ padding: "0.2rem 0.6rem", borderRadius: "5px", border: `1px solid ${dailyRocFilter === opt.roc ? "#6366f1" : "var(--border)"}`, background: dailyRocFilter === opt.roc ? "#6366f118" : "transparent", color: dailyRocFilter === opt.roc ? "#6366f1" : `var(--text-dim)`, fontFamily: "monospace", fontSize: "0.9rem", cursor: "pointer", display: "flex", gap: "0.3rem", alignItems: "center" }}>
+                      style={{ padding: "0.2rem 0.6rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${dailyRocFilter === opt.roc ? "#6366f1" : "var(--border)"}`, background: dailyRocFilter === opt.roc ? "#6366f118" : "transparent", color: dailyRocFilter === opt.roc ? "#6366f1" : `var(--text-dim)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem", cursor: "pointer", display: "flex", gap: "0.3rem", alignItems: "center" }}>
                       <span>{opt.roc}</span>
                       {opt.funding && <span style={{ fontSize: "0.8rem", color: dailyRocFilter === opt.roc ? "#818cf8" : `var(--text-faint)` }}>{opt.funding}</span>}
                     </button>
@@ -6254,7 +6381,7 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
         )}
 
         {/* Summary strip */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "0.5rem", marginBottom: "1rem", padding: "0.75rem", background: `var(--bg-primary)`, borderRadius: "8px", border: "1px solid var(--border)" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "0.5rem", marginBottom: "1rem", padding: "0.75rem", background: `var(--bg-primary)`, borderRadius: "var(--radius-md, 10px)", border: "1px solid var(--border)" }}>
           {[
             { l: "Days Worked", v: worked.length, c: "#16a34a" },
             { l: "Total Hours", v: fmt(totalHrs, 1), c: "#6366f1" },
@@ -6265,14 +6392,14 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
             { l: "% to Goal", v: sg && overallGph > 0 ? Math.round((overallGph / sg) * 100) + "%" : "—", c: sg ? attainColor((overallGph / sg) * 100) : `var(--text-dim)` },
           ].map(({ l, v, c }) => (
             <div key={l} style={{ textAlign: "center" }}>
-              <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "1.65rem", color: c, fontWeight: 700, lineHeight: 1 }}>{v}</div>
-              <div style={{ fontFamily: "monospace", fontSize: "0.85rem", color: `var(--text-dim)`, marginTop: "0.15rem" }}>{l}</div>
+              <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.15rem", color: c, fontWeight: 700, lineHeight: 1 }}>{v}</div>
+              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: `var(--text-dim)`, marginTop: "0.15rem" }}>{l}</div>
             </div>
           ))}
         </div>
 
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "monospace", fontSize: "1.05rem" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem" }}>
             <thead>
               <tr style={{ borderBottom: "2px solid var(--border)" }}>
                 {["Date","Day","Agents","Hours","Goals","GPH","HSD","XM","% to Goal"].map(h => (
@@ -6347,17 +6474,17 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
                         return (
                           <tr><td colSpan={9} style={{ padding: 0 }}>
                             <div style={{ padding: "0.6rem 1rem", background: "#d9770608", borderLeft: "3px solid #d97706" }}>
-                              <div style={{ fontFamily: "monospace", fontSize: "0.85rem", color: `var(--text-faint)`, letterSpacing: "0.08em", marginBottom: "0.5rem" }}>
+                              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: `var(--text-faint)`, letterSpacing: "0.08em", marginBottom: "0.5rem" }}>
                                 {singleProgram ? "AGENT DETAIL" : (selectedDrillJob ? "AGENT DETAIL" : "PROGRAM BREAKDOWN")} {"\u2014"} {d.date} ({dayLabel(d.date)})
                                 {!singleProgram && selectedDrillJob && (
                                   <button onClick={e => { e.stopPropagation(); setSelectedDrillJob(null); }}
-                                    style={{ marginLeft: "0.75rem", padding: "0.15rem 0.5rem", borderRadius: "4px", border: "1px solid #d97706", background: "#d9770618", color: "#d97706", fontFamily: "monospace", fontSize: "0.85rem", cursor: "pointer" }}>
+                                    style={{ marginLeft: "0.75rem", padding: "0.15rem 0.5rem", borderRadius: "var(--radius-sm, 6px)", border: "1px solid #d97706", background: "#d9770618", color: "#d97706", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", cursor: "pointer" }}>
                                     {"\u2190"} Back to Programs
                                   </button>
                                 )}
                               </div>
                               {!singleProgram && !selectedDrillJob && (
-                                <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "monospace", fontSize: "0.9rem" }}>
+                                <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem" }}>
                                   <thead><tr style={{ borderBottom: "1px solid var(--border)" }}>
                                     {["Program", "Agents", "Hours", "Sales", "GPH", "% Goal", "CPS", "HSD", "XM"].map(h => (
                                       <th key={h} style={{ padding: "0.3rem 0.5rem", textAlign: h === "Program" ? "left" : "right", color: `var(--text-faint)`, fontWeight: 400 }}>{h}</th>
@@ -6372,7 +6499,7 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
                                       return (
                                         <tr key={jt} onClick={e => { e.stopPropagation(); setSelectedDrillJob(jt); }}
                                           style={{ borderBottom: "1px solid var(--bg-tertiary)", cursor: "pointer", background: ji % 2 === 0 ? "transparent" : `var(--bg-row-alt)` }}>
-                                          <td style={{ padding: "0.3rem 0.5rem", color: `var(--text-warm)`, fontFamily: "Georgia, serif" }}>{jt}</td>
+                                          <td style={{ padding: "0.3rem 0.5rem", color: `var(--text-warm)`, fontFamily: "var(--font-ui, Inter, sans-serif)" }}>{jt}</td>
                                           <td style={{ padding: "0.3rem 0.5rem", textAlign: "right", color: `var(--text-dim)` }}>{data.agents.length}</td>
                                           <td style={{ padding: "0.3rem 0.5rem", textAlign: "right", color: "#6366f1" }}>{data.hrs.toFixed(1)}</td>
                                           <td style={{ padding: "0.3rem 0.5rem", textAlign: "right", color: data.goals > 0 ? "#d97706" : `var(--text-faint)`, fontWeight: 700 }}>{data.goals || "\u2014"}</td>
@@ -6396,11 +6523,11 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
                                 if (!data) return null;
                                 return (
                                   <div>
-                                    <div style={{ fontFamily: "Georgia, serif", fontSize: "1.05rem", color: `var(--text-warm)`, marginBottom: "0.3rem" }}>
+                                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: `var(--text-warm)`, marginBottom: "0.3rem" }}>
                                       <span style={{ fontWeight: 700 }}>{drillJob}</span>
-                                      <span style={{ fontFamily: "monospace", fontSize: "0.9rem", color: `var(--text-dim)`, marginLeft: "0.75rem" }}>{data.agents.length} agents {"\u00b7"} {data.goals} sales {"\u00b7"} {data.hrs.toFixed(1)} hrs</span>
+                                      <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem", color: `var(--text-dim)`, marginLeft: "0.75rem" }}>{data.agents.length} agents <span style={{ display: "inline-block", width: "0.6em" }} /> {data.goals} sales <span style={{ display: "inline-block", width: "0.6em" }} /> {data.hrs.toFixed(1)} hrs</span>
                                     </div>
-                                    <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "monospace", fontSize: "0.88rem" }}>
+                                    <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem" }}>
                                       <thead><tr style={{ borderBottom: "1px solid var(--border)" }}>
                                         {["Agent","Supervisor","Hours","Sales","GPH","% Goal","CPS","HSD","XM"].map(h => (
                                           <th key={h} style={{ padding: "0.2rem 0.5rem", textAlign: h === "Agent" || h === "Supervisor" ? "left" : "right", color: `var(--text-faint)`, fontWeight: 400 }}>{h}</th>
@@ -6556,23 +6683,23 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
   return (
     <div style={{ height: "calc(100vh - 32px)", background: `var(--bg-primary)`, display: "flex", flexDirection: "column", overflow: "hidden" }}>
       {/* Header */}
-      <div style={{ background: `var(--bg-secondary)`, borderBottom: "1px solid var(--border)", padding: "1.25rem 2.5rem", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem", flexShrink: 0 }}>
+      <div style={{ background: `var(--glass-bg)`, backdropFilter: "blur(12px) saturate(150%)", WebkitBackdropFilter: "blur(12px) saturate(150%)", borderBottom: "1px solid var(--glass-border)", padding: "1rem 2.5rem", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem", flexShrink: 0 }}>
         <div>
-          <div style={{ fontFamily: "monospace", fontSize: "1.08rem", color: `var(--text-muted)`, letterSpacing: "0.15em", textTransform: "uppercase" }}>
-            Program {slideIndex} of {total - 1} · {totalRowCount} records
+          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.68rem", color: `var(--text-muted)`, letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 500 }}>
+            Program {slideIndex} of {total - 1} <span style={{ display: "inline-block", width: "0.6em" }} /> {totalRowCount} records
           </div>
-          <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "3.38rem", color: `var(--text-warm)`, fontWeight: 700, letterSpacing: "-0.5px", lineHeight: 1.1 }}>
+          <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.75rem", color: `var(--text-warm)`, fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1.15, marginTop: "0.15rem" }}>
             {jobType}
           </div>
           {rocOptions.length > 0 && (
             <div style={{ display: "flex", gap: "0.35rem", marginTop: "0.4rem", flexWrap: "wrap" }}>
               <button onClick={() => setRocFilter(null)}
-                style={{ padding: "0.2rem 0.6rem", borderRadius: "5px", border: `1px solid ${!rocFilter ? "#d97706" : "var(--border)"}`, background: !rocFilter ? "#d9770618" : "transparent", color: !rocFilter ? "#d97706" : `var(--text-dim)`, fontFamily: "monospace", fontSize: "0.9rem", cursor: "pointer" }}>
+                style={{ padding: "0.2rem 0.6rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${!rocFilter ? "#d97706" : "var(--border)"}`, background: !rocFilter ? "#d9770618" : "transparent", color: !rocFilter ? "#d97706" : `var(--text-dim)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem", cursor: "pointer" }}>
                 All
               </button>
               {rocOptions.map(opt => (
                 <button key={opt.roc} onClick={() => setRocFilter(rocFilter === opt.roc ? null : opt.roc)}
-                  style={{ padding: "0.2rem 0.6rem", borderRadius: "5px", border: `1px solid ${rocFilter === opt.roc ? "#6366f1" : "var(--border)"}`, background: rocFilter === opt.roc ? "#6366f118" : "transparent", color: rocFilter === opt.roc ? "#6366f1" : `var(--text-dim)`, fontFamily: "monospace", fontSize: "0.9rem", cursor: "pointer", display: "flex", gap: "0.3rem", alignItems: "center" }}>
+                  style={{ padding: "0.2rem 0.6rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${rocFilter === opt.roc ? "#6366f1" : "var(--border)"}`, background: rocFilter === opt.roc ? "#6366f118" : "transparent", color: rocFilter === opt.roc ? "#6366f1" : `var(--text-dim)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem", cursor: "pointer", display: "flex", gap: "0.3rem", alignItems: "center" }}>
                   <span>{opt.roc}</span>
                   {opt.funding && <span style={{ fontSize: "0.8rem", color: rocFilter === opt.roc ? "#818cf8" : `var(--text-faint)` }}>{opt.funding}</span>}
                 </button>
@@ -6580,10 +6707,10 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
             </div>
           )}
         </div>
-        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: "0.3rem", flexWrap: "wrap" }}>
           {tabs.map(t => (
             <button key={t} onClick={() => setTab(t)}
-              style={{ padding: "0.4rem 0.9rem", borderRadius: "6px", border: `1px solid ${tab===t?"#d97706":`var(--border)`}`, background: tab===t?"#d9770618":"transparent", color: tab===t?"#d97706":`var(--text-muted)`, fontFamily: "monospace", fontSize: "1.14rem", cursor: "pointer", textTransform: "capitalize", letterSpacing: "0.05em" }}>
+              style={{ padding: "0.4rem 0.8rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${tab===t?"#d9770650":"var(--text-faint)"}`, background: tab===t?"#d9770612":"transparent", color: tab===t?"#d97706":`var(--text-muted)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", cursor: "pointer", textTransform: "capitalize", fontWeight: tab===t ? 600 : 400, transition: "all 200ms cubic-bezier(0.4,0,0.2,1)" }}>
               {t === "overview" ? "Overview" : t === "bysite" ? "By Site" : t === "agents" ? "All Agents" : t === "teams" ? "Teams" : t === "goals" ? "Ranking" : t === "daily" ? "Daily" : t}
             </button>
           ))}
@@ -6640,18 +6767,18 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
               if (targets.length === 0) return null;
               const sites = Object.keys(goalEntry);
               return (
-                <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1.25rem 1.5rem" }}>
-                  <div style={{ fontFamily: "monospace", fontSize: "0.95rem", color: `var(--text-faint)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.75rem" }}>
+                <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem 1.5rem" }}>
+                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: `var(--text-faint)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.75rem" }}>
                     GOAL BREAKOUT BY FUNDING
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: `2.5fr ${sites.map(() => "1fr 1fr 1fr").join(" ")}`, gap: "0.4rem 0.75rem", alignItems: "center" }}>
                     {/* Header */}
-                    <div style={{ fontFamily: "monospace", fontSize: "0.85rem", color: `var(--text-faint)` }}>Target</div>
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: `var(--text-faint)` }}>Target</div>
                     {sites.map(s => (
                       <Fragment key={s}>
-                        <div style={{ fontFamily: "monospace", fontSize: "0.85rem", color: `var(--text-faint)`, textAlign: "right" }}>{s} Homes</div>
-                        <div style={{ fontFamily: "monospace", fontSize: "0.85rem", color: `var(--text-faint)`, textAlign: "right" }}>{s} Hours</div>
-                        <div style={{ fontFamily: "monospace", fontSize: "0.85rem", color: `var(--text-faint)`, textAlign: "right" }}>{s} SPH</div>
+                        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: `var(--text-faint)`, textAlign: "right" }}>{s} Homes</div>
+                        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: `var(--text-faint)`, textAlign: "right" }}>{s} Hours</div>
+                        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: `var(--text-faint)`, textAlign: "right" }}>{s} SPH</div>
                       </Fragment>
                     ))}
                     {/* Rows per target */}
@@ -6662,9 +6789,9 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
                       return (
                         <Fragment key={t}>
                           <div style={{ display: "flex", gap: "0.4rem", alignItems: "center", padding: "0.3rem 0", borderTop: "1px solid var(--bg-tertiary)" }}>
-                            <span style={{ fontFamily: "monospace", fontSize: "0.88rem", color: `var(--text-dim)` }}>{roc}</span>
-                            <span style={{ fontFamily: "Georgia, serif", fontSize: "1rem", color: `var(--text-secondary)` }}>{t}</span>
-                            {funding && <span style={{ fontFamily: "monospace", fontSize: "0.8rem", color: "#6366f1", background: "#6366f108", border: "1px solid #6366f130", borderRadius: "3px", padding: "0 0.25rem" }}>{funding}</span>}
+                            <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem", color: `var(--text-dim)` }}>{roc}</span>
+                            <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-secondary)` }}>{t}</span>
+                            {funding && <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "#6366f1", background: "#6366f108", border: "1px solid #6366f130", borderRadius: "3px", padding: "0 0.25rem" }}>{funding}</span>}
                           </div>
                           {sites.map(s => {
                             const sRows = tRows.filter(r => {
@@ -6673,9 +6800,9 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
                             });
                             if (sRows.length === 0) return (
                               <Fragment key={s}>
-                                <div style={{ textAlign: "right", fontFamily: "monospace", fontSize: "0.95rem", color: `var(--text-faint)`, borderTop: "1px solid var(--bg-tertiary)", padding: "0.3rem 0" }}>{"\u2014"}</div>
-                                <div style={{ textAlign: "right", fontFamily: "monospace", fontSize: "0.95rem", color: `var(--text-faint)`, borderTop: "1px solid var(--bg-tertiary)", padding: "0.3rem 0" }}>{"\u2014"}</div>
-                                <div style={{ textAlign: "right", fontFamily: "monospace", fontSize: "0.95rem", color: `var(--text-faint)`, borderTop: "1px solid var(--bg-tertiary)", padding: "0.3rem 0" }}>{"\u2014"}</div>
+                                <div style={{ textAlign: "right", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: `var(--text-faint)`, borderTop: "1px solid var(--bg-tertiary)", padding: "0.3rem 0" }}>{"\u2014"}</div>
+                                <div style={{ textAlign: "right", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: `var(--text-faint)`, borderTop: "1px solid var(--bg-tertiary)", padding: "0.3rem 0" }}>{"\u2014"}</div>
+                                <div style={{ textAlign: "right", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: `var(--text-faint)`, borderTop: "1px solid var(--bg-tertiary)", padding: "0.3rem 0" }}>{"\u2014"}</div>
                               </Fragment>
                             );
                             const pr = sRows.map(r => computePlanRow(r));
@@ -6684,9 +6811,9 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
                             const sph = pr.length > 0 ? pr.reduce((a, p) => a + p.sphGoal, 0) / pr.length : 0;
                             return (
                               <Fragment key={s}>
-                                <div style={{ textAlign: "right", fontFamily: "monospace", fontSize: "0.95rem", color: `var(--text-primary)`, borderTop: "1px solid var(--bg-tertiary)", padding: "0.3rem 0" }}>{homes.toLocaleString()}</div>
-                                <div style={{ textAlign: "right", fontFamily: "monospace", fontSize: "0.95rem", color: `var(--text-primary)`, borderTop: "1px solid var(--bg-tertiary)", padding: "0.3rem 0" }}>{Math.round(hours).toLocaleString()}</div>
-                                <div style={{ textAlign: "right", fontFamily: "monospace", fontSize: "0.95rem", color: `var(--text-primary)`, borderTop: "1px solid var(--bg-tertiary)", padding: "0.3rem 0" }}>{sph.toFixed(3)}</div>
+                                <div style={{ textAlign: "right", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: `var(--text-primary)`, borderTop: "1px solid var(--bg-tertiary)", padding: "0.3rem 0" }}>{homes.toLocaleString()}</div>
+                                <div style={{ textAlign: "right", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: `var(--text-primary)`, borderTop: "1px solid var(--bg-tertiary)", padding: "0.3rem 0" }}>{Math.round(hours).toLocaleString()}</div>
+                                <div style={{ textAlign: "right", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: `var(--text-primary)`, borderTop: "1px solid var(--bg-tertiary)", padding: "0.3rem 0" }}>{sph.toFixed(3)}</div>
                               </Fragment>
                             );
                           })}
@@ -6699,10 +6826,10 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
             })()}
 
             {/* Quartile breakdown */}
-            <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1.5rem" }}>
+            <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.5rem" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.1rem" }}>
-                <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase" }}>Quartile Distribution</div>
-                <div style={{ fontFamily: "monospace", fontSize: "1.17rem", color: `var(--text-faint)` }}>ranked on total period GPH</div>
+                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase" }}>Quartile Distribution</div>
+                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-faint)` }}>ranked on total period GPH</div>
               </div>
               {(() => {
                 // Aggregate per unique agent: sum hours, goals, goalsNum
@@ -6726,20 +6853,20 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
                         const pct    = agentList.length ? Math.round(total / agentList.length * 100) : 0;
                         const qHours = inQ.reduce((s, a) => s + a.hours, 0);
                         return (
-                          <div key={q} style={{ padding: "1rem", borderRadius: "8px", background: Q[q].color+"12", border: `1px solid ${Q[q].color}30`, textAlign: "center" }}>
-                            <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "4.2rem", color: Q[q].color, fontWeight: 700, lineHeight: 1 }}>{active}</div>
-                            <div style={{ fontFamily: "monospace", fontSize: "1.08rem", color: Q[q].color, marginTop: "0.2rem" }}>{q} · 16+ hrs</div>
-                            <div style={{ fontFamily: "Georgia, serif", fontSize: "1.11rem", color: `var(--text-muted)`, marginTop: "0.15rem" }}>{Q[q].label}</div>
+                          <div key={q} style={{ padding: "1rem", borderRadius: "var(--radius-md, 10px)", background: Q[q].color+"12", border: `1px solid ${Q[q].color}30`, textAlign: "center" }}>
+                            <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "2.5rem", color: Q[q].color, fontWeight: 700, lineHeight: 1 }}>{active}</div>
+                            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: Q[q].color, marginTop: "0.2rem" }}>{q} · 16+ hrs</div>
+                            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-muted)`, marginTop: "0.15rem" }}>{Q[q].label}</div>
                             <div style={{ marginTop: "0.5rem", paddingTop: "0.5rem", borderTop: `1px solid ${Q[q].color}20` }}>
-                              <div style={{ fontFamily: "monospace", fontSize: "1.08rem", color: `var(--text-dim)` }}>{total} total · {pct}%</div>
-                              <div style={{ fontFamily: "monospace", fontSize: "1.08rem", color: "#6366f1", marginTop: "0.2rem" }}>{fmt(qHours, 0)} hrs</div>
+                              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-dim)` }}>{total} total · {pct}%</div>
+                              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "#6366f1", marginTop: "0.2rem" }}>{fmt(qHours, 0)} hrs</div>
                             </div>
                           </div>
                         );
                       })}
                     </div>
                     <div style={{ marginBottom: "0.4rem" }}>
-                      <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-dim)`, marginBottom: "0.25rem" }}>UNIQUE AGENTS BY QUARTILE</div>
+                      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)`, marginBottom: "0.25rem" }}>UNIQUE AGENTS BY QUARTILE</div>
                       <div style={{ display: "flex", height: "8px", borderRadius: "6px", overflow: "hidden" }}>
                         {["Q1","Q2","Q3","Q4"].map(q => (
                           <div key={q} style={{ flex: agentList.filter(a=>a.quartile===q).length||0, background: Q[q].color, transition: "flex 0.6s" }} />
@@ -6747,8 +6874,8 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
                       </div>
                     </div>
                     <div>
-                      <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-dim)`, marginBottom: "0.25rem" }}>HOURS BY QUARTILE</div>
-                      <div style={{ display: "flex", height: "6px", borderRadius: "4px", overflow: "hidden" }}>
+                      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)`, marginBottom: "0.25rem" }}>HOURS BY QUARTILE</div>
+                      <div style={{ display: "flex", height: "6px", borderRadius: "var(--radius-sm, 6px)", overflow: "hidden" }}>
                         {["Q1","Q2","Q3","Q4"].map(q => {
                           const h = agentList.filter(a=>a.quartile===q).reduce((s,a)=>s+a.hours,0);
                           return <div key={q} style={{ flex: h||0, background: Q[q].color+"99", transition: "flex 0.6s" }} />;
@@ -6762,8 +6889,8 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
 
             {/* Site quartile breakdown — unique agents per region */}
             {regions.length > 0 && (
-              <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1.5rem" }}>
-                <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "1.1rem" }}>Quartile Breakdown by Site</div>
+              <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.5rem" }}>
+                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "1.1rem" }}>Quartile Breakdown by Site</div>
                 <div style={{ display: "grid", gap: "1rem" }}>
                   {regions.map(r => {
                     // Aggregate hours+goals per unique agent within this region
@@ -6785,12 +6912,12 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
                     const over16    = regionAgents.filter(a => a.hours >= 16).length;
                     const rTotal    = regionAgents.length;
                     return (
-                      <div key={r.name} style={{ padding: "0.9rem 1rem", background: `var(--bg-primary)`, borderRadius: "8px", border: "1px solid var(--bg-tertiary)" }}>
+                      <div key={r.name} style={{ padding: "0.9rem 1rem", background: `var(--bg-primary)`, borderRadius: "var(--radius-md, 10px)", border: "1px solid var(--bg-tertiary)" }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.6rem" }}>
-                          <span style={{ fontFamily: "Georgia, serif", fontSize: "1.27rem", color: `var(--text-primary)`, fontWeight: 600 }}>{r.name}</span>
+                          <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "1.27rem", color: `var(--text-primary)`, fontWeight: 600 }}>{r.name}</span>
                           <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
-                            <span style={{ fontFamily: "monospace", fontSize: "1.17rem", color: "#6366f1" }}>{fmt(totalRHrs, 0)} hrs{over16 > 0 ? ` · ${over16} at 16+` : ""}</span>
-                            <span style={{ fontFamily: "monospace", fontSize: "1.17rem", color: `var(--text-muted)` }}>{rTotal} agents</span>
+                            <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "#6366f1" }}>{fmt(totalRHrs, 0)} hrs{over16 > 0 ? ` · ${over16} at 16+` : ""}</span>
+                            <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)` }}>{rTotal} agents</span>
                           </div>
                         </div>
                         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.4rem", marginBottom: "0.5rem" }}>
@@ -6798,22 +6925,22 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
                             const inQ    = regionAgents.filter(a => a.quartile === q);
                             const active = inQ.filter(a => a.hours >= 16).length;
                             return (
-                            <div key={q} style={{ padding: "0.4rem 0.5rem", borderRadius: "5px", background: Q[q].color+"15", border: `1px solid ${Q[q].color}30`, textAlign: "center" }}>
-                              <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "2.1rem", color: Q[q].color, fontWeight: 700, lineHeight: 1 }}>{active}</div>
-                              <div style={{ fontFamily: "monospace", fontSize: "1.17rem", color: Q[q].color+"cc", marginTop: "0.1rem" }}>{q} · 16+</div>
-                              <div style={{ fontFamily: "monospace", fontSize: "0.81rem", color: `var(--text-faint)`, marginTop: "0.1rem" }}>{rd[q]} total</div>
+                            <div key={q} style={{ padding: "0.4rem 0.5rem", borderRadius: "var(--radius-sm, 6px)", background: Q[q].color+"15", border: `1px solid ${Q[q].color}30`, textAlign: "center" }}>
+                              <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.5rem", color: Q[q].color, fontWeight: 700, lineHeight: 1 }}>{active}</div>
+                              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: Q[q].color+"cc", marginTop: "0.1rem" }}>{q} · 16+</div>
+                              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.81rem", color: `var(--text-faint)`, marginTop: "0.1rem" }}>{rd[q]} total</div>
                             </div>
                             );
                           })}
                         </div>
-                        <div style={{ display: "flex", height: "8px", borderRadius: "4px", overflow: "hidden", gap: "1px" }}>
+                        <div style={{ display: "flex", height: "8px", borderRadius: "var(--radius-sm, 6px)", overflow: "hidden", gap: "1px" }}>
                           {["Q1","Q2","Q3","Q4"].map(q => rd[q] > 0 && (
                             <div key={q} style={{ flex: rd[q], background: Q[q].color }} />
                           ))}
                         </div>
                         <div style={{ display: "flex", gap: "0.75rem", marginTop: "0.35rem" }}>
                           {["Q1","Q2","Q3","Q4"].map(q => rHoursByQ[q] > 0 && (
-                            <span key={q} style={{ fontFamily: "monospace", fontSize: "0.8rem", color: Q[q].color+"99" }}>{q}: {fmt(rHoursByQ[q], 0)}h</span>
+                            <span key={q} style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: Q[q].color+"99" }}>{q}: {fmt(rHoursByQ[q], 0)}h</span>
                           ))}
                         </div>
                       </div>
@@ -6825,10 +6952,10 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
 
             {/* New hires banner */}
             {newHiresInProgram.length > 0 && (
-              <div style={{ background: "#d9770610", border: "1px solid #d9770630", borderRadius: "10px", padding: "0.85rem 1.25rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
+              <div style={{ background: "var(--nh-bg)", border: `1px solid var(--nh-border)`, borderRadius: "var(--radius-md, 10px)", padding: "0.85rem 1.25rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
                 <span style={{ fontSize: "1.5rem" }}>🌱</span>
-                <span style={{ fontFamily: "Georgia, serif", fontSize: "1.2rem", color: "#fde68a" }}>
-                  <strong style={{ color: "#d97706" }}>{newHiresInProgram.length} new hire{newHiresInProgram.length > 1 ? "s" : ""}</strong> active in this program ({newHiresInProgram.map(a => a.agentName).join(", ")}). Enhanced contextual insights included below.
+                <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem", color: "var(--text-secondary)" }}>
+                  <strong style={{ color: "var(--nh-color)" }}>{newHiresInProgram.length} new hire{newHiresInProgram.length > 1 ? "s" : ""}</strong> active in this program ({newHiresInProgram.map(a => a.agentName).join(", ")}). Enhanced contextual insights included below.
                 </span>
               </div>
             )}
@@ -6841,26 +6968,26 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
 
             {/* Top performers + Priority Coaching */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.25rem" }}>
-              <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1.25rem" }}>
-                <div style={{ fontFamily: "monospace", fontSize: "1.08rem", color: "#16a34a", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.35rem" }}>Top Performers</div>
-                <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-dim)`, marginBottom: "0.9rem" }}>Q1 & Q2 · 16+ hours only</div>
+              <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem" }}>
+                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "#16a34a", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.35rem" }}>Top Performers</div>
+                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)`, marginBottom: "0.9rem" }}>Q1 & Q2 · 16+ hours only</div>
                 {(() => {
                   const topList = [...q1Agents, ...q2Agents].filter(a => a.hours >= 16).sort((a, b) => b.hours - a.hours).slice(0, 5);
-                  if (topList.length === 0) return <div style={{ color: `var(--text-faint)`, fontFamily: "Georgia, serif", fontSize: "1.2rem" }}>No Q1/Q2 agents with 16+ hours yet</div>;
+                  if (topList.length === 0) return <div style={{ color: `var(--text-faint)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem" }}>No Q1/Q2 agents with 16+ hours yet</div>;
                   return topList.map((a, i) => {
                     const gph = a.hours > 0 ? (a.goals / a.hours).toFixed(3) : "0.000";
                     const pct = `${Math.round(a.pctToGoal)}%`;
                     return (
                     <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.5rem 0", borderBottom: i < topList.length-1 ? "1px solid var(--bg-tertiary)" : "none" }}>
                       <div>
-                        <div style={{ color: `var(--text-warm)`, fontFamily: "Georgia, serif", fontSize: "1.23rem", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                        <div style={{ color: `var(--text-warm)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem", display: "flex", alignItems: "center", gap: "0.4rem" }}>
                           {a.agentName}
-                          {newHireSet.has(a.agentName) && <span style={{ fontFamily: "monospace", fontSize: "1.08rem", color: "#d97706", background: "#d9770620", padding: "0.05rem 0.3rem", borderRadius: "2px" }}>NEW</span>}
+                          {newHireSet.has(a.agentName) && <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "var(--nh-color)", background: "var(--nh-bg)", padding: "0.05rem 0.3rem", borderRadius: "2px" }}>NEW</span>}
                         </div>
-                        <div style={{ fontFamily: "monospace", fontSize: "1.17rem", color: `var(--text-dim)` }}>{a.region} · {fmt(a.hours, 1)} hrs · {gph} GPH</div>
+                        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)` }}>{a.region} · {fmt(a.hours, 1)} hrs · {gph} GPH</div>
                       </div>
                       <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.25rem" }}>
-                        <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "1.65rem", color: Q[a.quartile].color, fontWeight: 700 }}>{pct}</div>
+                        <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.15rem", color: Q[a.quartile].color, fontWeight: 700 }}>{pct}</div>
                         <QBadge q={a.quartile} />
                       </div>
                     </div>
@@ -6869,23 +6996,23 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
                 })()}
               </div>
 
-              <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1.25rem" }}>
-                <div style={{ fontFamily: "monospace", fontSize: "1.08rem", color: "#dc2626", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.35rem" }}>Priority Coaching</div>
-                <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-dim)`, marginBottom: "0.9rem" }}>Zero sales · ranked by hours invested</div>
+              <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem" }}>
+                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "#dc2626", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.35rem" }}>Priority Coaching</div>
+                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)`, marginBottom: "0.9rem" }}>Zero sales · ranked by hours invested</div>
                 {q4Agents.length === 0 ? (
-                  <div style={{ color: `var(--text-faint)`, fontFamily: "Georgia, serif", fontSize: "1.2rem" }}>No Q4 agents — excellent!</div>
+                  <div style={{ color: `var(--text-faint)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem" }}>No Q4 agents — excellent!</div>
                 ) : q4Agents.slice(0, 5).map((a, i) => (
                   <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.5rem 0", borderBottom: i < Math.min(q4Agents.length,5)-1 ? "1px solid var(--bg-tertiary)" : "none" }}>
                     <div>
-                      <div style={{ color: `var(--text-warm)`, fontFamily: "Georgia, serif", fontSize: "1.23rem", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                      <div style={{ color: `var(--text-warm)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem", display: "flex", alignItems: "center", gap: "0.4rem" }}>
                         {a.agentName}
-                        {newHireSet.has(a.agentName) && <span style={{ fontFamily: "monospace", fontSize: "1.08rem", color: "#d97706", background: "#d9770620", padding: "0.05rem 0.3rem", borderRadius: "2px" }}>NEW</span>}
-                        {a.hours > 16 && <span style={{ fontFamily: "monospace", fontSize: "1.08rem", color: "#6366f1", background: "#6366f120", padding: "0.05rem 0.3rem", borderRadius: "2px" }}>16+ HRS</span>}
+                        {newHireSet.has(a.agentName) && <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "var(--nh-color)", background: "var(--nh-bg)", padding: "0.05rem 0.3rem", borderRadius: "2px" }}>NEW</span>}
+                        {a.hours > 16 && <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "#6366f1", background: "#6366f120", padding: "0.05rem 0.3rem", borderRadius: "2px" }}>16+ HRS</span>}
                       </div>
-                      <div style={{ fontFamily: "monospace", fontSize: "1.17rem", color: `var(--text-dim)` }}>{a.region} · 0 sales</div>
+                      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)` }}>{a.region} · 0 sales</div>
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.25rem" }}>
-                      <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "1.65rem", color: "#6366f1", fontWeight: 700 }}>{fmt(a.hours, 1)} hrs</div>
+                      <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.15rem", color: "#6366f1", fontWeight: 700 }}>{fmt(a.hours, 1)} hrs</div>
                       <QBadge q={a._q} />
                     </div>
                   </div>
@@ -6921,8 +7048,8 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
         {/* ── REGIONS TAB ── */}
         {/* ── AGENTS TAB ── */}
         {tab === "agents" && (
-          <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1.5rem" }}>
-            <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "1.1rem" }}>
+          <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.5rem" }}>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "1.1rem" }}>
               All Agents — {totalRowCount} records · click column headers to sort
             </div>
             <AgentTable agents={agents} newHireSet={newHireSet} />
@@ -7008,13 +7135,13 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
           return (
             <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
               {/* Header */}
-              <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase" }}>
-                Supervisor Ranking {progSphGoal ? `\u00b7 SPH Goal: ${progSphGoal.toFixed(3)}` : ""}
+              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase" }}>
+                Supervisor Ranking {progSphGoal ? ` | SPH Goal: ${progSphGoal.toFixed(3)}` : ""}
               </div>
 
               {/* Ranking table */}
               <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "monospace", fontSize: "0.95rem" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem" }}>
                   <thead><tr style={{ borderBottom: "2px solid var(--border)" }}>
                     <th style={{ padding: "0.4rem 0.5rem", textAlign: "left", color: `var(--text-faint)`, fontWeight: 600, fontSize: "0.85rem" }}>#</th>
                     <RankTh k="name" label="Supervisor" left />
@@ -7040,7 +7167,7 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
                       return (
                         <Fragment key={s.name}><tr onClick={() => setExpandedRankSup(expandedRankSup === s.name ? null : s.name)} style={{ cursor: "pointer", borderBottom: "1px solid var(--bg-tertiary)", background: isTop ? "#16a34a08" : isBot ? "#dc262608" : i % 2 === 0 ? "transparent" : `var(--bg-row-alt)` }}>
                           <td style={{ padding: "0.4rem 0.5rem", color: isTop ? "#16a34a" : isBot ? "#dc2626" : `var(--text-dim)`, fontWeight: 700 }}>{i + 1}</td>
-                          <td style={{ padding: "0.4rem 0.5rem", color: `var(--text-warm)`, fontFamily: "Georgia, serif" }}>
+                          <td style={{ padding: "0.4rem 0.5rem", color: `var(--text-warm)`, fontFamily: "var(--font-ui, Inter, sans-serif)" }}>
                             {s.name}
                             {isTop && <span style={{ marginLeft: "0.4rem", fontSize: "0.8rem", color: "#16a34a", background: "#16a34a15", border: "1px solid #16a34a30", borderRadius: "3px", padding: "0.05rem 0.3rem" }}>TOP</span>}
                           </td>
@@ -7108,17 +7235,17 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
       {/* Sticky nav — always visible, never scrolls away */}
       <div style={{ flexShrink: 0, borderTop: "1px solid var(--border)", padding: "0.75rem 2.5rem", display: "flex", alignItems: "center", justifyContent: "space-between", background: `var(--bg-row-alt)` }}>
         <button onClick={() => onNav(-1)} disabled={slideIndex === 0}
-          style={{ padding: "0.5rem 1.25rem", background: slideIndex===0?"transparent":"var(--bg-tertiary)", border: `1px solid ${slideIndex===0?`var(--border)`:`var(--text-faint)`}`, borderRadius: "6px", color: slideIndex===0?`var(--border)`:`var(--text-secondary)`, fontFamily: "monospace", fontSize: "1.17rem", cursor: slideIndex===0?"not-allowed":"pointer", letterSpacing: "0.05em" }}>
+          style={{ padding: "0.5rem 1.25rem", background: slideIndex===0?"transparent":"var(--bg-tertiary)", border: `1px solid ${slideIndex===0?`var(--border)`:`var(--text-faint)`}`, borderRadius: "6px", color: slideIndex===0?`var(--border)`:`var(--text-secondary)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", cursor: slideIndex===0?"not-allowed":"pointer", letterSpacing: "0.05em" }}>
           ← PREV
         </button>
         <div style={{ display: "flex", gap: "0.35rem", alignItems: "center" }}>
           {Array.from({ length: total }).map((_, i) => (
             <div key={i} onClick={() => onNav(i - slideIndex)}
-              style={{ width: i===slideIndex?"22px":"6px", height: "6px", borderRadius: "3px", background: i===slideIndex?"#d97706":`var(--border)`, cursor: "pointer", transition: "all 0.2s" }} />
+              style={{ width: i===slideIndex?"22px":"8px", height: "8px", borderRadius: "4px", background: i===slideIndex?"#d97706":"transparent", border: i===slideIndex?"none":`2px solid var(--text-faint)`, cursor: "pointer", transition: "all 0.2s" }} />
           ))}
         </div>
         <button onClick={() => onNav(1)} disabled={slideIndex === total - 1}
-          style={{ padding: "0.5rem 1.25rem", background: slideIndex===total-1?"transparent":"var(--bg-tertiary)", border: `1px solid ${slideIndex===total-1?`var(--border)`:`var(--text-faint)`}`, borderRadius: "6px", color: slideIndex===total-1?`var(--border)`:`var(--text-secondary)`, fontFamily: "monospace", fontSize: "1.17rem", cursor: slideIndex===total-1?"not-allowed":"pointer", letterSpacing: "0.05em" }}>
+          style={{ padding: "0.5rem 1.25rem", background: slideIndex===total-1?"transparent":"var(--bg-tertiary)", border: `1px solid ${slideIndex===total-1?`var(--border)`:`var(--text-faint)`}`, borderRadius: "6px", color: slideIndex===total-1?`var(--border)`:`var(--text-secondary)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", cursor: slideIndex===total-1?"not-allowed":"pointer", letterSpacing: "0.05em" }}>
           NEXT →
         </button>
       </div>
@@ -7729,7 +7856,7 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
     <th onClick={() => toggleSort(k)}
       style={{ padding: "0.4rem 0.6rem", textAlign: right?"right":"left", fontWeight: 400,
         color: sortBy===k ? "#d97706" : `var(--text-dim)`, cursor: "pointer", whiteSpace: "nowrap",
-        fontFamily: "monospace", fontSize: "1.08rem", userSelect: "none" }}>
+        fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", userSelect: "none" }}>
       {label}{sortBy===k?(sortDir===-1?" ↓":" ↑"):""}
     </th>
   );
@@ -7738,7 +7865,7 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
     <th onClick={() => toggleProgSort(k)}
       style={{ padding: "0.4rem 0.75rem", textAlign: right?"right":"left", fontWeight: 400,
         color: progSortBy===k ? "#d97706" : `var(--text-dim)`, cursor: "pointer", whiteSpace: "nowrap",
-        fontFamily: "monospace", fontSize: "1.08rem", userSelect: "none" }}>
+        fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", userSelect: "none" }}>
       {label}{progSortBy===k?(progSortDir===-1?" ↓":" ↑"):""}
     </th>
   );
@@ -7752,48 +7879,48 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
 
   if (loading) return (
     <div style={{ minHeight: "90vh", display: "flex", alignItems: "center", justifyContent: "center", background: `var(--bg-primary)` }}>
-      <div style={{ fontFamily: "monospace", fontSize: "1.05rem", color: `var(--text-dim)` }}>Checking connection…</div>
+      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: `var(--text-dim)` }}>Checking connection…</div>
     </div>
   );
 
   if (pasteMode) return (
     <div style={{ minHeight: "90vh", background: `var(--bg-primary)`, padding: "3rem 2.5rem" }}>
       <div style={{ maxWidth: "640px", margin: "0 auto" }}>
-        <div style={{ fontFamily: "monospace", fontSize: "1.17rem", color: "#16a34a", letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: "0.5rem" }}>Today's Operations — Manual Data Load</div>
-        <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "3rem", color: `var(--text-warm)`, fontWeight: 700, marginBottom: "1.5rem" }}>Paste Live Data</div>
+        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "#16a34a", letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: "0.5rem" }}>Today's Operations — Manual Data Load</div>
+        <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "3rem", color: `var(--text-warm)`, fontWeight: 700, marginBottom: "1.5rem" }}>Paste Live Data</div>
 
-        <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1.5rem", marginBottom: "1.25rem" }}>
-          <div style={{ fontFamily: "monospace", fontSize: "1.11rem", color: `var(--text-muted)`, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "1rem" }}>Step 1 — Open the live data URL</div>
+        <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.5rem", marginBottom: "1.25rem" }}>
+          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-muted)`, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "1rem" }}>Step 1 — Open the live data URL</div>
           <a href={OTM_URL} target="_blank" rel="noreferrer"
-            style={{ display: "inline-block", background: "#16a34a18", border: "1px solid #16a34a55", borderRadius: "6px", color: "#16a34a", padding: "0.5rem 1rem", fontFamily: "monospace", fontSize: "1.14rem", textDecoration: "none", marginBottom: "0.5rem" }}>
+            style={{ display: "inline-block", background: "#16a34a18", border: "1px solid #16a34a55", borderRadius: "6px", color: "#16a34a", padding: "0.5rem 1rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", textDecoration: "none", marginBottom: "0.5rem" }}>
             ↗ Open OTM Data Feed
           </a>
-          <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-faint)`, marginTop: "0.5rem" }}>
+          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-faint)`, marginTop: "0.5rem" }}>
             This opens the live data in a new tab. You'll see raw JSON text.
           </div>
         </div>
 
-        <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1.5rem", marginBottom: "1.25rem" }}>
-          <div style={{ fontFamily: "monospace", fontSize: "1.11rem", color: `var(--text-muted)`, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "1rem" }}>Step 2 — Copy & paste the data here</div>
-          <div style={{ fontFamily: "Georgia, serif", fontSize: "1.17rem", color: `var(--text-muted)`, marginBottom: "0.75rem" }}>
-            In that tab, press <kbd style={{ background: `var(--bg-tertiary)`, border: "1px solid var(--text-faint)", borderRadius: "3px", padding: "0.1rem 0.35rem", fontFamily: "monospace", fontSize: "1.05rem" }}>Ctrl+A</kbd> then <kbd style={{ background: `var(--bg-tertiary)`, border: "1px solid var(--text-faint)", borderRadius: "3px", padding: "0.1rem 0.35rem", fontFamily: "monospace", fontSize: "1.05rem" }}>Ctrl+C</kbd> to copy everything, then paste it below.
+        <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.5rem", marginBottom: "1.25rem" }}>
+          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-muted)`, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "1rem" }}>Step 2 — Copy & paste the data here</div>
+          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)`, marginBottom: "0.75rem" }}>
+            In that tab, press <kbd style={{ background: `var(--bg-tertiary)`, border: "1px solid var(--text-faint)", borderRadius: "3px", padding: "0.1rem 0.35rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem" }}>Ctrl+A</kbd> then <kbd style={{ background: `var(--bg-tertiary)`, border: "1px solid var(--text-faint)", borderRadius: "3px", padding: "0.1rem 0.35rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem" }}>Ctrl+C</kbd> to copy everything, then paste it below.
           </div>
           <textarea
             value={pasteText}
             onChange={e => { setPasteText(e.target.value); setPasteError(null); }}
             placeholder='Paste JSON here… (starts with [{"agt":…)'
-            style={{ width: "100%", height: "120px", background: `var(--bg-primary)`, border: `1px solid ${pasteError ? "#dc2626" : `var(--border)`}`, borderRadius: "6px", color: `var(--text-secondary)`, fontFamily: "monospace", fontSize: "1.11rem", padding: "0.75rem", resize: "vertical", boxSizing: "border-box" }}
+            style={{ width: "100%", height: "120px", background: `var(--bg-primary)`, border: `1px solid ${pasteError ? "#dc2626" : `var(--border)`}`, borderRadius: "6px", color: `var(--text-secondary)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", padding: "0.75rem", resize: "vertical", boxSizing: "border-box" }}
           />
           {pasteError && (
-            <div style={{ fontFamily: "monospace", fontSize: "1.17rem", color: "#dc2626", marginTop: "0.4rem" }}>⚠ {pasteError}</div>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "#dc2626", marginTop: "0.4rem" }}>⚠ {pasteError}</div>
           )}
           <button onClick={handlePaste} disabled={!pasteText.trim()}
-            style={{ marginTop: "0.75rem", padding: "0.5rem 1.25rem", background: pasteText.trim() ? "#16a34a18" : "transparent", border: `1px solid ${pasteText.trim() ? "#16a34a" : `var(--border)`}`, borderRadius: "6px", color: pasteText.trim() ? "#16a34a" : `var(--text-faint)`, fontFamily: "monospace", fontSize: "1.14rem", cursor: pasteText.trim() ? "pointer" : "not-allowed" }}>
+            style={{ marginTop: "0.75rem", padding: "0.5rem 1.25rem", background: pasteText.trim() ? "#16a34a18" : "transparent", border: `1px solid ${pasteText.trim() ? "#16a34a" : `var(--border)`}`, borderRadius: "6px", color: pasteText.trim() ? "#16a34a" : `var(--text-faint)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", cursor: pasteText.trim() ? "pointer" : "not-allowed" }}>
             Load Data →
           </button>
         </div>
 
-        <div style={{ fontFamily: "monospace", fontSize: "1.11rem", color: `var(--text-faint)`, textAlign: "center" }}>
+        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-faint)`, textAlign: "center" }}>
           Direct fetch is blocked in this environment. Pasting the data works identically — you'll see all the same live stats.
         </div>
       </div>
@@ -7802,14 +7929,14 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
 
   if (!d) return (
     <div style={{ minHeight: "90vh", display: "flex", alignItems: "center", justifyContent: "center", background: `var(--bg-primary)` }}>
-      <div style={{ fontFamily: "monospace", fontSize: "1.05rem", color: `var(--text-dim)`, textAlign: "center" }}>
+      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: `var(--text-dim)`, textAlign: "center" }}>
         <div style={{ fontSize: "1.8rem", marginBottom: "0.5rem" }}>{loading ? "\u23F3" : "\uD83D\uDCE1"}</div>
         {loading ? "Fetching live data..." : "No data available."}
         <div style={{ marginTop: "0.75rem", display: "flex", gap: "0.5rem", justifyContent: "center" }}>
-          <button onClick={doFetch} style={{ background: "transparent", border: "1px solid #16a34a", borderRadius: "5px", color: "#16a34a", padding: "0.3rem 0.8rem", cursor: "pointer", fontFamily: "monospace", fontSize: "1.11rem" }}>
+          <button onClick={doFetch} style={{ background: "transparent", border: "1px solid #16a34a", borderRadius: "var(--radius-sm, 6px)", color: "#16a34a", padding: "0.3rem 0.8rem", cursor: "pointer", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem" }}>
             {loading ? "Fetching..." : "Try Auto-Fetch"}
           </button>
-          <button onClick={() => setPasteMode(true)} style={{ background: "transparent", border: "1px solid var(--text-faint)", borderRadius: "5px", color: `var(--text-muted)`, padding: "0.3rem 0.8rem", cursor: "pointer", fontFamily: "monospace", fontSize: "1.11rem" }}>Paste Data</button>
+          <button onClick={() => setPasteMode(true)} style={{ background: "transparent", border: "1px solid var(--text-faint)", borderRadius: "var(--radius-sm, 6px)", color: `var(--text-muted)`, padding: "0.3rem 0.8rem", cursor: "pointer", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem" }}>Paste Data</button>
         </div>
       </div>
     </div>
@@ -7821,10 +7948,10 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
       {/* ── Header ── */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.75rem" }}>
         <div>
-          <div style={{ fontFamily: "monospace", fontSize: "1.17rem", color: "#16a34a", letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: "0.25rem" }}>
+          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "#16a34a", letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: "0.25rem" }}>
           ● LIVE · auto-refreshes every 5 min · last loaded {now}
           </div>
-          <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "3rem", color: `var(--text-warm)`, fontWeight: 700 }}>Today's Operations</div>
+          <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "3rem", color: `var(--text-warm)`, fontWeight: 700 }}>Today's Operations</div>
         </div>
         <button onClick={async () => {
             try {
@@ -7836,8 +7963,8 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
             }
           }}
           style={{ background: "transparent", border: "1px solid var(--text-faint)", borderRadius: "6px",
-            color: `var(--text-muted)`, padding: "0.4rem 1rem", fontFamily: "monospace",
-            fontSize: "1.11rem", cursor: "pointer" }}>
+            color: `var(--text-muted)`, padding: "0.4rem 1rem", fontFamily: "var(--font-ui, Inter, sans-serif)",
+            fontSize: "0.8rem", cursor: "pointer" }}>
           {loading ? "Fetching..." : "\u27F3 Refresh Data"}
         </button>
       </div>
@@ -7851,31 +7978,31 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
           { v: d.totalRgu || "—",         l: "RGU",         sub: "today total",  c: "#2563eb" },
           { v: d.absent.length,           l: "Absent",      sub: `of ${recentAgentNames.size} last-7-day roster`, c: d.absent.length > 0 ? "#dc2626" : "#16a34a" },
         ].map(({ v, l, sub, c }) => (
-          <div key={l} style={{ background: `var(--bg-secondary)`, border: `1px solid ${c}22`, borderRadius: "10px", padding: "1rem", textAlign: "center" }}>
-            <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "3rem", color: c, fontWeight: 700, lineHeight: 1 }}>{v}</div>
-            <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: c, marginTop: "0.2rem" }}>{l}</div>
-            <div style={{ fontFamily: "monospace", fontSize: "1.17rem", color: `var(--text-faint)`, marginTop: "0.2rem" }}>{sub}</div>
+          <div key={l} style={{ background: `var(--bg-secondary)`, border: `1px solid ${c}22`, borderRadius: "var(--radius-md, 10px)", padding: "1rem", textAlign: "center" }}>
+            <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "3rem", color: c, fontWeight: 700, lineHeight: 1 }}>{v}</div>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: c, marginTop: "0.2rem" }}>{l}</div>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-faint)`, marginTop: "0.2rem" }}>{sub}</div>
           </div>
         ))}
       </div>
 
       {/* ── Product Code Columns — full-width slim bar ── */}
       {allAvailableCodes.length > 0 && (
-        <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1rem 1.25rem", marginBottom: "1.25rem" }}>
+        <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1rem 1.25rem", marginBottom: "1.25rem" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div style={{ fontFamily: "monospace", fontSize: "1.11rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase" }}>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase" }}>
               Product Code Columns
             </div>
             <div style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
               {selectedCodes.size > 0 && (
                 <button onClick={() => setSelectedCodes(new Set())}
-                  style={{ background: "transparent", border: "1px solid var(--text-faint)", borderRadius: "4px", color: `var(--text-muted)`, padding: "0.15rem 0.5rem", fontFamily: "monospace", fontSize: "1.17rem", cursor: "pointer" }}>
+                  style={{ background: "transparent", border: "1px solid var(--text-faint)", borderRadius: "var(--radius-sm, 6px)", color: `var(--text-muted)`, padding: "0.15rem 0.5rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", cursor: "pointer" }}>
                   Show All
                 </button>
               )}
               <button onClick={() => setCodeDropOpen(v => !v)}
-                style={{ background: codeDropOpen ? "#d9770620" : "transparent", border: `1px solid ${codeDropOpen ? "#d97706" : `var(--text-faint)`}`, borderRadius: "4px",
-                  color: codeDropOpen ? "#d97706" : `var(--text-muted)`, padding: "0.15rem 0.6rem", fontFamily: "monospace", fontSize: "1.11rem", cursor: "pointer" }}>
+                style={{ background: codeDropOpen ? "#d9770620" : "transparent", border: `1px solid ${codeDropOpen ? "#d97706" : `var(--text-faint)`}`, borderRadius: "var(--radius-sm, 6px)",
+                  color: codeDropOpen ? "#d97706" : `var(--text-muted)`, padding: "0.15rem 0.6rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", cursor: "pointer" }}>
                 {codeDropOpen ? "▲ Close" : "▼ Select Codes"}{selectedCodes.size > 0 ? ` (${selectedCodes.size})` : ""}
               </button>
             </div>
@@ -7885,7 +8012,7 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
             <div style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem", marginTop: "0.5rem" }}>
               {[...selectedCodes].sort((a,b)=>Number(a)-Number(b)).map(cod => (
                 <span key={cod} onClick={() => toggleCode(cod)}
-                  style={{ fontFamily: "monospace", fontSize: "1.17rem", padding: "0.15rem 0.45rem", borderRadius: "3px",
+                  style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", padding: "0.15rem 0.45rem", borderRadius: "3px",
                     background: "#d9770620", border: "1px solid #d9770650", color: "#d97706", cursor: "pointer" }}
                   title="Click to remove">
                   {prodLabel(cod, codes)} ×
@@ -7903,8 +8030,8 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
                   return (
                     <button key={cod} onClick={() => toggleCode(cod)}
                       style={{ background: active ? "#6366f120" : "transparent", border: `1px solid ${active ? "#6366f1" : `var(--border)`}`,
-                        borderRadius: "4px", color: active ? "#6366f1" : `var(--text-dim)`, padding: "0.2rem 0.55rem",
-                        fontFamily: "monospace", fontSize: "1.17rem", cursor: "pointer", textAlign: "center",
+                        borderRadius: "var(--radius-sm, 6px)", color: active ? "#6366f1" : `var(--text-dim)`, padding: "0.2rem 0.55rem",
+                        fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", cursor: "pointer", textAlign: "center",
                         width: "100%", transition: "all 0.1s" }}>
                       {lbl}
                     </button>
@@ -7920,8 +8047,8 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.25rem", marginBottom: "1.25rem", alignItems: "stretch" }}>
 
         {/* ── Attendance panel ── */}
-        <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1.25rem" }}>
-          <div style={{ fontFamily: "monospace", fontSize: "1.11rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "1rem" }}>
+        <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem" }}>
+          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "1rem" }}>
             Attendance vs Last 7 Days
           </div>
           <div style={{ display: "flex", gap: "0.75rem", marginBottom: "1rem" }}>
@@ -7930,16 +8057,16 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
               { label: "Absent",  count: d.absent.length,  color: "#dc2626" },
               { label: "New",     count: d.newFaces.length, color: "#d97706" },
             ].map(({ label, count, color }) => (
-              <div key={label} style={{ flex: 1, padding: "0.6rem", background: color+"12", border: `1px solid ${color}30`, borderRadius: "8px", textAlign: "center" }}>
-                <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "2.4rem", color, fontWeight: 700, lineHeight: 1 }}>{count}</div>
-                <div style={{ fontFamily: "monospace", fontSize: "1.11rem", color, marginTop: "0.15rem" }}>{label}</div>
+              <div key={label} style={{ flex: 1, padding: "0.6rem", background: color+"12", border: `1px solid ${color}30`, borderRadius: "var(--radius-md, 10px)", textAlign: "center" }}>
+                <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.75rem", color, fontWeight: 700, lineHeight: 1 }}>{count}</div>
+                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color, marginTop: "0.15rem" }}>{label}</div>
               </div>
             ))}
           </div>
           {d.absent.length > 0 && (
             <div>
               <button onClick={() => setShowAbsent(v => !v)}
-                style={{ background: "transparent", border: "none", cursor: "pointer", fontFamily: "monospace", fontSize: "1.11rem", color: "#dc2626", padding: 0, display: "flex", alignItems: "center", gap: "0.3rem", marginBottom: "0.4rem" }}>
+                style={{ background: "transparent", border: "none", cursor: "pointer", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "#dc2626", padding: 0, display: "flex", alignItems: "center", gap: "0.3rem", marginBottom: "0.4rem" }}>
                 <span>{showAbsent?"▾":"▸"}</span>
                 {d.absent.length} absent today — worked in last 7 days
               </button>
@@ -7947,12 +8074,12 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
                   {Object.entries(d.absentByRegion).sort().map(([reg, agents]) => (
                     <div key={reg}>
-                      <div style={{ fontFamily: "monospace", fontSize: "1.17rem", color: getRegColor(reg), textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.25rem" }}>
+                      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: getRegColor(reg), textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.25rem" }}>
                         {reg} <span style={{ color: `var(--text-faint)` }}>({agents.length})</span>
                       </div>
                       <div style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem" }}>
                         {agents.sort((a,b)=>a.name.localeCompare(b.name)).map(({ name, quartile }) => (
-                          <div key={name} style={{ fontFamily: "monospace", fontSize: "1.11rem", padding: "0.15rem 0.5rem", borderRadius: "3px",
+                          <div key={name} style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", padding: "0.15rem 0.5rem", borderRadius: "3px",
                             background: "#dc262612", border: "1px solid #dc262630", color: "#dc2626",
                             display: "flex", alignItems: "center", gap: "0.3rem" }}>
                             {name.split(" ")[0]}
@@ -7968,12 +8095,12 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
           )}
           {d.newFaces.length > 0 && (
             <div style={{ marginTop: "0.75rem" }}>
-              <div style={{ fontFamily: "monospace", fontSize: "1.11rem", color: "#d97706", marginBottom: "0.4rem" }}>
+              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "#d97706", marginBottom: "0.4rem" }}>
                 ▸ {d.newFaces.length} agents working today not in recent history
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem" }}>
                 {d.newFaces.sort().map(name => (
-                  <div key={name} style={{ fontFamily: "monospace", fontSize: "1.11rem", padding: "0.15rem 0.5rem", borderRadius: "3px",
+                  <div key={name} style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", padding: "0.15rem 0.5rem", borderRadius: "3px",
                     background: "#d9770612", border: "1px solid #d9770630", color: "#d97706" }}>
                     {name.split(" ")[0]}
                   </div>
@@ -7984,8 +8111,8 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
         </div>
 
         {/* ── By Region ── */}
-        <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1.25rem", display: "flex", flexDirection: "column" }}>
-          <div style={{ fontFamily: "monospace", fontSize: "1.11rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "1rem" }}>
+        <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem", display: "flex", flexDirection: "column" }}>
+          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "1rem" }}>
             By Region — Live
           </div>
           {Object.entries(d.byReg).sort().map(([reg, s]) => {
@@ -7996,10 +8123,10 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
             const pctColor = avgPct !== null ? attainColor(avgPct) : `var(--text-dim)`;
             const hasProd = Object.keys(s.products).length > 0;
             return (
-              <div key={reg} style={{ padding: "0.85rem 1rem", background: `var(--bg-primary)`, borderRadius: "8px", border: `1px solid ${regColor}22`, marginBottom: "0.6rem" }}>
+              <div key={reg} style={{ padding: "0.85rem 1rem", background: `var(--bg-primary)`, borderRadius: "var(--radius-md, 10px)", border: `1px solid ${regColor}22`, marginBottom: "0.6rem" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
-                  <span style={{ fontFamily: "Georgia, serif", fontSize: "1.32rem", color: regColor, fontWeight: 600 }}>{reg}</span>
-                  <span style={{ fontFamily: "monospace", fontSize: "1.14rem", color: `var(--text-muted)` }}>{s.count} agents</span>
+                  <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "1.32rem", color: regColor, fontWeight: 600 }}>{reg}</span>
+                  <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)` }}>{s.count} agents</span>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr", gap: "0.5rem" }}>
                   {[
@@ -8010,8 +8137,8 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
                     { l: "% to Goal", v: avgPct !== null ? `${Math.round(avgPct)}%` : "—",   c: pctColor  },
                   ].map(({ l, v, c }) => (
                     <div key={l} style={{ textAlign: "center" }}>
-                      <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "1.65rem", color: c, fontWeight: 600 }}>{v}</div>
-                      <div style={{ fontFamily: "monospace", fontSize: "0.99rem", color: `var(--text-dim)` }}>{l}</div>
+                      <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.15rem", color: c, fontWeight: 600 }}>{v}</div>
+                      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: `var(--text-dim)` }}>{l}</div>
                     </div>
                   ))}
                 </div>
@@ -8020,7 +8147,7 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
                     {Object.entries(s.products)
                       .filter(([cod]) => selectedCodes.size === 0 || selectedCodes.has(cod))
                       .sort((a,b)=>b[1]-a[1]).map(([cod, cnt]) => (
-                      <span key={cod} style={{ fontFamily: "monospace", fontSize: "0.81rem", padding: "0.1rem 0.35rem", borderRadius: "3px", background: "#6366f108", border: "1px solid #6366f120", color: "#6366f1aa",
+                      <span key={cod} style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.81rem", padding: "0.1rem 0.35rem", borderRadius: "3px", background: "#6366f108", border: "1px solid #6366f120", color: "#6366f1aa",
                         wordBreak: "break-word", overflowWrap: "anywhere" }}
                         title={`${prodLabel(cod, codes)}: ${cnt}`}>
                         {prodLabel(cod, codes)}: {cnt}
@@ -8035,10 +8162,10 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
           {/* Product mix if any sales exist */}
           {Object.keys(d.productTotals).length > 0 && (
             <div style={{ marginTop: "auto", paddingTop: "0.75rem", borderTop: "1px solid var(--bg-tertiary)" }}>
-              <div style={{ fontFamily: "monospace", fontSize: "1.11rem", color: `var(--text-dim)`, marginBottom: "0.4rem" }}>PRODUCT MIX TODAY</div>
+              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-dim)`, marginBottom: "0.4rem" }}>PRODUCT MIX TODAY</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem" }}>
                 {Object.entries(d.productTotals).sort((a,b)=>b[1]-a[1]).map(([cod, cnt]) => (
-                  <div key={cod} style={{ fontFamily: "monospace", fontSize: "1.08rem", padding: "0.15rem 0.5rem", borderRadius: "3px", background: "#6366f112", border: "1px solid #6366f130", color: "#6366f1",
+                  <div key={cod} style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", padding: "0.15rem 0.5rem", borderRadius: "3px", background: "#6366f112", border: "1px solid #6366f130", color: "#6366f1",
                     wordBreak: "break-word", overflowWrap: "anywhere" }}>
                     {prodLabel(cod, codes)}: {cnt}
                   </div>
@@ -8050,10 +8177,10 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
       </div>
 
       {/* ── Programs breakdown ── */}
-      <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1.25rem", marginBottom: "1.25rem" }}>
+      <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem", marginBottom: "1.25rem" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
-          <div style={{ fontFamily: "monospace", fontSize: "1.11rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase" }}>Performance by Campaign · by Site</div>
-          <div style={{ fontFamily: "monospace", fontSize: "1.11rem", color: `var(--text-faint)` }}>click headers to sort · site tabs to filter</div>
+          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase" }}>Performance by Campaign · by Site</div>
+          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-faint)` }}>click headers to sort · site tabs to filter</div>
         </div>
         {/* Site drill-down tabs */}
         {(() => {
@@ -8069,7 +8196,7 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
             <div style={{ marginBottom: "1rem" }}>
               <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginBottom: progSiteFilter === "BZ" ? "0.5rem" : 0 }}>
                 <button onClick={() => { setProgSiteFilter(null); setBzSiteFilter(null); }}
-                  style={{ padding: "0.3rem 0.8rem", borderRadius: "5px", border: `1px solid ${!progSiteFilter?"#d97706":`var(--border)`}`, background: !progSiteFilter?"#d9770618":"transparent", color: !progSiteFilter?"#d97706":`var(--text-muted)`, fontFamily: "monospace", fontSize: "1.11rem", cursor: "pointer" }}>
+                  style={{ padding: "0.3rem 0.8rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${!progSiteFilter?"#d97706":`var(--border)`}`, background: !progSiteFilter?"#d9770618":"transparent", color: !progSiteFilter?"#d97706":`var(--text-muted)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", cursor: "pointer" }}>
                   All Sites
                 </button>
                 {siteTabs.map(st => {
@@ -8077,9 +8204,9 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
                   const btnColor = getRegColor(st.regs[0]);
                   return (
                     <button key={st.label} onClick={() => { setProgSiteFilter(isActive ? null : st.label); setBzSiteFilter(null); }}
-                      style={{ padding: "0.3rem 0.8rem", borderRadius: "5px", border: `1px solid ${isActive?btnColor:`var(--border)`}`, background: isActive?btnColor+"18":"transparent", color: isActive?btnColor:`var(--text-muted)`, fontFamily: "monospace", fontSize: "1.11rem", cursor: "pointer" }}>
+                      style={{ padding: "0.3rem 0.8rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${isActive?btnColor:`var(--border)`}`, background: isActive?btnColor+"18":"transparent", color: isActive?btnColor:`var(--text-muted)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", cursor: "pointer" }}>
                       {st.label}
-                      <span style={{ fontFamily: "monospace", fontSize: "1.08rem", color: `var(--text-dim)`, marginLeft: "0.35rem" }}>
+                      <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-dim)`, marginLeft: "0.35rem" }}>
                         ({st.regs.length > 1 ? `${st.regs.length} sites` : st.regs[0]})
                       </span>
                     </button>
@@ -8090,7 +8217,7 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
               {progSiteFilter === "BZ" && bzRegs.length > 1 && (
                 <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap", paddingLeft: "0.5rem", borderLeft: "2px solid #6366f130" }}>
                   <button onClick={() => setBzSiteFilter(null)}
-                    style={{ padding: "0.25rem 0.7rem", borderRadius: "4px", border: `1px solid ${!bzSiteFilter ? "#6366f1" : `var(--border)`}`, background: !bzSiteFilter ? "#6366f118" : "transparent", color: !bzSiteFilter ? "#6366f1" : `var(--text-dim)`, fontFamily: "monospace", fontSize: "1.02rem", cursor: "pointer", transition: "all 0.15s" }}>
+                    style={{ padding: "0.25rem 0.7rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${!bzSiteFilter ? "#6366f1" : `var(--border)`}`, background: !bzSiteFilter ? "#6366f118" : "transparent", color: !bzSiteFilter ? "#6366f1" : `var(--text-dim)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "1.02rem", cursor: "pointer", transition: "all 0.15s" }}>
                     Combined
                   </button>
                   {bzRegs.map(reg => {
@@ -8100,7 +8227,7 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
                     const shortLabel = reg.replace(/-XOTM$/i, "");
                     return (
                       <button key={reg} onClick={() => setBzSiteFilter(isActive ? null : reg)}
-                        style={{ padding: "0.25rem 0.7rem", borderRadius: "4px", border: `1px solid ${isActive ? regColor : `var(--border)`}`, background: isActive ? regColor + "18" : "transparent", color: isActive ? regColor : `var(--text-dim)`, fontFamily: "monospace", fontSize: "1.02rem", cursor: "pointer", transition: "all 0.15s" }}>
+                        style={{ padding: "0.25rem 0.7rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${isActive ? regColor : `var(--border)`}`, background: isActive ? regColor + "18" : "transparent", color: isActive ? regColor : `var(--text-dim)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "1.02rem", cursor: "pointer", transition: "all 0.15s" }}>
                         {shortLabel}
                       </button>
                     );
@@ -8119,7 +8246,7 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
           const totAgents = sortedPrograms.reduce((s, p) => s + p.agentCount, 0);
           const filterColor = sortedPrograms.length > 0 ? getRegColor(sortedPrograms[0].reg) : "#d97706";
           return (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "0.5rem", marginBottom: "1rem", padding: "0.75rem", background: filterColor + "08", border: `1px solid ${filterColor}25`, borderRadius: "8px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "0.5rem", marginBottom: "1rem", padding: "0.75rem", background: filterColor + "08", border: `1px solid ${filterColor}25`, borderRadius: "var(--radius-md, 10px)" }}>
               {[
                 { l: "Campaigns", v: sortedPrograms.length, c: filterColor },
                 { l: "Agents", v: totAgents, c: `var(--text-secondary)` },
@@ -8129,15 +8256,15 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
                 { l: "CPS", v: totGoals > 0 ? `$${((totHrs * 19.77) / totGoals).toFixed(2)}` : `$${(totHrs * 19.77).toFixed(2)}`, c: (() => { const pv = sortedPrograms.filter(p => p.pctToGoal !== null); return pv.length > 0 ? attainColor(pv.reduce((s,p) => s + p.pctToGoal, 0) / pv.length) : `var(--text-faint)`; })() },
               ].map(({ l, v, c }) => (
                 <div key={l} style={{ textAlign: "center" }}>
-                  <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: "1.95rem", color: c, fontWeight: 700, lineHeight: 1 }}>{v}</div>
-                  <div style={{ fontFamily: "monospace", fontSize: "0.9rem", color: `var(--text-dim)`, marginTop: "0.1rem" }}>{l}</div>
+                  <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.95rem", color: c, fontWeight: 700, lineHeight: 1 }}>{v}</div>
+                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem", color: `var(--text-dim)`, marginTop: "0.1rem" }}>{l}</div>
                 </div>
               ))}
             </div>
           );
         })()}
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "monospace", fontSize: "1.08rem", whiteSpace: "nowrap" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", whiteSpace: "nowrap" }}>
             <thead>
               <tr style={{ borderBottom: "2px solid var(--border)" }}>
                 <ProgSortTh k="grp"        label="Program" />
@@ -8177,8 +8304,8 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
                   const pctColor = p.pctToGoal !== null ? attainColor(p.pctToGoal) : `var(--text-faint)`;
                   return (
                     <tr key={key} style={{ borderBottom: "1px solid var(--bg-tertiary)", ...style }}>
-                      <td style={{ padding: "0.4rem 0.75rem", color: `var(--text-primary)`, fontFamily: "Georgia, serif", ...style.tdProgram }}>{style.progLabel || p.grp}</td>
-                      <td style={{ padding: "0.4rem 0.75rem", color: `var(--text-dim)`, fontFamily: "monospace", fontSize: "0.9rem" }}>{p.roc || "\u2014"}</td>
+                      <td style={{ padding: "0.4rem 0.75rem", color: `var(--text-primary)`, fontFamily: "var(--font-ui, Inter, sans-serif)", ...style.tdProgram }}>{style.progLabel || p.grp}</td>
+                      <td style={{ padding: "0.4rem 0.75rem", color: `var(--text-dim)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem" }}>{p.roc || "\u2014"}</td>
                       <td style={{ padding: "0.4rem 0.75rem" }}>
                         <span style={{ background: regColor+"18", border: `1px solid ${regColor}40`, borderRadius: "3px", color: regColor, padding: "0.1rem 0.35rem" }}>{p.isCombined ? "BZ" : p.reg}</span>
                       </td>
@@ -8334,12 +8461,12 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
       </div>
 
       {/* ── Agent leaderboard ── */}
-      <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1.25rem" }}>
+      <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
-          <div style={{ fontFamily: "monospace", fontSize: "1.11rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase" }}>
+          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase" }}>
             Agent Leaderboard · {sortedAgents.length} {lbRegion === "All" ? (lbJob ? `in ${lbJob}` : "active today") : `in ${lbRegion}`}{lbJob && lbRegion !== "All" ? ` · ${lbJob}` : ""}
           </div>
-          <div style={{ fontFamily: "monospace", fontSize: "1.11rem", color: `var(--text-faint)` }}>click headers to sort</div>
+          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-faint)` }}>click headers to sort</div>
         </div>
         {/* Region selector */}
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", marginBottom: "0.5rem" }}>
@@ -8349,8 +8476,8 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
             const btnColor = r === "All" ? `var(--text-muted)` : getRegColor(r);
             return (
               <button key={r} onClick={() => { setLbRegion(r); setLbJob(null); }}
-                style={{ background: active ? btnColor+"20" : "transparent", border: `1px solid ${active ? btnColor : `var(--border)`}`, borderRadius: "5px",
-                  color: active ? btnColor : `var(--text-dim)`, padding: "0.2rem 0.6rem", fontFamily: "monospace", fontSize: "1.11rem", cursor: "pointer", transition: "all 0.15s" }}>
+                style={{ background: active ? btnColor+"20" : "transparent", border: `1px solid ${active ? btnColor : `var(--border)`}`, borderRadius: "var(--radius-sm, 6px)",
+                  color: active ? btnColor : `var(--text-dim)`, padding: "0.2rem 0.6rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", cursor: "pointer", transition: "all 0.15s" }}>
                 {r}
               </button>
             );
@@ -8366,14 +8493,14 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
           return (
             <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem", marginBottom: "1rem" }}>
               <button onClick={() => setLbJob(null)}
-                style={{ padding: "0.2rem 0.55rem", borderRadius: "4px", border: `1px solid ${!lbJob ? "#16a34a" : `var(--border)`}`, background: !lbJob ? "#16a34a18" : "transparent", color: !lbJob ? "#16a34a" : `var(--text-dim)`, fontFamily: "monospace", fontSize: "1.02rem", cursor: "pointer" }}>
+                style={{ padding: "0.2rem 0.55rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${!lbJob ? "#16a34a" : `var(--border)`}`, background: !lbJob ? "#16a34a18" : "transparent", color: !lbJob ? "#16a34a" : `var(--text-dim)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "1.02rem", cursor: "pointer" }}>
                 All Programs
               </button>
               {jobs.map(j => {
                 const active = lbJob === j;
                 return (
                   <button key={j} onClick={() => setLbJob(active ? null : j)}
-                    style={{ padding: "0.2rem 0.55rem", borderRadius: "4px", border: `1px solid ${active ? "#16a34a" : `var(--border)`}`, background: active ? "#16a34a18" : "transparent", color: active ? "#16a34a" : `var(--text-dim)`, fontFamily: "monospace", fontSize: "1.02rem", cursor: "pointer" }}>
+                    style={{ padding: "0.2rem 0.55rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${active ? "#16a34a" : `var(--border)`}`, background: active ? "#16a34a18" : "transparent", color: active ? "#16a34a" : `var(--text-dim)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "1.02rem", cursor: "pointer" }}>
                     {j}
                   </button>
                 );
@@ -8384,7 +8511,7 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
         {(() => {
           return (
         <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "monospace", fontSize: "1.08rem", whiteSpace: "nowrap" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", whiteSpace: "nowrap" }}>
             <thead>
               <tr style={{ borderBottom: "2px solid var(--border)" }}>
                 <SortTh k="name"  label="Agent"    />
@@ -8417,7 +8544,7 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
                 const pctColor = a.pctToGoal !== null ? attainColor(a.pctToGoal) : `var(--text-faint)`;
                 return (
                   <tr key={`${a.name}|${a.job || i}`} style={{ borderBottom: "1px solid var(--bg-tertiary)", background: i%2===0?"transparent":`var(--bg-row-alt)` }}>
-                    <td style={{ padding: "0.4rem 0.6rem", color: `var(--text-warm)`, fontFamily: "Georgia, serif" }}>{a.name}</td>
+                    <td style={{ padding: "0.4rem 0.6rem", color: `var(--text-warm)`, fontFamily: "var(--font-ui, Inter, sans-serif)" }}>{a.name}</td>
                     <td style={{ padding: "0.4rem 0.6rem" }}>
                       <span style={{ background: regColor+"18", border: `1px solid ${regColor}40`, borderRadius: "3px", color: regColor, padding: "0.1rem 0.35rem" }}>{a.reg}</span>
                     </td>
@@ -8444,7 +8571,7 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
                       {a.xml > 0 && eg > 0 ? `${Math.round(a.xml / eg * 100)}%` : "—"}
                     </td>
                     <td style={{ padding: "0.4rem 0.6rem", textAlign: "right" }}>
-                      {a.quartile ? <QBadge q={a.quartile} /> : <span style={{ fontFamily: "monospace", fontSize: "1.17rem", color: `var(--text-faint)` }}>—</span>}
+                      {a.quartile ? <QBadge q={a.quartile} /> : <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-faint)` }}>—</span>}
                     </td>
                   </tr>
                 );
@@ -8493,7 +8620,7 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
               })()}
             </tfoot>
           </table>
-          <div style={{ fontFamily: "monospace", fontSize: "1.08rem", color: `var(--text-faint)`, padding: "0.4rem 0.6rem" }}>
+          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-faint)`, padding: "0.4rem 0.6rem" }}>
             Hist Q = quartile from uploaded historical file · % to Goal = today's sales vs SPH goal × hours worked · HSD % = New HSD / Sales · Mobile % = New Mobile / Sales
           </div>
         </div>
@@ -8511,32 +8638,52 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
 
 const THEMES = {
   dark: {
-    "--bg-primary":    "#080c10",
-    "--bg-secondary":  "#0d1117",
-    "--bg-row-alt":    "#0a0e14",
-    "--bg-tertiary":   "#161b22",
-    "--border":        "#21262d",
-    "--border-muted":  "#30363d",
-    "--text-faint":    "#374151",
-    "--text-dim":      "#4b5563",
-    "--text-muted":    "#6b7280",
-    "--text-secondary":"#9ca3af",
-    "--text-primary":  "#e5e7eb",
-    "--text-warm":     "#f0e6d3",
+    "--bg-primary":      "#06090d",
+    "--bg-secondary":    "#0c1017",
+    "--bg-row-alt":      "#090d13",
+    "--bg-tertiary":     "#141a23",
+    "--border":          "#1e2530",
+    "--border-muted":    "#2a3240",
+    "--text-faint":      "#334155",
+    "--text-dim":        "#475569",
+    "--text-muted":      "#64748b",
+    "--text-secondary":  "#94a3b8",
+    "--text-primary":    "#e2e8f0",
+    "--text-warm":       "#f1f5f9",
+    "--glass-bg":        "rgba(12, 16, 23, 0.75)",
+    "--glass-bg-subtle": "rgba(12, 16, 23, 0.5)",
+    "--glass-border":    "rgba(255, 255, 255, 0.06)",
+    "--card-glow":       "0 0 0 1px rgba(255,255,255,0.04), 0 4px 24px rgba(0,0,0,0.3)",
+    "--card-hover-glow": "0 0 0 1px rgba(217,119,6,0.12), 0 8px 32px rgba(0,0,0,0.4)",
+    "--accent-surface":  "rgba(217, 119, 6, 0.06)",
+    "--nav-bg":          "rgba(6, 9, 13, 0.85)",
+    "--nh-color":        "#d97706",
+    "--nh-bg":           "#d9770618",
+    "--nh-border":       "#d9770640",
   },
   light: {
-    "--bg-primary":    "#f0f2f5",
-    "--bg-secondary":  "#ffffff",
-    "--bg-row-alt":    "#f7f8fa",
-    "--bg-tertiary":   "#e4e7eb",
-    "--border":        "#d1d5db",
-    "--border-muted":  "#e5e7eb",
-    "--text-faint":    "#9ca3af",
-    "--text-dim":      "#6b7280",
-    "--text-muted":    "#4b5563",
-    "--text-secondary":"#374151",
-    "--text-primary":  "#111827",
-    "--text-warm":     "#1f2937",
+    "--bg-primary":      "#f1f5f9",
+    "--bg-secondary":    "#ffffff",
+    "--bg-row-alt":      "#f8fafc",
+    "--bg-tertiary":     "#e2e8f0",
+    "--border":          "#cbd5e1",
+    "--border-muted":    "#e2e8f0",
+    "--text-faint":      "#94a3b8",
+    "--text-dim":        "#64748b",
+    "--text-muted":      "#475569",
+    "--text-secondary":  "#334155",
+    "--text-primary":    "#0f172a",
+    "--text-warm":       "#1e293b",
+    "--glass-bg":        "rgba(255, 255, 255, 0.7)",
+    "--glass-bg-subtle": "rgba(255, 255, 255, 0.5)",
+    "--glass-border":    "rgba(0, 0, 0, 0.06)",
+    "--card-glow":       "0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04)",
+    "--card-hover-glow": "0 2px 8px rgba(0,0,0,0.08), 0 8px 24px rgba(0,0,0,0.06)",
+    "--accent-surface":  "rgba(217, 119, 6, 0.04)",
+    "--nav-bg":          "rgba(241, 245, 249, 0.85)",
+    "--nh-color":        "#92400e",
+    "--nh-bg":           "#92400e14",
+    "--nh-border":       "#92400e35",
   },
 };
 
@@ -8691,18 +8838,18 @@ export default function App() {
     return (
       <div style={wrapStyle}>
         {/* Minimal top bar so TODAY is always accessible */}
-        <div style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 200, background: `var(--bg-primary)`, borderBottom: `1px solid var(--border)`, padding: "0.5rem 1.5rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontFamily: "monospace", fontSize: "1.08rem", color: `var(--text-dim)`, letterSpacing: "0.12em" }}>
-            PERFORMANCE INTELLIGENCE · no file loaded
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 200, background: `var(--nav-bg)`, backdropFilter: "blur(16px) saturate(180%)", WebkitBackdropFilter: "blur(16px) saturate(180%)", borderBottom: `1px solid var(--glass-border)`, padding: "0.6rem 1.5rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: `var(--text-dim)`, letterSpacing: "0.08em", fontWeight: 500 }}>
+            PERFORMANCE INTEL
           </span>
-          <div style={{ display: "flex", gap: "0.6rem", alignItems: "center" }}>
+          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
             <button onClick={() => setLightMode(v => !v)}
-              style={{ background: "transparent", border: `1px solid var(--border-muted)`, borderRadius: "5px", color: `var(--text-muted)`, padding: "0.3rem 0.7rem", fontFamily: "monospace", fontSize: "1.08rem", cursor: "pointer" }}>
-              {lightMode ? "☀ LIGHT" : "☾ DARK"}
+              style={{ background: "transparent", border: `1px solid var(--border-muted)`, borderRadius: "var(--radius-sm, 6px)", color: `var(--text-muted)`, padding: "0.35rem 0.65rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", cursor: "pointer", fontWeight: 500 }}>
+              {lightMode ? "\u2600" : "\u263E"}
             </button>
             <button onClick={() => setShowToday(true)}
-              style={{ background: "transparent", border: `1px solid var(--border-muted)`, borderRadius: "5px", color: `var(--text-muted)`, padding: "0.3rem 0.8rem", fontFamily: "monospace", fontSize: "1.11rem", cursor: "pointer", letterSpacing: "0.05em" }}>
-              ○ TODAY
+              style={{ background: "transparent", border: `1px solid var(--border-muted)`, borderRadius: "var(--radius-sm, 6px)", color: `var(--text-muted)`, padding: "0.35rem 0.75rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", cursor: "pointer", fontWeight: 500, letterSpacing: "0.04em" }}>
+              TODAY
             </button>
           </div>
         </div>
@@ -8710,9 +8857,9 @@ export default function App() {
       {showSettings && (
         <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}
           onClick={e => { if (e.target === e.currentTarget) setShowSettings(false); }}>
-          <div style={{ background: `var(--bg-primary)`, border: "1px solid var(--border)", borderRadius: "12px", padding: "1.5rem", width: "100%", maxWidth: "650px" }}>
-            <div style={{ fontFamily: "monospace", fontSize: "1.14rem", color: "#6366f1", letterSpacing: "0.12em", marginBottom: "1.25rem" }}>\u2699 DATA SOURCE SETTINGS</div>
-            <div style={{ fontFamily: "monospace", fontSize: "0.88rem", color: `var(--text-dim)`, marginBottom: "1rem" }}>
+          <div style={{ background: `var(--bg-primary)`, border: "1px solid var(--glass-border)", borderRadius: "var(--radius-xl, 20px)", padding: "1.75rem", width: "100%", maxWidth: "650px", boxShadow: "0 24px 80px rgba(0,0,0,0.3)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)" }}>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: "#6366f1", letterSpacing: "0.08em", marginBottom: "1.25rem", fontWeight: 600, textTransform: "uppercase" }}>Data Source Settings</div>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)`, marginBottom: "1rem", lineHeight: 1.5 }}>
               Publish Google Sheets as CSV (File \u2192 Share \u2192 Publish to web \u2192 CSV format). Update URLs here when sheets change monthly.
             </div>
             {[
@@ -8721,7 +8868,7 @@ export default function App() {
               { key: "nh", label: "Roster / New Hires Sheet", color: "#6366f1", current: nhSheetUrl, placeholder: "Optional — paste Roster CSV URL" },
             ].map(({ key, label, color, current, placeholder }) => (
               <div key={key} style={{ marginBottom: "1rem" }}>
-                <div style={{ fontFamily: "monospace", fontSize: "0.95rem", color, letterSpacing: "0.08em", marginBottom: "0.3rem" }}>{label}</div>
+                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color, letterSpacing: "0.08em", marginBottom: "0.3rem" }}>{label}</div>
                 <input
                   defaultValue={current}
                   placeholder={placeholder}
@@ -8729,10 +8876,10 @@ export default function App() {
                     const val = e.target.value.trim();
                     setSheetUrls(prev => ({ ...prev, [key]: val }));
                   }}
-                  style={{ width: "100%", padding: "0.5rem 0.75rem", fontFamily: "monospace", fontSize: "0.9rem", background: `var(--bg-secondary)`, color: `var(--text-primary)`, border: `1px solid var(--border)`, borderRadius: "6px", boxSizing: "border-box" }}
+                  style={{ width: "100%", padding: "0.5rem 0.75rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem", background: `var(--bg-secondary)`, color: `var(--text-primary)`, border: `1px solid var(--border)`, borderRadius: "6px", boxSizing: "border-box" }}
                 />
                 {current && (
-                  <div style={{ fontFamily: "monospace", fontSize: "0.8rem", color: `var(--text-faint)`, marginTop: "0.2rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-faint)`, marginTop: "0.2rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {current.slice(0, 80)}{current.length > 80 ? "..." : ""}
                   </div>
                 )}
@@ -8740,11 +8887,11 @@ export default function App() {
             ))}
             <div style={{ display: "flex", gap: "0.5rem", justifyContent: "space-between", marginTop: "1rem" }}>
               <button onClick={() => { setSheetUrls({}); }}
-                style={{ padding: "0.4rem 1rem", borderRadius: "6px", border: "1px solid var(--border)", background: "transparent", color: `var(--text-muted)`, fontFamily: "monospace", fontSize: "0.95rem", cursor: "pointer" }}>
+                style={{ padding: "0.4rem 1rem", borderRadius: "6px", border: "1px solid var(--border)", background: "transparent", color: `var(--text-muted)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", cursor: "pointer" }}>
                 Reset to Defaults
               </button>
               <button onClick={() => { setShowSettings(false); setRawData(null); setGoalsRaw(null); setNHRaw(null); }}
-                style={{ padding: "0.4rem 1rem", borderRadius: "6px", border: "1px solid #2563eb", background: "#2563eb18", color: "#2563eb", fontFamily: "monospace", fontSize: "0.95rem", cursor: "pointer", fontWeight: 600 }}>
+                style={{ padding: "0.4rem 1rem", borderRadius: "6px", border: "1px solid #2563eb", background: "#2563eb18", color: "#2563eb", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", cursor: "pointer", fontWeight: 600 }}>
                 Save & Reload
               </button>
             </div>
@@ -8752,7 +8899,7 @@ export default function App() {
         </div>
       )}
 
-      <div style={{ paddingTop: "32px" }}>
+      <div style={{ paddingTop: "42px" }}>
           <DropZone
             onData={d => { setRawData(d); setSlideIndex(0); }}
             goalsRaw={goalsRaw}
@@ -8771,79 +8918,84 @@ export default function App() {
   return (
     <div style={wrapStyle}>
       {/* Top bar — compact by default, expands on hover to show file controls below */}
-      <div style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 200, background: `var(--bg-primary)`, borderBottom: `1px solid var(--border)`, padding: "0.2rem 1.5rem" }}
+      <div style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 200, background: `var(--nav-bg)`, backdropFilter: "blur(16px) saturate(180%)", WebkitBackdropFilter: "blur(16px) saturate(180%)", borderBottom: `1px solid var(--glass-border)`, padding: "0.35rem 1.5rem" }}
         onMouseEnter={e => { e.currentTarget.dataset.expanded = "true"; const tb = e.currentTarget.querySelector("[data-toolbar]"); if (tb) { tb.style.pointerEvents = "none"; setTimeout(() => { tb.style.pointerEvents = "auto"; }, 300); } }}
         onMouseLeave={e => e.currentTarget.dataset.expanded = "false"}
         ref={el => { if (el) { const update = () => { const exp = el.dataset.expanded === "true"; const tb = el.querySelector("[data-toolbar]"); if (tb) tb.style.display = exp ? "flex" : "none"; }; el.dataset.expanded = "false"; const obs = new MutationObserver(update); obs.observe(el, { attributes: true, attributeFilter: ["data-expanded"] }); update(); } }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontFamily: "monospace", fontSize: "0.85rem", color: `var(--text-dim)`, letterSpacing: "0.12em" }}>
+          <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", color: `var(--text-dim)`, letterSpacing: "0.06em", fontWeight: 500 }}>
             {rawData
-              ? <>PERF INTEL · {programs.length} pgms · {perf.uniqueAgentCount} agts
-                  {goalsRaw && <span style={{ color: "#16a34a", marginLeft: "0.5rem" }}>· goals</span>}
-                  {newHireSet.size > 0 && <span style={{ color: "#d97706", marginLeft: "0.5rem" }}>· {newHireSet.size} NH</span>}
+              ? <>
+                  <span style={{ color: `var(--text-muted)`, fontWeight: 600 }}>PERF INTEL</span>
+                  <span style={{ margin: "0 0.4rem", opacity: 0.3 }}>|</span>
+                  {programs.length} programs
+                  <span style={{ margin: "0 0.4rem", opacity: 0.3 }}>|</span>
+                  {perf.uniqueAgentCount} agents
+                  {goalsRaw && <><span style={{ margin: "0 0.4rem", opacity: 0.3 }}>|</span><span style={{ color: "#16a34a" }}>goals</span></>}
+                  {newHireSet.size > 0 && <><span style={{ margin: "0 0.4rem", opacity: 0.3 }}>|</span><span style={{ color: "var(--nh-color)" }}>{newHireSet.size} NH</span></>}
                 </>
-              : <span>PERFORMANCE INTELLIGENCE · <span style={{ color: "#d97706" }}>no file loaded</span></span>
+              : <span><span style={{ fontWeight: 600 }}>PERFORMANCE INTEL</span></span>
             }
           </span>
-          <div style={{ display: "flex", gap: "0.6rem", alignItems: "center" }}>
+          <div style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
             <button onClick={() => setLightMode(v => !v)}
-              style={{ background: lightMode ? "#f0f2f518" : "transparent", border: `1px solid var(--border-muted)`, borderRadius: "5px", color: `var(--text-muted)`, padding: "0.2rem 0.5rem", fontFamily: "monospace", fontSize: "0.95rem", cursor: "pointer" }}>
+              style={{ background: "transparent", border: `1px solid var(--border-muted)`, borderRadius: "var(--radius-sm, 6px)", color: `var(--text-muted)`, padding: "0.3rem 0.55rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", cursor: "pointer" }}>
               {lightMode ? "\u2600" : "\u263E"}
             </button>
             <button onClick={() => setShowToday(v => !v)}
-              style={{ background: showToday?"#16a34a18":"transparent", border: `1px solid ${showToday?"#16a34a":`var(--border-muted)`}`, borderRadius: "5px", color: showToday?"#16a34a":`var(--text-muted)`, padding: "0.2rem 0.5rem", fontFamily: "monospace", fontSize: "0.95rem", cursor: "pointer" }}>
-              {showToday ? "\u25CF TODAY" : "\u25CB TODAY"}
+              style={{ background: showToday?"#16a34a12":"transparent", border: `1px solid ${showToday?"#16a34a50":`var(--border-muted)`}`, borderRadius: "var(--radius-sm, 6px)", color: showToday?"#16a34a":`var(--text-muted)`, padding: "0.3rem 0.6rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", cursor: "pointer", fontWeight: 500, letterSpacing: "0.03em" }}>
+              {showToday ? "\u25CF" : "\u25CB"} TODAY
             </button>
             <button onClick={() => setShowSettings(v => !v)}
-              style={{ background: showSettings?"#6366f118":"transparent", border: `1px solid ${showSettings?"#6366f1":`var(--border-muted)`}`, borderRadius: "5px", color: showSettings?"#6366f1":`var(--text-muted)`, padding: "0.2rem 0.5rem", fontFamily: "monospace", fontSize: "0.95rem", cursor: "pointer" }}>
+              style={{ background: showSettings?"#6366f112":"transparent", border: `1px solid ${showSettings?"#6366f150":`var(--border-muted)`}`, borderRadius: "var(--radius-sm, 6px)", color: showSettings?"#6366f1":`var(--text-muted)`, padding: "0.3rem 0.6rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", cursor: "pointer", fontWeight: 500, letterSpacing: "0.03em" }}>
               DATA
             </button>
           </div>
         </div>
         {/* File management row — appears below on hover */}
-        <div data-toolbar="" style={{ display: "none", gap: "0.6rem", alignItems: "center", paddingTop: "0.35rem", flexWrap: "wrap" }}>
+        <div data-toolbar="" style={{ display: "none", gap: "0.5rem", alignItems: "center", paddingTop: "0.4rem", paddingBottom: "0.15rem", flexWrap: "wrap" }}>
           <button onClick={() => goalsInputRef.current.click()}
-            style={{ background: goalsRaw?"#16a34a18":"transparent", border: `1px solid ${goalsRaw?"#16a34a":`var(--border-muted)`}`, borderRadius: "5px", color: goalsRaw?"#16a34a":`var(--text-muted)`, padding: "0.25rem 0.7rem", fontFamily: "monospace", fontSize: "1rem", cursor: "pointer" }}>
-            {goalsRaw ? "\u2713 GOALS (saved)" : "\u2295 GOALS"}
+            style={{ background: goalsRaw?"#16a34a10":"transparent", border: `1px solid ${goalsRaw?"#16a34a40":`var(--border-muted)`}`, borderRadius: "var(--radius-sm, 6px)", color: goalsRaw?"#16a34a":`var(--text-muted)`, padding: "0.3rem 0.65rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", cursor: "pointer", fontWeight: 500 }}>
+            {goalsRaw ? "\u2713 Goals" : "+ Goals"}
           </button>
           {goalsRaw && (
             <button onClick={() => setGoalsRaw(null)} title="Clear saved goals"
-              style={{ background: "transparent", border: "1px solid var(--text-faint)", borderRadius: "5px", color: `var(--text-dim)`, padding: "0.25rem 0.5rem", fontFamily: "monospace", fontSize: "1rem", cursor: "pointer" }}>{"\u2715"}</button>
+              style={{ background: "transparent", border: "1px solid var(--border-muted)", borderRadius: "var(--radius-sm, 6px)", color: `var(--text-dim)`, padding: "0.3rem 0.45rem", fontSize: "0.75rem", cursor: "pointer", lineHeight: 1 }}>{"\u2715"}</button>
           )}
           <input ref={goalsInputRef} type="file" accept=".csv" style={{ display: "none" }} onChange={e => loadFile(e.target.files[0], setGoalsRaw)} />
           <button onClick={() => nhInputRef.current.click()}
-            style={{ background: newHiresRaw?"#d9770618":"transparent", border: `1px solid ${newHiresRaw?"#d97706":`var(--border-muted)`}`, borderRadius: "5px", color: newHiresRaw?"#d97706":`var(--text-muted)`, padding: "0.25rem 0.7rem", fontFamily: "monospace", fontSize: "1rem", cursor: "pointer" }}>
-            {newHiresRaw ? `\uD83C\uDF31 ${newHireSet.size} NH (saved)` : "\uD83C\uDF31 NEW HIRES"}
+            style={{ background: newHiresRaw?"#d9770610":"transparent", border: `1px solid ${newHiresRaw?"#d9770640":`var(--border-muted)`}`, borderRadius: "var(--radius-sm, 6px)", color: newHiresRaw?"#d97706":`var(--text-muted)`, padding: "0.3rem 0.65rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", cursor: "pointer", fontWeight: 500 }}>
+            {newHiresRaw ? `\u2713 ${newHireSet.size} NH` : "+ New Hires"}
           </button>
           {newHiresRaw && (
             <button onClick={() => setNHRaw(null)} title="Clear saved roster"
-              style={{ background: "transparent", border: "1px solid var(--text-faint)", borderRadius: "5px", color: `var(--text-dim)`, padding: "0.25rem 0.5rem", fontFamily: "monospace", fontSize: "1rem", cursor: "pointer" }}>{"\u2715"}</button>
+              style={{ background: "transparent", border: "1px solid var(--border-muted)", borderRadius: "var(--radius-sm, 6px)", color: `var(--text-dim)`, padding: "0.3rem 0.45rem", fontSize: "0.75rem", cursor: "pointer", lineHeight: 1 }}>{"\u2715"}</button>
           )}
           <input ref={nhInputRef} type="file" accept=".csv" style={{ display: "none" }} onChange={e => loadFile(e.target.files[0], setNHRaw)} />
           <div style={{ flex: 1 }} />
           <button onClick={() => { setRawData(null); setSlideIndex(0); setShowToday(false); }}
-            style={{ background: "transparent", border: "1px solid var(--border-muted)", borderRadius: "5px", color: `var(--text-muted)`, padding: "0.25rem 0.7rem", fontFamily: "monospace", fontSize: "1rem", cursor: "pointer" }}>
-            {rawData ? "+ NEW FILE" : "+ LOAD FILE"}
+            style={{ background: "transparent", border: "1px solid var(--border-muted)", borderRadius: "var(--radius-sm, 6px)", color: `var(--text-muted)`, padding: "0.3rem 0.65rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", cursor: "pointer", fontWeight: 500 }}>
+            New File
           </button>
           <button onClick={() => { const t = prompt("Paste agent CSV data:"); if (t) { const rows = parseCSV(t); if (rows.length > 0) { setRawData(rows); setSlideIndex(0); } } }}
-            style={{ background: "transparent", border: "1px solid var(--border-muted)", borderRadius: "5px", color: `var(--text-muted)`, padding: "0.25rem 0.7rem", fontFamily: "monospace", fontSize: "1rem", cursor: "pointer" }}>
-            Paste CSV
+            style={{ background: "transparent", border: "1px solid var(--border-muted)", borderRadius: "var(--radius-sm, 6px)", color: `var(--text-muted)`, padding: "0.3rem 0.65rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", cursor: "pointer", fontWeight: 500 }}>
+            Paste
           </button>
           <button onClick={async () => { try { setSheetLoading(true); const res = await fetch(agentSheetUrl); const text = await res.text(); const rows = parseCSV(text); if (rows.length > 0) { setRawData(rows); setSlideIndex(0); } } catch(e) { alert("Could not fetch sheet: " + e.message); } finally { setSheetLoading(false); } }}
-            style={{ background: "transparent", border: "1px solid #2563eb", borderRadius: "5px", color: "#2563eb", padding: "0.25rem 0.7rem", fontFamily: "monospace", fontSize: "1rem", cursor: "pointer" }}>
-            {sheetLoading ? "Loading..." : "\u2601 Refresh Sheet"}
+            style={{ background: "#2563eb10", border: "1px solid #2563eb40", borderRadius: "var(--radius-sm, 6px)", color: "#2563eb", padding: "0.3rem 0.65rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", cursor: "pointer", fontWeight: 600 }}>
+            {sheetLoading ? "Loading..." : "Refresh"}
           </button>
         </div>
       </div>
 
-      <div style={{ paddingTop: "32px" }}>
+      <div style={{ paddingTop: "42px" }}>
         {showToday ? (
           <TodayView recentAgentNames={recentAgentNames} historicalAgentMap={historicalAgentMap} goalLookup={perf.goalLookup} />
         ) : sheetLoading && !rawData ? (
-          <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: `var(--bg-primary)` }}>
-            <div style={{ fontFamily: "monospace", fontSize: "1.2rem", color: `var(--text-muted)`, letterSpacing: "0.15em", marginBottom: "1rem" }}>LOADING FROM GOOGLE SHEETS...</div>
-            <div style={{ width: "200px", height: "3px", background: `var(--border)`, borderRadius: "2px", overflow: "hidden" }}>
-              <div style={{ width: "40%", height: "100%", background: "#d97706", borderRadius: "2px", animation: "pulse 1.5s ease-in-out infinite" }} />
+          <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: `var(--bg-primary)`, animation: "fadeIn 0.4s ease" }}>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)`, letterSpacing: "0.1em", marginBottom: "1.25rem", fontWeight: 500 }}>LOADING FROM GOOGLE SHEETS</div>
+            <div style={{ width: "180px", height: "2px", background: `var(--border)`, borderRadius: "2px", overflow: "hidden" }}>
+              <div style={{ width: "40%", height: "100%", background: "linear-gradient(90deg, #d97706, #f59e0b)", borderRadius: "2px", animation: "shimmer 1.5s ease-in-out infinite" }} />
             </div>
           </div>
         ) : !rawData ? (
@@ -8864,12 +9016,12 @@ export default function App() {
         ) : program ? (
           <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
             {/* Program navigation bar */}
-            <div style={{ flexShrink: 0, borderBottom: "1px solid var(--border)", padding: "0.5rem 1.5rem", background: `var(--bg-row-alt)`, display: "flex", alignItems: "center", gap: "0.5rem", overflowX: "auto" }}>
+            <div style={{ flexShrink: 0, borderBottom: "1px solid var(--glass-border)", padding: "0.5rem 1.5rem", background: `var(--glass-bg-subtle)`, backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", display: "flex", alignItems: "center", gap: "0.35rem", overflowX: "auto" }}>
               <button onClick={() => goToSlide(0)}
-                style={{ padding: "0.25rem 0.6rem", borderRadius: "4px", border: "1px solid var(--border)", background: "transparent", color: `var(--text-muted)`, fontFamily: "monospace", fontSize: "0.88rem", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>
+                style={{ padding: "0.4rem 0.75rem", borderRadius: "var(--radius-sm, 6px)", border: "1px solid var(--border-muted)", background: "transparent", color: `var(--text-muted)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, fontWeight: 500 }}>
                 {"\u2190"} Overview
               </button>
-              <div style={{ width: "1px", height: "20px", background: `var(--border)`, flexShrink: 0 }} />
+              <div style={{ width: "1px", height: "18px", background: `var(--border-muted)`, flexShrink: 0, margin: "0 0.15rem" }} />
               {programs.map((p, pi) => ({ p, pi })).sort((a, b) => (b.p.attainment ?? b.p.healthScore ?? 0) - (a.p.attainment ?? a.p.healthScore ?? 0)).map(({ p, pi }) => {
                 const pIdx = pi + 1;
                 const isActive = slideIndex === pIdx;
@@ -8877,15 +9029,16 @@ export default function App() {
                 const aColor = att !== null ? attainColor(att) : `var(--text-dim)`;
                 return (
                   <button key={p.jobType} onClick={() => goToSlide(pIdx)}
-                    style={{ padding: "0.25rem 0.65rem", borderRadius: "4px", border: `1px solid ${isActive ? aColor : "var(--border)"}`, background: isActive ? aColor + "18" : "transparent", color: isActive ? aColor : `var(--text-dim)`, fontFamily: "monospace", fontSize: "0.88rem", cursor: "pointer", fontWeight: isActive ? 700 : 400, whiteSpace: "nowrap", flexShrink: 0, transition: "all 0.15s" }}>
+                    style={{ padding: "0.4rem 0.7rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${isActive ? aColor + "50" : "transparent"}`, background: isActive ? aColor + "12" : "transparent", color: isActive ? aColor : `var(--text-dim)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", cursor: "pointer", fontWeight: isActive ? 600 : 400, whiteSpace: "nowrap", flexShrink: 0, transition: "all 200ms cubic-bezier(0.4,0,0.2,1)", position: "relative" }}>
                     {p.jobType}
-                    {att !== null && <span style={{ marginLeft: "0.3rem", fontSize: "0.78rem", opacity: 0.7 }}>{Math.round(att)}%</span>}
+                    {att !== null && <span style={{ marginLeft: "0.3rem", fontSize: "0.75rem", opacity: 0.6, fontFamily: "var(--font-data, monospace)" }}>{Math.round(att)}%</span>}
+                    {isActive && <span style={{ position: "absolute", bottom: "-0.5rem", left: "50%", transform: "translateX(-50%)", width: "20px", height: "2px", background: aColor, borderRadius: "1px" }} />}
                   </button>
                 );
               })}
-              <div style={{ width: "1px", height: "20px", background: `var(--border)`, flexShrink: 0 }} />
+              <div style={{ width: "1px", height: "18px", background: `var(--border-muted)`, flexShrink: 0, margin: "0 0.15rem" }} />
               <button onClick={() => goToSlide(1 + programs.length)}
-                style={{ padding: "0.25rem 0.6rem", borderRadius: "4px", border: `1px solid ${slideIndex === 1 + programs.length ? "#d97706" : "var(--border)"}`, background: slideIndex === 1 + programs.length ? "#d9770618" : "transparent", color: slideIndex === 1 + programs.length ? "#d97706" : `var(--text-dim)`, fontFamily: "monospace", fontSize: "0.88rem", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>
+                style={{ padding: "0.4rem 0.7rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${slideIndex === 1 + programs.length ? "#d9770650" : "transparent"}`, background: slideIndex === 1 + programs.length ? "#d9770612" : "transparent", color: slideIndex === 1 + programs.length ? "#d97706" : `var(--text-dim)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, fontWeight: slideIndex === 1 + programs.length ? 600 : 400 }}>
                 MoM Compare
               </button>
             </div>
@@ -8904,7 +9057,7 @@ export default function App() {
             </div>
           </div>
         ) : (
-          <div style={{ minHeight: "90vh", display: "flex", alignItems: "center", justifyContent: "center", color: `var(--text-faint)`, fontFamily: "Georgia, serif" }}>
+          <div style={{ minHeight: "90vh", display: "flex", alignItems: "center", justifyContent: "center", color: `var(--text-faint)`, fontFamily: "var(--font-ui, Inter, sans-serif)" }}>
             No "Job Type" column found in your data.
           </div>
         )}
