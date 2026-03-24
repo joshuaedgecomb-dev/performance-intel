@@ -232,7 +232,7 @@ function buildAIPrompt(type, data) {
   const { jobType, uniqueAgentCount, totalHours, totalGoals, gph, attainment, planGoals, actGoals,
     distUnique, q1Agents, q4Agents, regions, healthScore, totalNewXI, totalXmLines,
     newHiresInProgram, fiscalInfo, totalRgu, sphActual, sphGoal } = data;
-  const elapsed = fiscalInfo ? `${Math.round(fiscalInfo.pctElapsed)}%` : "unknown";
+  const elapsed = fiscalInfo ? `${fiscalInfo.pctElapsed.toFixed(1)}%` : "unknown";
   const daysLeft = fiscalInfo ? fiscalInfo.remainingBDays : "unknown";
   const elapsedDays = fiscalInfo ? fiscalInfo.elapsedBDays : 0;
   const totalDays = fiscalInfo ? fiscalInfo.totalBDays : 0;
@@ -332,6 +332,20 @@ PRODUCT MIX: ${productMix.join(" | ") || "N/A"}${hsdPerSale ? `\n  HSD/sale: ${h
   if (type === "opps") {
     return `${sysPrompt}\nIdentify 3-5 specific opportunities. Each must name an agent or a gap, and prescribe a concrete next-day action (not "consider" or "review" — tell the manager exactly what to do). Focus on: Q4 agents with hours, Q3 agents near Q2 threshold, product attach gaps, site parity issues, pacing shortfalls. One sentence per opportunity.\n\nData:\n${context}\n\nOpportunities (one per line):`;
   }
+  // MoM comparison — includes extra prior month context
+  if (data.prevGoals !== undefined) {
+    const momCtx = `\nMONTH-OVER-MONTH COMPARISON:
+  Prior month agents: ${data.prevAgents || "?"}  |  Current month agents: ${data.uniqueAgentCount || "?"}
+  Prior month sales: ${data.prevGoals || 0}  |  Current month sales: ${data.totalGoals || 0}  (${(data.totalGoals||0) - (data.prevGoals||0) >= 0 ? "+" : ""}${(data.totalGoals||0) - (data.prevGoals||0)})
+  Prior month hours: ${data.prevHours ? data.prevHours.toFixed(0) : "?"}  |  Current month hours: ${data.totalHours ? data.totalHours.toFixed(0) : "?"}
+  Prior GPH: ${data.prevGph ? data.prevGph.toFixed(3) : "?"}  |  Current GPH: ${data.gph ? data.gph.toFixed(3) : "?"}
+  Avg delta % to goal: ${data.avgDelta !== undefined ? (data.avgDelta >= 0 ? "+" : "") + data.avgDelta.toFixed(1) + "%" : "?"}
+  Agents improved: ${data.improvedCount || 0}  |  Agents declined: ${data.declinedCount || 0}
+  Top improvers: ${(data.topMovers || []).filter(a => a.delta > 0).slice(0, 3).map(a => `${a.name} (+${a.delta.toFixed(1)}%)`).join(", ") || "none"}
+  Biggest declines: ${(data.bottomMovers || []).filter(a => a.delta < 0).slice(0, 3).map(a => `${a.name} (${a.delta.toFixed(1)}%)`).join(", ") || "none"}`;
+    return `${sysPrompt}\nWrite a 4-6 paragraph month-over-month executive summary. Compare prior vs current month performance. Identify what changed and why — agent count shifts, conversion rate changes, hours utilization. Name specific agents who drove improvement or decline. Assess whether the trend is sustainable. End with 1-2 specific actions for the program manager.\n\nData:\n${context}${momCtx}`;
+  }
+
   // business overview
   return `${sysPrompt}\nWrite a 4-6 paragraph business-wide executive summary for leadership. Cover: overall pacing and projected finish across all programs, which programs are driving vs dragging performance, workforce utilization (agents with hours vs at threshold), and the top 2-3 actions that would move the needle most in the remaining ${daysLeft} business days.\n\nData:\n${context}`;
 }
@@ -385,6 +399,7 @@ const PRIOR_MONTH_STORAGE_KEY = "perf_intel_prior_month_v1";
 const DEFAULT_AGENT_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRagC_XDSQ84y25onmWs6MUOZcEdWZNA6fVRRDFUzNWQp3ginYLtOIQsSrwmbAERkOJ-daTvbHqEtoy/pub?gid=667346347&single=true&output=csv";
 const DEFAULT_GOALS_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRagC_XDSQ84y25onmWs6MUOZcEdWZNA6fVRRDFUzNWQp3ginYLtOIQsSrwmbAERkOJ-daTvbHqEtoy/pub?gid=1685208822&single=true&output=csv";
 const DEFAULT_NH_SHEET_URL    = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRagC_XDSQ84y25onmWs6MUOZcEdWZNA6fVRRDFUzNWQp3ginYLtOIQsSrwmbAERkOJ-daTvbHqEtoy/pub?gid=25912283&single=true&output=csv";
+const DEFAULT_PRIOR_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTZkBGVIxieyjBKftqL1oecSaUxRkao-gz2B9q4Z8zCY8hEtSy1M28S00RDCS8JVPgPFXJAv2LbsZru/pub?gid=667346347&single=true&output=csv";
 
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1430,7 +1445,7 @@ function generateNarrative(program, fiscalInfo, newHireSet) {
 
   // ── Opening: Status + Attainment ──
   const remaining = fiscalInfo ? fiscalInfo.remainingBDays : null;
-  const elapsed = fiscalInfo ? pct(fiscalInfo.pctElapsed) : null;
+  const elapsed = fiscalInfo ? `${fiscalInfo.pctElapsed.toFixed(1)}%` : null;
   if (attainment !== null && fiscalInfo) {
     const pace = attainment > (fiscalInfo.pctElapsed * 1.05) ? "ahead of" : attainment < (fiscalInfo.pctElapsed * 0.9) ? "behind" : "tracking with";
     lines.push(`${jobType} is at ${pct(attainment)} to goal (${actGoals} of ${planGoals} homes) with ${remaining} business day${remaining !== 1 ? "s" : ""} remaining. The program is ${pace} pace — the month is ${elapsed} elapsed.`);
@@ -1526,7 +1541,7 @@ function generateBusinessNarrative(perf, fiscalInfo) {
   const globalAtt = planTotal ? (globalGoals / planTotal) * 100 : null;
   if (globalAtt !== null && fiscalInfo) {
     const pace = globalAtt > (fiscalInfo.pctElapsed * 1.05) ? "ahead of" : globalAtt < (fiscalInfo.pctElapsed * 0.9) ? "behind" : "tracking with";
-    lines.push(`Business-wide: ${globalGoals} of ${planTotal} homes sold (${pct(globalAtt)}). ${fiscalInfo.remainingBDays} business days remaining, month is ${pct(fiscalInfo.pctElapsed)} elapsed. Operations are ${pace} pace.`);
+    lines.push(`Business-wide: ${globalGoals} of ${planTotal} homes sold (${pct(globalAtt)}). ${fiscalInfo.remainingBDays} business days remaining, month is ${fiscalInfo.pctElapsed.toFixed(1)}% elapsed. Operations are ${pace} pace.`);
   } else {
     lines.push(`Business-wide: ${globalGoals} homes sold across ${programs.length} programs and ${uniqueAgentCount} agents with ${f(totalHours, 0)} total hours.`);
   }
@@ -2710,7 +2725,7 @@ function FiscalPacingBanner({ fiscalInfo, title = "PACING — BUSINESS WIDE" }) 
           <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${pct}%`, background: "#d97706", borderRadius: "var(--radius-sm, 6px)", transition: "width 0.8s ease" }} />
         </div>
         <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.96rem", color: "#d97706", flexShrink: 0, minWidth: "7rem", textAlign: "right" }}>
-          {pct.toFixed(0)}% of fiscal month
+          {pct.toFixed(1)}% of fiscal month
         </span>
       </div>
     </div>
@@ -2935,7 +2950,7 @@ function PacingPanel({ fiscalInfo, metrics, title = "Pacing Analysis" }) {
       <div style={{ marginBottom: "1.5rem" }}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.3rem" }}>
           <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.83rem", color: "var(--text-muted)" }}>Month elapsed</span>
-          <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.83rem", color: "#d97706", fontWeight: 700 }}>{Math.round(pctElapsed)}% of fiscal month</span>
+          <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.83rem", color: "#d97706", fontWeight: 700 }}>{pctElapsed.toFixed(1)}% of fiscal month</span>
         </div>
         <div style={{ height: "8px", background: "var(--bg-tertiary)", borderRadius: "var(--radius-sm, 6px)", overflow: "hidden" }}>
           <div style={{ width: `${monthBarW}%`, height: "100%", background: "#d97706", borderRadius: "var(--radius-sm, 6px)", transition: "width 0.6s" }} />
@@ -2961,7 +2976,7 @@ function PacingPanel({ fiscalInfo, metrics, title = "Pacing Analysis" }) {
               {/* Actual so far */}
               <div style={{ marginBottom: "0.6rem" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.2rem" }}>
-                  <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", color: "var(--text-dim)" }}>Actual · {Math.round(pctElapsed)}% thru</span>
+                  <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", color: "var(--text-dim)" }}>Actual · {pctElapsed.toFixed(1)}% thru</span>
                   <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.87rem", color: "var(--text-primary)", fontWeight: 600 }}>{Math.round(m.actual).toLocaleString()}</span>
                 </div>
                 <div style={{ height: "4px", background: "var(--bg-tertiary)", borderRadius: "2px", overflow: "hidden" }}>
@@ -4641,80 +4656,182 @@ function BusinessOverview({ perf, onNav, localAI }) {
           })()}
         </div>
 
-        {/* Program + Region rankings */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.25rem" }}>
-          {/* Programs */}
-          <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase" }}>Program Rankings</div>
-              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-faint)` }}>{goalLookup ? "vs plan" : "by health score"}</div>
-            </div>
-            {programs.map((p, i) => {
-              const metric  = p.attainment !== null ? p.attainment : p.healthScore;
-              const maxM    = programs.reduce((m, x) => Math.max(m, x.attainment ?? x.healthScore), 1);
-              const barW    = Math.min((metric / maxM) * 100, 100);
-              const color   = qColor(p.attainment ?? p.q1Rate);
-              return (
-                <div key={p.jobType} onClick={() => onNav(i + 1)} style={{ padding: "0.6rem 0", borderBottom: "1px solid var(--bg-tertiary)", cursor: "pointer" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.3rem" }}>
-                    <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem", color: `var(--text-primary)` }}>{p.jobType}</span>
-                    <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
-                      <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: `var(--text-dim)` }}>{p.uniqueAgentCount} agents</span>
-                      {p.attainment !== null
-                        ? <span style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.15rem", color, fontWeight: 700 }}>{Math.round(p.attainment)}%<span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)` }}> plan</span></span>
-                        : <span style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.15rem", color, fontWeight: 700 }}>{p.distUnique.Q1} Q1</span>
-                      }
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", height: "4px", background: `var(--bg-tertiary)`, borderRadius: "2px", overflow: "hidden" }}>
-                    <div style={{ width: `${barW}%`, background: color, borderRadius: "2px", transition: "width 0.6s" }} />
-                  </div>
-                  <div style={{ display: "flex", gap: "0.75rem", marginTop: "0.25rem" }}>
-                    <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: Q.Q1.color }}>Q1: {p.distUnique.Q1}</span>
-                    <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: Q.Q4.color }}>Q4: {p.distUnique.Q4}</span>
-                    {p.planGoals && <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-faint)` }}>{p.actGoals} / {p.planGoals} homes</span>}
-                    <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-faint)` }}>{fmt(p.totalHours, 0)} hrs</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+        {/* Program Gainshare Scorecard */}
+        {(() => {
+          // Pre-compute totals for the header strip
+          const tHours = programs.reduce((s, p) => s + p.totalHours, 0);
+          const tGoals = programs.reduce((s, p) => s + p.actGoals, 0);
+          const tPlan  = programs.reduce((s, p) => s + (p.planGoals || 0), 0);
+          const tAtt   = tPlan > 0 ? (tGoals / tPlan) * 100 : null;
+          const tPace  = fiscalInfo && tGoals && tPlan ? calcPacing(tGoals, tPlan, fiscalInfo.elapsedBDays, fiscalInfo.totalBDays) : null;
+          const behindCount = programs.filter(p => { const pc = fiscalInfo && p.actGoals && p.planGoals ? calcPacing(p.actGoals, p.planGoals, fiscalInfo.elapsedBDays, fiscalInfo.totalBDays) : null; return pc && pc.projectedPct < 85; }).length;
+          const aheadCount = programs.filter(p => { const pc = fiscalInfo && p.actGoals && p.planGoals ? calcPacing(p.actGoals, p.planGoals, fiscalInfo.elapsedBDays, fiscalInfo.totalBDays) : null; return pc && pc.projectedPct >= 100; }).length;
 
-          {/* Regions */}
-          <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem" }}>
-            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "1rem" }}>Region Rankings</div>
-            {regions.map((r, i) => {
-              const maxR  = regions[0].avgPct;
-              const barW  = maxR > 0 ? Math.min((r.avgPct/maxR)*100, 100) : 0;
-              const color = qColor(r.avgPct);
-              const isTop = i === 0;
-              const isBot = i === regions.length - 1 && regions.length > 1;
-              return (
-                <div key={r.name} style={{ padding: "0.6rem 0", borderBottom: "1px solid var(--bg-tertiary)" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.3rem" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
-                      {isTop && <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "#d97706", background: "#d9770618", padding: "0.05rem 0.3rem", borderRadius: "2px" }}>BEST</span>}
-                      {isBot && <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "#dc2626", background: "#dc262618", padding: "0.05rem 0.3rem", borderRadius: "2px" }}>LAGGING</span>}
-                      <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem", color: `var(--text-primary)` }}>{r.name}</span>
-                    </div>
-                    <span style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.15rem", color, fontWeight: 700 }}>
-                      {r.totalGoals.toLocaleString()} <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)` }}>goals</span>
-                    </span>
+          return (
+          <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "clamp(1rem, 3vw, 1.75rem)" }}>
+            {/* Header with key business metrics */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1.25rem", flexWrap: "wrap", gap: "1rem" }}>
+              <div>
+                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.3rem" }}>
+                  Program Scorecard {goalLookup ? "— Gainshare Metrics" : ""}
+                </div>
+                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: `var(--text-dim)`, lineHeight: 1.5 }}>
+                  {programs.length} programs {aheadCount > 0 && <span style={{ color: "#16a34a", fontWeight: 600 }}>{aheadCount} ahead</span>}
+                  {aheadCount > 0 && behindCount > 0 && <span style={{ margin: "0 0.3rem", color: "var(--text-faint)" }}>/</span>}
+                  {behindCount > 0 && <span style={{ color: "#dc2626", fontWeight: 600 }}>{behindCount} behind pace</span>}
+                </div>
+              </div>
+              {tPace && (
+                <div style={{ display: "flex", gap: "1.25rem", alignItems: "center" }}>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Business Attainment</div>
+                    <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.75rem", color: tAtt !== null ? attainColor(tAtt) : "var(--text-faint)", fontWeight: 700, lineHeight: 1 }}>{tAtt !== null ? `${Math.round(tAtt)}%` : "—"}</div>
                   </div>
-                  <div style={{ display: "flex", height: "4px", background: `var(--bg-tertiary)`, borderRadius: "2px", overflow: "hidden", marginBottom: "0.25rem" }}>
-                    <div style={{ width: `${barW}%`, background: color, borderRadius: "2px", transition: "width 0.6s" }} />
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Projected EOM</div>
+                    <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.75rem", color: attainColor(tPace.projectedPct), fontWeight: 700, lineHeight: 1 }}>{tPace.projected.toLocaleString()}</div>
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: attainColor(tPace.projectedPct) }}>{Math.round(tPace.projectedPct)}% of plan</div>
                   </div>
-                  <div style={{ display: "flex", gap: "0.75rem" }}>
-                    <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)` }}>{r.uniqueAgents} agents</span>
-                    <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: Q.Q1.color }}>Q1: {r.uniqueQ1}</span>
-                    <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: Q.Q4.color }}>Q4: {r.uniqueQ4}</span>
-                    <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-faint)` }}>{fmt(r.totalHours, 0)} hrs</span>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Daily Rate</div>
+                    <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.75rem", color: tPace.requiredDaily && tPace.dailyRate >= tPace.requiredDaily ? "#16a34a" : "#dc2626", fontWeight: 700, lineHeight: 1 }}>{tPace.dailyRate.toFixed(1)}</div>
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "var(--text-dim)" }}>need {tPace.requiredDaily ? tPace.requiredDaily.toFixed(1) : "?"}/day</div>
                   </div>
                 </div>
-              );
-            })}
+              )}
+            </div>
+
+            {/* Scorecard table */}
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.92rem" }}>
+                <thead>
+                  <tr style={{ borderBottom: "2px solid var(--border)" }}>
+                    <th style={{ padding: "0.6rem 0.6rem", textAlign: "left", color: "var(--text-muted)", fontWeight: 600, fontSize: "0.8rem", letterSpacing: "0.04em" }}>Program</th>
+                    <th style={{ padding: "0.6rem 0.5rem", textAlign: "center", color: "var(--text-muted)", fontWeight: 600, fontSize: "0.8rem" }}>Agents</th>
+                    <th style={{ padding: "0.6rem 0.5rem", textAlign: "right", color: "var(--text-muted)", fontWeight: 600, fontSize: "0.8rem" }}>Sales / Plan</th>
+                    <th style={{ padding: "0.6rem 0.5rem", textAlign: "center", color: "var(--text-muted)", fontWeight: 600, fontSize: "0.8rem" }}>Attain</th>
+                    <th style={{ padding: "0.6rem 0.5rem", textAlign: "right", color: "var(--text-muted)", fontWeight: 600, fontSize: "0.8rem" }}>Hours</th>
+                    <th style={{ padding: "0.6rem 0.5rem", textAlign: "center", color: "var(--text-muted)", fontWeight: 600, fontSize: "0.8rem" }}>GPH</th>
+                    <th style={{ padding: "0.6rem 0.5rem", textAlign: "center", color: "var(--text-muted)", fontWeight: 600, fontSize: "0.8rem" }}>HSD</th>
+                    <th style={{ padding: "0.6rem 0.5rem", textAlign: "center", color: "var(--text-muted)", fontWeight: 600, fontSize: "0.8rem" }}>RGU</th>
+                    <th style={{ padding: "0.6rem 0.5rem", textAlign: "center", color: "var(--text-muted)", fontWeight: 600, fontSize: "0.8rem" }}>Q1 / Q4</th>
+                    <th style={{ padding: "0.6rem 0.5rem", textAlign: "center", color: "var(--text-muted)", fontWeight: 600, fontSize: "0.8rem" }}>Pacing</th>
+                    <th style={{ padding: "0.6rem 0.5rem", textAlign: "right", color: "var(--text-muted)", fontWeight: 600, fontSize: "0.8rem" }}>Proj. EOM</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...programs].sort((a, b) => (b.attainment ?? b.healthScore ?? 0) - (a.attainment ?? a.healthScore ?? 0)).map((p, i) => {
+                    const color = qColor(p.attainment ?? p.q1Rate);
+                    const pace = fiscalInfo && p.actGoals && p.planGoals ? calcPacing(p.actGoals, p.planGoals, fiscalInfo.elapsedBDays, fiscalInfo.totalBDays) : null;
+                    const paceColor = pace ? (pace.projectedPct >= 100 ? "#16a34a" : pace.projectedPct >= 85 ? "#2563eb" : "#dc2626") : "var(--text-faint)";
+                    const paceLabel = pace ? (pace.projectedPct >= 100 ? "AHEAD" : pace.projectedPct >= 85 ? "NEAR" : "BEHIND") : "—";
+                    const planHrs = p.goalEntry ? getPlanForKey(p.goalEntry, "Hours Goal") : null;
+                    const planHsd = p.goalEntry ? getPlanForKey(p.goalEntry, "HSD Sell In Goal") : null;
+                    const planRgu = p.goalEntry ? getPlanForKey(p.goalEntry, "RGU GOAL") : null;
+                    const hsdAtt = planHsd ? (p.totalNewXI / planHsd) * 100 : null;
+                    const rguAtt = planRgu ? (p.totalRgu / planRgu) * 100 : null;
+                    const hrsAtt = planHrs ? (p.totalHours / planHrs) * 100 : null;
+                    const pidx = programs.indexOf(p);
+                    // Row background: subtle tint based on pacing
+                    const rowBg = pace ? (pace.projectedPct >= 100 ? "#16a34a06" : pace.projectedPct >= 85 ? "transparent" : "#dc262606") : "transparent";
+                    const altBg = i % 2 === 1 ? "var(--bg-row-alt)" : "transparent";
+                    return (
+                      <tr key={p.jobType} onClick={() => onNav(pidx + 1)} style={{ borderBottom: "1px solid var(--bg-tertiary)", cursor: "pointer", background: pace && pace.projectedPct < 85 ? rowBg : altBg }}>
+                        <td style={{ padding: "0.7rem 0.6rem", whiteSpace: "nowrap" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                            <span style={{ display: "inline-block", width: "6px", height: "6px", borderRadius: "50%", background: color, flexShrink: 0 }} />
+                            <span style={{ color: "var(--text-warm)", fontWeight: 600, fontSize: "0.95rem" }}>{p.jobType}</span>
+                          </div>
+                        </td>
+                        <td style={{ padding: "0.7rem 0.5rem", textAlign: "center", color: "var(--text-secondary)", fontSize: "0.95rem" }}>{p.uniqueAgentCount}</td>
+                        <td style={{ padding: "0.7rem 0.5rem", textAlign: "right" }}>
+                          <span style={{ color: "var(--text-warm)", fontWeight: 600, fontSize: "1rem" }}>{p.actGoals.toLocaleString()}</span>
+                          {p.planGoals && <span style={{ color: "var(--text-faint)", fontSize: "0.82rem" }}> / {p.planGoals.toLocaleString()}</span>}
+                        </td>
+                        <td style={{ padding: "0.7rem 0.5rem", textAlign: "center" }}>
+                          <span style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.2rem", color, fontWeight: 700 }}>
+                            {p.attainment !== null ? `${Math.round(p.attainment)}%` : "—"}
+                          </span>
+                        </td>
+                        <td style={{ padding: "0.7rem 0.5rem", textAlign: "right" }}>
+                          <span style={{ color: hrsAtt !== null ? attainColor(hrsAtt) : "var(--text-secondary)", fontWeight: 600, fontSize: "0.95rem" }}>{fmt(p.totalHours, 0)}</span>
+                          {planHrs ? <span style={{ color: "var(--text-faint)", fontSize: "0.78rem" }}> / {fmt(planHrs, 0)}</span> : null}
+                        </td>
+                        <td style={{ padding: "0.7rem 0.5rem", textAlign: "center", fontFamily: "var(--font-data, monospace)", fontSize: "0.95rem", color: "var(--text-secondary)" }}>{p.gph.toFixed(3)}</td>
+                        <td style={{ padding: "0.7rem 0.5rem", textAlign: "center" }}>
+                          <span style={{ color: hsdAtt !== null ? attainColor(hsdAtt) : "var(--text-secondary)", fontWeight: 600, fontSize: "0.95rem" }}>{p.totalNewXI}</span>
+                          {hsdAtt !== null && <div style={{ fontSize: "0.75rem", color: attainColor(hsdAtt), fontWeight: 600 }}>{Math.round(hsdAtt)}%</div>}
+                        </td>
+                        <td style={{ padding: "0.7rem 0.5rem", textAlign: "center" }}>
+                          <span style={{ color: rguAtt !== null ? attainColor(rguAtt) : "var(--text-secondary)", fontWeight: 600, fontSize: "0.95rem" }}>{p.totalRgu}</span>
+                          {rguAtt !== null && <div style={{ fontSize: "0.75rem", color: attainColor(rguAtt), fontWeight: 600 }}>{Math.round(rguAtt)}%</div>}
+                        </td>
+                        <td style={{ padding: "0.7rem 0.5rem", textAlign: "center" }}>
+                          <span style={{ color: Q.Q1.color, fontWeight: 700, fontSize: "0.95rem" }}>{p.distUnique.Q1}</span>
+                          <span style={{ color: "var(--text-faint)", margin: "0 0.15rem" }}>/</span>
+                          <span style={{ color: p.distUnique.Q4 > 0 ? Q.Q4.color : "var(--text-faint)", fontWeight: p.distUnique.Q4 > 0 ? 700 : 400, fontSize: "0.95rem" }}>{p.distUnique.Q4}</span>
+                        </td>
+                        <td style={{ padding: "0.7rem 0.5rem", textAlign: "center" }}>
+                          <span style={{ fontSize: "0.82rem", fontWeight: 700, color: paceColor, background: paceColor + "14", padding: "0.2rem 0.6rem", borderRadius: "4px", border: `1px solid ${paceColor}30`, display: "inline-block" }}>{paceLabel}</span>
+                        </td>
+                        <td style={{ padding: "0.7rem 0.5rem", textAlign: "right" }}>
+                          {pace ? (
+                            <div>
+                              <span style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.1rem", color: attainColor(pace.projectedPct), fontWeight: 700 }}>{pace.projected.toLocaleString()}</span>
+                              <div style={{ fontSize: "0.75rem", color: attainColor(pace.projectedPct), fontWeight: 600 }}>{Math.round(pace.projectedPct)}%</div>
+                            </div>
+                          ) : <span style={{ color: "var(--text-faint)" }}>—</span>}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {/* Totals row */}
+                  {goalLookup && (() => {
+                    const tHsd = programs.reduce((s, p) => s + p.totalNewXI, 0);
+                    const tRgu = programs.reduce((s, p) => s + p.totalRgu, 0);
+                    const tQ1 = programs.reduce((s, p) => s + p.distUnique.Q1, 0);
+                    const tQ4 = programs.reduce((s, p) => s + p.distUnique.Q4, 0);
+                    const tColor = tAtt !== null ? attainColor(tAtt) : "var(--text-muted)";
+                    return (
+                      <tr style={{ borderTop: "2px solid var(--border)" }}>
+                        <td style={{ padding: "0.75rem 0.6rem", color: "var(--text-warm)", fontWeight: 700, fontSize: "0.95rem" }}>TOTAL</td>
+                        <td style={{ padding: "0.75rem 0.5rem", textAlign: "center", color: "var(--text-secondary)", fontWeight: 700 }}>{uniqueAgentCount}</td>
+                        <td style={{ padding: "0.75rem 0.5rem", textAlign: "right", fontWeight: 700 }}>
+                          <span style={{ color: "var(--text-warm)", fontSize: "1rem" }}>{tGoals.toLocaleString()}</span>
+                          {tPlan > 0 && <span style={{ color: "var(--text-faint)", fontSize: "0.82rem" }}> / {tPlan.toLocaleString()}</span>}
+                        </td>
+                        <td style={{ padding: "0.75rem 0.5rem", textAlign: "center" }}>
+                          <span style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.2rem", color: tColor, fontWeight: 700 }}>{tAtt !== null ? `${Math.round(tAtt)}%` : "—"}</span>
+                        </td>
+                        <td style={{ padding: "0.75rem 0.5rem", textAlign: "right", color: "var(--text-secondary)", fontWeight: 700, fontSize: "0.95rem" }}>{fmt(tHours, 0)}</td>
+                        <td style={{ padding: "0.75rem 0.5rem", textAlign: "center", fontFamily: "var(--font-data, monospace)", fontWeight: 700, color: "var(--text-secondary)", fontSize: "0.95rem" }}>{tHours > 0 ? (tGoals / tHours).toFixed(3) : "—"}</td>
+                        <td style={{ padding: "0.75rem 0.5rem", textAlign: "center", color: "var(--text-secondary)", fontWeight: 700, fontSize: "0.95rem" }}>{tHsd}</td>
+                        <td style={{ padding: "0.75rem 0.5rem", textAlign: "center", color: "var(--text-secondary)", fontWeight: 700, fontSize: "0.95rem" }}>{tRgu}</td>
+                        <td style={{ padding: "0.75rem 0.5rem", textAlign: "center" }}>
+                          <span style={{ color: Q.Q1.color, fontWeight: 700, fontSize: "0.95rem" }}>{tQ1}</span>
+                          <span style={{ color: "var(--text-faint)", margin: "0 0.15rem" }}>/</span>
+                          <span style={{ color: tQ4 > 0 ? Q.Q4.color : "var(--text-faint)", fontWeight: 700, fontSize: "0.95rem" }}>{tQ4}</span>
+                        </td>
+                        <td style={{ padding: "0.75rem 0.5rem", textAlign: "center" }}>
+                          {tPace && <span style={{ fontSize: "0.82rem", fontWeight: 700, color: tPace.projectedPct >= 100 ? "#16a34a" : tPace.projectedPct >= 85 ? "#2563eb" : "#dc2626", background: (tPace.projectedPct >= 100 ? "#16a34a" : tPace.projectedPct >= 85 ? "#2563eb" : "#dc2626") + "14", padding: "0.2rem 0.6rem", borderRadius: "4px" }}>{tPace.projectedPct >= 100 ? "AHEAD" : tPace.projectedPct >= 85 ? "NEAR" : "BEHIND"}</span>}
+                        </td>
+                        <td style={{ padding: "0.75rem 0.5rem", textAlign: "right" }}>
+                          {tPace ? (
+                            <div>
+                              <span style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.1rem", color: attainColor(tPace.projectedPct), fontWeight: 700 }}>{tPace.projected.toLocaleString()}</span>
+                              <div style={{ fontSize: "0.75rem", color: attainColor(tPace.projectedPct), fontWeight: 600 }}>{Math.round(tPace.projectedPct)}%</div>
+                            </div>
+                          ) : null}
+                        </td>
+                      </tr>
+                    );
+                  })()}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+          );
+        })()}
 
         {/* Wins + Opportunities from engine insights */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.25rem" }}>
@@ -5674,13 +5791,14 @@ function buildMoMAgentStats(currentAgents, priorAgents) {
   });
 }
 
-function CampaignComparisonPanel({ currentAgents, onNav }) {
+function CampaignComparisonPanel({ currentAgents, onNav, localAI, priorSheetUrl }) {
   const [activeJobType, setActiveJobType] = useState(null);
   const [sortCol, setSortCol] = useState("delta");
   const [sortDir, setSortDir] = useState(-1);
   const [siteFilter, setSiteFilter] = useState("ALL"); // ALL | DR | BZ
   const [hideLeft, setHideLeft] = useState(true);
   const [expandedAgent, setExpandedAgent] = useState(null);
+  const [priorSheetLoading, setPriorSheetLoading] = useState(false);
 
   // Self-contained prior month data (persisted to localStorage)
   const [priorRaw, _setPriorRaw] = useState(() => {
@@ -5690,6 +5808,23 @@ function CampaignComparisonPanel({ currentAgents, onNav }) {
     _setPriorRaw(data);
     try { if (data) localStorage.setItem(PRIOR_MONTH_STORAGE_KEY, JSON.stringify(data)); else localStorage.removeItem(PRIOR_MONTH_STORAGE_KEY); } catch(e) {}
   }, []);
+
+  // Auto-fetch prior month from Google Sheet if no local data
+  useEffect(() => {
+    if (priorRaw || !priorSheetUrl || priorSheetLoading) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        setPriorSheetLoading(true);
+        const res = await fetch(priorSheetUrl);
+        const text = await res.text();
+        const rows = parseCSV(text);
+        if (!cancelled && rows.length > 0) setPriorRaw(rows);
+      } catch(e) { /* silent */ }
+      finally { if (!cancelled) setPriorSheetLoading(false); }
+    })();
+    return () => { cancelled = true; };
+  }, [priorSheetUrl, priorRaw]);
   const [priorGoalsRaw, _setPriorGoalsRaw] = useState(() => {
     try { const s = localStorage.getItem(PRIOR_MONTH_STORAGE_KEY + "_goals"); return s ? JSON.parse(s) : null; } catch(e) { return null; }
   });
@@ -5710,12 +5845,21 @@ function CampaignComparisonPanel({ currentAgents, onNav }) {
   }, [currentAgents]);
   const pctElapsed = fiscalInfo ? fiscalInfo.pctElapsed / 100 : 0; // 0-1
 
-  // Site filter helper: map region to DR/BZ
+  // Site filter helper: map region to DR/BZ, also supports individual BZ region drilldown
   const agentSite = (a) => REGION_TO_SITE[a.region] || "DR";
   const filterBySite = (agents) => {
     if (siteFilter === "ALL") return agents;
-    return agents.filter(a => agentSite(a) === siteFilter);
+    if (siteFilter === "DR" || siteFilter === "BZ") return agents.filter(a => agentSite(a) === siteFilter);
+    // Individual region drilldown (e.g. "Belize City-XOTM")
+    return agents.filter(a => a.region === siteFilter);
   };
+
+  // Build BZ sub-site list from the data
+  const bzSubSites = useMemo(() => {
+    const allAgents = [...currentAgents, ...priorAgents];
+    const bzRegions = [...new Set(allAgents.map(a => a.region).filter(r => REGION_TO_SITE[r] === "BZ"))].sort();
+    return bzRegions;
+  }, [currentAgents, priorAgents]);
 
   const allJobTypes = useMemo(() => {
     const jts = new Set([
@@ -5725,12 +5869,12 @@ function CampaignComparisonPanel({ currentAgents, onNav }) {
     return [...jts].filter(Boolean).sort();
   }, [currentAgents, priorAgents]);
 
-  useEffect(() => { if (allJobTypes.length > 0 && !activeJobType) setActiveJobType(allJobTypes[0]); }, [allJobTypes, activeJobType]);
+  useEffect(() => { if (allJobTypes.length > 0 && !activeJobType) setActiveJobType("ALL"); }, [allJobTypes, activeJobType]);
 
   const agentStats = useMemo(() => {
     if (!activeJobType) return [];
-    const curFiltered = filterBySite(currentAgents.filter(a => a.jobType === activeJobType));
-    const prevFiltered = filterBySite(priorAgents.filter(a => a.jobType === activeJobType));
+    const curFiltered = filterBySite(activeJobType === "ALL" ? currentAgents.filter(a => !a.isSpanishCallback) : currentAgents.filter(a => a.jobType === activeJobType));
+    const prevFiltered = filterBySite(activeJobType === "ALL" ? priorAgents.filter(a => !a.isSpanishCallback) : priorAgents.filter(a => a.jobType === activeJobType));
     const stats = buildMoMAgentStats(curFiltered, prevFiltered);
     if (pctElapsed > 0) {
       stats.forEach(a => {
@@ -5831,8 +5975,17 @@ function CampaignComparisonPanel({ currentAgents, onNav }) {
 
       {priorAgents.length === 0 ? (
         <div style={{ background:"var(--bg-secondary)", border:"1px solid #6366f130", borderRadius:"12px", padding:"3rem", textAlign:"center" }}>
-          <div style={{ fontFamily:"Georgia, serif", fontSize:"1.5rem", color:"var(--text-warm)", marginBottom:"0.75rem" }}>Upload Prior Month Data to Begin</div>
-          <div style={{ fontFamily:"monospace", fontSize:"1.11rem", color:"var(--text-dim)", maxWidth:"500px", margin:"0 auto" }}>Use the buttons above to load your prior month performance data CSV and optionally the prior month goals CSV.</div>
+          <div style={{ fontFamily:"Georgia, serif", fontSize:"1.5rem", color:"var(--text-warm)", marginBottom:"0.75rem" }}>
+            {priorSheetLoading ? "Loading Prior Month from Sheet..." : "Upload Prior Month Data to Begin"}
+          </div>
+          {priorSheetLoading ? (
+            <div style={{ display:"flex", justifyContent:"center", alignItems:"center", gap:"0.5rem" }}>
+              <div style={{ width:"14px", height:"14px", borderRadius:"50%", border:"2px solid #6366f1", borderTopColor:"transparent", animation:"spin 0.8s linear infinite" }} />
+              <span style={{ fontFamily:"monospace", fontSize:"1.11rem", color:"#6366f1" }}>Fetching from Google Sheets...</span>
+            </div>
+          ) : (
+            <div style={{ fontFamily:"monospace", fontSize:"1.11rem", color:"var(--text-dim)", maxWidth:"500px", margin:"0 auto" }}>Use the buttons above to load your prior month performance data CSV and optionally the prior month goals CSV.</div>
+          )}
         </div>
       ) : allJobTypes.length === 0 ? (
         <div style={{ background:"var(--bg-secondary)", border:"1px solid var(--border)", borderRadius:"12px", padding:"3rem", textAlign:"center" }}>
@@ -5840,17 +5993,24 @@ function CampaignComparisonPanel({ currentAgents, onNav }) {
           <div style={{ fontFamily:"monospace", fontSize:"1.11rem", color:"var(--text-dim)" }}>No job types were found across either dataset.</div>
         </div>
       ) : (<>
-        <div style={{ display:"flex", gap:"0.4rem", flexWrap:"wrap", marginBottom:"1.5rem" }}>
-          {allJobTypes.map(jt => (<button key={jt} onClick={() => setActiveJobType(jt)}
-            style={{ padding:"0.45rem 1.1rem", borderRadius:"6px", border:`1px solid ${activeJobType===jt?"#d97706":"var(--border)"}`, background:activeJobType===jt?"#d9770618":"transparent", color:activeJobType===jt?"#d97706":"var(--text-muted)", fontFamily:"monospace", fontSize:"1.11rem", cursor:"pointer", fontWeight:activeJobType===jt?600:400 }}>{jt}</button>))}
-        </div>
-        <div style={{ display:"flex", gap:"0.5rem", alignItems:"center", marginBottom:"1.25rem" }}>
+        <div style={{ display:"flex", gap:"0.5rem", alignItems:"center", marginBottom:"1rem", flexWrap:"wrap" }}>
           <div style={{ fontFamily:"monospace", fontSize:"0.95rem", color:"var(--text-faint)", marginRight:"0.25rem" }}>SITE</div>
           {["ALL","DR","BZ"].map(s => (<button key={s} onClick={() => setSiteFilter(s)}
             style={{ padding:"0.3rem 0.9rem", borderRadius:"5px", border:`1px solid ${siteFilter===s?"#6366f1":"var(--border)"}`, background:siteFilter===s?"#6366f118":"transparent", color:siteFilter===s?"#818cf8":"var(--text-muted)", fontFamily:"monospace", fontSize:"1.05rem", cursor:"pointer", fontWeight:siteFilter===s?600:400 }}>{s}</button>))}
+          {bzSubSites.length > 1 && (<>
+            <div style={{ width:"1px", height:"20px", background:"var(--border)", margin:"0 0.15rem" }} />
+            {bzSubSites.map(r => (<button key={r} onClick={() => setSiteFilter(siteFilter === r ? "BZ" : r)}
+              style={{ padding:"0.3rem 0.7rem", borderRadius:"5px", border:`1px solid ${siteFilter===r?"#d97706":"var(--border)"}`, background:siteFilter===r?"#d9770618":"transparent", color:siteFilter===r?"#d97706":"var(--text-dim)", fontFamily:"monospace", fontSize:"0.9rem", cursor:"pointer", fontWeight:siteFilter===r?600:400 }}>{r.replace("-XOTM","")}</button>))}
+          </>)}
           {fiscalInfo && <div style={{ marginLeft:"auto", fontFamily:"monospace", fontSize:"0.95rem", color:"var(--text-faint)" }}>
-            Pacing: {fiscalInfo.elapsedBDays}/{fiscalInfo.totalBDays} biz days ({Math.round(fiscalInfo.pctElapsed)}%) {"·"} through {fiscalInfo.lastDataDate}
+            Pacing: {fiscalInfo.elapsedBDays}/{fiscalInfo.totalBDays} biz days ({fiscalInfo.pctElapsed.toFixed(1)}%) through {fiscalInfo.lastDataDate}
           </div>}
+        </div>
+        <div style={{ display:"flex", gap:"0.4rem", flexWrap:"wrap", marginBottom:"1.5rem" }}>
+          <button onClick={() => setActiveJobType("ALL")}
+            style={{ padding:"0.45rem 1.1rem", borderRadius:"6px", border:`1px solid ${activeJobType==="ALL"?"#d97706":"var(--border)"}`, background:activeJobType==="ALL"?"#d9770618":"transparent", color:activeJobType==="ALL"?"#d97706":"var(--text-muted)", fontFamily:"monospace", fontSize:"1.11rem", cursor:"pointer", fontWeight:activeJobType==="ALL"?600:400 }}>All Jobs</button>
+          {allJobTypes.map(jt => (<button key={jt} onClick={() => setActiveJobType(jt)}
+            style={{ padding:"0.45rem 1.1rem", borderRadius:"6px", border:`1px solid ${activeJobType===jt?"#d97706":"var(--border)"}`, background:activeJobType===jt?"#d9770618":"transparent", color:activeJobType===jt?"#d97706":"var(--text-muted)", fontFamily:"monospace", fontSize:"1.11rem", cursor:"pointer", fontWeight:activeJobType===jt?600:400 }}>{jt}</button>))}
         </div>
         {activeJobType && summary && (<>
           <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:"0.75rem", marginBottom:"1.5rem" }}>
@@ -5859,6 +6019,54 @@ function CampaignComparisonPanel({ currentAgents, onNav }) {
             <StatCard label="Current Sales" value={summary.curGoals.toLocaleString()} sub={`vs ${summary.prevGoals.toLocaleString()} prior`} accent="#16a34a" />
             <StatCard label="Current Hours" value={fmt(summary.curHours, 0)} sub={`vs ${fmt(summary.prevHours, 0)} prior`} accent="#2563eb" />
           </div>
+
+          {/* Executive Summary — MoM */}
+          {(() => {
+            const momLines = [];
+            const salesDelta = summary.curGoals - summary.prevGoals;
+            const hoursDelta = summary.curHours - summary.prevHours;
+            const gphDelta = summary.curGph - summary.prevGph;
+            momLines.push(`${activeJobType} month-over-month: ${summary.curAgents} active agents this month vs ${summary.prevAgents} prior. Sales ${salesDelta >= 0 ? "up" : "down"} ${Math.abs(salesDelta)} (${summary.prevGoals} to ${summary.curGoals}), hours ${hoursDelta >= 0 ? "up" : "down"} ${Math.abs(Math.round(hoursDelta))} (${fmt(summary.prevHours, 0)} to ${fmt(summary.curHours, 0)}).`);
+            momLines.push(`GPH moved from ${summary.prevGph.toFixed(3)} to ${summary.curGph.toFixed(3)} (${gphDelta >= 0 ? "+" : ""}${gphDelta.toFixed(3)}). ${summary.improvedCount} agents improved their % to goal while ${summary.declinedCount} declined, with an average delta of ${summary.avgDelta >= 0 ? "+" : ""}${summary.avgDelta.toFixed(1)}%.`);
+            if (summary.topMovers.filter(a => a.delta > 0).length > 0) {
+              const top = summary.topMovers.filter(a => a.delta > 0).slice(0, 3).map(a => `${a.name} (+${fmtPct(a.delta)})`).join(", ");
+              momLines.push(`Top improvers: ${top}.`);
+            }
+            if (summary.bottomMovers.filter(a => a.delta < 0).length > 0) {
+              const bot = summary.bottomMovers.filter(a => a.delta < 0).slice(0, 3).map(a => `${a.name} (${fmtPct(a.delta)})`).join(", ");
+              momLines.push(`Biggest declines: ${bot}.`);
+            }
+
+            const momAIData = localAI ? {
+              jobType: `${activeJobType} MoM Comparison`,
+              uniqueAgentCount: summary.curAgents,
+              totalHours: summary.curHours, totalGoals: summary.curGoals,
+              gph: summary.curGph,
+              attainment: null, planGoals: null, actGoals: summary.curGoals,
+              distUnique: {}, q1Agents: [], q4Agents: [], q3Agents: [],
+              regions: [], healthScore: null,
+              totalNewXI: summary.curHsd, totalXmLines: summary.curXm,
+              newHiresInProgram: [], fiscalInfo,
+              // Extra MoM context for the prompt
+              prevAgents: summary.prevAgents, prevGoals: summary.prevGoals, prevHours: summary.prevHours,
+              prevGph: summary.prevGph, avgDelta: summary.avgDelta,
+              improvedCount: summary.improvedCount, declinedCount: summary.declinedCount,
+              topMovers: summary.topMovers, bottomMovers: summary.bottomMovers,
+            } : null;
+
+            return (
+              <div style={{ marginBottom: "1.5rem" }}>
+                <CollapsibleNarrative
+                  title={`Executive Summary — ${activeJobType} MoM`}
+                  lines={momLines}
+                  defaultOpen={true}
+                  aiEnabled={localAI}
+                  aiPromptData={momAIData}
+                />
+              </div>
+            );
+          })()}
+
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"1.25rem", marginBottom:"1.5rem" }}>
             <div style={{ background:"var(--bg-secondary)", border:"1px solid var(--border)", borderRadius:"12px", padding:"1.25rem" }}>
               <div style={{ fontFamily:"monospace", fontSize:"1.08rem", color:"#d97706", letterSpacing:"0.12em", textTransform:"uppercase", marginBottom:"0.75rem" }}>Month-over-Month Metrics</div>
@@ -5900,12 +6108,33 @@ function CampaignComparisonPanel({ currentAgents, onNav }) {
             </div>
           </div>
           <div style={{ background:"var(--bg-secondary)", border:"1px solid var(--border)", borderRadius:"12px", padding:"1.25rem" }}>
-            <div style={{ fontFamily:"monospace", fontSize:"1.08rem", color:"var(--text-muted)", letterSpacing:"0.12em", textTransform:"uppercase", marginBottom:"0.75rem", display:"flex", alignItems:"center" }}>
-              Agent Detail {"\u2014"} {activeJobType} {"\u00B7"} {sorted.filter(a => !hideLeft || a.inCurrent).length} agents {"\u00B7"} click headers to sort
-                <button onClick={() => setHideLeft(v => !v)}
-                  style={{ marginLeft:"1rem", padding:"0.2rem 0.7rem", borderRadius:"4px", border:`1px solid ${hideLeft?"var(--border)":"#6366f1"}`, background:hideLeft?"transparent":"#6366f118", color:hideLeft?"var(--text-muted)":"#818cf8", fontFamily:"monospace", fontSize:"0.88rem", cursor:"pointer" }}>
-                  {hideLeft ? "Show Removed" : "Hide Removed"}
-                </button>
+            <div style={{ fontFamily:"monospace", fontSize:"1.08rem", color:"var(--text-muted)", letterSpacing:"0.12em", textTransform:"uppercase", marginBottom:"0.5rem", display:"flex", alignItems:"center", flexWrap:"wrap", gap:"0.4rem" }}>
+              Agent Detail {sorted.filter(a => !hideLeft || a.inCurrent).length} agents
+                <div style={{ marginLeft:"auto", textAlign:"right" }}>
+                  <button onClick={() => setHideLeft(v => !v)}
+                    style={{ padding:"0.2rem 0.7rem", borderRadius:"4px", border:`1px solid ${hideLeft?"var(--border)":"#6366f1"}`, background:hideLeft?"transparent":"#6366f118", color:hideLeft?"var(--text-muted)":"#818cf8", fontFamily:"monospace", fontSize:"0.88rem", cursor:"pointer" }}>
+                    {hideLeft ? "Show Removed" : "Hide Removed"}
+                  </button>
+                  {!hideLeft && (() => {
+                    const removedCount = sorted.filter(a => !a.inCurrent).length;
+                    return removedCount > 0 ? <div style={{ fontFamily:"var(--font-ui, Inter, sans-serif)", fontSize:"0.72rem", color:"#6366f1", marginTop:"0.2rem" }}>{removedCount} removed</div> : null;
+                  })()}
+                </div>
+            </div>
+            <div style={{ display:"flex", gap:"0.35rem", flexWrap:"wrap", marginBottom:"0.4rem" }}>
+              {["ALL","DR","BZ"].map(s => (<button key={s} onClick={() => setSiteFilter(s)}
+                style={{ padding:"0.3rem 0.6rem", borderRadius:"var(--radius-sm, 6px)", border:`1px solid ${siteFilter===s?"#6366f150":"var(--text-faint)"}`, background:siteFilter===s?"#6366f112":"transparent", color:siteFilter===s?"#818cf8":"var(--text-muted)", fontFamily:"var(--font-ui, Inter, sans-serif)", fontSize:"0.78rem", cursor:"pointer", fontWeight:siteFilter===s?600:400 }}>{s}</button>))}
+              {bzSubSites.length > 1 && (<>
+                <div style={{ width:"1px", height:"20px", background:"var(--border)", margin:"0 0.1rem" }} />
+                {bzSubSites.map(r => (<button key={r} onClick={() => setSiteFilter(siteFilter === r ? "BZ" : r)}
+                  style={{ padding:"0.3rem 0.6rem", borderRadius:"var(--radius-sm, 6px)", border:`1px solid ${siteFilter===r?"#d9770650":"var(--text-faint)"}`, background:siteFilter===r?"#d9770612":"transparent", color:siteFilter===r?"#d97706":"var(--text-muted)", fontFamily:"var(--font-ui, Inter, sans-serif)", fontSize:"0.75rem", cursor:"pointer", fontWeight:siteFilter===r?600:400 }}>{r.replace("-XOTM","")}</button>))}
+              </>)}
+            </div>
+            <div style={{ display:"flex", gap:"0.35rem", flexWrap:"wrap", marginBottom:"0.75rem" }}>
+              <button onClick={() => setActiveJobType("ALL")}
+                style={{ padding:"0.3rem 0.75rem", borderRadius:"var(--radius-sm, 6px)", border:`1px solid ${activeJobType==="ALL"?"#d9770650":"var(--text-faint)"}`, background:activeJobType==="ALL"?"#d9770612":"transparent", color:activeJobType==="ALL"?"#d97706":"var(--text-muted)", fontFamily:"var(--font-ui, Inter, sans-serif)", fontSize:"0.78rem", cursor:"pointer", fontWeight:activeJobType==="ALL"?600:400 }}>All Jobs</button>
+              {allJobTypes.map(jt => (<button key={jt} onClick={() => setActiveJobType(jt)}
+                style={{ padding:"0.3rem 0.75rem", borderRadius:"var(--radius-sm, 6px)", border:`1px solid ${activeJobType===jt?"#d9770650":"var(--text-faint)"}`, background:activeJobType===jt?"#d9770612":"transparent", color:activeJobType===jt?"#d97706":"var(--text-muted)", fontFamily:"var(--font-ui, Inter, sans-serif)", fontSize:"0.78rem", cursor:"pointer", fontWeight:activeJobType===jt?600:400 }}>{jt}</button>))}
             </div>
             <div style={{ overflowX:"auto" }}>
               <table style={{ width:"100%", borderCollapse:"collapse", fontFamily:"monospace", fontSize:"0.9rem" }}>
@@ -5947,8 +6176,8 @@ function CampaignComparisonPanel({ currentAgents, onNav }) {
                   </tr>];
                   if (expandedAgent === a.name && a.inCurrent) {
                     // Build weekly rollup (grouped by Mon of week) with date ranges
-                    const curRows = filterBySite(currentAgents.filter(r => r.agentName === a.name && r.jobType === activeJobType && r.date));
-                    const prevRows = filterBySite(priorAgents.filter(r => r.agentName === a.name && r.jobType === activeJobType && r.date));
+                    const curRows = filterBySite(currentAgents.filter(r => r.agentName === a.name && (activeJobType === "ALL" || r.jobType === activeJobType) && r.date));
+                    const prevRows = filterBySite(priorAgents.filter(r => r.agentName === a.name && (activeJobType === "ALL" || r.jobType === activeJobType) && r.date));
                     const getMonday = (ds) => {
                       const [y,mo,d] = ds.split("-").map(Number);
                       const dt = new Date(y, mo-1, d);
@@ -9053,6 +9282,7 @@ export default function App() {
   const agentSheetUrl = sheetUrls.agent || DEFAULT_AGENT_SHEET_URL;
   const goalsSheetUrl = sheetUrls.goals || DEFAULT_GOALS_SHEET_URL;
   const nhSheetUrl    = sheetUrls.nh || DEFAULT_NH_SHEET_URL;
+  const priorSheetUrl = sheetUrls.prior || DEFAULT_PRIOR_SHEET_URL;
 
   // Goals persisted to localStorage
   const [goalsRaw, _setGoalsRaw] = useState(() => {
@@ -9266,6 +9496,7 @@ export default function App() {
               { key: "agent", label: "Agent Data Sheet", color: "#d97706", current: agentSheetUrl, placeholder: "https://docs.google.com/spreadsheets/.../pub?output=csv" },
               { key: "goals", label: "Goals Sheet", color: "#16a34a", current: goalsSheetUrl, placeholder: "Optional — paste Goals CSV URL" },
               { key: "nh", label: "Roster / New Hires Sheet", color: "#6366f1", current: nhSheetUrl, placeholder: "Optional — paste Roster CSV URL" },
+              { key: "prior", label: "Prior Month Agent Data", color: "#d97706", current: priorSheetUrl, placeholder: "Optional — paste Prior Month CSV URL" },
             ].map(({ key, label, color, current, placeholder }) => (
               <div key={key} style={{ marginBottom: "1rem" }}>
                 <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color, letterSpacing: "0.08em", marginBottom: "0.3rem" }}>{label}</div>
@@ -9448,6 +9679,8 @@ export default function App() {
           <CampaignComparisonPanel
             currentAgents={perf.agents}
             onNav={navTo}
+            localAI={localAI}
+            priorSheetUrl={priorSheetUrl}
           />
         ) : program ? (
           <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
