@@ -400,6 +400,7 @@ const DEFAULT_AGENT_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-
 const DEFAULT_GOALS_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRagC_XDSQ84y25onmWs6MUOZcEdWZNA6fVRRDFUzNWQp3ginYLtOIQsSrwmbAERkOJ-daTvbHqEtoy/pub?gid=1685208822&single=true&output=csv";
 const DEFAULT_NH_SHEET_URL    = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRagC_XDSQ84y25onmWs6MUOZcEdWZNA6fVRRDFUzNWQp3ginYLtOIQsSrwmbAERkOJ-daTvbHqEtoy/pub?gid=25912283&single=true&output=csv";
 const DEFAULT_PRIOR_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTZkBGVIxieyjBKftqL1oecSaUxRkao-gz2B9q4Z8zCY8hEtSy1M28S00RDCS8JVPgPFXJAv2LbsZru/pub?gid=667346347&single=true&output=csv";
+const DEFAULT_PRIOR_GOALS_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTZkBGVIxieyjBKftqL1oecSaUxRkao-gz2B9q4Z8zCY8hEtSy1M28S00RDCS8JVPgPFXJAv2LbsZru/pub?gid=1685208822&single=true&output=csv";
 
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -2455,11 +2456,12 @@ function GainsharePanel({
     ? (projHourPct !== null ? (getHourGateTier(projHourPct)?.penalty ?? 0) : 0)
     : (projHourPct !== null && projHourPct < 100 ? -2.00 : 0);
 
+  const effectiveProjHourPenalty = projHourPct !== null ? projHourGatePenalty : hourGatePenalty;
   const projTotalBonus = (projMobileTier?.mobile ?? mobileTier?.mobile ?? 0)
     + (projHsdTier?.hsd ?? hsdTier?.hsd ?? 0)
     + (projCostPerTier?.costPer ?? costPerTier?.costPer ?? 0)
     + (projSphTier?.sph ?? sphTier?.sph ?? 0)
-    + projHourGatePenalty;
+    + effectiveProjHourPenalty;
   const hasProjBonus = fiscalInfo && fiscalInfo.elapsedBDays > 0;
 
   const ColDef = ({ label, attain, tierKey, tier, actual, plan, isSph, actualHours }) => {
@@ -4432,7 +4434,7 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
 // Consumes engine output directly. No computation inside.
 // ══════════════════════════════════════════════════════════════════════════════
 
-function BusinessOverview({ perf, onNav, localAI }) {
+function BusinessOverview({ perf, onNav, localAI, priorAgents, priorGoalLookup }) {
   const [tab, setTab] = useState("overview");
 
   const {
@@ -4495,11 +4497,11 @@ function BusinessOverview({ perf, onNav, localAI }) {
         <div>
           <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: `var(--text-muted)`, letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 600, marginBottom: "0.2rem" }}>Business Overview</div>
           <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "2rem", color: `var(--text-warm)`, fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1.15 }}>
-            {tab === "bysite" && activeGroup ? activeGroup.label : tab === "daily" ? "Daily Performance" : "Highlights & Lowlights"}
+            {tab === "bysite" && activeGroup ? activeGroup.label : tab === "daily" ? "Daily Performance" : tab === "trends" ? "Week-over-Week Trends" : "Highlights & Lowlights"}
           </div>
         </div>
         <div style={{ display: "flex", gap: "0.35rem", alignItems: "center", flexWrap: "wrap" }}>
-          {[["overview","Overview"],["bysite","By Site"],["daily","Daily"]].map(([t, label]) => (
+          {[["overview","Overview"],["bysite","By Site"],["daily","Daily"],["trends","Trends"]].map(([t, label]) => (
             <button key={t} onClick={() => setTab(t)}
               style={{ padding: "0.4rem 0.85rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${tab===t?"#d9770650":"var(--text-faint)"}`, background: tab===t?"#d9770612":"transparent", color: tab===t?"#d97706":`var(--text-muted)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", cursor: "pointer", fontWeight: tab===t ? 600 : 400, transition: "all 200ms cubic-bezier(0.4,0,0.2,1)" }}>
               {label}
@@ -4868,7 +4870,12 @@ function BusinessOverview({ perf, onNav, localAI }) {
 
         {/* ── DAILY TAB ── */}
         {tab === "daily" && (
-          <DailyBreakdownPanel agents={agents.filter(a => !a.isSpanishCallback)} regions={regions} jobType="All Programs" sphGoal={null} programs={programs} goalLookup={goalLookup} />
+          <DailyBreakdownPanel agents={agents.filter(a => !a.isSpanishCallback)} regions={regions} jobType="All Programs" sphGoal={null} programs={programs} goalLookup={goalLookup} priorAgents={priorAgents} />
+        )}
+
+        {/* ── TRENDS TAB ── */}
+        {tab === "trends" && (
+          <WeeklyTrendsPanel currentAgents={agents.filter(a => !a.isSpanishCallback)} priorAgents={priorAgents} fiscalInfo={fiscalInfo} />
         )}
       </div>
 
@@ -5760,6 +5767,586 @@ function TeamsView({ agents, jobType, sphGoal, allAgents }) {
 // SECTION 12c — CAMPAIGN COMPARISON PANEL (Month-over-Month)
 // ══════════════════════════════════════════════════════════════════════════════
 
+// ── Day-of-Week Analysis ──────────────────────────────────────────────────────
+// Aggregates daily agent rows by weekday (Mon–Sat). Returns an array of
+// { dow, dayNum, totalGoals, totalHours, gph, dayCount, avgGoals, avgHours }
+// sorted Mon→Sat.  Pass two datasets to buildDOWComparison for MoM overlay.
+function buildDOWAnalysis(agentRows) {
+  const DOW_NAMES = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  const buckets = {};
+  DOW_NAMES.forEach((name, i) => { buckets[i] = { dow: name, dayNum: i, dates: new Set(), totalGoals: 0, totalHours: 0, totalHsd: 0, totalXm: 0 }; });
+  agentRows.forEach(r => {
+    if (!r.date) return;
+    const dt = new Date(r.date + "T00:00:00");
+    const dayNum = dt.getDay();
+    if (dayNum === 0) return; // skip Sunday
+    buckets[dayNum].dates.add(r.date);
+    buckets[dayNum].totalGoals += r.goals || 0;
+    buckets[dayNum].totalHours += r.hours || 0;
+    buckets[dayNum].totalHsd   += r.newXI || 0;
+    buckets[dayNum].totalXm    += r.xmLines || 0;
+  });
+  // Return Mon–Sat (dayNum 1–6), skip Sunday
+  return [1,2,3,4,5,6].map(d => {
+    const b = buckets[d];
+    const dayCount = b.dates.size;
+    return {
+      dow: b.dow, dayNum: d, dayCount,
+      totalGoals: b.totalGoals, totalHours: b.totalHours,
+      totalHsd: b.totalHsd, totalXm: b.totalXm,
+      gph: b.totalHours > 0 ? b.totalGoals / b.totalHours : 0,
+      avgGoals: dayCount > 0 ? b.totalGoals / dayCount : 0,
+      avgHours: dayCount > 0 ? b.totalHours / dayCount : 0,
+      avgHsd: dayCount > 0 ? b.totalHsd / dayCount : 0,
+    };
+  });
+}
+
+function buildDOWComparison(currentAgents, priorAgents) {
+  const cur = buildDOWAnalysis(currentAgents);
+  const prev = buildDOWAnalysis(priorAgents);
+  return cur.map((c, i) => ({
+    ...c,
+    prev: prev[i] || null,
+    deltaGph: prev[i] ? c.gph - prev[i].gph : null,
+    deltaAvgGoals: prev[i] ? c.avgGoals - prev[i].avgGoals : null,
+    deltaAvgHours: prev[i] ? c.avgHours - prev[i].avgHours : null,
+  }));
+}
+
+// ── Weekly Comparison Builder ─────────────────────────────────────────────────
+// Aligns weeks by fiscal position (week 1 vs week 1) between current and prior
+// month datasets. Each agent row has a weekNum field.
+function buildWeeklyComparison(currentAgents, priorAgents) {
+  const DOW = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  const rollupByWeek = (rows) => {
+    const map = {};
+    rows.forEach(r => {
+      if (!r.weekNum || r.isSpanishCallback) return;
+      if (!map[r.weekNum]) map[r.weekNum] = { goals: 0, hours: 0, hsd: 0, xm: 0, agents: new Set(), dates: new Set(), daily: {} };
+      map[r.weekNum].goals += r.goals || 0;
+      map[r.weekNum].hours += r.hours || 0;
+      map[r.weekNum].hsd   += r.newXI || 0;
+      map[r.weekNum].xm    += r.xmLines || 0;
+      if (r.agentName) map[r.weekNum].agents.add(r.agentName);
+      if (r.date) {
+        map[r.weekNum].dates.add(r.date);
+        if (!map[r.weekNum].daily[r.date]) map[r.weekNum].daily[r.date] = { goals: 0, hours: 0, hsd: 0, xm: 0, agents: new Set() };
+        const dd = map[r.weekNum].daily[r.date];
+        dd.goals += r.goals || 0; dd.hours += r.hours || 0;
+        dd.hsd += r.newXI || 0; dd.xm += r.xmLines || 0;
+        if (r.agentName) dd.agents.add(r.agentName);
+      }
+    });
+    const sorted = Object.entries(map).sort((a, b) => {
+      const aMin = [...a[1].dates].sort()[0] || "";
+      const bMin = [...b[1].dates].sort()[0] || "";
+      return aMin.localeCompare(bMin);
+    });
+    return sorted.map(([wk, d]) => ({
+      weekNum: wk,
+      goals: d.goals, hours: d.hours, hsd: d.hsd, xm: d.xm,
+      agentCount: d.agents.size,
+      gph: d.hours > 0 ? d.goals / d.hours : 0,
+      dayCount: d.dates.size,
+      dateRange: [...d.dates].sort(),
+      daily: Object.entries(d.daily).sort(([a],[b]) => a.localeCompare(b)).map(([date, dd]) => {
+        const dt = new Date(date + "T00:00:00");
+        return { date, dow: DOW[dt.getDay()], goals: dd.goals, hours: dd.hours, hsd: dd.hsd, xm: dd.xm, agentCount: dd.agents.size, gph: dd.hours > 0 ? dd.goals / dd.hours : 0 };
+      }),
+    }));
+  };
+
+  const curWeeks = rollupByWeek(currentAgents);
+  const prevWeeks = rollupByWeek(priorAgents);
+  const maxLen = Math.max(curWeeks.length, prevWeeks.length);
+  const result = [];
+  for (let i = 0; i < maxLen; i++) {
+    const c = curWeeks[i] || null;
+    const p = prevWeeks[i] || null;
+
+    // Build DOW-matched prior totals: only sum prior days whose DOW exists in current week
+    let prevMatched = null;
+    if (c && p && p.daily && p.daily.length > 0) {
+      const curDows = new Set((c.daily || []).map(d => d.dow));
+      const matched = p.daily.filter(d => curDows.has(d.dow));
+      if (matched.length > 0 && matched.length < p.daily.length) {
+        const mGoals = matched.reduce((s, d) => s + d.goals, 0);
+        const mHours = matched.reduce((s, d) => s + d.hours, 0);
+        prevMatched = {
+          goals: mGoals, hours: mHours,
+          hsd: matched.reduce((s, d) => s + d.hsd, 0),
+          xm: matched.reduce((s, d) => s + d.xm, 0),
+          gph: mHours > 0 ? mGoals / mHours : 0,
+          dayCount: matched.length,
+          agentCount: Math.max(...matched.map(d => d.agentCount)),
+        };
+      }
+      // If all prior DOWs match (same day count), prevMatched stays null — use full prev
+    }
+
+    result.push({
+      position: i + 1,
+      cur: c,
+      prev: p,
+      prevMatched, // null when full prior is already comparable, or subset totals
+      deltaGoals: c && p ? c.goals - p.goals : null,
+      deltaHours: c && p ? c.hours - p.hours : null,
+      deltaGph: c && p ? c.gph - p.gph : null,
+      deltaAgents: c && p ? c.agentCount - p.agentCount : null,
+    });
+  }
+  return result;
+}
+
+// ── DOWCards Component ────────────────────────────────────────────────────────
+// Compact weekday performance cards with optional prior month overlay.
+function DOWCards({ agents, priorAgents, label }) {
+  const [showPrior, setShowPrior] = useState(false);
+  const hasPrior = priorAgents && priorAgents.length > 0;
+  const data = useMemo(() => hasPrior ? buildDOWComparison(agents, priorAgents) : buildDOWAnalysis(agents), [agents, priorAgents]);
+  if (!data || data.length === 0) return null;
+
+  // Find best/worst by avgGoals (only days with data)
+  const withData = (Array.isArray(data) ? data : []).filter(d => d.dayCount > 0);
+  if (withData.length === 0) return null;
+  const bestDay = withData.reduce((a, b) => a.avgGoals > b.avgGoals ? a : b);
+  const worstDay = withData.reduce((a, b) => a.avgGoals < b.avgGoals ? a : b);
+
+  const maxAvgGoals = Math.max(...withData.map(d => d.avgGoals));
+
+  const fmtDelta = (val) => {
+    if (val === null || val === undefined) return null;
+    const sign = val > 0 ? "+" : "";
+    return `${sign}${val.toFixed(1)}`;
+  };
+
+  return (
+    <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem 1.5rem" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase" }}>
+          Day-of-Week Performance {label ? `— ${label}` : ""}
+        </div>
+        {hasPrior && (
+          <button onClick={() => setShowPrior(!showPrior)}
+            style={{ padding: "0.25rem 0.6rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${showPrior ? "#8b5cf6" : "var(--border-muted)"}`, background: showPrior ? "#8b5cf612" : "transparent", color: showPrior ? "#8b5cf6" : `var(--text-dim)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", cursor: "pointer", transition: "all 0.15s" }}>
+            {showPrior ? "Hide Prior Month" : "Compare Prior Month"}
+          </button>
+        )}
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: "0.5rem" }}>
+        {data.map(d => {
+          const strength = maxAvgGoals > 0 ? d.avgGoals / maxAvgGoals : 0;
+          const isBest = d === bestDay;
+          const isWorst = d === worstDay;
+          const barColor = isBest ? "#16a34a" : isWorst ? "#dc2626" : "#d97706";
+          const borderClr = isBest ? "#16a34a40" : isWorst ? "#dc262640" : "var(--border)";
+
+          return (
+            <div key={d.dow} style={{ background: `var(--bg-tertiary)`, border: `1px solid ${borderClr}`, borderRadius: "var(--radius-md, 10px)", padding: "0.75rem 0.5rem", textAlign: "center", position: "relative", overflow: "hidden" }}>
+              {/* Strength bar at bottom */}
+              <div style={{ position: "absolute", bottom: 0, left: 0, width: "100%", height: "3px", background: "var(--border)" }}>
+                <div style={{ width: `${Math.round(strength * 100)}%`, height: "100%", background: barColor, transition: "width 0.4s ease" }} />
+              </div>
+
+              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem", color: isBest ? "#16a34a" : isWorst ? "#dc2626" : `var(--text-primary)`, fontWeight: 700, marginBottom: "0.35rem" }}>{d.dow}</div>
+              <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.35rem", color: `var(--text-warm)`, fontWeight: 700, lineHeight: 1 }}>{Math.round(d.avgGoals)}</div>
+              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.68rem", color: `var(--text-faint)`, marginTop: "0.15rem" }}>avg goals/day</div>
+
+              <div style={{ display: "flex", justifyContent: "center", gap: "0.5rem", marginTop: "0.35rem" }}>
+                <div>
+                  <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "0.82rem", color: `var(--text-secondary)`, fontWeight: 600 }}>{d.gph.toFixed(3)}</div>
+                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.6rem", color: `var(--text-faint)` }}>GPH</div>
+                </div>
+                <div>
+                  <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "0.82rem", color: `var(--text-secondary)`, fontWeight: 600 }}>{Math.round(d.avgHours)}</div>
+                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.6rem", color: `var(--text-faint)` }}>avg hrs</div>
+                </div>
+              </div>
+
+              {d.dayCount > 0 && (
+                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.62rem", color: `var(--text-faint)`, marginTop: "0.25rem" }}>{d.dayCount} day{d.dayCount > 1 ? "s" : ""}</div>
+              )}
+
+              {/* Prior month overlay */}
+              {showPrior && d.prev && d.prev.dayCount > 0 && (
+                <div style={{ marginTop: "0.4rem", paddingTop: "0.35rem", borderTop: "1px dashed #8b5cf630" }}>
+                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.62rem", color: "#8b5cf6", letterSpacing: "0.05em", textTransform: "uppercase", marginBottom: "0.15rem" }}>Prior</div>
+                  <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "0.78rem", color: "#8b5cf6" }}>{Math.round(d.prev.avgGoals)} goals</div>
+                  <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "0.72rem", color: "#8b5cf6" }}>{d.prev.gph.toFixed(3)} GPH</div>
+                  {d.deltaAvgGoals !== null && (
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.68rem", color: d.deltaAvgGoals >= 0 ? "#16a34a" : "#dc2626", marginTop: "0.1rem" }}>
+                      {fmtDelta(d.deltaAvgGoals)} goals/day
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Insight line */}
+      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: `var(--text-dim)`, marginTop: "0.65rem", lineHeight: 1.4 }}>
+        <span style={{ color: "#16a34a", fontWeight: 600 }}>{bestDay.dow}s</span> are the strongest day (avg {Math.round(bestDay.avgGoals)} goals, {bestDay.gph.toFixed(3)} GPH)
+        {worstDay !== bestDay && (
+          <span> while <span style={{ color: "#dc2626", fontWeight: 600 }}>{worstDay.dow}s</span> lag (avg {Math.round(worstDay.avgGoals)} goals, {worstDay.gph.toFixed(3)} GPH)</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── WeeklyTrendsPanel ─────────────────────────────────────────────────────────
+// Week-by-week comparison with expandable daily detail, site/campaign breakouts.
+function WeeklyTrendsPanel({ currentAgents, priorAgents, fiscalInfo }) {
+  const [siteFilter, setSiteFilter] = useState("ALL");
+  const [programFilter, setProgramFilter] = useState("All");
+  const [expandedWeek, setExpandedWeek] = useState(null); // week position number
+
+  const hasPrior = priorAgents && priorAgents.length > 0;
+
+  const siteList = useMemo(() => {
+    const regs = [...new Set(currentAgents.map(a => a.region).filter(Boolean))].sort();
+    const bz = regs.filter(r => r.toUpperCase().includes("XOTM"));
+    const dr = regs.filter(r => !r.toUpperCase().includes("XOTM"));
+    const sites = ["ALL"];
+    if (dr.length > 0) sites.push("DR");
+    if (bz.length > 0) sites.push("BZ");
+    regs.forEach(r => sites.push(r));
+    return sites;
+  }, [currentAgents]);
+
+  const programList = useMemo(() => {
+    const jts = [...new Set(currentAgents.filter(a => !a.isSpanishCallback).map(a => a.jobType).filter(Boolean))].sort();
+    return ["All", ...jts];
+  }, [currentAgents]);
+
+  const filterAgents = useCallback((agents) => {
+    let filtered = agents;
+    if (programFilter !== "All") filtered = filtered.filter(a => a.jobType === programFilter);
+    else filtered = filtered.filter(a => !a.isSpanishCallback);
+    if (siteFilter !== "ALL") {
+      if (siteFilter === "DR") filtered = filtered.filter(a => !(a.region || "").toUpperCase().includes("XOTM"));
+      else if (siteFilter === "BZ") filtered = filtered.filter(a => (a.region || "").toUpperCase().includes("XOTM"));
+      else filtered = filtered.filter(a => a.region === siteFilter);
+    }
+    return filtered;
+  }, [siteFilter, programFilter]);
+
+  const filteredCur = useMemo(() => filterAgents(currentAgents), [currentAgents, filterAgents]);
+  const filteredPrev = useMemo(() => filterAgents(priorAgents || []), [priorAgents, filterAgents]);
+  const weeks = useMemo(() => buildWeeklyComparison(filteredCur, filteredPrev), [filteredCur, filteredPrev]);
+
+  if (!weeks || weeks.length === 0) return (
+    <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "2rem", textAlign: "center", color: `var(--text-faint)`, fontFamily: "var(--font-ui, Inter, sans-serif)" }}>
+      No weekly data available. Ensure agent rows have a Week Number field.
+    </div>
+  );
+
+  const fmtDelta = (val, dec = 0) => {
+    if (val === null || val === undefined) return "";
+    const sign = val > 0 ? "+" : "";
+    return `${sign}${dec > 0 ? val.toFixed(dec) : Math.round(val).toLocaleString()}`;
+  };
+  const deltaColor = (val) => !val ? `var(--text-faint)` : val > 0 ? "#16a34a" : val < 0 ? "#dc2626" : `var(--text-dim)`;
+
+  const curTotals = weeks.reduce((acc, w) => {
+    if (w.cur) { acc.goals += w.cur.goals; acc.hours += w.cur.hours; acc.hsd += w.cur.hsd; acc.xm += w.cur.xm; acc.days += w.cur.dayCount; }
+    return acc;
+  }, { goals: 0, hours: 0, hsd: 0, xm: 0, days: 0 });
+  const prevTotals = weeks.reduce((acc, w) => {
+    if (w.prev) { acc.goals += w.prev.goals; acc.hours += w.prev.hours; acc.hsd += w.prev.hsd; acc.xm += w.prev.xm; acc.days += w.prev.dayCount; }
+    return acc;
+  }, { goals: 0, hours: 0, hsd: 0, xm: 0, days: 0 });
+
+  const cellBase = { fontFamily: "var(--font-data, monospace)", fontSize: "0.82rem", padding: "0.5rem 0.6rem", borderBottom: "1px solid var(--border)", textAlign: "right" };
+  const headerBase = { fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: `var(--text-muted)`, letterSpacing: "0.06em", textTransform: "uppercase", padding: "0.45rem 0.6rem", borderBottom: "2px solid var(--border)", textAlign: "right", whiteSpace: "nowrap" };
+  const filterBtnStyle = (active, color) => ({ padding: "0.25rem 0.65rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${active ? color : "var(--border-muted)"}`, background: active ? color + "14" : "transparent", color: active ? color : `var(--text-dim)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", cursor: "pointer", transition: "all 0.15s" });
+  const groupBorder = "2px solid var(--border)";
+
+  // Metric column definitions
+  const metrics = [
+    { key: "goals", label: "Goals", color: "#d97706",
+      val: (d) => d.goals.toLocaleString(),
+      delta: (c, p) => c.goals - p.goals,
+      totCur: curTotals.goals.toLocaleString(), totPrev: prevTotals.goals.toLocaleString(),
+      totDelta: curTotals.goals - prevTotals.goals },
+    { key: "hours", label: "Hours", color: "#6366f1",
+      val: (d) => Math.round(d.hours).toLocaleString(),
+      delta: (c, p) => Math.round(c.hours - p.hours),
+      totCur: Math.round(curTotals.hours).toLocaleString(), totPrev: Math.round(prevTotals.hours).toLocaleString(),
+      totDelta: Math.round(curTotals.hours - prevTotals.hours) },
+    { key: "gph", label: "GPH", color: "#16a34a",
+      val: (d) => d.gph.toFixed(3),
+      delta: (c, p) => c.gph - p.gph,
+      fmtD: (v) => v !== null ? (v > 0 ? "+" : "") + v.toFixed(3) : "",
+      totCur: curTotals.hours > 0 ? (curTotals.goals / curTotals.hours).toFixed(3) : "–",
+      totPrev: prevTotals.hours > 0 ? (prevTotals.goals / prevTotals.hours).toFixed(3) : "–",
+      totDelta: (curTotals.hours > 0 && prevTotals.hours > 0) ? (curTotals.goals / curTotals.hours) - (prevTotals.goals / prevTotals.hours) : null },
+    { key: "hsd", label: "HSD", color: "#f59e0b",
+      val: (d) => d.hsd.toLocaleString(),
+      delta: (c, p) => c.hsd - p.hsd,
+      totCur: curTotals.hsd.toLocaleString(), totPrev: prevTotals.hsd.toLocaleString(),
+      totDelta: curTotals.hsd - prevTotals.hsd },
+    { key: "xm", label: "XM", color: "#ec4899",
+      val: (d) => d.xm.toLocaleString(),
+      delta: (c, p) => c.xm - p.xm,
+      totCur: curTotals.xm.toLocaleString(), totPrev: prevTotals.xm.toLocaleString(),
+      totDelta: curTotals.xm - prevTotals.xm },
+  ];
+  const colsPerMetric = hasPrior ? 3 : 1;
+  const totalCols = 3 + metrics.length * colsPerMetric;
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+      {!hasPrior && (
+        <div style={{ background: "#6366f110", border: "1px solid #6366f140", borderLeft: "4px solid #6366f1", borderRadius: "var(--radius-md, 10px)", padding: "0.75rem 1rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
+          <span style={{ fontSize: "1rem" }}>📊</span>
+          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-secondary)` }}>
+            Load prior month data to unlock week-over-week comparisons. Navigate to the Campaign Comparison slide to upload.
+          </div>
+        </div>
+      )}
+
+      {/* Filters */}
+      <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1rem 1.5rem" }}>
+        <div style={{ display: "flex", gap: "1.5rem", flexWrap: "wrap", alignItems: "flex-start" }}>
+          <div>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: `var(--text-faint)`, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "0.3rem" }}>Site</div>
+            <div style={{ display: "flex", gap: "0.3rem", flexWrap: "wrap" }}>
+              {siteList.map(s => (
+                <button key={s} onClick={() => setSiteFilter(s)} style={filterBtnStyle(siteFilter === s, "#6366f1")}>{s}</button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: `var(--text-faint)`, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "0.3rem" }}>Campaign</div>
+            <div style={{ display: "flex", gap: "0.3rem", flexWrap: "wrap" }}>
+              {programList.map(p => (
+                <button key={p} onClick={() => setProgramFilter(p)} style={filterBtnStyle(programFilter === p, "#d97706")}>{p}</button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem 1.5rem" }}>
+        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.75rem" }}>
+          Week-by-Week Performance {hasPrior ? "— Current vs Prior Month" : "— Current Month"}
+          {siteFilter !== "ALL" && <span style={{ color: "#6366f1", marginLeft: "0.5rem" }}>({siteFilter})</span>}
+          {programFilter !== "All" && <span style={{ color: "#d97706", marginLeft: "0.5rem" }}>({programFilter})</span>}
+        </div>
+
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr>
+                <th colSpan={3} style={{ ...headerBase, textAlign: "left", borderBottom: "1px solid var(--border)" }}></th>
+                {metrics.map(m => (
+                  <th key={m.key} colSpan={colsPerMetric}
+                    style={{ ...headerBase, textAlign: "center", color: m.color, fontWeight: 700, fontSize: "0.78rem",
+                      borderLeft: groupBorder, borderBottom: "1px solid var(--border)", background: m.color + "08" }}>
+                    {m.label}
+                  </th>
+                ))}
+              </tr>
+              <tr style={{ background: `var(--bg-tertiary)` }}>
+                <th style={{ ...headerBase, textAlign: "left" }}>Week</th>
+                <th style={headerBase}>Days</th>
+                <th style={headerBase}>Agents</th>
+                {metrics.map(m => (
+                  <React.Fragment key={m.key}>
+                    <th style={{ ...headerBase, borderLeft: groupBorder, color: `var(--text-secondary)` }}>Cur</th>
+                    {hasPrior && <th style={{ ...headerBase, color: "#8b5cf6", background: "#8b5cf608" }}>Prior</th>}
+                    {hasPrior && <th style={{ ...headerBase, color: `var(--text-muted)` }}>{"\u0394"}</th>}
+                  </React.Fragment>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {weeks.flatMap((w, i) => {
+                const curLabel = w.cur && w.cur.dateRange.length > 0
+                  ? `${w.cur.dateRange[0].slice(5)} – ${w.cur.dateRange[w.cur.dateRange.length - 1].slice(5)}` : "";
+                const prevLabel = w.prev && w.prev.dateRange.length > 0
+                  ? `${w.prev.dateRange[0].slice(5)} – ${w.prev.dateRange[w.prev.dateRange.length - 1].slice(5)}` : "";
+                const isExpanded = expandedWeek === w.position;
+                const rows = [];
+
+                // Use DOW-matched prior when current week is partial (fewer days than prior)
+                // This makes the summary row compare same days: if cur has Mon+Tue, prior only shows Mon+Tue
+                const pDisp = w.prevMatched || w.prev; // matched subset or full prior
+                const isMatched = !!w.prevMatched;
+                const pDayLabel = pDisp ? pDisp.dayCount : (w.prev?.dayCount || 0);
+
+                // Week summary row (clickable)
+                rows.push(
+                  <tr key={`wk-${i}`} onClick={() => setExpandedWeek(isExpanded ? null : w.position)}
+                    style={{ background: i % 2 === 0 ? "transparent" : `var(--bg-row-alt)`, cursor: "pointer", transition: "background 0.15s" }}>
+                    <td style={{ ...cellBase, textAlign: "left", color: `var(--text-primary)`, fontWeight: 600 }}>
+                      <div>
+                        <span style={{ color: isExpanded ? "#d97706" : `var(--text-dim)`, marginRight: "0.35rem", fontSize: "0.72rem" }}>{isExpanded ? "\u25BC" : "\u25B6"}</span>
+                        Wk {w.position} {w.cur ? `(${w.cur.weekNum})` : ""}
+                      </div>
+                      <div style={{ fontSize: "0.68rem", color: `var(--text-faint)`, fontWeight: 400, marginLeft: "1rem" }}>
+                        {curLabel}{hasPrior && prevLabel ? ` / ${prevLabel}` : ""}
+                        {isMatched && <span style={{ color: "#8b5cf6", marginLeft: "0.35rem" }}>(prior matched to {pDayLabel}d)</span>}
+                      </div>
+                    </td>
+                    <td style={{ ...cellBase, color: `var(--text-dim)` }}>
+                      {w.cur?.dayCount || "–"}{hasPrior && w.prev ? `/${w.prev.dayCount}` : ""}
+                    </td>
+                    <td style={{ ...cellBase, color: `var(--text-dim)` }}>
+                      {w.cur?.agentCount || "–"}
+                      {hasPrior && pDisp && (
+                        <span style={{ fontSize: "0.7rem", color: `var(--text-faint)`, marginLeft: "0.25rem" }}>/{pDisp.agentCount || "–"}</span>
+                      )}
+                    </td>
+                    {metrics.map(m => {
+                      const d = (w.cur && pDisp) ? m.delta(w.cur, pDisp) : null;
+                      const fmtDV = m.fmtD ? m.fmtD(d) : (d !== null ? fmtDelta(d) : "");
+                      return (
+                        <React.Fragment key={m.key}>
+                          <td style={{ ...cellBase, borderLeft: groupBorder, color: `var(--text-warm)`, fontWeight: 600 }}>{w.cur ? m.val(w.cur) : "–"}</td>
+                          {hasPrior && <td style={{ ...cellBase, color: "#8b5cf6", background: "#8b5cf605" }}>{pDisp ? m.val(pDisp) : "–"}</td>}
+                          {hasPrior && <td style={{ ...cellBase, color: deltaColor(d), fontWeight: 600, fontSize: "0.78rem" }}>{fmtDV}</td>}
+                        </React.Fragment>
+                      );
+                    })}
+                  </tr>
+                );
+
+                // Expanded daily detail rows
+                if (isExpanded && w.cur) {
+                  const curDaily = w.cur.daily || [];
+                  const prevDaily = w.prev ? (w.prev.daily || []) : [];
+                  // Build prior lookup by DOW for side-by-side
+                  const prevByDow = {};
+                  prevDaily.forEach(d => { prevByDow[d.dow] = d; });
+
+                  curDaily.forEach((day, di) => {
+                    const pd = prevByDow[day.dow] || null;
+                    rows.push(
+                      <tr key={`day-${i}-${di}`} style={{ background: "#d9770606" }}>
+                        <td style={{ ...cellBase, textAlign: "left", paddingLeft: "2rem", color: `var(--text-secondary)`, fontSize: "0.78rem" }}>
+                          <span style={{ fontWeight: 600, color: `var(--text-muted)`, display: "inline-block", width: "2.5rem" }}>{day.dow}</span>
+                          <span style={{ color: `var(--text-faint)` }}>{day.date.slice(5)}</span>
+                          {pd && <span style={{ color: "#8b5cf6", marginLeft: "0.5rem", fontSize: "0.7rem" }}>/ {pd.date.slice(5)}</span>}
+                        </td>
+                        <td style={{ ...cellBase, color: `var(--text-faint)`, fontSize: "0.78rem" }}>1{pd ? "/1" : ""}</td>
+                        <td style={{ ...cellBase, color: `var(--text-faint)`, fontSize: "0.78rem" }}>
+                          {day.agentCount}
+                          {pd && <span style={{ color: "#8b5cf6", marginLeft: "0.2rem", fontSize: "0.68rem" }}>/{pd.agentCount}</span>}
+                        </td>
+                        {metrics.map(m => {
+                          const d = pd ? m.delta(day, pd) : null;
+                          const fmtDV = m.fmtD ? m.fmtD(d) : (d !== null ? fmtDelta(d) : "");
+                          return (
+                            <React.Fragment key={m.key}>
+                              <td style={{ ...cellBase, borderLeft: groupBorder, color: `var(--text-secondary)`, fontSize: "0.78rem" }}>{m.val(day)}</td>
+                              {hasPrior && <td style={{ ...cellBase, color: "#8b5cf6", background: "#8b5cf605", fontSize: "0.78rem" }}>{pd ? m.val(pd) : "–"}</td>}
+                              {hasPrior && <td style={{ ...cellBase, color: deltaColor(d), fontSize: "0.72rem" }}>{fmtDV}</td>}
+                            </React.Fragment>
+                          );
+                        })}
+                      </tr>
+                    );
+                  });
+                  // Show prior-only days not matched to current DOW
+                  if (hasPrior) {
+                    const curDows = new Set(curDaily.map(d => d.dow));
+                    prevDaily.filter(d => !curDows.has(d.dow)).forEach((pd, pi) => {
+                      rows.push(
+                        <tr key={`pday-${i}-${pi}`} style={{ background: "#8b5cf606" }}>
+                          <td style={{ ...cellBase, textAlign: "left", paddingLeft: "2rem", color: "#8b5cf6", fontSize: "0.78rem" }}>
+                            <span style={{ fontWeight: 600, display: "inline-block", width: "2.5rem" }}>{pd.dow}</span>
+                            <span style={{ color: `var(--text-faint)` }}>–</span>
+                            <span style={{ color: "#8b5cf6", marginLeft: "0.5rem", fontSize: "0.7rem" }}>/ {pd.date.slice(5)}</span>
+                          </td>
+                          <td style={{ ...cellBase, color: `var(--text-faint)`, fontSize: "0.78rem" }}>0/1</td>
+                          <td style={{ ...cellBase, color: "#8b5cf6", fontSize: "0.78rem" }}>–/{pd.agentCount}</td>
+                          {metrics.map(m => (
+                            <React.Fragment key={m.key}>
+                              <td style={{ ...cellBase, borderLeft: groupBorder, color: `var(--text-faint)`, fontSize: "0.78rem" }}>–</td>
+                              <td style={{ ...cellBase, color: "#8b5cf6", background: "#8b5cf605", fontSize: "0.78rem" }}>{m.val(pd)}</td>
+                              <td style={{ ...cellBase, color: `var(--text-faint)`, fontSize: "0.72rem" }}></td>
+                            </React.Fragment>
+                          ))}
+                        </tr>
+                      );
+                    });
+                  }
+                }
+
+                return rows;
+              })}
+              {/* Totals row */}
+              <tr style={{ borderTop: "2px solid var(--border)", background: `var(--bg-tertiary)` }}>
+                <td style={{ ...cellBase, textAlign: "left", fontWeight: 700, color: `var(--text-primary)` }}>Total</td>
+                <td style={{ ...cellBase, fontWeight: 600 }}>{curTotals.days}{hasPrior ? `/${prevTotals.days}` : ""}</td>
+                <td style={cellBase}></td>
+                {metrics.map(m => {
+                  const fmtDV = m.fmtD ? m.fmtD(m.totDelta) : (m.totDelta !== null ? fmtDelta(m.totDelta) : "");
+                  return (
+                    <React.Fragment key={m.key}>
+                      <td style={{ ...cellBase, borderLeft: groupBorder, color: `var(--text-warm)`, fontWeight: 700 }}>{m.totCur}</td>
+                      {hasPrior && <td style={{ ...cellBase, color: "#8b5cf6", fontWeight: 700, background: "#8b5cf605" }}>{m.totPrev}</td>}
+                      {hasPrior && <td style={{ ...cellBase, color: deltaColor(m.totDelta), fontWeight: 700 }}>{fmtDV}</td>}
+                    </React.Fragment>
+                  );
+                })}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Week-over-week GPH trend mini-chart */}
+      {weeks.filter(w => w.cur).length >= 2 && (() => {
+        const curWeeks = weeks.filter(w => w.cur);
+        const maxGph = Math.max(...curWeeks.map(w => w.cur.gph), ...(hasPrior ? weeks.filter(w => w.prev).map(w => w.prev.gph) : [0]));
+        const barH = 80;
+        return (
+          <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem 1.5rem" }}>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.75rem" }}>
+              GPH Trend by Week
+            </div>
+            <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end", height: `${barH + 30}px` }}>
+              {weeks.map((w, i) => {
+                const curH = w.cur && maxGph > 0 ? (w.cur.gph / maxGph) * barH : 0;
+                const prevH = w.prev && maxGph > 0 ? (w.prev.gph / maxGph) * barH : 0;
+                return (
+                  <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "0.15rem" }}>
+                    <div style={{ display: "flex", gap: "2px", alignItems: "flex-end", height: `${barH}px` }}>
+                      {w.cur && <div style={{ width: "18px", height: `${Math.max(curH, 2)}px`, background: "#d97706", borderRadius: "3px 3px 0 0", transition: "height 0.4s ease" }} title={`Current: ${w.cur.gph.toFixed(3)}`} />}
+                      {hasPrior && w.prev && <div style={{ width: "18px", height: `${Math.max(prevH, 2)}px`, background: "#8b5cf650", borderRadius: "3px 3px 0 0", transition: "height 0.4s ease" }} title={`Prior: ${w.prev.gph.toFixed(3)}`} />}
+                    </div>
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.68rem", color: `var(--text-faint)` }}>Wk{w.position}</div>
+                    {w.cur && <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "0.65rem", color: `var(--text-dim)` }}>{w.cur.gph.toFixed(3)}</div>}
+                  </div>
+                );
+              })}
+            </div>
+            {hasPrior && (
+              <div style={{ display: "flex", gap: "1rem", marginTop: "0.5rem", justifyContent: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
+                  <div style={{ width: "12px", height: "8px", background: "#d97706", borderRadius: "2px" }} />
+                  <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: `var(--text-dim)` }}>Current</span>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
+                  <div style={{ width: "12px", height: "8px", background: "#8b5cf650", borderRadius: "2px" }} />
+                  <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: `var(--text-dim)` }}>Prior</span>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+    </div>
+  );
+}
+
 // Replaces Spanish Callback. Shows all job types with MoM agent
 // job type with MoM agent % to goal comparisons.
 
@@ -5769,74 +6356,83 @@ function buildMoMAgentStats(currentAgents, priorAgents) {
     rows.forEach(a => {
       const n = a.agentName;
       if (!n) return;
-      if (!map[n]) map[n] = { hours: 0, goals: 0, goalsNum: 0, newXI: 0, xmLines: 0, newXH: 0, newVideo: 0, newVoice: 0, region: a.region, supervisor: a.supervisor };
+      if (!map[n]) map[n] = { hours: 0, goals: 0, goalsNum: 0, newXI: 0, xmLines: 0, newXH: 0, newVideo: 0, newVoice: 0, region: a.region, supervisor: a.supervisor, jobTypes: new Set(), dates: new Set() };
       map[n].hours += a.hours; map[n].goals += a.goals; map[n].goalsNum += a.goalsNum;
       map[n].newXI += a.newXI; map[n].xmLines += a.xmLines; map[n].newXH += a.newXH;
       map[n].newVideo += a.newVideo; map[n].newVoice += (a.newVoice || 0);
+      if (a.jobType && !a.isSpanishCallback) map[n].jobTypes.add(a.jobType);
+      if (a.date) map[n].dates.add(a.date);
     });
     return map;
   };
   const cur = rollup(currentAgents), prev = rollup(priorAgents);
   const allNames = [...new Set([...Object.keys(cur), ...Object.keys(prev)])].sort();
-  return allNames.map(name => {
-    const c = cur[name] || { hours:0, goals:0, goalsNum:0, newXI:0, xmLines:0, newXH:0, newVideo:0, newVoice:0 };
-    const p = prev[name] || { hours:0, goals:0, goalsNum:0, newXI:0, xmLines:0, newXH:0, newVideo:0, newVoice:0 };
+
+  // Build initial results
+  const results = allNames.map(name => {
+    const c = cur[name] || { hours:0, goals:0, goalsNum:0, newXI:0, xmLines:0, newXH:0, newVideo:0, newVoice:0, jobTypes: new Set(), dates: new Set() };
+    const p = prev[name] || { hours:0, goals:0, goalsNum:0, newXI:0, xmLines:0, newXH:0, newVideo:0, newVoice:0, jobTypes: new Set(), dates: new Set() };
     const curPct = c.goalsNum > 0 ? (c.goals / c.goalsNum) * 100 : 0;
     const prevPct = p.goalsNum > 0 ? (p.goals / p.goalsNum) * 100 : 0;
     const curGph = c.hours > 0 ? c.goals / c.hours : 0;
     const prevGph = p.hours > 0 ? p.goals / p.hours : 0;
+
+    // Campaign movement detection
+    const curPrograms = [...(c.jobTypes || [])].sort();
+    const prevPrograms = [...(p.jobTypes || [])].sort();
+    const added = curPrograms.filter(j => !prevPrograms.includes(j));
+    const removed = prevPrograms.filter(j => !curPrograms.includes(j));
+    const unchanged = curPrograms.filter(j => prevPrograms.includes(j));
+    const moved = added.length > 0 || removed.length > 0;
+
+    // Hours per day
+    const curDays = c.dates ? c.dates.size : 0;
+    const prevDays = p.dates ? p.dates.size : 0;
+    const curHpd = curDays > 0 ? c.hours / curDays : 0;
+    const prevHpd = prevDays > 0 ? p.hours / prevDays : 0;
+
     return { name, inCurrent: !!cur[name], inPrior: !!prev[name],
       region: (cur[name]||prev[name]).region||"", supervisor: (cur[name]||prev[name]).supervisor||"",
-      cur: { ...c, pct: curPct, gph: curGph }, prev: { ...p, pct: prevPct, gph: prevGph }, delta: curPct - prevPct };
+      cur: { ...c, pct: curPct, gph: curGph, hpd: curHpd, daysWorked: curDays, jobTypes: curPrograms },
+      prev: { ...p, pct: prevPct, gph: prevGph, hpd: prevHpd, daysWorked: prevDays, jobTypes: prevPrograms },
+      delta: curPct - prevPct,
+      campaign: { moved, added, removed, unchanged, curPrograms, prevPrograms },
+    };
   });
+
+  // Peer ranking by % to goal (among agents in current month)
+  const ranked = results.filter(a => a.inCurrent && a.cur.goalsNum > 0).sort((a, b) => b.cur.pct - a.cur.pct);
+  ranked.forEach((a, i) => { a.curRank = i + 1; });
+  const curPeerCount = ranked.length;
+
+  // Prior peer ranking
+  const rankedPrev = results.filter(a => a.inPrior && a.prev.goalsNum > 0).sort((a, b) => b.prev.pct - a.prev.pct);
+  rankedPrev.forEach((a, i) => { a.prevRank = i + 1; });
+  const prevPeerCount = rankedPrev.length;
+
+  results.forEach(a => {
+    a.curPeerCount = curPeerCount;
+    a.prevPeerCount = prevPeerCount;
+    if (!a.curRank) a.curRank = null;
+    if (!a.prevRank) a.prevRank = null;
+    a.rankDelta = (a.curRank && a.prevRank) ? a.prevRank - a.curRank : null; // positive = improved
+  });
+
+  return results;
 }
 
-function CampaignComparisonPanel({ currentAgents, onNav, localAI, priorSheetUrl }) {
+function CampaignComparisonPanel({ currentAgents, onNav, localAI, priorAgents, priorGoalLookup, priorSheetLoading, setPriorRaw, setPriorGoalsRaw }) {
   const [activeJobType, setActiveJobType] = useState(null);
   const [sortCol, setSortCol] = useState("delta");
   const [sortDir, setSortDir] = useState(-1);
   const [siteFilter, setSiteFilter] = useState("ALL"); // ALL | DR | BZ
   const [hideLeft, setHideLeft] = useState(true);
   const [expandedAgent, setExpandedAgent] = useState(null);
-  const [priorSheetLoading, setPriorSheetLoading] = useState(false);
 
-  // Self-contained prior month data (persisted to localStorage)
-  const [priorRaw, _setPriorRaw] = useState(() => {
-    try { const s = localStorage.getItem(PRIOR_MONTH_STORAGE_KEY); return s ? JSON.parse(s) : null; } catch(e) { return null; }
-  });
-  const setPriorRaw = useCallback(data => {
-    _setPriorRaw(data);
-    try { if (data) localStorage.setItem(PRIOR_MONTH_STORAGE_KEY, JSON.stringify(data)); else localStorage.removeItem(PRIOR_MONTH_STORAGE_KEY); } catch(e) {}
-  }, []);
-
-  // Auto-fetch prior month from Google Sheet if no local data
-  useEffect(() => {
-    if (priorRaw || !priorSheetUrl || priorSheetLoading) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        setPriorSheetLoading(true);
-        const res = await fetch(priorSheetUrl);
-        const text = await res.text();
-        const rows = parseCSV(text);
-        if (!cancelled && rows.length > 0) setPriorRaw(rows);
-      } catch(e) { /* silent */ }
-      finally { if (!cancelled) setPriorSheetLoading(false); }
-    })();
-    return () => { cancelled = true; };
-  }, [priorSheetUrl, priorRaw]);
-  const [priorGoalsRaw, _setPriorGoalsRaw] = useState(() => {
-    try { const s = localStorage.getItem(PRIOR_MONTH_STORAGE_KEY + "_goals"); return s ? JSON.parse(s) : null; } catch(e) { return null; }
-  });
-  const setPriorGoalsRaw = useCallback(data => {
-    _setPriorGoalsRaw(data);
-    try { if (data) localStorage.setItem(PRIOR_MONTH_STORAGE_KEY + "_goals", JSON.stringify(data)); else localStorage.removeItem(PRIOR_MONTH_STORAGE_KEY + "_goals"); } catch(e) {}
-  }, []);
+  // File upload refs (manual override still supported)
   const priorDataRef = useRef();
   const priorGoalsRef = useRef();
   const loadFileCamp = (f, setter) => { const r = new FileReader(); r.onload = e => setter(parseCSV(e.target.result)); r.readAsText(f); };
-  const priorAgents = useMemo(() => normalizeAgents(priorRaw || []), [priorRaw]);
-  const priorGoalLookup = useMemo(() => buildGoalLookup(priorGoalsRaw), [priorGoalsRaw]);
 
   // Fiscal pacing from current month data
   const fiscalInfo = useMemo(() => {
@@ -5919,7 +6515,8 @@ function CampaignComparisonPanel({ currentAgents, onNav, localAI, priorSheetUrl 
     const getVal = (a) => {
       const m = { name: a.name.toLowerCase(), prevPct: a.prev.pct, curPct: a.cur.pct, delta: a.delta,
         prevHours: a.prev.hours, curHours: a.cur.hours, curGoals: a.cur.goals, curGph: a.cur.gph, curHsd: a.cur.newXI, curXm: a.cur.xmLines,
-        curXh: a.cur.newXH, curXv: a.cur.newVideo, curPhone: a.cur.newVoice, prevGoals: a.prev.goals, prevGph: a.prev.gph, curGphCol: a.cur.gph };
+        curXh: a.cur.newXH, curXv: a.cur.newVideo, curPhone: a.cur.newVoice, prevGoals: a.prev.goals, prevGph: a.prev.gph, curGphCol: a.cur.gph,
+        rank: a.curRank || 999, hpd: a.cur.hpd || 0 };
       return m[sortCol] !== undefined ? m[sortCol] : a.delta;
     };
     arr.sort((a, b) => { const va = getVal(a), vb = getVal(b);
@@ -5958,19 +6555,19 @@ function CampaignComparisonPanel({ currentAgents, onNav, localAI, priorSheetUrl 
       <div style={{ background:"var(--bg-secondary)", border:"1px solid var(--border)", borderRadius:"12px", padding:"1.25rem", marginBottom:"1.5rem", display:"flex", gap:"1rem", alignItems:"center", flexWrap:"wrap" }}>
         <div style={{ fontFamily:"monospace", fontSize:"1.08rem", color:"var(--text-muted)", letterSpacing:"0.1em", marginRight:"0.5rem" }}>DATA</div>
         <button onClick={() => priorDataRef.current.click()}
-          style={{ background:priorRaw?"#6366f118":"transparent", border:`1px solid ${priorRaw?"#6366f1":"var(--border-muted)"}`, borderRadius:"5px", color:priorRaw?"#6366f1":"var(--text-muted)", padding:"0.35rem 0.9rem", fontFamily:"monospace", fontSize:"1.08rem", cursor:"pointer" }}>
-          {priorRaw ? `Prior Month Data (${priorAgents.length} rows)` : "Upload Prior Month Data"}
+          style={{ background:priorAgents.length>0?"#6366f118":"transparent", border:`1px solid ${priorAgents.length>0?"#6366f1":"var(--border-muted)"}`, borderRadius:"5px", color:priorAgents.length>0?"#6366f1":"var(--text-muted)", padding:"0.35rem 0.9rem", fontFamily:"monospace", fontSize:"1.08rem", cursor:"pointer" }}>
+          {priorAgents.length > 0 ? `Prior Month Data (${priorAgents.length} rows)` : "Upload Prior Month Data"}
         </button>
-        {priorRaw && <button onClick={() => setPriorRaw(null)} title="Clear" style={{ background:"transparent", border:"1px solid var(--text-faint)", borderRadius:"5px", color:"var(--text-dim)", padding:"0.2rem 0.5rem", fontFamily:"monospace", fontSize:"1.08rem", cursor:"pointer" }}>{"✕"}</button>}
+        {priorAgents.length > 0 && <button onClick={() => setPriorRaw(null)} title="Clear" style={{ background:"transparent", border:"1px solid var(--text-faint)", borderRadius:"5px", color:"var(--text-dim)", padding:"0.2rem 0.5rem", fontFamily:"monospace", fontSize:"1.08rem", cursor:"pointer" }}>{"✕"}</button>}
         <input ref={priorDataRef} type="file" accept=".csv" style={{ display:"none" }} onChange={e => { if (e.target.files[0]) loadFileCamp(e.target.files[0], setPriorRaw); e.target.value=""; }} />
         <div style={{ width:"1px", height:"24px", background:"var(--border)", margin:"0 0.25rem" }} />
         <button onClick={() => priorGoalsRef.current.click()}
-          style={{ background:priorGoalsRaw?"#16a34a18":"transparent", border:`1px solid ${priorGoalsRaw?"#16a34a":"var(--border-muted)"}`, borderRadius:"5px", color:priorGoalsRaw?"#16a34a":"var(--text-muted)", padding:"0.35rem 0.9rem", fontFamily:"monospace", fontSize:"1.08rem", cursor:"pointer" }}>
-          {priorGoalsRaw ? "Prior Month Goals" : "Upload Prior Month Goals"}
+          style={{ background:priorGoalLookup?"#16a34a18":"transparent", border:`1px solid ${priorGoalLookup?"#16a34a":"var(--border-muted)"}`, borderRadius:"5px", color:priorGoalLookup?"#16a34a":"var(--text-muted)", padding:"0.35rem 0.9rem", fontFamily:"monospace", fontSize:"1.08rem", cursor:"pointer" }}>
+          {priorGoalLookup ? "Prior Month Goals" : "Upload Prior Month Goals"}
         </button>
-        {priorGoalsRaw && <button onClick={() => setPriorGoalsRaw(null)} title="Clear" style={{ background:"transparent", border:"1px solid var(--text-faint)", borderRadius:"5px", color:"var(--text-dim)", padding:"0.2rem 0.5rem", fontFamily:"monospace", fontSize:"1.08rem", cursor:"pointer" }}>{"✕"}</button>}
+        {priorGoalLookup && <button onClick={() => setPriorGoalsRaw(null)} title="Clear" style={{ background:"transparent", border:"1px solid var(--text-faint)", borderRadius:"5px", color:"var(--text-dim)", padding:"0.2rem 0.5rem", fontFamily:"monospace", fontSize:"1.08rem", cursor:"pointer" }}>{"✕"}</button>}
         <input ref={priorGoalsRef} type="file" accept=".csv" style={{ display:"none" }} onChange={e => { if (e.target.files[0]) loadFileCamp(e.target.files[0], setPriorGoalsRaw); e.target.value=""; }} />
-        {(priorRaw || priorGoalsRaw) && <div style={{ marginLeft:"auto", fontFamily:"monospace", fontSize:"0.9rem", color:"var(--text-faint)" }}>saved to browser</div>}
+        {(priorAgents.length > 0 || priorGoalLookup) && <div style={{ marginLeft:"auto", fontFamily:"monospace", fontSize:"0.9rem", color:"var(--text-faint)" }}>saved to browser</div>}
       </div>
 
       {priorAgents.length === 0 ? (
@@ -6156,6 +6753,13 @@ function CampaignComparisonPanel({ currentAgents, onNav, localAI, priorSheetUrl 
                       <span style={{ borderBottom:expandedAgent===a.name?"2px solid #d97706":"1px dashed var(--border)", paddingBottom:"1px" }}>{a.name}</span>
                       {!a.inPrior && <span style={{ fontSize:"0.78rem", color:"#d97706", background:"#d9770620", padding:"0.05rem 0.3rem", borderRadius:"2px", marginLeft:"0.3rem" }}>NEW</span>}
                       {!a.inCurrent && <span style={{ fontSize:"0.78rem", color:"#6366f1", background:"#6366f120", padding:"0.05rem 0.3rem", borderRadius:"2px", marginLeft:"0.3rem" }}>LEFT</span>}
+                      {a.campaign && a.campaign.moved && a.inCurrent && a.inPrior && (
+                        <span style={{ fontSize:"0.72rem", color:"#8b5cf6", background:"#8b5cf618", padding:"0.05rem 0.35rem", borderRadius:"2px", marginLeft:"0.3rem", border:"1px solid #8b5cf630" }}
+                          title={`Added: ${a.campaign.added.join(", ") || "none"} | Removed: ${a.campaign.removed.join(", ") || "none"}`}>
+                          MOVED
+                        </span>
+                      )}
+                      {a.curRank && <span style={{ fontSize:"0.68rem", color:"var(--text-faint)", marginLeft:"0.35rem" }}>#{a.curRank}{a.rankDelta !== null ? ` (${a.rankDelta > 0 ? "\u25B2" : a.rankDelta < 0 ? "\u25BC" : "="}${Math.abs(a.rankDelta)})` : ""}</span>}
                     </td>
                     <td style={{ padding:"0.5rem 0.6rem", textAlign:"right", color:"var(--text-dim)" }}>{a.inPrior ? fmt(a.prev.hours, 1) : "\u2014"}</td>
                     <td style={{ padding:"0.5rem 0.6rem", textAlign:"right", color:"var(--text-secondary)" }}>{fmt(a.cur.hours, 1)}</td>
@@ -6206,9 +6810,66 @@ function CampaignComparisonPanel({ currentAgents, onNav, localAI, priorSheetUrl 
                     const prevDates = rollupByWeek(prevRows);
                     const allDts = [...new Set([...Object.keys(curDates), ...Object.keys(prevDates)])].sort();
                     const colSpan = 15; // total columns in table
+                    // Compute program-level peer averages for hours/day context
+                    const curPeerAvgHpd = (() => {
+                      const peers = agentStats.filter(p => p.inCurrent && p.name !== a.name && p.cur.daysWorked > 0);
+                      return peers.length > 0 ? peers.reduce((s, p) => s + p.cur.hpd, 0) / peers.length : 0;
+                    })();
                     rows.push(
                       <tr key={a.name+"_detail"}>
                         <td colSpan={colSpan} style={{ padding:"0.5rem 1rem 1rem 2rem", background:"var(--bg-tertiary)", borderBottom:"2px solid var(--border)" }}>
+                          {/* Agent insight strip */}
+                          <div style={{ display:"flex", gap:"1rem", flexWrap:"wrap", marginBottom:"0.75rem" }}>
+                            {/* Campaign movement */}
+                            {a.campaign && a.campaign.moved && (
+                              <div style={{ background:"#8b5cf610", border:"1px solid #8b5cf630", borderRadius:"8px", padding:"0.5rem 0.75rem", flex:"1 1 200px" }}>
+                                <div style={{ fontFamily:"var(--font-ui, Inter, sans-serif)", fontSize:"0.72rem", color:"#8b5cf6", letterSpacing:"0.08em", textTransform:"uppercase", marginBottom:"0.25rem" }}>Campaign Movement</div>
+                                {a.campaign.added.length > 0 && <div style={{ fontFamily:"var(--font-ui, Inter, sans-serif)", fontSize:"0.82rem", color:"#16a34a" }}>+ {a.campaign.added.join(", ")}</div>}
+                                {a.campaign.removed.length > 0 && <div style={{ fontFamily:"var(--font-ui, Inter, sans-serif)", fontSize:"0.82rem", color:"#dc2626" }}>- {a.campaign.removed.join(", ")}</div>}
+                                {a.campaign.unchanged.length > 0 && <div style={{ fontFamily:"var(--font-ui, Inter, sans-serif)", fontSize:"0.78rem", color:"var(--text-dim)" }}>Stayed: {a.campaign.unchanged.join(", ")}</div>}
+                              </div>
+                            )}
+                            {/* Hours utilization */}
+                            {a.inCurrent && a.cur.daysWorked > 0 && (
+                              <div style={{ background:"var(--bg-secondary)", border:"1px solid var(--border)", borderRadius:"8px", padding:"0.5rem 0.75rem", flex:"1 1 200px" }}>
+                                <div style={{ fontFamily:"var(--font-ui, Inter, sans-serif)", fontSize:"0.72rem", color:"var(--text-muted)", letterSpacing:"0.08em", textTransform:"uppercase", marginBottom:"0.25rem" }}>Hours Utilization</div>
+                                <div style={{ display:"flex", gap:"1rem" }}>
+                                  <div>
+                                    <div style={{ fontFamily:"var(--font-data, monospace)", fontSize:"1.1rem", color:"var(--text-warm)", fontWeight:700 }}>{a.cur.hpd.toFixed(1)}</div>
+                                    <div style={{ fontFamily:"var(--font-ui, Inter, sans-serif)", fontSize:"0.68rem", color:"var(--text-faint)" }}>hrs/day ({a.cur.daysWorked}d)</div>
+                                  </div>
+                                  {a.inPrior && a.prev.daysWorked > 0 && (
+                                    <div>
+                                      <div style={{ fontFamily:"var(--font-data, monospace)", fontSize:"1.1rem", color:"#8b5cf6", fontWeight:600 }}>{a.prev.hpd.toFixed(1)}</div>
+                                      <div style={{ fontFamily:"var(--font-ui, Inter, sans-serif)", fontSize:"0.68rem", color:"var(--text-faint)" }}>prior ({a.prev.daysWorked}d)</div>
+                                    </div>
+                                  )}
+                                  {curPeerAvgHpd > 0 && (
+                                    <div>
+                                      <div style={{ fontFamily:"var(--font-data, monospace)", fontSize:"1.1rem", color:"var(--text-dim)", fontWeight:600 }}>{curPeerAvgHpd.toFixed(1)}</div>
+                                      <div style={{ fontFamily:"var(--font-ui, Inter, sans-serif)", fontSize:"0.68rem", color:"var(--text-faint)" }}>peer avg</div>
+                                    </div>
+                                  )}
+                                </div>
+                                {curPeerAvgHpd > 0 && a.cur.hpd < curPeerAvgHpd * 0.8 && (
+                                  <div style={{ fontFamily:"var(--font-ui, Inter, sans-serif)", fontSize:"0.72rem", color:"#dc2626", marginTop:"0.2rem" }}>Below peer average by {((1 - a.cur.hpd / curPeerAvgHpd) * 100).toFixed(0)}%</div>
+                                )}
+                              </div>
+                            )}
+                            {/* Peer ranking */}
+                            {a.curRank && (
+                              <div style={{ background:"var(--bg-secondary)", border:"1px solid var(--border)", borderRadius:"8px", padding:"0.5rem 0.75rem", flex:"0 1 150px", textAlign:"center" }}>
+                                <div style={{ fontFamily:"var(--font-ui, Inter, sans-serif)", fontSize:"0.72rem", color:"var(--text-muted)", letterSpacing:"0.08em", textTransform:"uppercase", marginBottom:"0.25rem" }}>Peer Rank</div>
+                                <div style={{ fontFamily:"var(--font-display, Inter, sans-serif)", fontSize:"1.5rem", color:"var(--text-warm)", fontWeight:700 }}>#{a.curRank}<span style={{ fontSize:"0.82rem", color:"var(--text-faint)", fontWeight:400 }}> / {a.curPeerCount}</span></div>
+                                {a.rankDelta !== null && (
+                                  <div style={{ fontFamily:"var(--font-ui, Inter, sans-serif)", fontSize:"0.78rem", color: a.rankDelta > 0 ? "#16a34a" : a.rankDelta < 0 ? "#dc2626" : "var(--text-dim)", marginTop:"0.1rem" }}>
+                                    {a.rankDelta > 0 ? `\u25B2 ${a.rankDelta} spots` : a.rankDelta < 0 ? `\u25BC ${Math.abs(a.rankDelta)} spots` : "No change"}
+                                    {a.prevRank && <span style={{ color:"var(--text-faint)", marginLeft:"0.3rem" }}>(was #{a.prevRank}/{a.prevPeerCount})</span>}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
                           <div style={{ fontFamily:"monospace", fontSize:"0.88rem", color:"#d97706", letterSpacing:"0.1em", textTransform:"uppercase", marginBottom:"0.5rem" }}>
                             Week-by-Week {"\u2014"} {a.name} ({activeJobType})
                           </div>
@@ -6638,7 +7299,7 @@ function ProgramBySiteTab({ agents, regions, siteBuckets, jobType, goalEntry, go
 // ── Daily Breakdown Panel ─────────────────────────────────────────────────────
 // Shows performance by day, by region/site, with combined view and region tabs.
 // When programs[] is passed (from BusinessOverview), shows program drill-down tabs.
-function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal, programs, goalLookup, singleProgram }) {
+function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal, programs, goalLookup, singleProgram, priorAgents }) {
   const [dailyRegion, setDailyRegion] = useState("Combined");
   const [dailyProgram, setDailyProgram] = useState("All");
   const [dailyRocFilter, setDailyRocFilter] = useState(null);
@@ -6795,8 +7456,18 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
   const totalXm = worked.reduce((s, d) => s + d.xm, 0);
   const overallGph = totalHrs > 0 ? totalGoals / totalHrs : 0;
 
+  // Prior agents filtered to match current program selection
+  const priorAgentsFiltered = useMemo(() => {
+    if (!priorAgents || priorAgents.length === 0) return [];
+    if (dailyProgram !== "All") return priorAgents.filter(a => a.jobType === dailyProgram);
+    return priorAgents.filter(a => !a.isSpanishCallback);
+  }, [priorAgents, dailyProgram]);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+      {/* Day-of-Week Analysis */}
+      <DOWCards agents={activeAgents} priorAgents={priorAgentsFiltered} label={displayLabel} />
+
       <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.5rem" }}>
         <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.75rem" }}>
           Daily Performance Breakdown — {displayLabel}
@@ -7166,7 +7837,7 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
   );
 }
 
-function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total, onNav, allAgents, localAI }) {
+function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total, onNav, allAgents, localAI, priorAgents }) {
   const [tab, setTab] = useState("overview");
   const [rocFilter, setRocFilter] = useState(null); // null = all, or a specific ROC code
   const [rankSort, setRankSort] = useState({ key: "pctToGoal", dir: -1 });
@@ -7771,7 +8442,7 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
 
         {/* ── DAILY TAB ── */}
         {tab === "daily" && (
-          <DailyBreakdownPanel agents={filteredAgents} regions={regions} jobType={jobType} singleProgram={true} sphGoal={
+          <DailyBreakdownPanel agents={filteredAgents} regions={regions} jobType={jobType} singleProgram={true} priorAgents={priorAgents ? priorAgents.filter(a => a.jobType === jobType) : []} sphGoal={
             goalEntries.length > 0
               ? (() => {
                   const allRows = goalEntries.flatMap(e => Object.values(e.siteMap).flat());
@@ -9261,6 +9932,7 @@ export default function App() {
   }, []);
   const goalsInputRef               = useRef();
   const nhInputRef                  = useRef();
+  const priorGoalsInputRef          = useRef();
 
   // Check Ollama availability on mount
   useEffect(() => {
@@ -9283,6 +9955,7 @@ export default function App() {
   const goalsSheetUrl = sheetUrls.goals || DEFAULT_GOALS_SHEET_URL;
   const nhSheetUrl    = sheetUrls.nh || DEFAULT_NH_SHEET_URL;
   const priorSheetUrl = sheetUrls.prior || DEFAULT_PRIOR_SHEET_URL;
+  const priorGoalsSheetUrl = sheetUrls.priorGoals || DEFAULT_PRIOR_GOALS_SHEET_URL;
 
   // Goals persisted to localStorage
   const [goalsRaw, _setGoalsRaw] = useState(() => {
@@ -9310,6 +9983,24 @@ export default function App() {
     } catch(e) {}
   }, []);
 
+  // Prior month raw data — persisted to localStorage (hoisted from CampaignComparisonPanel)
+  const [priorMonthRaw, _setPriorMonthRaw] = useState(() => {
+    try { const s = localStorage.getItem(PRIOR_MONTH_STORAGE_KEY); return s ? JSON.parse(s) : null; } catch(e) { return null; }
+  });
+  const setPriorMonthRaw = useCallback(data => {
+    _setPriorMonthRaw(data);
+    try { if (data) localStorage.setItem(PRIOR_MONTH_STORAGE_KEY, JSON.stringify(data)); else localStorage.removeItem(PRIOR_MONTH_STORAGE_KEY); } catch(e) {}
+  }, []);
+
+  // Prior month goals — persisted to localStorage
+  const [priorMonthGoalsRaw, _setPriorMonthGoalsRaw] = useState(() => {
+    try { const s = localStorage.getItem(PRIOR_MONTH_STORAGE_KEY + "_goals"); return s ? JSON.parse(s) : null; } catch(e) { return null; }
+  });
+  const setPriorMonthGoalsRaw = useCallback(data => {
+    _setPriorMonthGoalsRaw(data);
+    try { if (data) localStorage.setItem(PRIOR_MONTH_STORAGE_KEY + "_goals", JSON.stringify(data)); else localStorage.removeItem(PRIOR_MONTH_STORAGE_KEY + "_goals"); } catch(e) {}
+  }, []);
+
   // Compute fiscal info early for threshold auto-scaling
   const earlyFiscalInfo = useMemo(() => {
     if (!rawData) return null;
@@ -9327,6 +10018,10 @@ export default function App() {
   const perf = usePerformanceEngine({ rawData, goalsRaw, newHiresRaw });
   const { programs, jobTypes, newHireSet, newHires, allAgentNames } = perf;
   const totalSlides = 1 + programs.length + 1; // Overview + programs + Campaign Comparison
+
+  // Prior month derived data (hoisted for app-wide access)
+  const priorAgents = useMemo(() => normalizeAgents(priorMonthRaw || []), [priorMonthRaw]);
+  const priorGoalLookup = useMemo(() => buildGoalLookup(priorMonthGoalsRaw), [priorMonthGoalsRaw]);
 
   // AI prefetch counter — triggers re-renders as cache fills
   const [aiPrefetchDone, setAiPrefetchDone] = useState(0);
@@ -9415,6 +10110,45 @@ export default function App() {
     return () => { cancelled = true; };
   }, []);
 
+  // Auto-load prior month data from Google Sheet (after main data loads, non-blocking)
+  const [priorSheetLoading, setPriorSheetLoading] = useState(false);
+  useEffect(() => {
+    if (!rawData || priorMonthRaw || !priorSheetUrl || priorSheetLoading) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        setPriorSheetLoading(true);
+        const proxyP = url => `https://corsproxy.io/?${encodeURIComponent(url)}`;
+        let res;
+        try { res = await fetch(priorSheetUrl); } catch(e) { res = null; }
+        if (!res || !res.ok) res = await fetch(proxyP(priorSheetUrl));
+        const text = await res.text();
+        const rows = parseCSV(text);
+        if (!cancelled && rows.length > 0) setPriorMonthRaw(rows);
+      } catch(e) { /* silent */ }
+      finally { if (!cancelled) setPriorSheetLoading(false); }
+    })();
+    return () => { cancelled = true; };
+  }, [rawData, priorSheetUrl, priorMonthRaw]);
+
+  // Auto-load prior month goals from Google Sheet (after prior data loads)
+  useEffect(() => {
+    if (!rawData || priorMonthGoalsRaw || !priorGoalsSheetUrl) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const proxyP = url => `https://corsproxy.io/?${encodeURIComponent(url)}`;
+        let res;
+        try { res = await fetch(priorGoalsSheetUrl); } catch(e) { res = null; }
+        if (!res || !res.ok) res = await fetch(proxyP(priorGoalsSheetUrl));
+        const text = await res.text();
+        const rows = parseCSV(text);
+        if (!cancelled && rows.length > 0) setPriorMonthGoalsRaw(rows);
+      } catch(e) { /* silent */ }
+    })();
+    return () => { cancelled = true; };
+  }, [rawData, priorGoalsSheetUrl, priorMonthGoalsRaw]);
+
   // Last-7-days unique agent names for Today attendance comparison
   const recentAgentNames = useMemo(() => {
     if (!rawData) return new Set();
@@ -9497,6 +10231,7 @@ export default function App() {
               { key: "goals", label: "Goals Sheet", color: "#16a34a", current: goalsSheetUrl, placeholder: "Optional — paste Goals CSV URL" },
               { key: "nh", label: "Roster / New Hires Sheet", color: "#6366f1", current: nhSheetUrl, placeholder: "Optional — paste Roster CSV URL" },
               { key: "prior", label: "Prior Month Agent Data", color: "#d97706", current: priorSheetUrl, placeholder: "Optional — paste Prior Month CSV URL" },
+              { key: "priorGoals", label: "Prior Month Goals", color: "#8b5cf6", current: priorGoalsSheetUrl, placeholder: "Optional — paste Prior Month Goals CSV URL" },
             ].map(({ key, label, color, current, placeholder }) => (
               <div key={key} style={{ marginBottom: "1rem" }}>
                 <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color, letterSpacing: "0.08em", marginBottom: "0.3rem" }}>{label}</div>
@@ -9639,6 +10374,15 @@ export default function App() {
               style={{ background: "transparent", border: "1px solid var(--border-muted)", borderRadius: "var(--radius-sm, 6px)", color: `var(--text-dim)`, padding: "0.3rem 0.45rem", fontSize: "0.75rem", cursor: "pointer", lineHeight: 1 }}>{"\u2715"}</button>
           )}
           <input ref={nhInputRef} type="file" accept=".csv" style={{ display: "none" }} onChange={e => loadFile(e.target.files[0], setNHRaw)} />
+          <button onClick={() => priorGoalsInputRef.current.click()}
+            style={{ background: priorMonthGoalsRaw?"#8b5cf610":"transparent", border: `1px solid ${priorMonthGoalsRaw?"#8b5cf640":`var(--border-muted)`}`, borderRadius: "var(--radius-sm, 6px)", color: priorMonthGoalsRaw?"#8b5cf6":`var(--text-muted)`, padding: "0.3rem 0.65rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", cursor: "pointer", fontWeight: 500 }}>
+            {priorMonthGoalsRaw ? "\u2713 Prior Goals" : "+ Prior Goals"}
+          </button>
+          {priorMonthGoalsRaw && (
+            <button onClick={() => setPriorMonthGoalsRaw(null)} title="Clear saved prior goals"
+              style={{ background: "transparent", border: "1px solid var(--border-muted)", borderRadius: "var(--radius-sm, 6px)", color: `var(--text-dim)`, padding: "0.3rem 0.45rem", fontSize: "0.75rem", cursor: "pointer", lineHeight: 1 }}>{"\u2715"}</button>
+          )}
+          <input ref={priorGoalsInputRef} type="file" accept=".csv" style={{ display: "none" }} onChange={e => loadFile(e.target.files[0], setPriorMonthGoalsRaw)} />
           <div style={{ flex: 1 }} />
           <button onClick={() => { setRawData(null); setSlideIndex(0); setShowToday(false); }}
             style={{ background: "transparent", border: "1px solid var(--border-muted)", borderRadius: "var(--radius-sm, 6px)", color: `var(--text-muted)`, padding: "0.3rem 0.65rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", cursor: "pointer", fontWeight: 500 }}>
@@ -9674,13 +10418,17 @@ export default function App() {
             onNewHiresLoad={setNHRaw}
           />
         ) : isOverview ? (
-          <BusinessOverview perf={perf} onNav={navTo} localAI={localAI} />
+          <BusinessOverview perf={perf} onNav={navTo} localAI={localAI} priorAgents={priorAgents} priorGoalLookup={priorGoalLookup} />
         ) : (slideIndex === 1 + programs.length) ? (
           <CampaignComparisonPanel
             currentAgents={perf.agents}
             onNav={navTo}
             localAI={localAI}
-            priorSheetUrl={priorSheetUrl}
+            priorAgents={priorAgents}
+            priorGoalLookup={priorGoalLookup}
+            priorSheetLoading={priorSheetLoading}
+            setPriorRaw={setPriorMonthRaw}
+            setPriorGoalsRaw={setPriorMonthGoalsRaw}
           />
         ) : program ? (
           <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -9723,6 +10471,7 @@ export default function App() {
             onNav={navTo}
             allAgents={perf.agents}
             localAI={localAI}
+            priorAgents={priorAgents}
           />
             </div>
           </div>
