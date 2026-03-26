@@ -8647,6 +8647,17 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
   });
   const [codeDropOpen,  setCodeDropOpen]  = useState(false);
 
+  // Active agents tracking: store agent→hours from previous load.
+  // An agent is "active" if their hours increased between refreshes (still dialing).
+  const [prevAgentHours, _setPrevAgentHours] = useState(() => {
+    try { const s = localStorage.getItem("today_prev_agent_hours"); return s ? JSON.parse(s) : {}; } catch(e) { return {}; }
+  });
+  const setPrevAgentHours = useCallback(map => {
+    _setPrevAgentHours(map);
+    try { localStorage.setItem("today_prev_agent_hours", JSON.stringify(map)); } catch(e) {}
+  }, []);
+  const [activeOnly, setActiveOnly] = useState(false);
+
   // Persist code selection to localStorage whenever it changes
   useEffect(() => {
     try {
@@ -8692,6 +8703,15 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
       if (!Array.isArray(otm)) throw new Error("Unexpected response format");
       const cMap = {};
       cArr.forEach(c => { cMap[String(c.cod)] = c.nam; });
+      // Snapshot current agent→hours before replacing data (for active detection)
+      if (raw && Array.isArray(raw)) {
+        const hoursMap = {};
+        raw.forEach(r => {
+          const name = (r.agt || "").trim();
+          if (name) hoursMap[name] = (hoursMap[name] || 0) + (Number(r.hrs) || 0);
+        });
+        if (Object.keys(hoursMap).length > 0) setPrevAgentHours(hoursMap);
+      }
       setCodes(cMap);
       setRaw(otm);
       setLastRefresh(new Date());
@@ -8709,6 +8729,14 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
     try {
       const parsed = JSON.parse(pasteText.trim());
       if (!Array.isArray(parsed)) throw new Error("Expected a JSON array — make sure you copied the full page content.");
+      if (raw && Array.isArray(raw)) {
+        const hoursMap = {};
+        raw.forEach(r => {
+          const name = (r.agt || "").trim();
+          if (name) hoursMap[name] = (hoursMap[name] || 0) + (Number(r.hrs) || 0);
+        });
+        if (Object.keys(hoursMap).length > 0) setPrevAgentHours(hoursMap);
+      }
       setRaw(parsed);
       setLastRefresh(new Date());
       setPasteMode(false);
@@ -8824,6 +8852,22 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
         : null;
       return { ...a, effectiveGoals, sphGoal, pctToGoal, quartile: hist?.quartile || null, jobType: a.job, ...deriveHsdXm(a.products) };
     });
+    // ── Active agent detection: hours increased since last refresh ─────────
+    const hasPrevHours = Object.keys(prevAgentHours).length > 0;
+    const activeAgentNames = new Set();
+    if (hasPrevHours) {
+      agents.forEach(a => {
+        const prevHrs = prevAgentHours[a.name] || 0;
+        if (a.hrs > prevHrs) activeAgentNames.add(a.name);
+      });
+    }
+    const allAgentCount = agents.length;
+    const activeAgentCount = hasPrevHours ? activeAgentNames.size : agents.length;
+
+    // Filter to active-only when toggled (applied to agents, agentsByJob, and raw rows for programs)
+    const displayAgents = activeOnly && hasPrevHours ? agents.filter(a => activeAgentNames.has(a.name)) : agents;
+    const displayAgentsByJob = activeOnly && hasPrevHours ? agentsByJob.filter(a => activeAgentNames.has(a.name)) : agentsByJob;
+    const displayNames = new Set(displayAgents.map(a => a.name));
     const todayNames = new Set(agents.map(a => a.name));
 
     // ── Attendance analysis — split by region ───────────────────────────────
@@ -8853,9 +8897,12 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
     // (e.g. SD-Xfinity + BZ) would have ALL their hours mis-attributed to
     // whichever region processed last. We must sum hours at the row level so
     // each row's hours land in that row's region.
+    const displayFiltered = activeOnly && hasPrevHours
+      ? filtered.filter(row => displayNames.has((row.agt || "").trim()))
+      : filtered;
     const byReg = {};
     const byRegAgentSets = {}; // reg → Set<agentName> for unique head count
-    filtered.forEach(row => {
+    displayFiltered.forEach(row => {
       const r  = fixReg(row.reg);
       if (!VALID_REGIONS.has(r)) return;
       const nm = (row.agt || "").trim();
@@ -8886,7 +8933,7 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
 
     // ── By Location (kept for legacy pulse cards) ────────────────────────────
     const byLoc = {};
-    agents.forEach(a => {
+    displayAgents.forEach(a => {
       const l = a.loc;
       if (!byLoc[l]) byLoc[l] = { count: 0, hrs: 0, goals: 0 };
       byLoc[l].count++;
@@ -8896,7 +8943,7 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
 
     // ── By program/group — with % to goal via goalLookup ────────────────────
     const grpMap = {};
-    filtered.forEach(row => {
+    displayFiltered.forEach(row => {
       const g       = row.grp || "Unknown";
       const regNorm = fixReg(row.reg);
       const jobCode = (row.job || "").trim();
@@ -8952,30 +8999,31 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
     }).sort((a, b) => b.hrs - a.hrs);
 
     // ── Unique regions for site filter ──────────────────────────────────────
-    const uniqueRegs = [...new Set(agents.map(a => a.reg))].sort();
+    const uniqueRegs = [...new Set(displayAgents.map(a => a.reg))].sort();
 
     // ── Product mix ─────────────────────────────────────────────────────────
     const productTotals = {};
-    agents.forEach(a => {
+    displayAgents.forEach(a => {
       Object.entries(a.products).forEach(([k, v]) => {
         productTotals[k] = (productTotals[k] || 0) + v;
       });
     });
 
     // ── Collect all unique product codes for dynamic columns ─────────────
-    const allProductCodes = [...new Set(agents.flatMap(a => Object.keys(a.products)))].sort();
+    const allProductCodes = [...new Set(displayAgents.flatMap(a => Object.keys(a.products)))].sort();
 
     return {
-      agents, agentsByJob,
-      totalHrs:   agents.reduce((s,a) => s + a.hrs,   0),
-      totalGoals: agents.reduce((s,a) => s + a.effectiveGoals,  0),
-      totalSal:   agents.reduce((s,a) => s + a.sal,    0),
-      totalRgu:   agents.reduce((s,a) => s + a.rgu,    0),
-      presentCount: todayNames.size,
+      agents: displayAgents, agentsByJob: displayAgentsByJob,
+      totalHrs:   displayAgents.reduce((s,a) => s + a.hrs,   0),
+      totalGoals: displayAgents.reduce((s,a) => s + a.effectiveGoals,  0),
+      totalSal:   displayAgents.reduce((s,a) => s + a.sal,    0),
+      totalRgu:   displayAgents.reduce((s,a) => s + a.rgu,    0),
+      presentCount: displayAgents.length,
+      activeCount: activeAgentCount, allCount: allAgentCount,
       absent: validAbsent, newFaces, absentByRegion,
       byLoc, byReg, programs, productTotals, uniqueRegs, allProductCodes,
     };
-  }, [raw, recentAgentNames, historicalAgentMap, goalLookup]);
+  }, [raw, recentAgentNames, historicalAgentMap, goalLookup, activeOnly, prevAgentHours]);
 
   const sortedAgents = useMemo(() => {
     if (!d) return [];
@@ -9191,10 +9239,34 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
         </button>
       </div>
 
-      {/* ── Pulse cards ── */}
+      {/* ── Active/All toggle + Pulse cards ── */}
+      {(() => {
+        const tBtnBase = { padding: "0.3rem 0.7rem", border: "none", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", cursor: "pointer", letterSpacing: "0.03em" };
+        const activeToggle = (
+          <div style={{ display: "inline-flex", borderRadius: "var(--radius-sm, 6px)", border: "1px solid var(--border)", overflow: "hidden" }}>
+            <button onClick={() => setActiveOnly(false)}
+              style={{ ...tBtnBase, fontWeight: activeOnly ? 400 : 700, background: !activeOnly ? "#16a34a18" : "transparent", color: !activeOnly ? "#16a34a" : `var(--text-dim)` }}>
+              All Agents{d.allCount != null ? ` (${d.allCount})` : ""}
+            </button>
+            <button onClick={() => setActiveOnly(true)}
+              style={{ ...tBtnBase, borderLeft: "1px solid var(--border)", fontWeight: activeOnly ? 700 : 400, background: activeOnly ? "#d9770618" : "transparent", color: activeOnly ? "#d97706" : `var(--text-dim)` }}>
+              Active{d.activeCount != null && Object.keys(prevAgentHours).length > 0 ? ` (${d.activeCount})` : ""}
+            </button>
+          </div>
+        );
+        return (
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: activeOnly ? "#d97706" : `var(--text-faint)`, letterSpacing: "0.08em" }}>
+              {activeOnly ? "Showing agents whose hours increased since last refresh (currently dialing)" : "Showing all agents with data today"}
+              {Object.keys(prevAgentHours).length === 0 && <span style={{ color: `var(--text-faint)` }}> — needs one refresh cycle to detect active</span>}
+            </div>
+            {activeToggle}
+          </div>
+        );
+      })()}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "0.75rem", marginBottom: "1.5rem" }}>
         {[
-          { v: d.presentCount,           l: "On Floor",    sub: `${d.absent.length} absent · ${d.newFaces.length} new`, c: "#16a34a" },
+          { v: d.presentCount,           l: activeOnly ? "Active" : "On Floor", sub: `${d.absent.length} absent · ${d.newFaces.length} new`, c: "#16a34a" },
           { v: fmt(d.totalHrs, 1),        l: "Hours Today", sub: `${fmt(d.totalHrs/Math.max(d.presentCount,1), 2)} avg/agent`,  c: "#6366f1" },
           { v: d.totalGoals,              l: "Sales Today", sub: d.totalGoals > 0 ? `${fmt(d.totalHrs > 0 ? d.totalGoals/d.totalHrs : 0, 3)} GPH pace` : "no sales yet", c: "#d97706" },
           { v: d.totalRgu || "—",         l: "RGU",         sub: "today total",  c: "#2563eb" },
@@ -9400,9 +9472,21 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
 
       {/* ── Programs breakdown ── */}
       <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem", marginBottom: "1.25rem" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem", flexWrap: "wrap", gap: "0.5rem" }}>
           <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase" }}>Performance by Campaign · by Site</div>
-          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-faint)` }}>click headers to sort · site tabs to filter</div>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+            <div style={{ display: "inline-flex", borderRadius: "var(--radius-sm, 6px)", border: "1px solid var(--border)", overflow: "hidden" }}>
+              <button onClick={() => setActiveOnly(false)}
+                style={{ padding: "0.25rem 0.6rem", border: "none", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", cursor: "pointer", fontWeight: activeOnly ? 400 : 700, background: !activeOnly ? "#16a34a18" : "transparent", color: !activeOnly ? "#16a34a" : `var(--text-dim)` }}>
+                All ({d.allCount})
+              </button>
+              <button onClick={() => setActiveOnly(true)}
+                style={{ padding: "0.25rem 0.6rem", border: "none", borderLeft: "1px solid var(--border)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", cursor: "pointer", fontWeight: activeOnly ? 700 : 400, background: activeOnly ? "#d9770618" : "transparent", color: activeOnly ? "#d97706" : `var(--text-dim)` }}>
+                Active{Object.keys(prevAgentHours).length > 0 ? ` (${d.activeCount})` : ""}
+              </button>
+            </div>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: `var(--text-faint)` }}>sort · filter by site</div>
+          </div>
         </div>
         {/* Site drill-down tabs */}
         {(() => {
@@ -9684,11 +9768,23 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
 
       {/* ── Agent leaderboard ── */}
       <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem", flexWrap: "wrap", gap: "0.5rem" }}>
           <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase" }}>
-            Agent Leaderboard · {sortedAgents.length} {lbRegion === "All" ? (lbJob ? `in ${lbJob}` : "active today") : `in ${lbRegion}`}{lbJob && lbRegion !== "All" ? ` · ${lbJob}` : ""}
+            Agent Leaderboard · {sortedAgents.length} {lbRegion === "All" ? (lbJob ? `in ${lbJob}` : (activeOnly ? "active now" : "today")) : `in ${lbRegion}`}{lbJob && lbRegion !== "All" ? ` · ${lbJob}` : ""}
           </div>
-          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-faint)` }}>click headers to sort</div>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+            <div style={{ display: "inline-flex", borderRadius: "var(--radius-sm, 6px)", border: "1px solid var(--border)", overflow: "hidden" }}>
+              <button onClick={() => setActiveOnly(false)}
+                style={{ padding: "0.25rem 0.6rem", border: "none", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", cursor: "pointer", fontWeight: activeOnly ? 400 : 700, background: !activeOnly ? "#16a34a18" : "transparent", color: !activeOnly ? "#16a34a" : `var(--text-dim)` }}>
+                All ({d.allCount})
+              </button>
+              <button onClick={() => setActiveOnly(true)}
+                style={{ padding: "0.25rem 0.6rem", border: "none", borderLeft: "1px solid var(--border)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", cursor: "pointer", fontWeight: activeOnly ? 700 : 400, background: activeOnly ? "#d9770618" : "transparent", color: activeOnly ? "#d97706" : `var(--text-dim)` }}>
+                Active{Object.keys(prevAgentHours).length > 0 ? ` (${d.activeCount})` : ""}
+              </button>
+            </div>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: `var(--text-faint)` }}>sort by headers</div>
+          </div>
         </div>
         {/* Region selector */}
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", marginBottom: "0.5rem" }}>
