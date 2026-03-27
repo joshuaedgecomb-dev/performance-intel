@@ -8683,7 +8683,7 @@ function TVMode({ d, codes, doFetch, lastRefresh, onExit }) {
 
     // Per-campaign slides (exclude Spanish Callback)
     const grpTotals = {};
-    sitePrograms.filter(p => !(p.grp || "").toLowerCase().includes("spanish callback")).forEach(p => {
+    sitePrograms.filter(p => !/(spanish callback|\\bfeb\\b|\\bmar\\b)/i.test(p.grp || "")).forEach(p => {
       if (!grpTotals[p.grp]) grpTotals[p.grp] = { grp: p.grp, hrs: 0, goals: 0, rgu: 0, hsd: 0, xm: 0, agents: new Set(), pctSum: 0, pctCount: 0 };
       const g = grpTotals[p.grp];
       g.hrs += p.hrs; g.goals += p.effectiveGoals; g.rgu += p.rgu;
@@ -8702,12 +8702,12 @@ function TVMode({ d, codes, doFetch, lastRefresh, onExit }) {
       s.push({ type: "campaign", label: g.grp, ...g, agentCount: g.agents.size,
         pctToGoal: g.pctCount > 0 ? g.pctSum / g.pctCount : null,
         bothSites, comparison: bothSites ? campaignMap[g.grp].sites : null,
-        topAgents: campAgents.slice(0, 10), siteName });
+        topAgents: campAgents.slice(0, 5), siteName });
       // Slide 2 for shared campaigns: stats grid + leaderboard
       if (bothSites) {
         s.push({ type: "campaign-detail", label: g.grp, ...g, agentCount: g.agents.size,
           pctToGoal: g.pctCount > 0 ? g.pctSum / g.pctCount : null,
-          topAgents: campAgents.slice(0, 12), siteName: null });
+          topAgents: campAgents.slice(0, 6), siteName: null });
       }
     });
 
@@ -8781,7 +8781,7 @@ function TVMode({ d, codes, doFetch, lastRefresh, onExit }) {
 
     if (slide.type === "overview") {
       // Aggregate programs by name
-      const progRows = slide.programs.filter(p => !(p.grp || "").toLowerCase().includes("spanish callback")).sort((a, b) => b.hrs - a.hrs).reduce((acc, p) => {
+      const progRows = slide.programs.filter(p => !/(spanish callback|\\bfeb\\b|\\bmar\\b)/i.test(p.grp || "")).sort((a, b) => b.hrs - a.hrs).reduce((acc, p) => {
         const existing = acc.find(x => x.grp === p.grp);
         if (existing) { existing.hrs += p.hrs; existing.goals += p.effectiveGoals; existing.rgu += p.rgu; existing.hsd += p.hsd || 0; existing.xm += p.xml || 0; p.agts.forEach(n => existing._agents.add(n)); if (p.pctToGoal !== null) { existing._pctSum += p.pctToGoal * p.agentCount; existing._pctN += p.agentCount; } }
         else acc.push({ grp: p.grp, hrs: p.hrs, goals: p.effectiveGoals, rgu: p.rgu, hsd: p.hsd || 0, xm: p.xml || 0, _agents: new Set(p.agts), _pctSum: p.pctToGoal !== null ? p.pctToGoal * p.agentCount : 0, _pctN: p.pctToGoal !== null ? p.agentCount : 0 });
@@ -8908,18 +8908,18 @@ function TVMode({ d, codes, doFetch, lastRefresh, onExit }) {
           </div>
 
           {/* Right: agent leaderboard */}
-          <div style={{ background: `var(--bg-tertiary)`, borderRadius: "var(--radius-lg, 16px)", padding: "1.5rem", border: `1px solid var(--border)`, overflow: "auto" }}>
-            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "clamp(0.8rem, 1.2vw, 1rem)", color: `var(--text-muted)`, letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 700, marginBottom: "1rem" }}>
+          <div style={{ background: `var(--bg-tertiary)`, borderRadius: "var(--radius-lg, 16px)", padding: "2rem", border: `1px solid var(--border)`, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "clamp(1.1rem, 2vw, 1.6rem)", color: `var(--text-muted)`, letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 700, marginBottom: "1.25rem" }}>
               {hasSales ? "Top Agents" : "Agents on Floor"}
             </div>
             {topAgents.length === 0 ? (
-              <div style={{ color: `var(--text-faint)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem" }}>No agent data yet</div>
+              <div style={{ color: `var(--text-faint)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "1.2rem" }}>No agent data yet</div>
             ) : (
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr style={{ borderBottom: `2px solid var(--border)` }}>
                     {["","Agent","Hrs",hasSales ? "Sales" : "", hasSales ? "GPH" : ""].filter(Boolean).map((h, i) => (
-                      <th key={h || i} style={{ padding: "0.4rem 0.6rem", textAlign: i <= 1 ? "left" : "right", color: `var(--text-faint)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "clamp(0.7rem, 1vw, 0.85rem)", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em" }}>{h}</th>
+                      <th key={h || i} style={{ padding: "0.6rem 0.75rem", textAlign: i <= 1 ? "left" : "right", color: `var(--text-faint)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "clamp(1rem, 1.5vw, 1.3rem)", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em" }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -8929,11 +8929,11 @@ function TVMode({ d, codes, doFetch, lastRefresh, onExit }) {
                     const rank = hasSales ? (i === 0 ? "\uD83E\uDD47" : i === 1 ? "\uD83E\uDD48" : i === 2 ? "\uD83E\uDD49" : `${i + 1}`) : `${i + 1}`;
                     return (
                       <tr key={a.name} style={{ borderBottom: `1px solid var(--border)`, background: hasSales && i < 3 ? `var(--bg-secondary)` : "transparent" }}>
-                        <td style={{ padding: "0.5rem 0.4rem", fontSize: "clamp(0.9rem, 1.2vw, 1.1rem)", textAlign: "center", width: "2rem" }}>{rank}</td>
-                        <td style={{ padding: "0.5rem 0.6rem", color: `var(--text-warm)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "clamp(0.85rem, 1.1vw, 1.05rem)", fontWeight: 600 }}>{a.name}</td>
-                        <td style={{ padding: "0.5rem 0.6rem", color: "#6366f1", fontFamily: "var(--font-data, monospace)", fontSize: "clamp(0.85rem, 1.1vw, 1.05rem)", textAlign: "right" }}>{fmt(a.hrs, 1)}</td>
-                        {hasSales && <td style={{ padding: "0.5rem 0.6rem", color: "#d97706", fontFamily: "var(--font-data, monospace)", fontSize: "clamp(0.85rem, 1.1vw, 1.05rem)", textAlign: "right", fontWeight: 700 }}>{a.effectiveGoals}</td>}
-                        {hasSales && <td style={{ padding: "0.5rem 0.6rem", color: "#16a34a", fontFamily: "var(--font-data, monospace)", fontSize: "clamp(0.85rem, 1.1vw, 1.05rem)", textAlign: "right", fontWeight: 600 }}>{aGph.toFixed(3)}</td>}
+                        <td style={{ padding: "0.75rem 0.6rem", fontSize: "clamp(1.3rem, 2vw, 1.8rem)", textAlign: "center", width: "3rem" }}>{rank}</td>
+                        <td style={{ padding: "0.75rem 0.75rem", color: `var(--text-warm)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "clamp(1.2rem, 2vw, 1.7rem)", fontWeight: 600 }}>{a.name}</td>
+                        <td style={{ padding: "0.75rem 0.75rem", color: "#6366f1", fontFamily: "var(--font-data, monospace)", fontSize: "clamp(1.2rem, 2vw, 1.7rem)", textAlign: "right" }}>{fmt(a.hrs, 1)}</td>
+                        {hasSales && <td style={{ padding: "0.75rem 0.75rem", color: "#d97706", fontFamily: "var(--font-data, monospace)", fontSize: "clamp(1.2rem, 2vw, 1.7rem)", textAlign: "right", fontWeight: 700 }}>{a.effectiveGoals}</td>}
+                        {hasSales && <td style={{ padding: "0.75rem 0.75rem", color: "#16a34a", fontFamily: "var(--font-data, monospace)", fontSize: "clamp(1.2rem, 2vw, 1.7rem)", textAlign: "right", fontWeight: 600 }}>{aGph.toFixed(3)}</td>}
                       </tr>
                     );
                   })}
@@ -8976,18 +8976,18 @@ function TVMode({ d, codes, doFetch, lastRefresh, onExit }) {
           </div>
 
           {/* Right: agent leaderboard */}
-          <div style={{ background: `var(--bg-tertiary)`, borderRadius: "var(--radius-lg, 16px)", padding: "1.75rem", border: `1px solid var(--border)`, overflow: "auto", display: "flex", flexDirection: "column" }}>
-            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "clamp(0.9rem, 1.3vw, 1.15rem)", color: `var(--text-muted)`, letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 700, marginBottom: "1.25rem" }}>
+          <div style={{ background: `var(--bg-tertiary)`, borderRadius: "var(--radius-lg, 16px)", padding: "2rem", border: `1px solid var(--border)`, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "clamp(1.1rem, 2vw, 1.6rem)", color: `var(--text-muted)`, letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 700, marginBottom: "1.25rem" }}>
               {hasSales ? "Top Agents" : "Agents on Floor"}
             </div>
             {topAgents.length === 0 ? (
-              <div style={{ color: `var(--text-faint)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "1rem" }}>No agent data yet</div>
+              <div style={{ color: `var(--text-faint)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "1.2rem" }}>No agent data yet</div>
             ) : (
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr style={{ borderBottom: `2px solid var(--border)` }}>
                     {["","Agent","Hrs",hasSales ? "Sales" : "", hasSales ? "GPH" : ""].filter(Boolean).map((h, i) => (
-                      <th key={h || i} style={{ padding: "0.5rem 0.75rem", textAlign: i <= 1 ? "left" : "right", color: `var(--text-faint)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "clamp(0.8rem, 1.1vw, 1rem)", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em" }}>{h}</th>
+                      <th key={h || i} style={{ padding: "0.6rem 0.75rem", textAlign: i <= 1 ? "left" : "right", color: `var(--text-faint)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "clamp(1rem, 1.5vw, 1.3rem)", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em" }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -8997,11 +8997,11 @@ function TVMode({ d, codes, doFetch, lastRefresh, onExit }) {
                     const rank = hasSales ? (i === 0 ? "\uD83E\uDD47" : i === 1 ? "\uD83E\uDD48" : i === 2 ? "\uD83E\uDD49" : `${i + 1}`) : `${i + 1}`;
                     return (
                       <tr key={a.name} style={{ borderBottom: `1px solid var(--border)`, background: hasSales && i < 3 ? `var(--bg-secondary)` : "transparent" }}>
-                        <td style={{ padding: "0.6rem 0.5rem", fontSize: "clamp(1rem, 1.4vw, 1.3rem)", textAlign: "center", width: "2.5rem" }}>{rank}</td>
-                        <td style={{ padding: "0.6rem 0.75rem", color: `var(--text-warm)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "clamp(0.95rem, 1.3vw, 1.2rem)", fontWeight: 600 }}>{a.name}</td>
-                        <td style={{ padding: "0.6rem 0.75rem", color: "#6366f1", fontFamily: "var(--font-data, monospace)", fontSize: "clamp(0.95rem, 1.3vw, 1.2rem)", textAlign: "right" }}>{fmt(a.hrs, 1)}</td>
-                        {hasSales && <td style={{ padding: "0.6rem 0.75rem", color: "#d97706", fontFamily: "var(--font-data, monospace)", fontSize: "clamp(0.95rem, 1.3vw, 1.2rem)", textAlign: "right", fontWeight: 700 }}>{a.effectiveGoals}</td>}
-                        {hasSales && <td style={{ padding: "0.6rem 0.75rem", color: "#16a34a", fontFamily: "var(--font-data, monospace)", fontSize: "clamp(0.95rem, 1.3vw, 1.2rem)", textAlign: "right", fontWeight: 600 }}>{aGph.toFixed(3)}</td>}
+                        <td style={{ padding: "0.75rem 0.6rem", fontSize: "clamp(1.3rem, 2vw, 1.8rem)", textAlign: "center", width: "3rem" }}>{rank}</td>
+                        <td style={{ padding: "0.75rem 0.75rem", color: `var(--text-warm)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "clamp(1.2rem, 2vw, 1.7rem)", fontWeight: 600 }}>{a.name}</td>
+                        <td style={{ padding: "0.75rem 0.75rem", color: "#6366f1", fontFamily: "var(--font-data, monospace)", fontSize: "clamp(1.2rem, 2vw, 1.7rem)", textAlign: "right" }}>{fmt(a.hrs, 1)}</td>
+                        {hasSales && <td style={{ padding: "0.75rem 0.75rem", color: "#d97706", fontFamily: "var(--font-data, monospace)", fontSize: "clamp(1.2rem, 2vw, 1.7rem)", textAlign: "right", fontWeight: 700 }}>{a.effectiveGoals}</td>}
+                        {hasSales && <td style={{ padding: "0.75rem 0.75rem", color: "#16a34a", fontFamily: "var(--font-data, monospace)", fontSize: "clamp(1.2rem, 2vw, 1.7rem)", textAlign: "right", fontWeight: 600 }}>{aGph.toFixed(3)}</td>}
                       </tr>
                     );
                   })}
