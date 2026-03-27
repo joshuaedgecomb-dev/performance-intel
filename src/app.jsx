@@ -8744,12 +8744,14 @@ function TVMode({ d, codes, doFetch, lastRefresh, onExit }) {
     return s;
   }, [d, tvSite, campaignMap]);
 
+  const slidesLenRef = useRef(slides.length);
+  slidesLenRef.current = slides.length;
   useEffect(() => { setSlideIdx(0); }, [tvSite]);
   useEffect(() => {
     if (slides.length <= 1) return;
-    const timer = setInterval(() => setSlideIdx(i => (i + 1) % slides.length), CYCLE_MS);
+    const timer = setInterval(() => setSlideIdx(i => (i + 1) % slidesLenRef.current), CYCLE_MS);
     return () => clearInterval(timer);
-  }, [slides.length]);
+  }, []);
   useEffect(() => {
     const interval = setInterval(doFetch, 5 * 60 * 1000);
     return () => clearInterval(interval);
