@@ -8606,6 +8606,486 @@ const deriveHsdXm = (products) => ({
   xml: Number(products[NEW_MOBILE_CODE]) || 0,
 });
 
+// ── TVMode — Screensaver for TV displays ─────────────────────────────────────
+// Full-screen auto-rotating view using current theme, site filter, campaign comparison.
+function TVMode({ d, codes, doFetch, lastRefresh, onExit }) {
+  const [slideIdx, setSlideIdx] = useState(0);
+  const [tvSite, setTvSite] = useState("ALL");
+  const autoScrollRef = useRef(null);
+
+  // Auto-scroll any overflow container when slide changes
+  useEffect(() => {
+    const el = autoScrollRef.current;
+    if (!el) return;
+    el.scrollTop = 0;
+    const scrollMax = el.scrollHeight - el.clientHeight;
+    if (scrollMax <= 0) return; // no overflow
+    const pauseMs = 2000; // pause at top and bottom
+    const scrollDuration = CYCLE_MS - pauseMs * 2;
+    let startTime = null;
+    let phase = "pause-top"; // pause-top → scrolling → pause-bottom
+    let frame;
+    const phaseStart = performance.now();
+    const step = (now) => {
+      if (phase === "pause-top") {
+        if (now - phaseStart >= pauseMs) { phase = "scrolling"; startTime = now; }
+      } else if (phase === "scrolling") {
+        const elapsed = now - startTime;
+        const pct = Math.min(elapsed / scrollDuration, 1);
+        // ease-in-out
+        const ease = pct < 0.5 ? 2 * pct * pct : 1 - Math.pow(-2 * pct + 2, 2) / 2;
+        el.scrollTop = ease * scrollMax;
+        if (pct >= 1) phase = "done";
+      } else { return; }
+      frame = requestAnimationFrame(step);
+    };
+    frame = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frame);
+  }, [slideIdx]); // ALL | DR | BZ
+  const CYCLE_MS = 12000;
+  const COST_PER_HOUR = 19.77;
+
+  const getSite = (reg) => (reg || "").toUpperCase().includes("XOTM") ? "BZ" : "DR";
+
+  // Group programs by campaign name, with per-site breakdowns
+  const campaignMap = useMemo(() => {
+    if (!d) return {};
+    const map = {};
+    d.programs.forEach(p => {
+      const key = p.grp;
+      if (!map[key]) map[key] = { grp: key, sites: {} };
+      const site = getSite(p.reg);
+      if (!map[key].sites[site]) map[key].sites[site] = { hrs: 0, goals: 0, rgu: 0, hsd: 0, xm: 0, agents: new Set(), pctSum: 0, pctCount: 0 };
+      const s = map[key].sites[site];
+      s.hrs += p.hrs; s.goals += p.effectiveGoals; s.rgu += p.rgu;
+      s.hsd += p.hsd || 0; s.xm += p.xml || 0;
+      if (p.pctToGoal !== null && p.pctToGoal !== undefined) { s.pctSum += p.pctToGoal * p.agentCount; s.pctCount += p.agentCount; }
+      p.agts.forEach(n => s.agents.add(n));
+    });
+    return map;
+  }, [d]);
+
+  // Build slides based on site filter
+  const slides = useMemo(() => {
+    if (!d) return [];
+    const s = [];
+    const siteAgents = tvSite === "ALL" ? d.agents : d.agents.filter(a => getSite(a.reg) === tvSite);
+    const sitePrograms = tvSite === "ALL" ? d.programs : d.programs.filter(p => getSite(p.reg) === tvSite);
+
+    // Overview slide
+    const totHrs = siteAgents.reduce((a, x) => a + x.hrs, 0);
+    const totGoals = siteAgents.reduce((a, x) => a + x.effectiveGoals, 0);
+    const totRgu = siteAgents.reduce((a, x) => a + x.rgu, 0);
+    const totHsd = sitePrograms.reduce((a, p) => a + (p.hsd || 0), 0);
+    const totXm = sitePrograms.reduce((a, p) => a + (p.xml || 0), 0);
+    s.push({ type: "overview", label: tvSite === "ALL" ? "Company Overview" : tvSite === "DR" ? "Dominican Republic" : "Belize",
+      agentCount: siteAgents.length, hrs: totHrs, goals: totGoals, rgu: totRgu, hsd: totHsd, xm: totXm, programs: sitePrograms });
+
+    // Per-campaign slides (exclude Spanish Callback)
+    const grpTotals = {};
+    sitePrograms.filter(p => !(p.grp || "").toLowerCase().includes("spanish callback")).forEach(p => {
+      if (!grpTotals[p.grp]) grpTotals[p.grp] = { grp: p.grp, hrs: 0, goals: 0, rgu: 0, hsd: 0, xm: 0, agents: new Set(), pctSum: 0, pctCount: 0 };
+      const g = grpTotals[p.grp];
+      g.hrs += p.hrs; g.goals += p.effectiveGoals; g.rgu += p.rgu;
+      g.hsd += p.hsd || 0; g.xm += p.xml || 0;
+      p.agts.forEach(n => g.agents.add(n));
+      if (p.pctToGoal !== null && p.pctToGoal !== undefined) { g.pctSum += p.pctToGoal * p.agentCount; g.pctCount += p.agentCount; }
+    });
+    Object.values(grpTotals).sort((a, b) => b.hrs - a.hrs).forEach(g => {
+      const bothSites = campaignMap[g.grp] && Object.keys(campaignMap[g.grp].sites).length > 1;
+      const campAgents = siteAgents.filter(a => g.agents.has(a.name))
+        .sort((a, b) => b.effectiveGoals - a.effectiveGoals || b.hrs - a.hrs);
+      // Determine site for single-site campaigns
+      const campSites = [...new Set(sitePrograms.filter(p => p.grp === g.grp).map(p => getSite(p.reg)))];
+      const siteName = campSites.length === 1 ? (campSites[0] === "DR" ? "Dominican Republic" : "Belize") : null;
+      // Slide 1: comparison (shared) or stats+leaderboard (single)
+      s.push({ type: "campaign", label: g.grp, ...g, agentCount: g.agents.size,
+        pctToGoal: g.pctCount > 0 ? g.pctSum / g.pctCount : null,
+        bothSites, comparison: bothSites ? campaignMap[g.grp].sites : null,
+        topAgents: campAgents.slice(0, 10), siteName });
+      // Slide 2 for shared campaigns: stats grid + leaderboard
+      if (bothSites) {
+        s.push({ type: "campaign-detail", label: g.grp, ...g, agentCount: g.agents.size,
+          pctToGoal: g.pctCount > 0 ? g.pctSum / g.pctCount : null,
+          topAgents: campAgents.slice(0, 12), siteName: null });
+      }
+    });
+
+    return s;
+  }, [d, tvSite, campaignMap]);
+
+  useEffect(() => { setSlideIdx(0); }, [tvSite]);
+  useEffect(() => {
+    if (slides.length <= 1) return;
+    const timer = setInterval(() => setSlideIdx(i => (i + 1) % slides.length), CYCLE_MS);
+    return () => clearInterval(timer);
+  }, [slides.length]);
+  useEffect(() => {
+    const interval = setInterval(doFetch, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [doFetch]);
+  useEffect(() => {
+    const handler = e => { if (e.key === "Escape") onExit(); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onExit]);
+
+  if (slides.length === 0) return null;
+  const slide = slides[slideIdx % slides.length];
+  const fmt = (v, dec = 0) => dec > 0 ? Number(v).toFixed(dec) : Math.round(v).toLocaleString();
+  const now = lastRefresh ? new Date(lastRefresh).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+  const cps = (hrs, goals) => `$${(goals > 0 ? (hrs * COST_PER_HOUR) / goals : hrs * COST_PER_HOUR).toFixed(2)}`;
+  const pctFmt = (v) => v !== null && v !== undefined ? `${Math.round(v)}%` : "–";
+  const goalColor = (pct) => pct !== null && pct !== undefined ? (pct >= 100 ? "#16a34a" : pct >= 90 ? "#22c55e" : pct >= 70 ? "#d97706" : pct >= 50 ? "#ea580c" : "#dc2626") : `var(--text-faint)`;
+
+  // Stat card — big number with label
+  const Stat = ({ value, label, color }) => (
+    <div style={{ flex: "1 1 0", textAlign: "center", padding: "1rem 0.5rem" }}>
+      <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "clamp(2.5rem, 5vw, 4.5rem)", color, fontWeight: 800, lineHeight: 1, letterSpacing: "-0.03em" }}>{value}</div>
+      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "clamp(0.7rem, 1.2vw, 0.95rem)", color: `var(--text-muted)`, marginTop: "0.4rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em" }}>{label}</div>
+    </div>
+  );
+
+  // Site comparison column
+  const SiteCol = ({ data, label, color }) => {
+    if (!data) return null;
+    const gph = data.hrs > 0 ? data.goals / data.hrs : 0;
+    return (
+      <div style={{ flex: "1 1 0", background: `var(--bg-tertiary)`, borderRadius: "var(--radius-lg, 16px)", padding: "2rem", border: `2px solid ${color}30` }}>
+        <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "clamp(1.5rem, 3vw, 2.2rem)", color, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "1.5rem", textAlign: "center" }}>{label}</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.25rem 2rem" }}>
+          {[
+            { l: "Agents", v: data.agents.size, c: "#16a34a" },
+            { l: "Hours", v: fmt(data.hrs, 1), c: "#6366f1" },
+            { l: "Sales", v: data.goals, c: "#d97706" },
+            { l: "GPH", v: gph.toFixed(3), c: "#16a34a" },
+            { l: "RGU", v: data.rgu || "–", c: "#2563eb" },
+            { l: "HSD", v: data.hsd || "–", c: "#f59e0b" },
+            { l: "XM Lines", v: data.xm || "–", c: "#ec4899" },
+            { l: "Cost/Sale", v: cps(data.hrs, data.goals), c: data.goals > 0 ? "#16a34a" : `var(--text-faint)` },
+            { l: "% to Goal", v: data.pctCount > 0 ? `${Math.round(data.pctSum / data.pctCount)}%` : "–", c: goalColor(data.pctCount > 0 ? data.pctSum / data.pctCount : null) },
+          ].map(({ l, v, c }) => (
+            <div key={l} style={{ textAlign: "center" }}>
+              <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "clamp(2.5rem, 5vw, 4rem)", color: c, fontWeight: 800, lineHeight: 1 }}>{v}</div>
+              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "clamp(0.8rem, 1.2vw, 1.1rem)", color: `var(--text-muted)`, marginTop: "0.35rem", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600 }}>{l}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const renderSlide = () => {
+    const gph = slide.hrs > 0 ? slide.goals / slide.hrs : 0;
+    const pct = slide.pctToGoal;
+
+    if (slide.type === "overview") {
+      // Aggregate programs by name
+      const progRows = slide.programs.filter(p => !(p.grp || "").toLowerCase().includes("spanish callback")).sort((a, b) => b.hrs - a.hrs).reduce((acc, p) => {
+        const existing = acc.find(x => x.grp === p.grp);
+        if (existing) { existing.hrs += p.hrs; existing.goals += p.effectiveGoals; existing.rgu += p.rgu; existing.hsd += p.hsd || 0; existing.xm += p.xml || 0; p.agts.forEach(n => existing._agents.add(n)); if (p.pctToGoal !== null) { existing._pctSum += p.pctToGoal * p.agentCount; existing._pctN += p.agentCount; } }
+        else acc.push({ grp: p.grp, hrs: p.hrs, goals: p.effectiveGoals, rgu: p.rgu, hsd: p.hsd || 0, xm: p.xml || 0, _agents: new Set(p.agts), _pctSum: p.pctToGoal !== null ? p.pctToGoal * p.agentCount : 0, _pctN: p.pctToGoal !== null ? p.agentCount : 0 });
+        return acc;
+      }, []).sort((a, b) => b.hrs - a.hrs);
+
+      const fewCampaigns = progRows.length <= 5;
+      return (
+        <div style={{ display: "flex", flexDirection: fewCampaigns ? "column" : "row", gap: "1.5rem", height: "100%", justifyContent: "center" }}>
+          {/* Stats — top row when few campaigns, left column when many */}
+          <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", flex: fewCampaigns ? "0 0 auto" : "1 1 0" }}>
+            <div style={{ display: "grid", gridTemplateColumns: fewCampaigns ? "repeat(auto-fit, minmax(120px, 1fr))" : "1fr 1fr 1fr", gap: fewCampaigns ? "1rem" : "1.5rem" }}>
+              {[
+                { v: slide.agentCount, l: "On Floor", c: "#16a34a" },
+                { v: fmt(slide.hrs, 1), l: "Hours", c: "#6366f1" },
+                { v: slide.goals, l: "Sales", c: "#d97706" },
+                { v: gph.toFixed(3), l: "GPH", c: goalColor(pct) },
+                { v: slide.rgu || "–", l: "RGU", c: "#2563eb" },
+                { v: cps(slide.hrs, slide.goals), l: "Cost/Sale", c: goalColor(pct) },
+                { v: slide.hsd || "–", l: "HSD", c: "#f59e0b" },
+                { v: slide.xm || "–", l: "XM Lines", c: "#ec4899" },
+                ...(fewCampaigns ? [] : [{ v: progRows.length, l: "Campaigns", c: `var(--text-muted)` }]),
+              ].map(({ v, l, c }) => (
+                <div key={l} style={{ background: `var(--bg-tertiary)`, borderRadius: "var(--radius-lg, 16px)", padding: fewCampaigns ? "1rem 0.5rem" : "1.25rem", textAlign: "center", border: `1px solid ${c}20`, overflow: "hidden" }}>
+                  <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: fewCampaigns ? "clamp(1.5rem, 3vw, 2.5rem)" : "clamp(1.8rem, 3.5vw, 3rem)", color: c, fontWeight: 800, lineHeight: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{v}</div>
+                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "clamp(0.65rem, 0.9vw, 0.82rem)", color: `var(--text-muted)`, marginTop: "0.4rem", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600 }}>{l}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Campaign cards — below when few, right column with auto-scroll when many */}
+          <div ref={autoScrollRef} style={{ overflow: "hidden", position: "relative", flex: fewCampaigns ? "1 1 auto" : "1 1 0", minHeight: 0, display: "flex", flexDirection: "column", justifyContent: fewCampaigns ? "flex-start" : "flex-start", gap: "0.75rem" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+            {progRows.map((p, i) => {
+              const pGph = p.hrs > 0 ? p.goals / p.hrs : 0;
+              const pPct = p._pctN > 0 ? p._pctSum / p._pctN : null;
+              const pctColor = goalColor(pPct);
+              const fs = fewCampaigns;
+              const metrics = [
+                { v: fmt(p.hrs, 1), l: "Hrs", c: "#6366f1" },
+                { v: p.goals, l: "Sales", c: "#d97706" },
+                { v: pGph.toFixed(3), l: "GPH", c: pctColor },
+                { v: p.rgu || "–", l: "RGU", c: "#2563eb" },
+                { v: p.hsd || "–", l: "HSD", c: "#f59e0b" },
+                { v: p.xm || "–", l: "XM", c: "#ec4899" },
+                { v: cps(p.hrs, p.goals), l: "CPS", c: pctColor },
+                { v: pPct !== null ? `${Math.round(pPct)}%` : "–", l: "Goal", c: pctColor },
+              ];
+              return (
+                <div key={i} style={{ background: `var(--bg-tertiary)`, borderRadius: "var(--radius-md, 10px)", padding: fs ? "2rem 2.5rem" : "0.75rem 1rem", border: `1px solid var(--border)`,
+                  display: "grid", gridTemplateColumns: `minmax(${fs ? "10rem" : "8rem"}, ${fs ? "1.5fr" : "2fr"}) repeat(${metrics.length}, 1fr)`, alignItems: "center", gap: fs ? "1.5rem" : "0.5rem" }}>
+                  <div>
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: fs ? "clamp(1.1rem, 1.8vw, 1.5rem)" : "clamp(0.85rem, 1.2vw, 1.1rem)", color: `var(--text-warm)`, fontWeight: 700, lineHeight: 1.2 }}>{p.grp}</div>
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: fs ? "clamp(0.9rem, 1.3vw, 1.15rem)" : "clamp(0.65rem, 0.9vw, 0.8rem)", color: `var(--text-faint)`, marginTop: "0.2rem" }}>{p._agents.size} agents</div>
+                  </div>
+                  {metrics.map(({ v, l, c }) => (
+                    <div key={l} style={{ textAlign: "center" }}>
+                      <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: fs ? "clamp(2.2rem, 3.5vw, 3.5rem)" : "clamp(0.9rem, 1.2vw, 1.15rem)", color: c, fontWeight: 700 }}>{v}</div>
+                      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: fs ? "clamp(0.9rem, 1.3vw, 1.2rem)" : "clamp(0.55rem, 0.7vw, 0.68rem)", color: `var(--text-faint)`, textTransform: "uppercase", letterSpacing: "0.05em" }}>{l}</div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (slide.type === "campaign") {
+      // Shared campaign: headline stats + site comparison
+      if (slide.bothSites && slide.comparison) {
+        return (
+          <div style={{ display: "flex", flexDirection: "column", height: "100%", justifyContent: "center" }}>
+            <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1.5rem", flexWrap: "wrap", justifyContent: "center" }}>
+              <Stat value={slide.agentCount} label="Agents" color="#16a34a" />
+              <Stat value={fmt(slide.hrs, 1)} label="Hours" color="#6366f1" />
+              <Stat value={slide.goals} label="Sales" color="#d97706" />
+              <Stat value={gph.toFixed(3)} label="GPH" color={goalColor(pct)} />
+              <Stat value={slide.rgu || "–"} label="RGU" color="#2563eb" />
+              <Stat value={slide.hsd || "–"} label="HSD" color="#f59e0b" />
+              <Stat value={slide.xm || "–"} label="XM Lines" color="#ec4899" />
+              <Stat value={cps(slide.hrs, slide.goals)} label="Cost/Sale" color={goalColor(pct)} />
+              <Stat value={pctFmt(pct)} label="% to Goal" color={goalColor(pct)} />
+            </div>
+            <div style={{ display: "flex", gap: "1.5rem", flex: 1, minHeight: 0 }}>
+              <SiteCol data={slide.comparison["DR"]} label="Dominican Republic" color="#6366f1" />
+              <SiteCol data={slide.comparison["BZ"]} label="Belize" color="#16a34a" />
+            </div>
+          </div>
+        );
+      }
+
+      // Single-site campaign: two-column layout — big stats left, leaderboard right
+      const topAgents = slide.topAgents || [];
+      const hasSales = slide.goals > 0;
+      return (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2rem", height: "100%" }}>
+          {/* Left: site label + big stat cards */}
+          <div style={{ display: "flex", flexDirection: "column", justifyContent: "center" }}>
+            {slide.siteName && (
+              <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "clamp(1.2rem, 2.5vw, 1.8rem)", color: `var(--text-muted)`, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "1.25rem", textAlign: "center" }}>{slide.siteName}</div>
+            )}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "1.5rem" }}>
+              {[
+                { v: slide.agentCount, l: "Agents", c: "#16a34a" },
+                { v: fmt(slide.hrs, 1), l: "Hours", c: "#6366f1" },
+                { v: slide.goals, l: "Sales", c: "#d97706" },
+                { v: gph.toFixed(3), l: "GPH", c: goalColor(pct) },
+                { v: slide.rgu || "–", l: "RGU", c: "#2563eb" },
+                { v: cps(slide.hrs, slide.goals), l: "Cost/Sale", c: goalColor(pct) },
+                { v: slide.hsd || "–", l: "HSD", c: "#f59e0b" },
+                { v: slide.xm || "–", l: "XM Lines", c: "#ec4899" },
+                { v: pctFmt(pct), l: "% to Goal", c: goalColor(pct) },
+              ].map(({ v, l, c }) => (
+                <div key={l} style={{ background: `var(--bg-tertiary)`, borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem", textAlign: "center", border: `1px solid ${c}20` }}>
+                  <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "clamp(2rem, 4vw, 3.5rem)", color: c, fontWeight: 800, lineHeight: 1 }}>{v}</div>
+                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "clamp(0.7rem, 1vw, 0.9rem)", color: `var(--text-muted)`, marginTop: "0.4rem", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600 }}>{l}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Right: agent leaderboard */}
+          <div style={{ background: `var(--bg-tertiary)`, borderRadius: "var(--radius-lg, 16px)", padding: "1.5rem", border: `1px solid var(--border)`, overflow: "auto" }}>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "clamp(0.8rem, 1.2vw, 1rem)", color: `var(--text-muted)`, letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 700, marginBottom: "1rem" }}>
+              {hasSales ? "Top Agents" : "Agents on Floor"}
+            </div>
+            {topAgents.length === 0 ? (
+              <div style={{ color: `var(--text-faint)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem" }}>No agent data yet</div>
+            ) : (
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ borderBottom: `2px solid var(--border)` }}>
+                    {["","Agent","Hrs",hasSales ? "Sales" : "", hasSales ? "GPH" : ""].filter(Boolean).map((h, i) => (
+                      <th key={h || i} style={{ padding: "0.4rem 0.6rem", textAlign: i <= 1 ? "left" : "right", color: `var(--text-faint)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "clamp(0.7rem, 1vw, 0.85rem)", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {topAgents.map((a, i) => {
+                    const aGph = a.hrs > 0 ? a.effectiveGoals / a.hrs : 0;
+                    const rank = hasSales ? (i === 0 ? "\uD83E\uDD47" : i === 1 ? "\uD83E\uDD48" : i === 2 ? "\uD83E\uDD49" : `${i + 1}`) : `${i + 1}`;
+                    return (
+                      <tr key={a.name} style={{ borderBottom: `1px solid var(--border)`, background: hasSales && i < 3 ? `var(--bg-secondary)` : "transparent" }}>
+                        <td style={{ padding: "0.5rem 0.4rem", fontSize: "clamp(0.9rem, 1.2vw, 1.1rem)", textAlign: "center", width: "2rem" }}>{rank}</td>
+                        <td style={{ padding: "0.5rem 0.6rem", color: `var(--text-warm)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "clamp(0.85rem, 1.1vw, 1.05rem)", fontWeight: 600 }}>{a.name}</td>
+                        <td style={{ padding: "0.5rem 0.6rem", color: "#6366f1", fontFamily: "var(--font-data, monospace)", fontSize: "clamp(0.85rem, 1.1vw, 1.05rem)", textAlign: "right" }}>{fmt(a.hrs, 1)}</td>
+                        {hasSales && <td style={{ padding: "0.5rem 0.6rem", color: "#d97706", fontFamily: "var(--font-data, monospace)", fontSize: "clamp(0.85rem, 1.1vw, 1.05rem)", textAlign: "right", fontWeight: 700 }}>{a.effectiveGoals}</td>}
+                        {hasSales && <td style={{ padding: "0.5rem 0.6rem", color: "#16a34a", fontFamily: "var(--font-data, monospace)", fontSize: "clamp(0.85rem, 1.1vw, 1.05rem)", textAlign: "right", fontWeight: 600 }}>{aGph.toFixed(3)}</td>}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    if (slide.type === "campaign-detail") {
+      const topAgents = slide.topAgents || [];
+      const hasSales = slide.goals > 0;
+      // Determine combined site label
+      const detailSiteLabel = tvSite === "DR" ? "Dominican Republic" : tvSite === "BZ" ? "Belize" : "All Sites";
+      return (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "2.5rem", height: "100%" }}>
+          {/* Left: site label + big stat cards */}
+          <div style={{ display: "flex", flexDirection: "column", justifyContent: "center" }}>
+            <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "clamp(1.3rem, 2.5vw, 2rem)", color: `var(--text-muted)`, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: "1.5rem", textAlign: "center" }}>{detailSiteLabel}</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "1.75rem" }}>
+              {[
+                { v: slide.agentCount, l: "Agents", c: "#16a34a" },
+                { v: fmt(slide.hrs, 1), l: "Hours", c: "#6366f1" },
+                { v: slide.goals, l: "Sales", c: "#d97706" },
+                { v: gph.toFixed(3), l: "GPH", c: goalColor(pct) },
+                { v: slide.rgu || "–", l: "RGU", c: "#2563eb" },
+                { v: cps(slide.hrs, slide.goals), l: "Cost/Sale", c: goalColor(pct) },
+                { v: slide.hsd || "–", l: "HSD", c: "#f59e0b" },
+                { v: slide.xm || "–", l: "XM Lines", c: "#ec4899" },
+                { v: pctFmt(pct), l: "% to Goal", c: goalColor(pct) },
+              ].map(({ v, l, c }) => (
+                <div key={l} style={{ background: `var(--bg-tertiary)`, borderRadius: "var(--radius-lg, 16px)", padding: "1.5rem", textAlign: "center", border: `1px solid ${c}20` }}>
+                  <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "clamp(2.5rem, 5vw, 4.5rem)", color: c, fontWeight: 800, lineHeight: 1 }}>{v}</div>
+                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "clamp(0.8rem, 1.2vw, 1.1rem)", color: `var(--text-muted)`, marginTop: "0.5rem", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600 }}>{l}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Right: agent leaderboard */}
+          <div style={{ background: `var(--bg-tertiary)`, borderRadius: "var(--radius-lg, 16px)", padding: "1.75rem", border: `1px solid var(--border)`, overflow: "auto", display: "flex", flexDirection: "column" }}>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "clamp(0.9rem, 1.3vw, 1.15rem)", color: `var(--text-muted)`, letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 700, marginBottom: "1.25rem" }}>
+              {hasSales ? "Top Agents" : "Agents on Floor"}
+            </div>
+            {topAgents.length === 0 ? (
+              <div style={{ color: `var(--text-faint)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "1rem" }}>No agent data yet</div>
+            ) : (
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ borderBottom: `2px solid var(--border)` }}>
+                    {["","Agent","Hrs",hasSales ? "Sales" : "", hasSales ? "GPH" : ""].filter(Boolean).map((h, i) => (
+                      <th key={h || i} style={{ padding: "0.5rem 0.75rem", textAlign: i <= 1 ? "left" : "right", color: `var(--text-faint)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "clamp(0.8rem, 1.1vw, 1rem)", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {topAgents.map((a, i) => {
+                    const aGph = a.hrs > 0 ? a.effectiveGoals / a.hrs : 0;
+                    const rank = hasSales ? (i === 0 ? "\uD83E\uDD47" : i === 1 ? "\uD83E\uDD48" : i === 2 ? "\uD83E\uDD49" : `${i + 1}`) : `${i + 1}`;
+                    return (
+                      <tr key={a.name} style={{ borderBottom: `1px solid var(--border)`, background: hasSales && i < 3 ? `var(--bg-secondary)` : "transparent" }}>
+                        <td style={{ padding: "0.6rem 0.5rem", fontSize: "clamp(1rem, 1.4vw, 1.3rem)", textAlign: "center", width: "2.5rem" }}>{rank}</td>
+                        <td style={{ padding: "0.6rem 0.75rem", color: `var(--text-warm)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "clamp(0.95rem, 1.3vw, 1.2rem)", fontWeight: 600 }}>{a.name}</td>
+                        <td style={{ padding: "0.6rem 0.75rem", color: "#6366f1", fontFamily: "var(--font-data, monospace)", fontSize: "clamp(0.95rem, 1.3vw, 1.2rem)", textAlign: "right" }}>{fmt(a.hrs, 1)}</td>
+                        {hasSales && <td style={{ padding: "0.6rem 0.75rem", color: "#d97706", fontFamily: "var(--font-data, monospace)", fontSize: "clamp(0.95rem, 1.3vw, 1.2rem)", textAlign: "right", fontWeight: 700 }}>{a.effectiveGoals}</td>}
+                        {hasSales && <td style={{ padding: "0.6rem 0.75rem", color: "#16a34a", fontFamily: "var(--font-data, monospace)", fontSize: "clamp(0.95rem, 1.3vw, 1.2rem)", textAlign: "right", fontWeight: 600 }}>{aGph.toFixed(3)}</td>}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    return null;
+  };
+
+  const siteBtnStyle = (active) => ({
+    padding: "0.3rem 0.85rem", border: "none", borderRadius: 0,
+    fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", cursor: "pointer",
+    fontWeight: active ? 700 : 400, letterSpacing: "0.04em",
+    background: active ? "#d9770620" : "transparent",
+    color: active ? "#d97706" : `var(--text-dim)`,
+  });
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: `var(--bg-primary)`, color: `var(--text-primary)`, fontFamily: "var(--font-ui, Inter, sans-serif)", display: "flex", flexDirection: "column", overflow: "hidden" }}
+      onClick={e => { if (e.detail === 2) onExit(); }}>
+
+      {/* Top bar */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "1rem 2.5rem", borderBottom: `1px solid var(--border)`, flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+          <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#16a34a", animation: "pulse 2s infinite" }} />
+          <span style={{ fontSize: "0.82rem", color: "#16a34a", letterSpacing: "0.15em", textTransform: "uppercase", fontWeight: 600 }}>LIVE</span>
+          <span style={{ fontSize: "0.78rem", color: `var(--text-faint)` }}>updated {now}</span>
+        </div>
+
+        <div style={{ fontSize: "clamp(1.2rem, 2.5vw, 2rem)", color: `var(--text-warm)`, fontWeight: 800, letterSpacing: "-0.02em" }}>{slide.label}</div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+          {/* Site filter */}
+          <div style={{ display: "inline-flex", borderRadius: "var(--radius-sm, 6px)", border: `1px solid var(--border)`, overflow: "hidden" }}>
+            {[["ALL","All"],["DR","DR"],["BZ","BZ"]].map(([k, label]) => (
+              <button key={k} onClick={e => { e.stopPropagation(); setTvSite(k); }} style={siteBtnStyle(tvSite === k)}>{label}</button>
+            ))}
+          </div>
+          {/* Dots */}
+          <div style={{ display: "flex", gap: "0.3rem" }}>
+            {slides.map((_, i) => (
+              <div key={i} onClick={e => { e.stopPropagation(); setSlideIdx(i); }}
+                style={{ width: i === slideIdx % slides.length ? "18px" : "6px", height: "6px", borderRadius: "3px",
+                  background: i === slideIdx % slides.length ? "#d97706" : `var(--border)`, transition: "all 0.3s ease", cursor: "pointer" }} />
+            ))}
+          </div>
+          <button onClick={e => { e.stopPropagation(); onExit(); }}
+            style={{ background: "transparent", border: `1px solid var(--border)`, borderRadius: "6px", color: `var(--text-dim)`, padding: "0.3rem 0.65rem", fontSize: "0.72rem", cursor: "pointer" }}>
+            ESC
+          </button>
+        </div>
+      </div>
+
+      {/* Progress bar */}
+      <div style={{ height: "3px", background: `var(--border)`, flexShrink: 0 }}>
+        <div key={slideIdx} style={{ height: "100%", background: "#d97706", animation: `tvProgress ${CYCLE_MS}ms linear forwards`, width: "0%" }} />
+      </div>
+
+      {/* Slide content — fit to remaining viewport height */}
+      <div style={{ flex: 1, overflow: "hidden", padding: "1.5rem 2.5rem", display: "flex", flexDirection: "column" }}>
+        <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+          {renderSlide()}
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div style={{ padding: "0.6rem 2.5rem", borderTop: `1px solid var(--border)`, display: "flex", justifyContent: "space-between", flexShrink: 0 }}>
+        <span style={{ fontSize: "0.72rem", color: `var(--text-faint)` }}>Performance Intel · TV Mode</span>
+        <span style={{ fontSize: "0.72rem", color: `var(--text-faint)` }}>Double-click or ESC to exit · Click dots to jump</span>
+      </div>
+
+      <style>{`
+        @keyframes tvProgress { from { width: 0%; } to { width: 100%; } }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+      `}</style>
+    </div>
+  );
+}
+
 function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
   const [raw,         setRaw]         = useState(() => {
     try {
@@ -8657,6 +9137,7 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
     try { localStorage.setItem("today_prev_agent_hours", JSON.stringify(map)); } catch(e) {}
   }, []);
   const [activeOnly, setActiveOnly] = useState(false);
+  const [screensaverMode, setScreensaverMode] = useState(false);
 
   // Persist code selection to localStorage whenever it changes
   useEffect(() => {
@@ -9075,14 +9556,25 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
     });
   }, [d, progSortBy, progSortDir, progSiteFilter, bzSiteFilter]);
 
-  // All codes present in today's data (for the selector dropdown)
+  // All codes: from OTM data, omit unnamed unless sold, omit Cox
   const allAvailableCodes = useMemo(() => {
-    if (!d) return [];
-    return [...new Set([
-      ...d.agents.flatMap(a => Object.keys(a.products)),
-      ...d.programs.flatMap(p => Object.keys(p.products || {})),
-    ])].sort((a, b) => Number(a) - Number(b));
-  }, [d]);
+    if (!raw || !Array.isArray(raw) || raw.length === 0) return [];
+    const codeSet = new Set();
+    Object.keys(raw[0]).forEach(k => { if (/^\d+$/.test(k)) codeSet.add(k); });
+    // Codes with actual sales today
+    const soldCodes = new Set();
+    if (d) {
+      d.agents.forEach(a => Object.entries(a.products).forEach(([k, v]) => { if (v > 0) soldCodes.add(k); }));
+      d.programs.forEach(p => Object.entries(p.products || {}).forEach(([k, v]) => { if (v > 0) soldCodes.add(k); }));
+    }
+    return [...codeSet].filter(c => {
+      // Check both PRODUCT_LABELS (hardcoded) and codes (from Code.php API)
+      const name = PRODUCT_LABELS[String(c)] || codes[String(c)] || "";
+      if (name.toUpperCase().includes("COX")) return false;
+      if (!name) return soldCodes.has(c);
+      return true;
+    }).sort((a, b) => Number(a) - Number(b));
+  }, [raw, codes, d]);
 
   // Codes to actually display (filtered by selector; empty selection = show all)
   const displayCodes = useMemo(() => {
@@ -9212,6 +9704,11 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
     </div>
   );
 
+  // ── Screensaver / TV Mode ────────────────────────────────────────────────
+  if (screensaverMode && d) {
+    return (<TVMode d={d} codes={codes} doFetch={doFetch} lastRefresh={lastRefresh} onExit={() => setScreensaverMode(false)} />);
+  }
+
   return (
     <div style={{ background: `var(--bg-primary)`, minHeight: "90vh", padding: "2rem 2.5rem", paddingBottom: "4rem" }}>
 
@@ -9223,20 +9720,26 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
           </div>
           <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "3rem", color: `var(--text-warm)`, fontWeight: 700 }}>Today's Operations</div>
         </div>
-        <button onClick={async () => {
-            try {
-              await doFetch();
-              // If doFetch succeeded, raw will be updated and paste mode stays off
-              // If it failed silently (caught internally), paste mode was already set
-            } catch(e) {
-              setPasteMode(true);
-            }
-          }}
-          style={{ background: "transparent", border: "1px solid var(--text-faint)", borderRadius: "6px",
-            color: `var(--text-muted)`, padding: "0.4rem 1rem", fontFamily: "var(--font-ui, Inter, sans-serif)",
-            fontSize: "0.8rem", cursor: "pointer" }}>
-          {loading ? "Fetching..." : "\u27F3 Refresh Data"}
-        </button>
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", alignItems: "flex-end" }}>
+          <button onClick={() => setScreensaverMode(true)}
+            style={{ background: "#6366f110", border: "1px solid #6366f140", borderRadius: "6px",
+              color: "#6366f1", padding: "0.5rem 1.25rem", fontFamily: "var(--font-ui, Inter, sans-serif)",
+              fontSize: "1.1rem", cursor: "pointer", fontWeight: 700, width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}>
+            <span style={{ fontSize: "2.4rem", lineHeight: 1 }}>📺</span> TV Mode
+          </button>
+          <button onClick={async () => {
+              try {
+                await doFetch();
+              } catch(e) {
+                setPasteMode(true);
+              }
+            }}
+            style={{ background: "transparent", border: "1px solid var(--text-faint)", borderRadius: "6px",
+              color: `var(--text-muted)`, padding: "0.4rem 1rem", fontFamily: "var(--font-ui, Inter, sans-serif)",
+              fontSize: "0.8rem", cursor: "pointer", width: "100%" }}>
+            {loading ? "Fetching..." : "\u27F3 Refresh Data"}
+          </button>
+        </div>
       </div>
 
       {/* ── Active/All toggle + Pulse cards ── */}
@@ -9314,26 +9817,97 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
               ))}
             </div>
           )}
-          {/* Dropdown code picker — fills full width */}
-          {codeDropOpen && (
-            <div style={{ marginTop: "0.75rem", borderTop: "1px solid var(--bg-tertiary)", paddingTop: "0.75rem" }}>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: "0.25rem" }}>
-                {allAvailableCodes.map(cod => {
-                  const active = selectedCodes.has(cod);
-                  const lbl = prodLabel(cod, codes);
+          {/* Dropdown code picker — categorized sub-trays */}
+          {codeDropOpen && (() => {
+            const CODE_CATEGORIES = [
+              { label: "RGU / New Sales", color: "#16a34a", codes: ["701","702","703","704","717","706","740","742","744"] },
+              { label: "Tier Upgrades", color: "#6366f1", codes: ["713","714","715","716","725"] },
+              { label: "Internet (HSD)", color: "#2563eb", codes: ["600","601","602","603","604","605","484","513","552","553","554","555","482","468","488"] },
+              { label: "TV Plans", color: "#d97706", codes: ["500","501","502","503","504","551","475","465","493","495"] },
+              { label: "Premium Channels", color: "#8b5cf6", codes: ["401","402","403","404","405","417","489"] },
+              { label: "TV Add-Ons & Packs", color: "#f59e0b", codes: ["459","460","461","462","409","463"] },
+              { label: "Mobile Plans (XM)", color: "#ec4899", codes: ["518","519","522","523","492","817"] },
+              { label: "Mobile Devices", color: "#14b8a6", codes: ["432","433","434","435","436","437","438","439"] },
+              { label: "Accessories", color: "#64748b", codes: ["440","441","442","443","444","445","446"] },
+              { label: "Home Security (XH)", color: "#f97316", codes: ["469","470","467","515","516","517","483","486","487"] },
+              { label: "Voice", color: "#06b6d4", codes: ["514","610"] },
+              { label: "NOW Internet", color: "#a855f7", codes: ["524","525"] },
+              { label: "International", color: "#84cc16", codes: ["490","491"] },
+              { label: "Operations / Other", color: "#94a3b8", codes: ["420","466","415","418","419","464","481","550","556"] },
+            ];
+            const categorized = new Set(CODE_CATEGORIES.flatMap(c => c.codes));
+            const uncategorized = allAvailableCodes.filter(c => !categorized.has(c));
+            const selectCat = (catCodes) => {
+              setSelectedCodes(prev => {
+                const next = new Set(prev);
+                const allSelected = catCodes.every(c => next.has(c));
+                catCodes.forEach(c => { if (allSelected) next.delete(c); else next.add(c); });
+                return next;
+              });
+            };
+            const catBtnStyle = (active) => ({
+              background: active ? "#6366f120" : "transparent", border: `1px solid ${active ? "#6366f1" : "var(--border)"}`,
+              borderRadius: "var(--radius-sm, 6px)", color: active ? "#6366f1" : `var(--text-dim)`, padding: "0.2rem 0.55rem",
+              fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", cursor: "pointer", textAlign: "center",
+              width: "100%", transition: "all 0.1s"
+            });
+            return (
+              <div style={{ marginTop: "0.75rem", borderTop: "1px solid var(--bg-tertiary)", paddingTop: "0.75rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                {CODE_CATEGORIES.map(cat => {
+                  const visible = cat.codes.filter(c => allAvailableCodes.includes(c));
+                  if (visible.length === 0) return null;
+                  const allSelected = visible.every(c => selectedCodes.has(c));
+                  const someSelected = visible.some(c => selectedCodes.has(c));
                   return (
-                    <button key={cod} onClick={() => toggleCode(cod)}
-                      style={{ background: active ? "#6366f120" : "transparent", border: `1px solid ${active ? "#6366f1" : `var(--border)`}`,
-                        borderRadius: "var(--radius-sm, 6px)", color: active ? "#6366f1" : `var(--text-dim)`, padding: "0.2rem 0.55rem",
-                        fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", cursor: "pointer", textAlign: "center",
-                        width: "100%", transition: "all 0.1s" }}>
-                      {lbl}
-                    </button>
+                    <div key={cat.label}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.35rem" }}>
+                        <button onClick={() => selectCat(visible)}
+                          style={{ background: "transparent", border: "none", cursor: "pointer", padding: "0.1rem 0.3rem",
+                            fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem",
+                            color: allSelected ? cat.color : someSelected ? cat.color + "90" : `var(--text-faint)`,
+                            fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                          {allSelected ? "\u2713" : "\u25CB"}
+                        </button>
+                        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", color: cat.color,
+                          fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                          {cat.label}
+                        </div>
+                        <div style={{ flex: 1, height: "1px", background: cat.color + "30" }} />
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: "0.25rem", paddingLeft: "0.25rem" }}>
+                        {visible.map(cod => {
+                          const active = selectedCodes.has(cod);
+                          return (
+                            <button key={cod} onClick={() => toggleCode(cod)} style={catBtnStyle(active)}>
+                              {prodLabel(cod, codes)}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
                   );
                 })}
+                {uncategorized.length > 0 && (
+                  <div>
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", color: `var(--text-faint)`,
+                      fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "0.35rem" }}>
+                      Other
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: "0.25rem" }}>
+                      {uncategorized.map(cod => {
+                        const active = selectedCodes.has(cod);
+                        return (
+                          <button key={cod} onClick={() => toggleCode(cod)} style={catBtnStyle(active)}>
+                            {prodLabel(cod, codes)}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
-          )}
+            );
+          })()}
         </div>
       )}
 
