@@ -8766,7 +8766,7 @@ function TVMode({ d, codes, doFetch, lastRefresh, onExit }) {
   const now = lastRefresh ? new Date(lastRefresh).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
   const cps = (hrs, goals) => {
     const val = goals > 0 ? (hrs * COST_PER_HOUR) / goals : hrs * COST_PER_HOUR;
-    return val >= 100 ? `$${Math.round(val)}` : `$${val.toFixed(2)}`;
+    return `$${Math.round(val).toLocaleString()}`;
   };
   const pctFmt = (v) => v !== null && v !== undefined ? `${Math.round(v)}%` : "–";
   const goalColor = (pct) => pct !== null && pct !== undefined ? (pct >= 100 ? "#16a34a" : pct >= 90 ? "#22c55e" : pct >= 70 ? "#d97706" : pct >= 50 ? "#ea580c" : "#dc2626") : `var(--text-faint)`;
@@ -8786,9 +8786,9 @@ function TVMode({ d, codes, doFetch, lastRefresh, onExit }) {
     const sPct = data.pctCount > 0 ? data.pctSum / data.pctCount : null;
     const metrics = [
       { l: "Agents", v: data.agents.size, c: "#16a34a" },
-      { l: "Hours", v: fmt(data.hrs, 1), c: "#6366f1" },
+      { l: "Hours", v: Math.round(data.hrs), c: "#6366f1" },
       { l: "Sales", v: data.goals, c: "#d97706" },
-      { l: "GPH", v: sGph.toFixed(3), c: goalColor(sPct) },
+      { l: "GPH", v: sGph.toFixed(2), c: goalColor(sPct) },
       { l: "RGU", v: data.rgu || "–", c: "#2563eb" },
       { l: "HSD", v: data.hsd || "–", c: "#f59e0b" },
       { l: "XM", v: data.xm || "–", c: "#ec4899" },
@@ -8798,13 +8798,17 @@ function TVMode({ d, codes, doFetch, lastRefresh, onExit }) {
     return (
       <div style={{ flex: "1 1 0", background: `var(--bg-tertiary)`, borderRadius: "var(--radius-lg, 16px)", padding: "1.5rem", border: `2px solid ${color}30`, overflow: "hidden", display: "flex", flexDirection: "column" }}>
         <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "clamp(1.6rem, 3vw, 2.4rem)", color, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "0.75rem", textAlign: "center", flexShrink: 0 }}>{label}</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0", flex: 1, alignContent: "stretch" }}>
-          {metrics.map(({ l, v, c }) => (
-            <div key={l} style={{ textAlign: "center", overflow: "hidden", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "clamp(1.8rem, 3.5vw, 2.8rem)", color: `var(--text-muted)`, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700 }}>{l}</div>
-              <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "clamp(2.8rem, 5.5vw, 5rem)", color: c, fontWeight: 800, lineHeight: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{v}</div>
-            </div>
-          ))}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr 1fr", gap: "0", flex: 1, alignContent: "stretch" }}>
+          {metrics.map(({ l, v, c }) => {
+            const vStr = String(v);
+            const vFont = vStr.length >= 7 ? "clamp(1.8rem, 3.5vw, 3rem)" : vStr.length >= 5 ? "clamp(2.4rem, 4.5vw, 4rem)" : "clamp(2.8rem, 5.5vw, 5rem)";
+            return (
+              <div key={l} style={{ textAlign: "center", overflow: "hidden", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "clamp(1.8rem, 3.5vw, 2.8rem)", color: `var(--text-muted)`, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700 }}>{l}</div>
+                <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: vFont, color: c, fontWeight: 800, lineHeight: 1, whiteSpace: "nowrap" }}>{v}</div>
+              </div>
+            );
+          })}
         </div>
       </div>
     );
@@ -8831,9 +8835,9 @@ function TVMode({ d, codes, doFetch, lastRefresh, onExit }) {
             <div style={{ display: "grid", gridTemplateColumns: fewCampaigns ? "repeat(auto-fit, minmax(120px, 1fr))" : "1fr 1fr 1fr", gap: fewCampaigns ? "1rem" : "1.5rem" }}>
               {[
                 { v: slide.agentCount, l: "On Floor", c: "#16a34a" },
-                { v: fmt(slide.hrs, 1), l: "Hours", c: "#6366f1" },
+                { v: Math.round(slide.hrs), l: "Hours", c: "#6366f1" },
                 { v: slide.goals, l: "Sales", c: "#d97706" },
-                { v: gph.toFixed(3), l: "GPH", c: goalColor(pct) },
+                { v: gph.toFixed(2), l: "GPH", c: goalColor(pct) },
                 { v: slide.rgu || "–", l: "RGU", c: "#2563eb" },
                 { v: cps(slide.hrs, slide.goals), l: "Cost/Sale", c: goalColor(pct) },
                 { v: slide.hsd || "–", l: "HSD", c: "#f59e0b" },
@@ -8874,9 +8878,9 @@ function TVMode({ d, codes, doFetch, lastRefresh, onExit }) {
                     const pPct = p._pctN > 0 ? p._pctSum / p._pctN : null;
                     const pctColor = goalColor(pPct);
                     const vals = [
-                      { v: fmt(p.hrs, 1), c: "#6366f1" },
+                      { v: Math.round(p.hrs), c: "#6366f1" },
                       { v: p.goals, c: "#d97706" },
-                      { v: pGph.toFixed(3), c: pctColor },
+                      { v: pGph.toFixed(2), c: pctColor },
                       { v: p.rgu || "–", c: "#2563eb" },
                       { v: p.hsd || "–", c: "#f59e0b" },
                       { v: p.xm || "–", c: "#ec4899" },
@@ -8931,9 +8935,9 @@ function TVMode({ d, codes, doFetch, lastRefresh, onExit }) {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "1.5rem" }}>
               {[
                 { v: slide.agentCount, l: "Agents", c: "#16a34a" },
-                { v: fmt(slide.hrs, 1), l: "Hours", c: "#6366f1" },
+                { v: Math.round(slide.hrs), l: "Hours", c: "#6366f1" },
                 { v: slide.goals, l: "Sales", c: "#d97706" },
-                { v: gph.toFixed(3), l: "GPH", c: goalColor(pct) },
+                { v: gph.toFixed(2), l: "GPH", c: goalColor(pct) },
                 { v: slide.rgu || "–", l: "RGU", c: "#2563eb" },
                 { v: cps(slide.hrs, slide.goals), l: "Cost/Sale", c: goalColor(pct) },
                 { v: slide.hsd || "–", l: "HSD", c: "#f59e0b" },
@@ -8972,7 +8976,7 @@ function TVMode({ d, codes, doFetch, lastRefresh, onExit }) {
                       <div style={{ display: "flex", gap: "1rem", paddingLeft: "2.3rem" }}>
                         <div style={{ textAlign: "center" }}>
                           <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: lblSize, color: `var(--text-faint)`, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Hrs </span>
-                          <span style={{ fontFamily: "var(--font-data, monospace)", fontSize: statSize, color: "#6366f1", fontWeight: 700 }}>{fmt(a.hrs, 1)}</span>
+                          <span style={{ fontFamily: "var(--font-data, monospace)", fontSize: statSize, color: "#6366f1", fontWeight: 700 }}>{Math.round(a.hrs)}</span>
                         </div>
                         {hasSales && <div style={{ textAlign: "center" }}>
                           <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: lblSize, color: `var(--text-faint)`, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Sales </span>
@@ -8980,7 +8984,7 @@ function TVMode({ d, codes, doFetch, lastRefresh, onExit }) {
                         </div>}
                         {hasSales && <div style={{ textAlign: "center" }}>
                           <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: lblSize, color: `var(--text-faint)`, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>GPH </span>
-                          <span style={{ fontFamily: "var(--font-data, monospace)", fontSize: statSize, color: "#16a34a", fontWeight: 600 }}>{aGph.toFixed(3)}</span>
+                          <span style={{ fontFamily: "var(--font-data, monospace)", fontSize: statSize, color: "#16a34a", fontWeight: 600 }}>{aGph.toFixed(2)}</span>
                         </div>}
                       </div>
                     </div>
@@ -9006,9 +9010,9 @@ function TVMode({ d, codes, doFetch, lastRefresh, onExit }) {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "1.75rem" }}>
               {[
                 { v: slide.agentCount, l: "Agents", c: "#16a34a" },
-                { v: fmt(slide.hrs, 1), l: "Hours", c: "#6366f1" },
+                { v: Math.round(slide.hrs), l: "Hours", c: "#6366f1" },
                 { v: slide.goals, l: "Sales", c: "#d97706" },
-                { v: gph.toFixed(3), l: "GPH", c: goalColor(pct) },
+                { v: gph.toFixed(2), l: "GPH", c: goalColor(pct) },
                 { v: slide.rgu || "–", l: "RGU", c: "#2563eb" },
                 { v: cps(slide.hrs, slide.goals), l: "Cost/Sale", c: goalColor(pct) },
                 { v: slide.hsd || "–", l: "HSD", c: "#f59e0b" },
@@ -9047,7 +9051,7 @@ function TVMode({ d, codes, doFetch, lastRefresh, onExit }) {
                       <div style={{ display: "flex", gap: "1rem", paddingLeft: "2.3rem" }}>
                         <div style={{ textAlign: "center" }}>
                           <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: lblSize, color: `var(--text-faint)`, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Hrs </span>
-                          <span style={{ fontFamily: "var(--font-data, monospace)", fontSize: statSize, color: "#6366f1", fontWeight: 700 }}>{fmt(a.hrs, 1)}</span>
+                          <span style={{ fontFamily: "var(--font-data, monospace)", fontSize: statSize, color: "#6366f1", fontWeight: 700 }}>{Math.round(a.hrs)}</span>
                         </div>
                         {hasSales && <div style={{ textAlign: "center" }}>
                           <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: lblSize, color: `var(--text-faint)`, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Sales </span>
@@ -9055,7 +9059,7 @@ function TVMode({ d, codes, doFetch, lastRefresh, onExit }) {
                         </div>}
                         {hasSales && <div style={{ textAlign: "center" }}>
                           <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: lblSize, color: `var(--text-faint)`, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>GPH </span>
-                          <span style={{ fontFamily: "var(--font-data, monospace)", fontSize: statSize, color: "#16a34a", fontWeight: 600 }}>{aGph.toFixed(3)}</span>
+                          <span style={{ fontFamily: "var(--font-data, monospace)", fontSize: statSize, color: "#16a34a", fontWeight: 600 }}>{aGph.toFixed(2)}</span>
                         </div>}
                       </div>
                     </div>
