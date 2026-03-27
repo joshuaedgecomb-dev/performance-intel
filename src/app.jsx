@@ -8612,6 +8612,7 @@ function TVMode({ d, codes, doFetch, lastRefresh, onExit }) {
   const [slideIdx, setSlideIdx] = useState(0);
   const [tvSite, setTvSite] = useState("ALL");
   const autoScrollRef = useRef(null);
+  const agentScrollRef = useRef(null);
 
   // Auto-scroll any overflow container when slide changes
   useEffect(() => {
@@ -8641,7 +8642,36 @@ function TVMode({ d, codes, doFetch, lastRefresh, onExit }) {
     };
     frame = requestAnimationFrame(step);
     return () => cancelAnimationFrame(frame);
-  }, [slideIdx]); // ALL | DR | BZ
+  }, [slideIdx]);
+
+  // Auto-scroll agent leaderboard
+  useEffect(() => {
+    const el = agentScrollRef.current;
+    if (!el) return;
+    el.scrollTop = 0;
+    const scrollMax = el.scrollHeight - el.clientHeight;
+    if (scrollMax <= 0) return;
+    const pauseMs = 2000;
+    const scrollDuration = CYCLE_MS - pauseMs * 2;
+    let startTime = null;
+    let phase = "pause-top";
+    let frame;
+    const phaseStart = performance.now();
+    const step = (now) => {
+      if (phase === "pause-top") {
+        if (now - phaseStart >= pauseMs) { phase = "scrolling"; startTime = now; }
+      } else if (phase === "scrolling") {
+        const elapsed = now - startTime;
+        const pct = Math.min(elapsed / scrollDuration, 1);
+        const ease = pct < 0.5 ? 2 * pct * pct : 1 - Math.pow(-2 * pct + 2, 2) / 2;
+        el.scrollTop = ease * scrollMax;
+        if (pct >= 1) phase = "done";
+      } else { return; }
+      frame = requestAnimationFrame(step);
+    };
+    frame = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frame);
+  }, [slideIdx]);
   const CYCLE_MS = 12000;
   const COST_PER_HOUR = 19.77;
 
@@ -8734,40 +8764,45 @@ function TVMode({ d, codes, doFetch, lastRefresh, onExit }) {
   const slide = slides[slideIdx % slides.length];
   const fmt = (v, dec = 0) => dec > 0 ? Number(v).toFixed(dec) : Math.round(v).toLocaleString();
   const now = lastRefresh ? new Date(lastRefresh).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
-  const cps = (hrs, goals) => `$${(goals > 0 ? (hrs * COST_PER_HOUR) / goals : hrs * COST_PER_HOUR).toFixed(2)}`;
+  const cps = (hrs, goals) => {
+    const val = goals > 0 ? (hrs * COST_PER_HOUR) / goals : hrs * COST_PER_HOUR;
+    return val >= 100 ? `$${Math.round(val)}` : `$${val.toFixed(2)}`;
+  };
   const pctFmt = (v) => v !== null && v !== undefined ? `${Math.round(v)}%` : "–";
   const goalColor = (pct) => pct !== null && pct !== undefined ? (pct >= 100 ? "#16a34a" : pct >= 90 ? "#22c55e" : pct >= 70 ? "#d97706" : pct >= 50 ? "#ea580c" : "#dc2626") : `var(--text-faint)`;
 
   // Stat card — big number with label
   const Stat = ({ value, label, color }) => (
-    <div style={{ flex: "1 1 0", textAlign: "center", padding: "1rem 0.5rem" }}>
-      <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "clamp(2.5rem, 5vw, 4.5rem)", color, fontWeight: 800, lineHeight: 1, letterSpacing: "-0.03em" }}>{value}</div>
-      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "clamp(0.7rem, 1.2vw, 0.95rem)", color: `var(--text-muted)`, marginTop: "0.4rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em" }}>{label}</div>
+    <div style={{ flex: "1 1 0", textAlign: "center", padding: "0.75rem 0.25rem", overflow: "hidden" }}>
+      <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "clamp(2rem, 4vw, 3.5rem)", color, fontWeight: 800, lineHeight: 1, letterSpacing: "-0.03em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{value}</div>
+      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "clamp(1.2rem, 2vw, 1.8rem)", color: `var(--text-muted)`, marginTop: "0.3rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em" }}>{label}</div>
     </div>
   );
 
-  // Site comparison column
+  // Site comparison column — label above value for each metric
   const SiteCol = ({ data, label, color }) => {
     if (!data) return null;
-    const gph = data.hrs > 0 ? data.goals / data.hrs : 0;
+    const sGph = data.hrs > 0 ? data.goals / data.hrs : 0;
+    const sPct = data.pctCount > 0 ? data.pctSum / data.pctCount : null;
+    const metrics = [
+      { l: "Agents", v: data.agents.size, c: "#16a34a" },
+      { l: "Hours", v: fmt(data.hrs, 1), c: "#6366f1" },
+      { l: "Sales", v: data.goals, c: "#d97706" },
+      { l: "GPH", v: sGph.toFixed(3), c: goalColor(sPct) },
+      { l: "RGU", v: data.rgu || "–", c: "#2563eb" },
+      { l: "HSD", v: data.hsd || "–", c: "#f59e0b" },
+      { l: "XM", v: data.xm || "–", c: "#ec4899" },
+      { l: "CPS", v: cps(data.hrs, data.goals), c: goalColor(sPct) },
+      { l: "Goal", v: sPct !== null ? `${Math.round(sPct)}%` : "–", c: goalColor(sPct) },
+    ];
     return (
-      <div style={{ flex: "1 1 0", background: `var(--bg-tertiary)`, borderRadius: "var(--radius-lg, 16px)", padding: "2rem", border: `2px solid ${color}30`, overflow: "hidden", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-        <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "clamp(1.3rem, 2.5vw, 1.8rem)", color, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "1.5rem", textAlign: "center" }}>{label}</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "clamp(1rem, 2vh, 2rem) 1rem", flex: 1, alignContent: "center" }}>
-          {[
-            { l: "Agents", v: data.agents.size, c: "#16a34a" },
-            { l: "Hours", v: fmt(data.hrs, 1), c: "#6366f1" },
-            { l: "Sales", v: data.goals, c: "#d97706" },
-            { l: "GPH", v: gph.toFixed(3), c: "#16a34a" },
-            { l: "RGU", v: data.rgu || "–", c: "#2563eb" },
-            { l: "HSD", v: data.hsd || "–", c: "#f59e0b" },
-            { l: "XM Lines", v: data.xm || "–", c: "#ec4899" },
-            { l: "Cost/Sale", v: cps(data.hrs, data.goals), c: data.goals > 0 ? "#16a34a" : `var(--text-faint)` },
-            { l: "% to Goal", v: data.pctCount > 0 ? `${Math.round(data.pctSum / data.pctCount)}%` : "–", c: goalColor(data.pctCount > 0 ? data.pctSum / data.pctCount : null) },
-          ].map(({ l, v, c }) => (
-            <div key={l} style={{ textAlign: "center", overflow: "hidden" }}>
-              <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "clamp(1.8rem, 3.5vw, 3rem)", color: c, fontWeight: 800, lineHeight: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{v}</div>
-              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "clamp(0.7rem, 1.1vw, 0.95rem)", color: `var(--text-muted)`, marginTop: "0.35rem", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>{l}</div>
+      <div style={{ flex: "1 1 0", background: `var(--bg-tertiary)`, borderRadius: "var(--radius-lg, 16px)", padding: "1.5rem", border: `2px solid ${color}30`, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+        <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "clamp(1.6rem, 3vw, 2.4rem)", color, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "0.75rem", textAlign: "center", flexShrink: 0 }}>{label}</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0", flex: 1, alignContent: "stretch" }}>
+          {metrics.map(({ l, v, c }) => (
+            <div key={l} style={{ textAlign: "center", overflow: "hidden", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "clamp(1.8rem, 3.5vw, 2.8rem)", color: `var(--text-muted)`, textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 700 }}>{l}</div>
+              <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "clamp(2.8rem, 5.5vw, 5rem)", color: c, fontWeight: 800, lineHeight: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{v}</div>
             </div>
           ))}
         </div>
@@ -8805,50 +8840,69 @@ function TVMode({ d, codes, doFetch, lastRefresh, onExit }) {
                 { v: slide.xm || "–", l: "XM Lines", c: "#ec4899" },
                 ...(fewCampaigns ? [] : [{ v: progRows.length, l: "Campaigns", c: `var(--text-muted)` }]),
               ].map(({ v, l, c }) => (
-                <div key={l} style={{ background: `var(--bg-tertiary)`, borderRadius: "var(--radius-lg, 16px)", padding: fewCampaigns ? "1rem 0.5rem" : "1.25rem", textAlign: "center", border: `1px solid ${c}20`, overflow: "hidden" }}>
+                <div key={l} style={{ background: `var(--bg-tertiary)`, borderRadius: "var(--radius-lg, 16px)", padding: fewCampaigns ? "0.75rem 0.5rem" : "1rem", textAlign: "center", border: `1px solid ${c}20`, overflow: "hidden" }}>
+                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: fewCampaigns ? "clamp(0.9rem, 1.5vw, 1.2rem)" : "clamp(1rem, 1.6vw, 1.3rem)", color: `var(--text-muted)`, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700, marginBottom: "0.1rem" }}>{l}</div>
                   <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: fewCampaigns ? "clamp(1.5rem, 3vw, 2.5rem)" : "clamp(1.8rem, 3.5vw, 3rem)", color: c, fontWeight: 800, lineHeight: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{v}</div>
-                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "clamp(0.65rem, 0.9vw, 0.82rem)", color: `var(--text-muted)`, marginTop: "0.4rem", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600 }}>{l}</div>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Campaign cards — below when few, right column with auto-scroll when many */}
-          <div ref={autoScrollRef} style={{ overflow: "hidden", position: "relative", flex: fewCampaigns ? "1 1 auto" : "1 1 0", minHeight: 0, display: "flex", flexDirection: "column", justifyContent: fewCampaigns ? "flex-start" : "flex-start", gap: "0.75rem" }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-            {progRows.map((p, i) => {
-              const pGph = p.hrs > 0 ? p.goals / p.hrs : 0;
-              const pPct = p._pctN > 0 ? p._pctSum / p._pctN : null;
-              const pctColor = goalColor(pPct);
-              const fs = fewCampaigns;
-              const metrics = [
-                { v: fmt(p.hrs, 1), l: "Hrs", c: "#6366f1" },
-                { v: p.goals, l: "Sales", c: "#d97706" },
-                { v: pGph.toFixed(3), l: "GPH", c: pctColor },
-                { v: p.rgu || "–", l: "RGU", c: "#2563eb" },
-                { v: p.hsd || "–", l: "HSD", c: "#f59e0b" },
-                { v: p.xm || "–", l: "XM", c: "#ec4899" },
-                { v: cps(p.hrs, p.goals), l: "CPS", c: pctColor },
-                { v: pPct !== null ? `${Math.round(pPct)}%` : "–", l: "Goal", c: pctColor },
-              ];
-              return (
-                <div key={i} style={{ background: `var(--bg-tertiary)`, borderRadius: "var(--radius-md, 10px)", padding: fs ? "2rem 2.5rem" : "0.75rem 1rem", border: `1px solid var(--border)`,
-                  display: "grid", gridTemplateColumns: `minmax(${fs ? "10rem" : "8rem"}, ${fs ? "1.5fr" : "2fr"}) repeat(${metrics.length}, 1fr)`, alignItems: "center", gap: fs ? "1.5rem" : "0.5rem" }}>
-                  <div>
-                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: fs ? "clamp(1.1rem, 1.8vw, 1.5rem)" : "clamp(0.85rem, 1.2vw, 1.1rem)", color: `var(--text-warm)`, fontWeight: 700, lineHeight: 1.2 }}>{p.grp}</div>
-                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: fs ? "clamp(0.9rem, 1.3vw, 1.15rem)" : "clamp(0.65rem, 0.9vw, 0.8rem)", color: `var(--text-faint)`, marginTop: "0.2rem" }}>{p._agents.size} agents</div>
-                  </div>
-                  {metrics.map(({ v, l, c }) => (
-                    <div key={l} style={{ textAlign: "center" }}>
-                      <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: fs ? "clamp(2.2rem, 3.5vw, 3.5rem)" : "clamp(0.9rem, 1.2vw, 1.15rem)", color: c, fontWeight: 700 }}>{v}</div>
-                      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: fs ? "clamp(0.9rem, 1.3vw, 1.2rem)" : "clamp(0.55rem, 0.7vw, 0.68rem)", color: `var(--text-faint)`, textTransform: "uppercase", letterSpacing: "0.05em" }}>{l}</div>
-                    </div>
+          {/* Campaign table — header row + value rows, no repeated labels */}
+          {(() => {
+            const cols = ["Hrs","Sales","GPH","RGU","HSD","XM","CPS","Goal"];
+            const fs = fewCampaigns;
+            const gridCols = `minmax(${fs ? "10rem" : "8rem"}, ${fs ? "1.5fr" : "2fr"}) repeat(${cols.length}, 1fr)`;
+            const valSize = fs ? "clamp(2rem, 3vw, 3rem)" : "clamp(0.9rem, 1.2vw, 1.15rem)";
+            const headSize = fs ? "clamp(1.4rem, 2.2vw, 2rem)" : "clamp(0.75rem, 1vw, 0.95rem)";
+            const nameSize = fs ? "clamp(1.1rem, 1.8vw, 1.5rem)" : "clamp(0.85rem, 1.2vw, 1.1rem)";
+            const subSize = fs ? "clamp(0.9rem, 1.3vw, 1.15rem)" : "clamp(0.65rem, 0.9vw, 0.8rem)";
+            return (
+              <div style={{ display: "flex", flexDirection: "column", flex: fewCampaigns ? "1 1 auto" : "1 1 0", minHeight: 0 }}>
+                {/* Header — always visible */}
+                <div style={{ display: "grid", gridTemplateColumns: gridCols, alignItems: "end", gap: fs ? "1rem" : "0.5rem", padding: fs ? "0 2.5rem 0.5rem" : "0 1rem 0.3rem", borderBottom: `2px solid var(--border)`, flexShrink: 0 }}>
+                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: headSize, color: `var(--text-muted)`, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>Campaign</div>
+                  {cols.map(h => (
+                    <div key={h} style={{ textAlign: "center", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: headSize, color: `var(--text-muted)`, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>{h}</div>
                   ))}
                 </div>
-              );
-            })}
-            </div>
-          </div>
+                {/* Scrolling data rows */}
+                <div ref={autoScrollRef} style={{ overflow: "hidden", flex: 1, minHeight: 0, paddingTop: fs ? "0.5rem" : "0.35rem" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: fs ? "0.5rem" : "0.35rem" }}>
+                  {progRows.map((p, i) => {
+                    const pGph = p.hrs > 0 ? p.goals / p.hrs : 0;
+                    const pPct = p._pctN > 0 ? p._pctSum / p._pctN : null;
+                    const pctColor = goalColor(pPct);
+                    const vals = [
+                      { v: fmt(p.hrs, 1), c: "#6366f1" },
+                      { v: p.goals, c: "#d97706" },
+                      { v: pGph.toFixed(3), c: pctColor },
+                      { v: p.rgu || "–", c: "#2563eb" },
+                      { v: p.hsd || "–", c: "#f59e0b" },
+                      { v: p.xm || "–", c: "#ec4899" },
+                      { v: cps(p.hrs, p.goals), c: pctColor },
+                      { v: pPct !== null ? `${Math.round(pPct)}%` : "–", c: pctColor },
+                    ];
+                    return (
+                      <div key={i} style={{ background: `var(--bg-tertiary)`, borderRadius: "var(--radius-md, 10px)", padding: fs ? "1.25rem 2.5rem" : "0.6rem 1rem", border: `1px solid var(--border)`,
+                        display: "grid", gridTemplateColumns: gridCols, alignItems: "center", gap: fs ? "1rem" : "0.5rem" }}>
+                        <div>
+                          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: nameSize, color: `var(--text-warm)`, fontWeight: 700, lineHeight: 1.2 }}>{p.grp}</div>
+                          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: subSize, color: `var(--text-faint)`, marginTop: "0.15rem" }}>{p._agents.size} agents</div>
+                        </div>
+                        {vals.map(({ v, c }, vi) => (
+                          <div key={vi} style={{ textAlign: "center" }}>
+                            <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: valSize, color: c, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{v}</div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
+                </div>
+              </div>
+            );
+          })()}
         </div>
       );
     }
@@ -8857,22 +8911,9 @@ function TVMode({ d, codes, doFetch, lastRefresh, onExit }) {
       // Shared campaign: headline stats + site comparison
       if (slide.bothSites && slide.comparison) {
         return (
-          <div style={{ display: "flex", flexDirection: "column", height: "100%", justifyContent: "center" }}>
-            <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1.5rem", flexWrap: "wrap", justifyContent: "center" }}>
-              <Stat value={slide.agentCount} label="Agents" color="#16a34a" />
-              <Stat value={fmt(slide.hrs, 1)} label="Hours" color="#6366f1" />
-              <Stat value={slide.goals} label="Sales" color="#d97706" />
-              <Stat value={gph.toFixed(3)} label="GPH" color={goalColor(pct)} />
-              <Stat value={slide.rgu || "–"} label="RGU" color="#2563eb" />
-              <Stat value={slide.hsd || "–"} label="HSD" color="#f59e0b" />
-              <Stat value={slide.xm || "–"} label="XM Lines" color="#ec4899" />
-              <Stat value={cps(slide.hrs, slide.goals)} label="Cost/Sale" color={goalColor(pct)} />
-              <Stat value={pctFmt(pct)} label="% to Goal" color={goalColor(pct)} />
-            </div>
-            <div style={{ display: "flex", gap: "1.5rem", flex: 1, minHeight: 0 }}>
-              <SiteCol data={slide.comparison["DR"]} label="Dominican Republic" color="#6366f1" />
-              <SiteCol data={slide.comparison["BZ"]} label="Belize" color="#16a34a" />
-            </div>
+          <div style={{ display: "flex", gap: "1.5rem", height: "100%" }}>
+            <SiteCol data={slide.comparison["DR"]} label="Dominican Republic" color="#6366f1" />
+            <SiteCol data={slide.comparison["BZ"]} label="Belize" color="#16a34a" />
           </div>
         );
       }
@@ -8899,46 +8940,53 @@ function TVMode({ d, codes, doFetch, lastRefresh, onExit }) {
                 { v: slide.xm || "–", l: "XM Lines", c: "#ec4899" },
                 { v: pctFmt(pct), l: "% to Goal", c: goalColor(pct) },
               ].map(({ v, l, c }) => (
-                <div key={l} style={{ background: `var(--bg-tertiary)`, borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem", textAlign: "center", border: `1px solid ${c}20` }}>
+                <div key={l} style={{ background: `var(--bg-tertiary)`, borderRadius: "var(--radius-lg, 16px)", padding: "1rem", textAlign: "center", border: `1px solid ${c}20` }}>
+                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "clamp(1.1rem, 1.8vw, 1.5rem)", color: `var(--text-muted)`, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700, marginBottom: "0.2rem" }}>{l}</div>
                   <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "clamp(2rem, 4vw, 3.5rem)", color: c, fontWeight: 800, lineHeight: 1 }}>{v}</div>
-                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "clamp(0.7rem, 1vw, 0.9rem)", color: `var(--text-muted)`, marginTop: "0.4rem", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600 }}>{l}</div>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Right: agent leaderboard */}
-          <div style={{ background: `var(--bg-tertiary)`, borderRadius: "var(--radius-lg, 16px)", padding: "2rem", border: `1px solid var(--border)`, overflow: "hidden", display: "flex", flexDirection: "column" }}>
-            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "clamp(1.1rem, 2vw, 1.6rem)", color: `var(--text-muted)`, letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 700, marginBottom: "1.25rem" }}>
+          {/* Right: agent leaderboard — card style */}
+          <div style={{ background: `var(--bg-tertiary)`, borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem", border: `1px solid var(--border)`, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "clamp(1.1rem, 2vw, 1.6rem)", color: `var(--text-muted)`, letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 700, marginBottom: "0.5rem" }}>
               {hasSales ? "Top Agents" : "Agents on Floor"}
             </div>
             {topAgents.length === 0 ? (
               <div style={{ color: `var(--text-faint)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "1.2rem" }}>No agent data yet</div>
             ) : (
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr style={{ borderBottom: `2px solid var(--border)` }}>
-                    {["","Agent","Hrs",hasSales ? "Sales" : "", hasSales ? "GPH" : ""].filter(Boolean).map((h, i) => (
-                      <th key={h || i} style={{ padding: "0.6rem 0.75rem", textAlign: i <= 1 ? "left" : "right", color: `var(--text-faint)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "clamp(1rem, 1.5vw, 1.3rem)", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em" }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {topAgents.map((a, i) => {
-                    const aGph = a.hrs > 0 ? a.effectiveGoals / a.hrs : 0;
-                    const rank = hasSales ? (i === 0 ? "\uD83E\uDD47" : i === 1 ? "\uD83E\uDD48" : i === 2 ? "\uD83E\uDD49" : `${i + 1}`) : `${i + 1}`;
-                    return (
-                      <tr key={a.name} style={{ borderBottom: `1px solid var(--border)`, background: hasSales && i < 3 ? `var(--bg-secondary)` : "transparent" }}>
-                        <td style={{ padding: "0.75rem 0.6rem", fontSize: "clamp(1.3rem, 2vw, 1.8rem)", textAlign: "center", width: "3rem" }}>{rank}</td>
-                        <td style={{ padding: "0.75rem 0.75rem", color: `var(--text-warm)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "clamp(1.2rem, 2vw, 1.7rem)", fontWeight: 600 }}>{a.name}</td>
-                        <td style={{ padding: "0.75rem 0.75rem", color: "#6366f1", fontFamily: "var(--font-data, monospace)", fontSize: "clamp(1.2rem, 2vw, 1.7rem)", textAlign: "right" }}>{fmt(a.hrs, 1)}</td>
-                        {hasSales && <td style={{ padding: "0.75rem 0.75rem", color: "#d97706", fontFamily: "var(--font-data, monospace)", fontSize: "clamp(1.2rem, 2vw, 1.7rem)", textAlign: "right", fontWeight: 700 }}>{a.effectiveGoals}</td>}
-                        {hasSales && <td style={{ padding: "0.75rem 0.75rem", color: "#16a34a", fontFamily: "var(--font-data, monospace)", fontSize: "clamp(1.2rem, 2vw, 1.7rem)", textAlign: "right", fontWeight: 600 }}>{aGph.toFixed(3)}</td>}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+              <div ref={agentScrollRef} style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+                {topAgents.map((a, i) => {
+                  const aGph = a.hrs > 0 ? a.effectiveGoals / a.hrs : 0;
+                  const rank = hasSales ? (i === 0 ? "\uD83E\uDD47" : i === 1 ? "\uD83E\uDD48" : i === 2 ? "\uD83E\uDD49" : `${i + 1}`) : `${i + 1}`;
+                  const nameSize = "clamp(1.8rem, 3vw, 2.5rem)";
+                  const statSize = "clamp(1.8rem, 3vw, 2.5rem)";
+                  const lblSize = "clamp(1.2rem, 2vw, 1.7rem)";
+                  return (
+                    <div key={a.name} style={{ background: hasSales && i < 3 ? `var(--bg-secondary)` : "transparent", borderRadius: "var(--radius-sm, 6px)", padding: "0.5rem 0.75rem", borderBottom: `1px solid var(--border)` }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.25rem" }}>
+                        <span style={{ fontSize: nameSize, minWidth: "1.8rem", textAlign: "center" }}>{rank}</span>
+                        <span style={{ color: `var(--text-warm)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: nameSize, fontWeight: 700 }}>{a.name}</span>
+                      </div>
+                      <div style={{ display: "flex", gap: "1rem", paddingLeft: "2.3rem" }}>
+                        <div style={{ textAlign: "center" }}>
+                          <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: lblSize, color: `var(--text-faint)`, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Hrs </span>
+                          <span style={{ fontFamily: "var(--font-data, monospace)", fontSize: statSize, color: "#6366f1", fontWeight: 700 }}>{fmt(a.hrs, 1)}</span>
+                        </div>
+                        {hasSales && <div style={{ textAlign: "center" }}>
+                          <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: lblSize, color: `var(--text-faint)`, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Sales </span>
+                          <span style={{ fontFamily: "var(--font-data, monospace)", fontSize: statSize, color: "#d97706", fontWeight: 700 }}>{a.effectiveGoals}</span>
+                        </div>}
+                        {hasSales && <div style={{ textAlign: "center" }}>
+                          <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: lblSize, color: `var(--text-faint)`, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>GPH </span>
+                          <span style={{ fontFamily: "var(--font-data, monospace)", fontSize: statSize, color: "#16a34a", fontWeight: 600 }}>{aGph.toFixed(3)}</span>
+                        </div>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
         </div>
@@ -8967,46 +9015,53 @@ function TVMode({ d, codes, doFetch, lastRefresh, onExit }) {
                 { v: slide.xm || "–", l: "XM Lines", c: "#ec4899" },
                 { v: pctFmt(pct), l: "% to Goal", c: goalColor(pct) },
               ].map(({ v, l, c }) => (
-                <div key={l} style={{ background: `var(--bg-tertiary)`, borderRadius: "var(--radius-lg, 16px)", padding: "1.5rem", textAlign: "center", border: `1px solid ${c}20` }}>
-                  <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "clamp(2.5rem, 5vw, 4.5rem)", color: c, fontWeight: 800, lineHeight: 1 }}>{v}</div>
-                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "clamp(0.8rem, 1.2vw, 1.1rem)", color: `var(--text-muted)`, marginTop: "0.5rem", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600 }}>{l}</div>
+                <div key={l} style={{ background: `var(--bg-tertiary)`, borderRadius: "var(--radius-lg, 16px)", padding: "1rem", textAlign: "center", border: `1px solid ${c}20`, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "clamp(1.5rem, 2.8vw, 2.2rem)", color: `var(--text-muted)`, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700 }}>{l}</div>
+                  <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "clamp(3.5rem, 7vw, 6rem)", color: c, fontWeight: 800, lineHeight: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{v}</div>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Right: agent leaderboard */}
-          <div style={{ background: `var(--bg-tertiary)`, borderRadius: "var(--radius-lg, 16px)", padding: "2rem", border: `1px solid var(--border)`, overflow: "hidden", display: "flex", flexDirection: "column" }}>
-            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "clamp(1.1rem, 2vw, 1.6rem)", color: `var(--text-muted)`, letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 700, marginBottom: "1.25rem" }}>
+          {/* Right: agent leaderboard — card style */}
+          <div style={{ background: `var(--bg-tertiary)`, borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem", border: `1px solid var(--border)`, overflow: "hidden", display: "flex", flexDirection: "column" }}>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "clamp(1.1rem, 2vw, 1.6rem)", color: `var(--text-muted)`, letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 700, marginBottom: "0.5rem" }}>
               {hasSales ? "Top Agents" : "Agents on Floor"}
             </div>
             {topAgents.length === 0 ? (
               <div style={{ color: `var(--text-faint)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "1.2rem" }}>No agent data yet</div>
             ) : (
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr style={{ borderBottom: `2px solid var(--border)` }}>
-                    {["","Agent","Hrs",hasSales ? "Sales" : "", hasSales ? "GPH" : ""].filter(Boolean).map((h, i) => (
-                      <th key={h || i} style={{ padding: "0.6rem 0.75rem", textAlign: i <= 1 ? "left" : "right", color: `var(--text-faint)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "clamp(1rem, 1.5vw, 1.3rem)", fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em" }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {topAgents.map((a, i) => {
-                    const aGph = a.hrs > 0 ? a.effectiveGoals / a.hrs : 0;
-                    const rank = hasSales ? (i === 0 ? "\uD83E\uDD47" : i === 1 ? "\uD83E\uDD48" : i === 2 ? "\uD83E\uDD49" : `${i + 1}`) : `${i + 1}`;
-                    return (
-                      <tr key={a.name} style={{ borderBottom: `1px solid var(--border)`, background: hasSales && i < 3 ? `var(--bg-secondary)` : "transparent" }}>
-                        <td style={{ padding: "0.75rem 0.6rem", fontSize: "clamp(1.3rem, 2vw, 1.8rem)", textAlign: "center", width: "3rem" }}>{rank}</td>
-                        <td style={{ padding: "0.75rem 0.75rem", color: `var(--text-warm)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "clamp(1.2rem, 2vw, 1.7rem)", fontWeight: 600 }}>{a.name}</td>
-                        <td style={{ padding: "0.75rem 0.75rem", color: "#6366f1", fontFamily: "var(--font-data, monospace)", fontSize: "clamp(1.2rem, 2vw, 1.7rem)", textAlign: "right" }}>{fmt(a.hrs, 1)}</td>
-                        {hasSales && <td style={{ padding: "0.75rem 0.75rem", color: "#d97706", fontFamily: "var(--font-data, monospace)", fontSize: "clamp(1.2rem, 2vw, 1.7rem)", textAlign: "right", fontWeight: 700 }}>{a.effectiveGoals}</td>}
-                        {hasSales && <td style={{ padding: "0.75rem 0.75rem", color: "#16a34a", fontFamily: "var(--font-data, monospace)", fontSize: "clamp(1.2rem, 2vw, 1.7rem)", textAlign: "right", fontWeight: 600 }}>{aGph.toFixed(3)}</td>}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+              <div ref={agentScrollRef} style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+                {topAgents.map((a, i) => {
+                  const aGph = a.hrs > 0 ? a.effectiveGoals / a.hrs : 0;
+                  const rank = hasSales ? (i === 0 ? "\uD83E\uDD47" : i === 1 ? "\uD83E\uDD48" : i === 2 ? "\uD83E\uDD49" : `${i + 1}`) : `${i + 1}`;
+                  const nameSize = "clamp(1.8rem, 3vw, 2.5rem)";
+                  const statSize = "clamp(1.8rem, 3vw, 2.5rem)";
+                  const lblSize = "clamp(1.2rem, 2vw, 1.7rem)";
+                  return (
+                    <div key={a.name} style={{ background: hasSales && i < 3 ? `var(--bg-secondary)` : "transparent", borderRadius: "var(--radius-sm, 6px)", padding: "0.5rem 0.75rem", borderBottom: `1px solid var(--border)` }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.25rem" }}>
+                        <span style={{ fontSize: nameSize, minWidth: "1.8rem", textAlign: "center" }}>{rank}</span>
+                        <span style={{ color: `var(--text-warm)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: nameSize, fontWeight: 700 }}>{a.name}</span>
+                      </div>
+                      <div style={{ display: "flex", gap: "1rem", paddingLeft: "2.3rem" }}>
+                        <div style={{ textAlign: "center" }}>
+                          <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: lblSize, color: `var(--text-faint)`, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Hrs </span>
+                          <span style={{ fontFamily: "var(--font-data, monospace)", fontSize: statSize, color: "#6366f1", fontWeight: 700 }}>{fmt(a.hrs, 1)}</span>
+                        </div>
+                        {hasSales && <div style={{ textAlign: "center" }}>
+                          <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: lblSize, color: `var(--text-faint)`, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Sales </span>
+                          <span style={{ fontFamily: "var(--font-data, monospace)", fontSize: statSize, color: "#d97706", fontWeight: 700 }}>{a.effectiveGoals}</span>
+                        </div>}
+                        {hasSales && <div style={{ textAlign: "center" }}>
+                          <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: lblSize, color: `var(--text-faint)`, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>GPH </span>
+                          <span style={{ fontFamily: "var(--font-data, monospace)", fontSize: statSize, color: "#16a34a", fontWeight: 600 }}>{aGph.toFixed(3)}</span>
+                        </div>}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
         </div>
@@ -9028,24 +9083,20 @@ function TVMode({ d, codes, doFetch, lastRefresh, onExit }) {
     <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: `var(--bg-primary)`, color: `var(--text-primary)`, fontFamily: "var(--font-ui, Inter, sans-serif)", display: "flex", flexDirection: "column", overflow: "hidden" }}
       onClick={e => { if (e.detail === 2) onExit(); }}>
 
-      {/* Top bar */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "1rem 2.5rem", borderBottom: `1px solid var(--border)`, flexShrink: 0 }}>
+      {/* Top bar — hidden by default, visible on hover */}
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 10, display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.75rem 2.5rem", background: `var(--bg-primary)`, borderBottom: `1px solid var(--border)`, opacity: 0, transition: "opacity 0.3s ease" }}
+        onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = 0}>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
           <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#16a34a", animation: "pulse 2s infinite" }} />
           <span style={{ fontSize: "0.82rem", color: "#16a34a", letterSpacing: "0.15em", textTransform: "uppercase", fontWeight: 600 }}>LIVE</span>
           <span style={{ fontSize: "0.78rem", color: `var(--text-faint)` }}>updated {now}</span>
         </div>
-
-        <div style={{ fontSize: "clamp(1.2rem, 2.5vw, 2rem)", color: `var(--text-warm)`, fontWeight: 800, letterSpacing: "-0.02em" }}>{slide.label}</div>
-
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-          {/* Site filter */}
           <div style={{ display: "inline-flex", borderRadius: "var(--radius-sm, 6px)", border: `1px solid var(--border)`, overflow: "hidden" }}>
             {[["ALL","All"],["DR","DR"],["BZ","BZ"]].map(([k, label]) => (
               <button key={k} onClick={e => { e.stopPropagation(); setTvSite(k); }} style={siteBtnStyle(tvSite === k)}>{label}</button>
             ))}
           </div>
-          {/* Dots */}
           <div style={{ display: "flex", gap: "0.3rem" }}>
             {slides.map((_, i) => (
               <div key={i} onClick={e => { e.stopPropagation(); setSlideIdx(i); }}
@@ -9065,17 +9116,21 @@ function TVMode({ d, codes, doFetch, lastRefresh, onExit }) {
         <div key={slideIdx} style={{ height: "100%", background: "#d97706", animation: `tvProgress ${CYCLE_MS}ms linear forwards`, width: "0%" }} />
       </div>
 
-      {/* Slide content — fit to remaining viewport height */}
-      <div style={{ flex: 1, overflow: "hidden", padding: "1.5rem 2.5rem", display: "flex", flexDirection: "column" }}>
-        <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-          {renderSlide()}
+      {/* Slide title */}
+      <div style={{ padding: "0.75rem 2.5rem 0", flexShrink: 0, textAlign: "center", position: "relative" }}>
+        <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "clamp(2rem, 4vw, 3.5rem)", color: `var(--text-warm)`, fontWeight: 800, letterSpacing: "-0.02em" }}>{slide.label}</div>
+        <div style={{ position: "absolute", right: "2.5rem", top: "50%", transform: "translateY(-50%)", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#16a34a", animation: "pulse 2s infinite" }} />
+          <span style={{ fontSize: "clamp(0.75rem, 1.1vw, 0.95rem)", color: "#16a34a", letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 600 }}>LIVE</span>
+          <span style={{ fontSize: "clamp(0.7rem, 1vw, 0.85rem)", color: `var(--text-faint)` }}>{now}</span>
         </div>
       </div>
 
-      {/* Footer */}
-      <div style={{ padding: "0.6rem 2.5rem", borderTop: `1px solid var(--border)`, display: "flex", justifyContent: "space-between", flexShrink: 0 }}>
-        <span style={{ fontSize: "0.72rem", color: `var(--text-faint)` }}>Performance Intel · TV Mode</span>
-        <span style={{ fontSize: "0.72rem", color: `var(--text-faint)` }}>Double-click or ESC to exit · Click dots to jump</span>
+      {/* Slide content — fit to remaining viewport height */}
+      <div style={{ flex: 1, overflow: "hidden", padding: "0.75rem 2.5rem 1rem", display: "flex", flexDirection: "column" }}>
+        <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+          {renderSlide()}
+        </div>
       </div>
 
       <style>{`
