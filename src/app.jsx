@@ -8683,7 +8683,7 @@ function TVMode({ d, codes, doFetch, lastRefresh, onExit }) {
 
     // Per-campaign slides (exclude Spanish Callback)
     const grpTotals = {};
-    sitePrograms.filter(p => !/(spanish callback|\\bfeb\\b|\\bmar\\b)/i.test(p.grp || "")).forEach(p => {
+    sitePrograms.filter(p => !/(spanish callback|\bfeb\b|\bmar\b|^unknown$)/i.test(p.grp || "")).forEach(p => {
       if (!grpTotals[p.grp]) grpTotals[p.grp] = { grp: p.grp, hrs: 0, goals: 0, rgu: 0, hsd: 0, xm: 0, agents: new Set(), pctSum: 0, pctCount: 0 };
       const g = grpTotals[p.grp];
       g.hrs += p.hrs; g.goals += p.effectiveGoals; g.rgu += p.rgu;
@@ -8751,9 +8751,9 @@ function TVMode({ d, codes, doFetch, lastRefresh, onExit }) {
     if (!data) return null;
     const gph = data.hrs > 0 ? data.goals / data.hrs : 0;
     return (
-      <div style={{ flex: "1 1 0", background: `var(--bg-tertiary)`, borderRadius: "var(--radius-lg, 16px)", padding: "2rem", border: `2px solid ${color}30` }}>
-        <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "clamp(1.5rem, 3vw, 2.2rem)", color, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "1.5rem", textAlign: "center" }}>{label}</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.25rem 2rem" }}>
+      <div style={{ flex: "1 1 0", background: `var(--bg-tertiary)`, borderRadius: "var(--radius-lg, 16px)", padding: "2rem", border: `2px solid ${color}30`, overflow: "hidden", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+        <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "clamp(1.3rem, 2.5vw, 1.8rem)", color, fontWeight: 800, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "1.5rem", textAlign: "center" }}>{label}</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "clamp(1rem, 2vh, 2rem) 1rem", flex: 1, alignContent: "center" }}>
           {[
             { l: "Agents", v: data.agents.size, c: "#16a34a" },
             { l: "Hours", v: fmt(data.hrs, 1), c: "#6366f1" },
@@ -8765,9 +8765,9 @@ function TVMode({ d, codes, doFetch, lastRefresh, onExit }) {
             { l: "Cost/Sale", v: cps(data.hrs, data.goals), c: data.goals > 0 ? "#16a34a" : `var(--text-faint)` },
             { l: "% to Goal", v: data.pctCount > 0 ? `${Math.round(data.pctSum / data.pctCount)}%` : "–", c: goalColor(data.pctCount > 0 ? data.pctSum / data.pctCount : null) },
           ].map(({ l, v, c }) => (
-            <div key={l} style={{ textAlign: "center" }}>
-              <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "clamp(2.5rem, 5vw, 4rem)", color: c, fontWeight: 800, lineHeight: 1 }}>{v}</div>
-              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "clamp(0.8rem, 1.2vw, 1.1rem)", color: `var(--text-muted)`, marginTop: "0.35rem", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600 }}>{l}</div>
+            <div key={l} style={{ textAlign: "center", overflow: "hidden" }}>
+              <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "clamp(1.8rem, 3.5vw, 3rem)", color: c, fontWeight: 800, lineHeight: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{v}</div>
+              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "clamp(0.7rem, 1.1vw, 0.95rem)", color: `var(--text-muted)`, marginTop: "0.35rem", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>{l}</div>
             </div>
           ))}
         </div>
@@ -8781,7 +8781,7 @@ function TVMode({ d, codes, doFetch, lastRefresh, onExit }) {
 
     if (slide.type === "overview") {
       // Aggregate programs by name
-      const progRows = slide.programs.filter(p => !/(spanish callback|\\bfeb\\b|\\bmar\\b)/i.test(p.grp || "")).sort((a, b) => b.hrs - a.hrs).reduce((acc, p) => {
+      const progRows = slide.programs.filter(p => !/(spanish callback|\bfeb\b|\bmar\b|^unknown$)/i.test(p.grp || "")).sort((a, b) => b.hrs - a.hrs).reduce((acc, p) => {
         const existing = acc.find(x => x.grp === p.grp);
         if (existing) { existing.hrs += p.hrs; existing.goals += p.effectiveGoals; existing.rgu += p.rgu; existing.hsd += p.hsd || 0; existing.xm += p.xml || 0; p.agts.forEach(n => existing._agents.add(n)); if (p.pctToGoal !== null) { existing._pctSum += p.pctToGoal * p.agentCount; existing._pctN += p.agentCount; } }
         else acc.push({ grp: p.grp, hrs: p.hrs, goals: p.effectiveGoals, rgu: p.rgu, hsd: p.hsd || 0, xm: p.xml || 0, _agents: new Set(p.agts), _pctSum: p.pctToGoal !== null ? p.pctToGoal * p.agentCount : 0, _pctN: p.pctToGoal !== null ? p.agentCount : 0 });
