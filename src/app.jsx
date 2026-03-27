@@ -8608,7 +8608,7 @@ const deriveHsdXm = (products) => ({
 
 // ── TVMode — Screensaver for TV displays ─────────────────────────────────────
 // Full-screen auto-rotating view using current theme, site filter, campaign comparison.
-function TVMode({ d, codes, doFetch, lastRefresh, onExit }) {
+function TVMode({ d, codes, doFetch, lastRefresh, onExit, activeOnly, setActiveOnly, prevAgentHours }) {
   const [slideIdx, setSlideIdx] = useState(0);
   const [tvSite, setTvSite] = useState("ALL");
   const autoScrollRef = useRef(null);
@@ -9098,6 +9098,18 @@ function TVMode({ d, codes, doFetch, lastRefresh, onExit }) {
           <span style={{ fontSize: "0.78rem", color: `var(--text-faint)` }}>updated {now}</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+          {/* Active/All toggle */}
+          <div style={{ display: "inline-flex", borderRadius: "var(--radius-sm, 6px)", border: `1px solid var(--border)`, overflow: "hidden" }}>
+            <button onClick={e => { e.stopPropagation(); setActiveOnly(false); }}
+              style={{ padding: "0.3rem 0.7rem", border: "none", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", cursor: "pointer", fontWeight: !activeOnly ? 700 : 400, background: !activeOnly ? "#16a34a18" : "transparent", color: !activeOnly ? "#16a34a" : `var(--text-dim)` }}>
+              All ({d.allCount})
+            </button>
+            <button onClick={e => { e.stopPropagation(); setActiveOnly(true); }}
+              style={{ padding: "0.3rem 0.7rem", border: "none", borderLeft: "1px solid var(--border)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", cursor: "pointer", fontWeight: activeOnly ? 700 : 400, background: activeOnly ? "#d9770618" : "transparent", color: activeOnly ? "#d97706" : `var(--text-dim)` }}>
+              Active{Object.keys(prevAgentHours).length > 0 ? ` (${d.activeCount})` : ""}
+            </button>
+          </div>
+          {/* Site filter */}
           <div style={{ display: "inline-flex", borderRadius: "var(--radius-sm, 6px)", border: `1px solid var(--border)`, overflow: "hidden" }}>
             {[["ALL","All"],["DR","DR"],["BZ","BZ"]].map(([k, label]) => (
               <button key={k} onClick={e => { e.stopPropagation(); setTvSite(k); }} style={siteBtnStyle(tvSite === k)}>{label}</button>
@@ -9767,7 +9779,7 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
 
   // ── Screensaver / TV Mode ────────────────────────────────────────────────
   if (screensaverMode && d) {
-    return (<TVMode d={d} codes={codes} doFetch={doFetch} lastRefresh={lastRefresh} onExit={() => setScreensaverMode(false)} />);
+    return (<TVMode d={d} codes={codes} doFetch={doFetch} lastRefresh={lastRefresh} onExit={() => setScreensaverMode(false)} activeOnly={activeOnly} setActiveOnly={setActiveOnly} prevAgentHours={prevAgentHours} />);
   }
 
   return (
@@ -9782,7 +9794,7 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
           <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "3rem", color: `var(--text-warm)`, fontWeight: 700 }}>Today's Operations</div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", alignItems: "flex-end" }}>
-          <button onClick={() => setScreensaverMode(true)}
+          <button onClick={() => { setActiveOnly(false); setScreensaverMode(true); }}
             style={{ background: "#6366f110", border: "1px solid #6366f140", borderRadius: "6px",
               color: "#6366f1", padding: "0.5rem 1.25rem", fontFamily: "var(--font-ui, Inter, sans-serif)",
               fontSize: "1.1rem", cursor: "pointer", fontWeight: 700, width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}>
