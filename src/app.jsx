@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect, Fragment, Component } from "react";
+import pptxgen from "pptxgenjs";
 
 // ── Error Boundary — catches rendering crashes and shows a recovery UI ──────
 class ErrorBoundary extends Component {
@@ -79,6 +80,63 @@ function attainColor(pct) {
   if (pct >= 80)  return Q.Q2.color;
   if (pct > 0)    return Q.Q3.color;
   return Q.Q4.color;
+}
+
+// ── MBR Export Constants ─────────────────────────────────────────────────────
+// Category detection: GL-code prefixes, display name keywords, and exact overrides
+function getMbrCategory(jobType) {
+  const jt = (jobType || "").trim();
+  const upper = jt.toUpperCase();
+  // GL code prefixes
+  if (/^GLN/i.test(jt)) return "Acquisition";
+  if (/^GLU/i.test(jt)) return "Multi-Product Expansion";
+  if (/^GLB/i.test(jt)) return "Up Tier & Ancillary";
+  // Keyword matching on display names
+  if (/\b(NONSUB|NON.?SUB|BAU|LOCALIZ|WR\s*NS)\b/i.test(upper)) return "Acquisition";
+  if (/\b(XM\s*UP|ADD.?A.?LINE|ONBOARD|LIKELY)\b/i.test(upper)) return "Multi-Product Expansion";
+  if (/\b(XMC|ATTACH|UP.?TIER|ANCILLARY)\b/i.test(upper)) return "Up Tier & Ancillary";
+  // Bare "XM" (not "XMC") → Multi-Product Expansion
+  if (/^XM$/i.test(upper) || /^XM\s/i.test(upper)) return "Multi-Product Expansion";
+  return jt;
+}
+
+const MBR_COLORS = {
+  purple:      "6137F4",
+  purpleDark:  "4a28c4",
+  amber:       "FFAA00",
+  green:       "008557",
+  blue:        "1F69FF",
+  orange:      "E54F00",
+  red:         "E5004C",
+  textPrimary: "1a1a1a",
+  textSecondary:"888888",
+  white:       "FFFFFF",
+  lightGray:   "FAFAFA",
+  cardBorder:  "E2E8F0",
+};
+
+const MBR_FONT = "Segoe UI";
+const MBR_BILLING_RATE = 19.77;
+
+// Display-friendly site name mapping
+const MBR_SITE_NAMES = {
+  "Belize City-XOTM": "Belize City",
+  "San Ignacio-XOTM": "San Ignacio",
+  "SD-Xfinity": "Dom. Republic",
+};
+function mbrSiteName(name) { return MBR_SITE_NAMES[name] || name; }
+
+function formatFiscalFilename(fiscalEnd) {
+  if (!fiscalEnd) return "GCS_MBR_000000.pptx";
+  const [y, m, d] = fiscalEnd.split("-");
+  return `GCS_MBR_${m}${d}${y.slice(2)}.pptx`;
+}
+
+function mbrQuartileColor(pctToGoal) {
+  if (pctToGoal >= 100) return MBR_COLORS.green;
+  if (pctToGoal >= 80)  return MBR_COLORS.blue;
+  if (pctToGoal > 0)    return MBR_COLORS.amber;
+  return MBR_COLORS.red;
 }
 
 // ── Fiscal Month & Pacing Utilities ──────────────────────────────────────────
@@ -4428,6 +4486,1016 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
   );
 }
 
+
+// ══════════════════════════════════════════════════════════════════════════════
+// SECTION 11.5 — MBR PPTX EXPORT
+// Generates a Monthly Business Review PowerPoint deck from perf data.
+// ══════════════════════════════════════════════════════════════════════════════
+
+// LAYOUT_WIDE = 13.33" x 7.5"
+const MBR_W = 13.33;
+
+function buildMbrTitleSlide(pres, fiscalInfo) {
+  const slide = pres.addSlide();
+  slide.bkgd = MBR_COLORS.purple;
+  // Subtle decorative circle (top right)
+  slide.addShape(pres.shapes.OVAL, {
+    x: 9.5, y: -1.5, w: 5, h: 5, fill: { color: "5228D4" },
+  });
+  // Subtle decorative circle (bottom left)
+  slide.addShape(pres.shapes.OVAL, {
+    x: -2, y: 4.5, w: 5, h: 5, fill: { color: "5228D4" },
+  });
+  slide.addText("MONTHLY BUSINESS REVIEW", {
+    x: 0.8, y: 2.0, w: 11.5, h: 1.2,
+    fontSize: 42, fontFace: MBR_FONT, color: MBR_COLORS.white, bold: true,
+  });
+  slide.addText("GLOBAL CALLCENTER SOLUTIONS (GCS)", {
+    x: 0.8, y: 3.2, w: 11.5, h: 0.7,
+    fontSize: 20, fontFace: MBR_FONT, color: MBR_COLORS.amber,
+  });
+  const fiscalEnd = fiscalInfo?.fiscalEnd || "";
+  let dateLabel = "";
+  if (fiscalEnd) {
+    const [y, m] = fiscalEnd.split("-");
+    const months = ["","January","February","March","April","May","June","July","August","September","October","November","December"];
+    dateLabel = `${months[parseInt(m, 10)] || ""} ${y}`;
+  }
+  slide.addText(dateLabel, {
+    x: 0.8, y: 3.9, w: 11.5, h: 0.5,
+    fontSize: 16, fontFace: MBR_FONT, color: MBR_COLORS.white, italic: true,
+  });
+  slide.addShape(pres.shapes.RECTANGLE, {
+    x: 0, y: 5.5, w: MBR_W, h: 0.05,
+    fill: { color: MBR_COLORS.amber },
+  });
+}
+
+function addMbrSlideHeader(slide, pres, title, subtitle) {
+  // Header with gradient effect (two overlapping rects)
+  slide.addShape(pres.shapes.RECTANGLE, {
+    x: 0, y: 0, w: MBR_W, h: 1.15,
+    fill: { color: MBR_COLORS.purple },
+  });
+  slide.addShape(pres.shapes.RECTANGLE, {
+    x: 0, y: 0.7, w: MBR_W, h: 0.45,
+    fill: { color: "5228D4" },
+  });
+  slide.addShape(pres.shapes.RECTANGLE, {
+    x: 0, y: 1.15, w: MBR_W, h: 0.05,
+    fill: { color: MBR_COLORS.amber },
+  });
+  slide.addText("GLOBAL CALLCENTER SOLUTIONS", {
+    x: 0.5, y: 0.15, w: 6, h: 0.3,
+    fontSize: 9, fontFace: MBR_FONT, color: "C0C0E0",
+  });
+  slide.addText(title, {
+    x: 0.5, y: 0.4, w: 10, h: 0.45,
+    fontSize: 22, fontFace: MBR_FONT, color: MBR_COLORS.white, bold: true,
+  });
+  if (subtitle) {
+    slide.addText(subtitle, {
+      x: 0.5, y: 0.8, w: 10, h: 0.3,
+      fontSize: 12, fontFace: MBR_FONT, color: MBR_COLORS.amber,
+    });
+  }
+  // Footer bar
+  slide.addShape(pres.shapes.RECTANGLE, {
+    x: 0, y: 7.2, w: MBR_W, h: 0.3,
+    fill: { color: "F5F5FA" },
+  });
+  slide.addShape(pres.shapes.RECTANGLE, {
+    x: 0, y: 7.2, w: MBR_W, h: 0.01,
+    fill: { color: MBR_COLORS.cardBorder },
+  });
+  slide.addText("GCS  |  Performance Intel", {
+    x: 0.5, y: 7.22, w: 4, h: 0.2,
+    fontSize: 7, fontFace: MBR_FONT, color: MBR_COLORS.textSecondary, italic: true,
+  });
+}
+
+function buildMbrSummarySlide(pres, perf) {
+  const slide = pres.addSlide();
+  slide.bkgd = MBR_COLORS.white;
+  const fi = perf.fiscalInfo;
+  const fiscalEnd = fi?.fiscalEnd || "";
+  let periodLabel = "";
+  if (fiscalEnd) {
+    const [y, m] = fiscalEnd.split("-");
+    const months = ["","JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+    periodLabel = `${months[parseInt(m, 10)] || ""} ${y} MTD`;
+  }
+  addMbrSlideHeader(slide, pres, `SUMMARY \u2013 ${periodLabel}`, "Sales Performance");
+
+  // ── TOP ROW: 5 KPI cards + Headcount with pie chart ──
+  const kpis = [
+    { label: "HOURS",    actual: perf.totalHours,    plan: perf.globalPlanHours, color: MBR_COLORS.blue },
+    { label: "SALES",    actual: perf.globalGoals,    plan: perf.planTotal, color: MBR_COLORS.blue },
+    { label: "XI RGUs",  actual: perf.globalNewXI,    plan: perf.globalPlanNewXI, color: MBR_COLORS.green },
+    { label: "XM RGUs",  actual: perf.globalXmLines,  plan: perf.globalPlanXmLines, color: MBR_COLORS.blue },
+    { label: "RGUs",     actual: perf.globalRgu,      plan: perf.globalPlanRgu, color: MBR_COLORS.orange },
+  ];
+  const cardW = 1.75, cardH = 1.15, gapX = 0.12, startX = 0.5, startY = 1.4;
+  kpis.forEach((kpi, i) => {
+    const x = startX + i * (cardW + gapX);
+    const hasPlan = kpi.plan != null && kpi.plan > 0;
+    const pctGoal = hasPlan ? (kpi.actual / kpi.plan) * 100 : null;
+    const pacing = hasPlan && fi ? calcPacing(kpi.actual, kpi.plan, fi.elapsedBDays, fi.totalBDays) : null;
+    // Card shadow (offset slightly)
+    slide.addShape(pres.shapes.ROUNDED_RECTANGLE, {
+      x: x + 0.02, y: startY + 0.03, w: cardW, h: cardH,
+      fill: { color: "E0E0E0" }, rectRadius: 0.05,
+    });
+    // Card face
+    slide.addShape(pres.shapes.ROUNDED_RECTANGLE, {
+      x, y: startY, w: cardW, h: cardH,
+      fill: { color: "FFF8E1" }, rectRadius: 0.05,
+      line: { color: MBR_COLORS.cardBorder, width: 0.5 },
+    });
+    // Left accent bar
+    slide.addShape(pres.shapes.RECTANGLE, {
+      x, y: startY + 0.08, w: 0.05, h: cardH - 0.16,
+      fill: { color: kpi.color },
+    });
+    // Colored label
+    slide.addText(kpi.label, {
+      x, y: startY + 0.05, w: cardW, h: 0.28,
+      fontSize: 13, fontFace: MBR_FONT, color: kpi.color, bold: true, align: "center",
+    });
+    // % to Goal
+    if (hasPlan) {
+      slide.addText(`${Math.round(pctGoal)}% to Goal`, {
+        x, y: startY + 0.33, w: cardW, h: 0.32,
+        fontSize: 11, fontFace: MBR_FONT, color: MBR_COLORS.textPrimary, align: "center",
+      });
+    }
+    // Pacing
+    if (pacing) {
+      slide.addText(`${Math.round(pacing.projectedPct)}% Pacing`, {
+        x, y: startY + 0.68, w: cardW, h: 0.32,
+        fontSize: 11, fontFace: MBR_FONT, color: MBR_COLORS.textPrimary, bold: true, align: "center",
+      });
+    }
+  });
+
+  // Headcount + Pie chart (top right, aligned with KPI cards)
+  const hcX = 10.0;
+  slide.addText("HEADCOUNT", {
+    x: hcX, y: startY, w: 3, h: 0.28,
+    fontSize: 14, fontFace: MBR_FONT, color: MBR_COLORS.orange, bold: true, align: "center",
+  });
+  slide.addText(String(perf.uniqueAgentCount || 0), {
+    x: hcX, y: startY + 0.28, w: 3, h: 0.35,
+    fontSize: 22, fontFace: MBR_FONT, color: MBR_COLORS.textPrimary, bold: true, align: "center",
+  });
+
+  // Site distribution pie chart
+  const regions = perf.regions || [];
+  if (regions.length > 0) {
+    const pieColors = ["008557", "1F69FF", "6137F4", "FFAA00", "E54F00", "E5004C"];
+    const chartData = [{
+      name: "Sites",
+      labels: regions.map(r => `${mbrSiteName(r.name)}, ${r.uniqueAgents || r.count}`),
+      values: regions.map(r => r.uniqueAgents || r.count),
+    }];
+    slide.addChart(pres.charts.PIE, chartData, {
+      x: hcX + 0.15, y: startY + 0.7, w: 2.6, h: 1.53,
+      showTitle: false,
+      showValue: false,
+      showPercent: true,
+      showLegend: false,
+      showLabel: true,
+      dataLabelPosition: "bestFit",
+      dataLabelFontSize: 8,
+      dataLabelColor: MBR_COLORS.textPrimary,
+      chartColors: pieColors.slice(0, regions.length),
+    });
+  }
+
+  // ── BOTTOM: Per-category aggregate tables ──
+  const { programs } = perf;
+  const categories = {};
+  programs.forEach(p => {
+    const cat = getMbrCategory(p.jobType);
+    if (!categories[cat]) categories[cat] = [];
+    categories[cat].push(p);
+  });
+
+  const catList = Object.entries(categories);
+  const catColors = { "Acquisition": MBR_COLORS.green, "Multi-Product Expansion": MBR_COLORS.blue, "Up Tier & Ancillary": MBR_COLORS.amber, "Other": MBR_COLORS.purple };
+  const tableW = catList.length > 0 ? Math.min(4.0, (MBR_W - 0.8) / catList.length - 0.15) : 4.0;
+  // Section divider
+  slide.addShape(pres.shapes.RECTANGLE, {
+    x: 0.3, y: 3.55, w: MBR_W - 0.6, h: 0.015,
+    fill: { color: MBR_COLORS.cardBorder },
+  });
+  const tableStartY = 3.8; // pushed down for breathing room
+  const rowH = 0.2;
+  const colW5 = [tableW * 0.24, tableW * 0.19, tableW * 0.19, tableW * 0.19, tableW * 0.19];
+
+  // ── PASS 1: Build data for all categories, find max volume rows ──
+  const catData = catList.map(([cat, progs]) => {
+    const catColor = catColors[cat] || MBR_COLORS.purple;
+    const totHours = progs.reduce((s, p) => s + p.totalHours, 0);
+    const totSales = progs.reduce((s, p) => s + p.actGoals, 0);
+    const totRgu   = progs.reduce((s, p) => s + p.totalRgu, 0);
+    const totXI    = progs.reduce((s, p) => s + p.totalNewXI, 0);
+    const totXM    = progs.reduce((s, p) => s + p.totalXmLines, 0);
+    const totVideo = progs.reduce((s, p) => s + p.agents.reduce((s2, a) => s2 + a.newVideo, 0), 0);
+    const totXH    = progs.reduce((s, p) => s + p.agents.reduce((s2, a) => s2 + a.newXH, 0), 0);
+    const planHours = progs.reduce((s, p) => s + (p.goalEntry ? (getPlanForKey(p.goalEntry, "Hours Goal") || 0) : 0), 0);
+    const planSales = progs.reduce((s, p) => s + (p.planGoals || 0), 0);
+    const planRgu   = progs.reduce((s, p) => s + (p.goalEntry ? (getPlanForKey(p.goalEntry, "RGU GOAL") || 0) : 0), 0);
+    const planXI    = progs.reduce((s, p) => s + (p.goalEntry ? (getPlanForKey(p.goalEntry, "HSD Sell In Goal") || 0) : 0), 0);
+    const planXM    = progs.reduce((s, p) => s + (p.goalEntry ? (getPlanForKey(p.goalEntry, "XM GOAL") || 0) : 0), 0);
+    const volRows = [];
+    const addCatRow = (label, actual, plan, isDollar) => {
+      if (!plan && !actual) return;
+      const pfx = isDollar ? "$  " : "";
+      const variance = plan ? actual - plan : 0;
+      const pctGoal = plan ? Math.round((actual / plan) * 100) + "%" : "\u2014";
+      const fmtVal = isDollar ? (v => pfx + Math.round(v).toLocaleString()) : (v => Math.round(v).toLocaleString());
+      volRows.push([label, plan ? fmtVal(plan) : "\u2014", fmtVal(actual),
+        plan ? ((variance >= 0 ? pfx : (isDollar ? "$ (" : "(")) + Math.abs(Math.round(variance)).toLocaleString() + (variance < 0 ? ")" : "")) : "\u2014", pctGoal]);
+    };
+    const catBudgetPlan = planHours ? planHours * MBR_BILLING_RATE : null;
+    addCatRow("BUDGET", totHours * MBR_BILLING_RATE, catBudgetPlan, true);
+    addCatRow("HOURS", totHours, planHours || null);
+    addCatRow("HOMES SOLD", totSales, planSales || null);
+    addCatRow("TOTAL RGUs", totRgu, planRgu || null);
+    addCatRow("XI RGUs", totXI, planXI || null);
+    addCatRow("XM RGUs", totXM, planXM || null);
+    if (totVideo > 0) addCatRow("VIDEO RGUs", totVideo, null);
+    if (totXH > 0) addCatRow("XH RGUs", totXH, null);
+    const costRows = [];
+    if (totSales > 0) {
+      const cpsPlan = planSales && planHours ? (planHours * MBR_BILLING_RATE) / planSales : null;
+      const cpsAct = (totHours * MBR_BILLING_RATE) / totSales;
+      costRows.push(["CPS", cpsPlan ? "$  " + cpsPlan.toFixed(2) : "\u2014", "$  " + cpsAct.toFixed(2),
+        cpsPlan ? ((cpsAct - cpsPlan >= 0 ? "$  " : "$ (") + Math.abs(cpsAct - cpsPlan).toFixed(2) + (cpsAct - cpsPlan < 0 ? ")" : "")) : "",
+        cpsPlan ? Math.round((cpsAct / cpsPlan) * 100) + "%" : ""]);
+    }
+    if (totRgu > 0) {
+      const cprguPlan = planRgu && planHours ? (planHours * MBR_BILLING_RATE) / planRgu : null;
+      const cprguAct = (totHours * MBR_BILLING_RATE) / totRgu;
+      costRows.push(["CPRGU", cprguPlan ? "$  " + cprguPlan.toFixed(2) : "\u2014", "$  " + cprguAct.toFixed(2),
+        cprguPlan ? ((cprguAct - cprguPlan >= 0 ? "$  " : "$ (") + Math.abs(cprguAct - cprguPlan).toFixed(2) + (cprguAct - cprguPlan < 0 ? ")" : "")) : "",
+        cprguPlan ? Math.round((cprguAct / cprguPlan) * 100) + "%" : ""]);
+    }
+    if (totHours > 0 && totSales > 0) costRows.push(["SPH", "\u2014", (totSales / totHours).toFixed(2), "", ""]);
+    return { cat, catColor, volRows, costRows };
+  });
+
+  // Max volume row count → consistent cost table Y
+  const maxVolRows = Math.max(...catData.map(d => d.volRows.length));
+  const volTableEndY = tableStartY + 0.32 + rowH * (maxVolRows + 1) + 0.1; // header + rows + gap
+
+  // ── PASS 2: Render all tables at aligned positions ──
+  catData.forEach((d, ci) => {
+    const tx = 0.5 + ci * (tableW + 0.15);
+    const catHdrStyle = { fontSize: 8, fontFace: MBR_FONT, color: MBR_COLORS.white, fill: { color: d.catColor }, bold: true };
+    const catCellStyle = { fontSize: 8, fontFace: MBR_FONT, color: MBR_COLORS.textPrimary, fill: { color: MBR_COLORS.white } };
+    const mkHdr = () => ["", "Budget", "Actual", "Variance", "% Goal"].map((t, i) => ({
+      text: t, options: { ...catHdrStyle, align: i === 0 ? "left" : "right" },
+    }));
+    const mkRows = (src) => src.map(r => r.map((c, i) => ({
+      text: c, options: { ...catCellStyle, bold: i === 0, align: i === 0 ? "left" : "right" },
+    })));
+
+    // Category header bar
+    slide.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: tx, y: tableStartY, w: tableW, h: 0.32, fill: { color: d.catColor }, rectRadius: 0.04 });
+    slide.addText(d.cat.toUpperCase(), {
+      x: tx, y: tableStartY, w: tableW, h: 0.32,
+      fontSize: 10, fontFace: MBR_FONT, color: MBR_COLORS.white, bold: true, align: "center", valign: "middle",
+    });
+
+    // Volume table
+    const vRows = mkRows(d.volRows);
+    if (vRows.length > 0) {
+      slide.addTable([mkHdr(), ...vRows], {
+        x: tx, y: tableStartY + 0.32, w: tableW, fontSize: 8,
+        border: { pt: 0.3, color: MBR_COLORS.cardBorder },
+        colW: colW5, rowH, margin: [1, 3, 1, 3],
+      });
+    }
+
+    // Cost table — aligned across all categories
+    const cRows = mkRows(d.costRows);
+    if (cRows.length > 0) {
+      slide.addTable([mkHdr(), ...cRows], {
+        x: tx, y: volTableEndY, w: tableW, fontSize: 8,
+        border: { pt: 0.3, color: MBR_COLORS.cardBorder },
+        colW: colW5, rowH, margin: [1, 3, 1, 3],
+      });
+    }
+  });
+
+  // Data source
+  const lastDate = fi?.lastDataDate || "";
+  slide.addText(`Data Source: BI data through ${lastDate}`, {
+    x: 0.5, y: 7.05, w: 8, h: 0.2,
+    fontSize: 7, fontFace: MBR_FONT, color: MBR_COLORS.textSecondary, italic: true,
+  });
+}
+
+function buildMbrProgramSlide(pres, program, fiscalInfo, narrativeText, oppsText) {
+  const slide = pres.addSlide();
+  slide.bkgd = MBR_COLORS.white;
+  const category = getMbrCategory(program.jobType);
+  const fiscalEnd = fiscalInfo?.fiscalEnd || "";
+  let periodLabel = "";
+  if (fiscalEnd) {
+    const [y, m] = fiscalEnd.split("-");
+    const months = ["","JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+    periodLabel = `${months[parseInt(m, 10)] || ""} ${y} MTD`;
+  }
+  addMbrSlideHeader(slide, pres, program.jobType, `${category}  |  ${periodLabel}`);
+  const fi = fiscalInfo;
+
+  // Category badge (top right)
+  const catColors = { "Acquisition": MBR_COLORS.green, "Multi-Product Expansion": MBR_COLORS.blue, "Up Tier & Ancillary": MBR_COLORS.amber };
+  const badgeColor = catColors[category] || MBR_COLORS.purple;
+  // Badge shadow
+  slide.addShape(pres.shapes.ROUNDED_RECTANGLE, {
+    x: 10.82, y: 0.28, w: 2.1, h: 0.45,
+    fill: { color: "CCCCCC" }, rectRadius: 0.08,
+  });
+  // Badge face
+  slide.addShape(pres.shapes.ROUNDED_RECTANGLE, {
+    x: 10.8, y: 0.25, w: 2.1, h: 0.45,
+    fill: { color: badgeColor }, rectRadius: 0.08,
+  });
+  slide.addText(category, {
+    x: 10.8, y: 0.25, w: 2.1, h: 0.45,
+    fontSize: 9, fontFace: MBR_FONT, color: MBR_COLORS.white, bold: true, align: "center", valign: "middle",
+  });
+
+  // Truncate AI text to fit slide
+  const truncate = (text, max) => {
+    if (!text) return null;
+    if (text.length <= max) return text;
+    const cut = text.slice(0, max);
+    const last = cut.lastIndexOf(".");
+    return last > max * 0.5 ? cut.slice(0, last + 1) : cut + "...";
+  };
+  const narrative = truncate(narrativeText, 300) || "Add project insights here";
+  const opps = truncate(oppsText, 400) || "Add team insights here";
+
+  const tOpts = { fontSize: 8, fontFace: MBR_FONT };
+  const hdrOpts = { ...tOpts, color: MBR_COLORS.white, fill: { color: MBR_COLORS.purple }, bold: true };
+  const cellOpts = { ...tOpts, color: MBR_COLORS.textPrimary, fill: { color: MBR_COLORS.white } };
+
+  // ══ LEFT COLUMN (x=0.5, w=6.8): PROJECT ══
+  const lx = 0.5;
+  let cy = 1.35;
+
+  slide.addText("PROJECT", {
+    x: lx, y: cy, w: 6.8, h: 0.28,
+    fontSize: 12, fontFace: MBR_FONT, color: MBR_COLORS.textPrimary, bold: true, align: "center",
+  });
+  cy += 0.32;
+
+  // ── TABLE 1: Volume Metrics ──
+  const volRows = [];
+  const addVolRow = (label, actual, plan) => {
+    if (plan == null || plan <= 0) return;
+    const variance = actual - plan;
+    const pctGoal = (actual / plan) * 100;
+    const pacing = fi ? calcPacing(actual, plan, fi.elapsedBDays, fi.totalBDays) : null;
+    volRows.push([label, Math.round(plan).toLocaleString(), Math.round(actual).toLocaleString(),
+      (variance >= 0 ? "" : "(") + Math.abs(Math.round(variance)).toLocaleString() + (variance < 0 ? ")" : ""),
+      Math.round(pctGoal) + "%", pacing ? Math.round(pacing.projectedPct) + "%" : "\u2014"]);
+  };
+  const ge = program.goalEntry;
+  const planHrs = ge ? getPlanForKey(ge, "Hours Goal") : null;
+  const actHrs = program.totalHours;
+  const budgetPlan = planHrs ? planHrs * MBR_BILLING_RATE : null;
+  const budgetActual = actHrs * MBR_BILLING_RATE;
+  if (budgetPlan) {
+    const bVar = budgetActual - budgetPlan;
+    const bPacing = fi ? calcPacing(budgetActual, budgetPlan, fi.elapsedBDays, fi.totalBDays) : null;
+    volRows.push(["BUDGET", "$  " + Math.round(budgetPlan).toLocaleString(), "$  " + Math.round(budgetActual).toLocaleString(),
+      (bVar >= 0 ? "$  " : "$ (") + Math.abs(Math.round(bVar)).toLocaleString() + (bVar < 0 ? ")" : ""),
+      Math.round((budgetActual / budgetPlan) * 100) + "%", bPacing ? Math.round(bPacing.projectedPct) + "%" : "\u2014"]);
+  }
+  addVolRow("HOURS", actHrs, planHrs);
+  addVolRow("SALES", program.actGoals, program.planGoals);
+  addVolRow("RGUs", program.totalRgu, ge ? getPlanForKey(ge, "RGU GOAL") : null);
+  addVolRow("HSD RGUs", program.totalNewXI, ge ? getPlanForKey(ge, "HSD Sell In Goal") : null);
+  addVolRow("XM RGUs", program.totalXmLines, ge ? getPlanForKey(ge, "XM GOAL") : null);
+  if (program.hasNewVideo) addVolRow("VIDEO RGUs", program.agents.reduce((s,a) => s+a.newVideo,0), ge ? getPlanForKey(ge, "VIDEO GOAL") : null);
+  if (program.hasNewXH) addVolRow("XH RGUs", program.agents.reduce((s,a) => s+a.newXH,0), ge ? getPlanForKey(ge, "XH GOAL") : null);
+
+  // ── TABLE 2: Cost & Efficiency Metrics ──
+  const costRows = [];
+  if (program.actGoals > 0) {
+    const cpsPlan = program.planGoals && planHrs ? (planHrs * MBR_BILLING_RATE) / program.planGoals : null;
+    const cpsActual = (actHrs * MBR_BILLING_RATE) / program.actGoals;
+    costRows.push(["CPS", cpsPlan ? "$  " + cpsPlan.toFixed(2) : "\u2014", "$  " + cpsActual.toFixed(2),
+      cpsPlan ? ((cpsActual - cpsPlan >= 0 ? "$  " : "$ (") + Math.abs(cpsActual - cpsPlan).toFixed(2) + (cpsActual - cpsPlan < 0 ? ")" : "")) : "",
+      cpsPlan ? Math.round((cpsActual / cpsPlan) * 100) + "%" : ""]);
+  }
+  if (program.totalRgu > 0) {
+    const rg = ge ? getPlanForKey(ge, "RGU GOAL") : null;
+    const cprguPlan = rg && planHrs ? (planHrs * MBR_BILLING_RATE) / rg : null;
+    const cprguActual = (actHrs * MBR_BILLING_RATE) / program.totalRgu;
+    costRows.push(["CPRGU", cprguPlan ? "$  " + cprguPlan.toFixed(2) : "\u2014", "$  " + cprguActual.toFixed(2),
+      cprguPlan ? ((cprguActual - cprguPlan >= 0 ? "$  " : "$ (") + Math.abs(cprguActual - cprguPlan).toFixed(2) + (cprguActual - cprguPlan < 0 ? ")" : "")) : "",
+      cprguPlan ? Math.round((cprguActual / cprguPlan) * 100) + "%" : ""]);
+  }
+  if (program.totalNewXI > 0) {
+    const xi = ge ? getPlanForKey(ge, "HSD Sell In Goal") : null;
+    const cpxiPlan = xi && planHrs ? (planHrs * MBR_BILLING_RATE) / xi : null;
+    const cpxiActual = (actHrs * MBR_BILLING_RATE) / program.totalNewXI;
+    costRows.push(["CPXI", cpxiPlan ? "$  " + cpxiPlan.toFixed(2) : "\u2014", "$  " + cpxiActual.toFixed(2),
+      cpxiPlan ? ((cpxiActual - cpxiPlan >= 0 ? "$  " : "$ (") + Math.abs(cpxiActual - cpxiPlan).toFixed(2) + (cpxiActual - cpxiPlan < 0 ? ")" : "")) : "",
+      cpxiPlan ? Math.round((cpxiActual / cpxiPlan) * 100) + "%" : ""]);
+  }
+  const sphPlanVal = ge ? getPlanForKey(ge, "SPH GOAL") : null;
+  if (sphPlanVal && actHrs > 0) {
+    const sphAct = program.actGoals / actHrs;
+    costRows.push(["SPH", sphPlanVal.toFixed(2), sphAct.toFixed(2),
+      ((sphAct - sphPlanVal >= 0 ? "" : "(") + Math.abs(sphAct - sphPlanVal).toFixed(2) + (sphAct - sphPlanVal < 0 ? ")" : "")),
+      Math.round((sphAct / sphPlanVal) * 100) + "%"]);
+  } else if (actHrs > 0 && program.actGoals > 0) {
+    costRows.push(["SPH", "\u2014", (program.actGoals / actHrs).toFixed(2), "", ""]);
+  }
+  if (actHrs > 0 && program.totalNewXI > 0) costRows.push(["SPH (XI)", "\u2014", (program.totalNewXI / actHrs).toFixed(2), "", ""]);
+  if (actHrs > 0 && program.totalXmLines > 0) costRows.push(["SPH (XM)", "\u2014", (program.totalXmLines / actHrs).toFixed(2), "", ""]);
+
+  // Render Volume table
+  const volHdr = ["", "Budget", "Actual", "Variance", "% Goal", "% Pacing"].map((t, i) => ({
+    text: t, options: { ...hdrOpts, align: i === 0 ? "left" : "right" },
+  }));
+  const volDataRows = volRows.map((r, ri) => r.map((c, i) => ({ text: c, options: { ...cellOpts, bold: i === 0, align: i === 0 ? "left" : "right", fill: { color: ri % 2 === 1 ? "F5F5FA" : MBR_COLORS.white } } })));
+  if (volDataRows.length > 0) {
+    slide.addTable([volHdr, ...volDataRows], {
+      x: lx, y: cy, w: 6.8, fontSize: 8,
+      border: { pt: 0.5, color: MBR_COLORS.cardBorder },
+      colW: [1.0, 1.1, 1.1, 1.1, 0.8, 0.8],
+      rowH: 0.2, margin: [2, 4, 2, 4],
+    });
+    cy += 0.2 * (volDataRows.length + 1) + 0.12;
+  }
+
+  // Render Cost/Efficiency table (no Pacing column — only 5 cols)
+  const costHdr = ["", "Budget", "Actual", "Variance", "% Goal"].map((t, i) => ({
+    text: t, options: { ...hdrOpts, align: i === 0 ? "left" : "right" },
+  }));
+  const costDataRows = costRows.map((r, ri) => r.map((c, i) => ({ text: c, options: { ...cellOpts, bold: i === 0, align: i === 0 ? "left" : "right", fill: { color: ri % 2 === 1 ? "F5F5FA" : MBR_COLORS.white } } })));
+  if (costDataRows.length > 0) {
+    slide.addTable([costHdr, ...costDataRows], {
+      x: lx, y: cy, w: 5.5, fontSize: 8,
+      border: { pt: 0.5, color: MBR_COLORS.cardBorder },
+      colW: [0.9, 1.1, 1.1, 1.1, 0.8],
+      rowH: 0.2, margin: [2, 4, 2, 4],
+    });
+    cy += 0.2 * (costDataRows.length + 1) + 0.12;
+  }
+
+  // Project KPI Insights (below table)
+  slide.addText("Project KPI Insights", {
+    x: lx, y: cy, w: 6.8, h: 0.25,
+    fontSize: 10, fontFace: MBR_FONT, color: MBR_COLORS.textPrimary, bold: true,
+  });
+  cy += 0.25;
+  slide.addText(narrative, {
+    x: lx, y: cy, w: 6.8, h: 0.75,
+    fontSize: 8, fontFace: MBR_FONT, color: MBR_COLORS.textPrimary, valign: "top", wrap: true,
+  });
+
+  // Subtle background wash for TEAM column
+  slide.addShape(pres.shapes.RECTANGLE, {
+    x: 7.4, y: 1.25, w: 5.93, h: 5.75,
+    fill: { color: "F8F9FC" },
+  });
+  // Vertical divider between columns
+  slide.addShape(pres.shapes.RECTANGLE, {
+    x: 7.4, y: 1.35, w: 0.015, h: 5.5,
+    fill: { color: MBR_COLORS.purple },
+  });
+  // ══ RIGHT COLUMN (x=7.6, w=5.3): TEAM ══
+  const rx = 7.6;
+  let ry = 1.35;
+
+  slide.addText("TEAM", {
+    x: rx, y: ry, w: 5.3, h: 0.28,
+    fontSize: 12, fontFace: MBR_FONT, color: MBR_COLORS.textPrimary, bold: true, align: "center",
+  });
+  ry += 0.32;
+
+  // Per-site quartile breakdown tables (matching reference PPTX)
+  const regions = program.regions || [];
+  const qGroups = [
+    { key: "Q1", label: "1st", agents: program.q1Agents || [], color: MBR_COLORS.green, bgTint: "E8F5E9" },
+    { key: "Q2", label: "2nd", agents: program.q2Agents || [], color: MBR_COLORS.blue, bgTint: "E3F2FD" },
+    { key: "Q3", label: "3rd", agents: program.q3Agents || [], color: MBR_COLORS.amber, bgTint: "FFF8E1" },
+    { key: "Q4", label: "4th", agents: program.q4Agents || [], color: MBR_COLORS.red, bgTint: "FFEBEE" },
+  ];
+
+  const nhSet = new Set((program.newHiresInProgram || []).map(a => a.agentName));
+  const thOpts = { fontSize: 7, fontFace: MBR_FONT, color: MBR_COLORS.white, fill: { color: MBR_COLORS.purple }, bold: true };
+  const teamHdr = [
+    { text: "Quartile", options: thOpts },
+    { text: "Agents", options: { ...thOpts, align: "center" } },
+    { text: "<60", options: { ...thOpts, align: "center" } },
+    { text: "Hours", options: { ...thOpts, align: "right" } },
+    { text: "Sales", options: { ...thOpts, align: "right" } },
+    { text: "XI RGU", options: { ...thOpts, align: "right" } },
+    { text: "XM RGU", options: { ...thOpts, align: "right" } },
+    { text: "SPH", options: { ...thOpts, align: "right" } },
+  ];
+
+  regions.filter(region => region.totalHours >= 10).forEach(region => {
+    slide.addText(mbrSiteName(region.name), {
+      x: rx, y: ry, w: 5.3, h: 0.2,
+      fontSize: 8, fontFace: MBR_FONT, color: MBR_COLORS.purple, bold: true,
+    });
+    ry += 0.2;
+
+    const siteRows = qGroups.map(qg => {
+      const siteAgents = qg.agents.filter(a => a.region === region.name);
+      const count = siteAgents.length;
+      const nhCount = siteAgents.filter(a => nhSet.has(a.agentName)).length;
+      const hours = siteAgents.reduce((s, a) => s + a.hours, 0);
+      const sales = siteAgents.reduce((s, a) => s + a.goals, 0);
+      const xiRgu = siteAgents.reduce((s, a) => s + (a.newXI || 0), 0);
+      const xmRgu = siteAgents.reduce((s, a) => s + (a.xmLines || 0), 0);
+      const sph = hours > 0 ? (sales / hours).toFixed(2) : "0.00";
+      const rowFill = { color: qg.bgTint };
+      const rc = { fontSize: 7, fontFace: MBR_FONT, color: MBR_COLORS.textPrimary, fill: rowFill };
+      return [
+        { text: qg.label, options: { ...rc, color: qg.color, bold: true } },
+        { text: String(count), options: { ...rc, align: "center" } },
+        { text: String(nhCount), options: { ...rc, align: "center" } },
+        { text: hours ? hours.toFixed(1) : "0", options: { ...rc, align: "right" } },
+        { text: String(sales), options: { ...rc, align: "right" } },
+        { text: String(xiRgu), options: { ...rc, align: "right" } },
+        { text: String(xmRgu), options: { ...rc, align: "right" } },
+        { text: sph, options: { ...rc, align: "right" } },
+      ];
+    });
+
+    slide.addTable([teamHdr, ...siteRows], {
+      x: rx, y: ry, w: 5.3,
+      fontSize: 7,
+      border: { pt: 0.3, color: MBR_COLORS.cardBorder },
+      colW: [0.6, 0.5, 0.4, 0.75, 0.65, 0.6, 0.6, 0.5],
+      rowH: 0.18,
+      margin: [1, 3, 1, 3],
+    });
+    ry += 0.18 * 5 + 0.1;
+  });
+
+  // Tier legend
+  slide.addText(
+    "T1: 100%+ to goal | T2: 80%-99.9% to goal | T3: 1%-79.9% to goal | T4: 0% | Hours > " + getMinHours(),
+    { x: rx, y: ry, w: 5.3, h: 0.2, fontSize: 6, fontFace: MBR_FONT, color: MBR_COLORS.textSecondary }
+  );
+  ry += 0.25;
+
+  // Team Insights (bottom right)
+  slide.addText("Team Insights", {
+    x: rx, y: ry, w: 5.3, h: 0.25,
+    fontSize: 10, fontFace: MBR_FONT, color: MBR_COLORS.textPrimary, bold: true,
+  });
+  ry += 0.25;
+  slide.addText(opps, {
+    x: rx, y: ry, w: 5.3, h: 1.2,
+    fontSize: 8, fontFace: MBR_FONT, color: MBR_COLORS.textPrimary, valign: "top", wrap: true,
+  });
+
+  // Data source
+  const lastDate = fi?.lastDataDate || "";
+  slide.addText("Data Source: BI data through " + lastDate, {
+    x: 0.5, y: 7.05, w: 8, h: 0.2,
+    fontSize: 7, fontFace: MBR_FONT, color: MBR_COLORS.textSecondary, italic: true,
+  });
+}
+
+function buildMbrSiteRankingSlide(pres, perf) {
+  const slide = pres.addSlide();
+  slide.bkgd = MBR_COLORS.white;
+  addMbrSlideHeader(slide, pres, "SITE PERFORMANCE RANKING", "Sales Performance by Site");
+
+  const { programs, fiscalInfo } = perf;
+  const fi = fiscalInfo;
+
+  // Collect all unique sites across all programs (with >= 10 hrs threshold)
+  const allSites = new Set();
+  programs.forEach(p => {
+    (p.regions || []).forEach(r => {
+      if (r.totalHours >= 10) allSites.add(r.name);
+    });
+  });
+  const sites = [...allSites].sort();
+  if (sites.length === 0 || programs.length === 0) return;
+
+  // Metrics per site per program
+  const metrics = ["SPH", "Hours", "Sales", "XI RGU", "XM RGU"];
+
+  // Build header row — each site gets a colored group of columns
+  const siteColors = {};
+  const colorPool = [MBR_COLORS.green, MBR_COLORS.blue, MBR_COLORS.purple, MBR_COLORS.amber, MBR_COLORS.orange];
+  sites.forEach((s, i) => { siteColors[s] = colorPool[i % colorPool.length]; });
+
+  const fontSize = 7;
+  const hdrBase = { fontSize, fontFace: MBR_FONT, bold: true, align: "center", valign: "middle" };
+
+  // Top header row: Program | Site1 (spanning 5 cols) | Site2 (spanning 5 cols) | ... | Best
+  // Since pptxgenjs doesn't support colspan, we'll use a flat structure with site name in the first metric col
+
+  // Build two header rows
+  const hdr1 = [{ text: "", options: { ...hdrBase, color: MBR_COLORS.white, fill: { color: MBR_COLORS.purple } } }];
+  const hdr2 = [{ text: "PROGRAM", options: { ...hdrBase, color: MBR_COLORS.white, fill: { color: MBR_COLORS.purple }, align: "left" } }];
+
+  sites.forEach(s => {
+    const sColor = siteColors[s];
+    // Site name header spans conceptually — put name in first col of group
+    hdr1.push({ text: mbrSiteName(s), options: { ...hdrBase, color: MBR_COLORS.white, fill: { color: sColor } } });
+    for (let i = 1; i < metrics.length; i++) {
+      hdr1.push({ text: "", options: { ...hdrBase, color: MBR_COLORS.white, fill: { color: sColor } } });
+    }
+    metrics.forEach(m => {
+      hdr2.push({ text: m, options: { ...hdrBase, color: MBR_COLORS.white, fill: { color: sColor } } });
+    });
+  });
+  hdr1.push({ text: "", options: { ...hdrBase, color: MBR_COLORS.white, fill: { color: MBR_COLORS.purple } } });
+  hdr2.push({ text: "BEST SITE", options: { ...hdrBase, color: MBR_COLORS.white, fill: { color: MBR_COLORS.purple } } });
+
+  // Build data rows — one per program
+  const dataRows = programs.map((prog, ri) => {
+    const rowBg = ri % 2 === 1 ? "F5F5FA" : MBR_COLORS.white;
+    const cellBase = { fontSize, fontFace: MBR_FONT, fill: { color: rowBg }, valign: "middle" };
+    const row = [{ text: prog.jobType, options: { ...cellBase, bold: true, align: "left", color: MBR_COLORS.textPrimary } }];
+
+    let bestSite = null;
+    let bestSph = -1;
+    const siteSph = {};
+
+    sites.forEach(s => {
+      const region = (prog.regions || []).find(r => r.name === s);
+      const hasData = region && region.totalHours >= 10;
+      const hours = hasData ? region.totalHours : 0;
+      const sales = hasData ? region.totalGoals : 0;
+      // Get XI and XM from individual agents in this region
+      const regionAgents = hasData ? (prog.agents || []).filter(a => a.region === s) : [];
+      const xiRgu = regionAgents.reduce((sum, a) => sum + (a.newXI || 0), 0);
+      const xmRgu = regionAgents.reduce((sum, a) => sum + (a.xmLines || 0), 0);
+      const sph = hours > 0 ? sales / hours : 0;
+
+      if (hasData && sph > bestSph) { bestSph = sph; bestSite = s; }
+      siteSph[s] = sph;
+
+      const vals = [
+        sph > 0 ? sph.toFixed(2) : "\u2014",
+        hours > 0 ? Math.round(hours).toLocaleString() : "\u2014",
+        sales > 0 ? String(sales) : "\u2014",
+        xiRgu > 0 ? String(xiRgu) : "\u2014",
+        xmRgu > 0 ? String(xmRgu) : "\u2014",
+      ];
+      vals.forEach(v => {
+        row.push({ text: v, options: { ...cellBase, align: "right", color: MBR_COLORS.textPrimary } });
+      });
+    });
+
+    // Best Site column — highlight green
+    row.push({
+      text: bestSite ? mbrSiteName(bestSite) : "\u2014",
+      options: { ...cellBase, bold: true, align: "center", color: bestSite ? MBR_COLORS.green : MBR_COLORS.textSecondary },
+    });
+
+    return row;
+  });
+
+  // Color-code the winning SPH cells green
+  dataRows.forEach((row, ri) => {
+    let bestSph = -1;
+    let bestColIdx = -1;
+    // SPH is the first metric in each site group (col index: 1, 1+5, 1+10, ...)
+    sites.forEach((s, si) => {
+      const colIdx = 1 + si * metrics.length; // SPH column for this site
+      const cellText = row[colIdx].text;
+      const val = parseFloat(cellText);
+      if (!isNaN(val) && val > bestSph) { bestSph = val; bestColIdx = colIdx; }
+    });
+    if (bestColIdx >= 0) {
+      row[bestColIdx].options = { ...row[bestColIdx].options, color: MBR_COLORS.green, bold: true };
+    }
+  });
+
+  // Calculate column widths
+  const progColW = 1.6;
+  const bestColW = 1.1;
+  const metricColW = sites.length > 0 ? (MBR_W - 0.8 - progColW - bestColW) / (sites.length * metrics.length) : 0.5;
+  const colW = [progColW];
+  sites.forEach(() => { metrics.forEach(() => colW.push(metricColW)); });
+  colW.push(bestColW);
+
+  const tableY = 1.4;
+  slide.addTable([hdr1, hdr2, ...dataRows], {
+    x: 0.4, y: tableY, w: MBR_W - 0.8,
+    fontSize,
+    border: { pt: 0.3, color: MBR_COLORS.cardBorder },
+    colW,
+    rowH: 0.28,
+    margin: [2, 3, 2, 3],
+  });
+
+  // Legend
+  const legendY = tableY + 0.28 * (dataRows.length + 2) + 0.1;
+  slide.addText(
+    "Ranked by SPH (Sales Per Hour)  |  Sites with < 10 hours excluded  |  Green = best performing site",
+    { x: 0.5, y: legendY, w: MBR_W - 1, h: 0.18, fontSize: 7, fontFace: MBR_FONT, color: MBR_COLORS.textSecondary, italic: true }
+  );
+
+  // ── SPH % to Goal Bar Chart ──
+  const chartY = legendY + 0.25;
+  const chartH = Math.max(1.8, 7.0 - chartY - 0.5); // fill remaining space
+
+  // Build chart data: one series per site, values = SPH % to goal per program
+  const chartSeries = sites.map(s => {
+    const sColor = siteColors[s];
+    return {
+      name: mbrSiteName(s),
+      labels: programs.map(p => p.jobType),
+      values: programs.map(p => {
+        const region = (p.regions || []).find(r => r.name === s);
+        if (!region || region.totalHours < 10) return 0;
+        const sph = region.totalGoals / region.totalHours;
+        const sphGoal = (() => {
+          if (!p.goalEntry) return null;
+          const rows = uniqueRowsFromEntry(p.goalEntry);
+          const vals = rows.map(r => computePlanRow(r).sphGoal).filter(v => v > 0);
+          return vals.length ? vals.reduce((a, v) => a + v, 0) / vals.length : null;
+        })();
+        return sphGoal ? Math.round((sph / sphGoal) * 100) : 0;
+      }),
+    };
+  });
+
+  // Only show chart if we have meaningful data
+  const hasChartData = chartSeries.some(s => s.values.some(v => v > 0));
+  if (hasChartData) {
+    slide.addText("SPH % to Goal by Site", {
+      x: 0.5, y: chartY, w: MBR_W - 1, h: 0.25,
+      fontSize: 10, fontFace: MBR_FONT, color: MBR_COLORS.textPrimary, bold: true, align: "center",
+    });
+
+    slide.addChart(pres.charts.BAR, chartSeries, {
+      x: 0.5, y: chartY + 0.25, w: MBR_W - 1, h: chartH - 0.25,
+      showTitle: false,
+      showValue: true,
+      valueFontSize: 7,
+      valueFontFace: MBR_FONT,
+      catAxisLabelFontSize: 7,
+      catAxisLabelFontFace: MBR_FONT,
+      valAxisLabelFontSize: 7,
+      valAxisLabelFontFace: MBR_FONT,
+      valAxisTitle: "% to Goal",
+      valAxisTitleFontSize: 7,
+      catAxisOrientation: "minMax",
+      barGrouping: "clustered",
+      chartColors: sites.map(s => siteColors[s]),
+      showLegend: true,
+      legendPos: "b",
+      legendFontSize: 8,
+      legendFontFace: MBR_FONT,
+      valGridLine: { color: MBR_COLORS.cardBorder, size: 0.5 },
+      plotArea: { fill: { color: "FCFCFE" } },
+      dataLabelPosition: "outEnd",
+      dataLabelFormatCode: "#\\%",
+    });
+
+    // 100% goal reference line note
+    slide.addText("\u25C6 100% = at goal", {
+      x: MBR_W - 2.5, y: chartY, w: 2, h: 0.25,
+      fontSize: 7, fontFace: MBR_FONT, color: MBR_COLORS.textSecondary, align: "right",
+    });
+  }
+
+  // Data source
+  const lastDate = fi?.lastDataDate || "";
+  slide.addText("Data Source: BI data through " + lastDate, {
+    x: 0.5, y: 7.05, w: 8, h: 0.2,
+    fontSize: 7, fontFace: MBR_FONT, color: MBR_COLORS.textSecondary, italic: true,
+  });
+}
+
+function buildMbrPlaceholderSlides(pres, programs) {
+  const cw = MBR_W - 1; // content width (0.5" margins each side)
+  const s1 = pres.addSlide();
+  s1.bkgd = MBR_COLORS.white;
+  addMbrSlideHeader(s1, pres, "MEMBER & TEAM INSIGHTS", "Insights");
+  let insightY = 1.5;
+  (programs || []).forEach(prog => {
+    s1.addText(prog.jobType, {
+      x: 0.5, y: insightY, w: cw, h: 0.35,
+      fontSize: 13, fontFace: MBR_FONT, color: MBR_COLORS.purple, bold: true,
+    });
+    s1.addText("Add member insights here", {
+      x: 0.5, y: insightY + 0.35, w: cw, h: 0.6,
+      fontSize: 10, fontFace: MBR_FONT, color: MBR_COLORS.textSecondary, italic: true,
+    });
+    insightY += 1.05;
+  });
+  const s2 = pres.addSlide();
+  s2.bkgd = MBR_COLORS.white;
+  addMbrSlideHeader(s2, pres, "OPERATIONS", "Looking Ahead");
+  const opsSections = ["Attrition", "tNPS", "My Performance Stats"];
+  opsSections.forEach((sec, i) => {
+    const oy = 1.5 + i * 1.6;
+    s2.addText(sec, {
+      x: 0.5, y: oy, w: cw, h: 0.35,
+      fontSize: 14, fontFace: MBR_FONT, color: MBR_COLORS.purple, bold: true,
+    });
+    s2.addText("Add content here", {
+      x: 0.5, y: oy + 0.4, w: cw, h: 0.8,
+      fontSize: 10, fontFace: MBR_FONT, color: MBR_COLORS.textSecondary, italic: true,
+    });
+  });
+  const s3 = pres.addSlide();
+  s3.bkgd = MBR_COLORS.white;
+  addMbrSlideHeader(s3, pres, "ACTION ITEMS", "Looking Ahead");
+  const colHeaders = ["COMCAST TEAM", "PARTNER TEAM"];
+  colHeaders.forEach((hdr, i) => {
+    const cx = i === 0 ? 0.5 : 6.9;
+    s3.addText(hdr, {
+      x: cx, y: 1.5, w: 5.8, h: 0.35,
+      fontSize: 13, fontFace: MBR_FONT, color: MBR_COLORS.purple, bold: true,
+    });
+    s3.addText("Add action items here", {
+      x: cx, y: 1.9, w: 5.8, h: 4,
+      fontSize: 10, fontFace: MBR_FONT, color: MBR_COLORS.textSecondary, italic: true, valign: "top",
+    });
+  });
+}
+
+async function generateMBR(perf, onProgress) {
+  const { programs, fiscalInfo } = perf;
+  const pres = new pptxgen();
+  pres.layout = "LAYOUT_WIDE";
+  pres.author = "Performance Intel";
+  pres.subject = "Monthly Business Review";
+  const insights = {};
+  for (let i = 0; i < programs.length; i++) {
+    const prog = programs[i];
+    if (onProgress) onProgress(`Generating insights for ${prog.jobType}...`, i, programs.length);
+    const aiData = {
+      jobType: prog.jobType,
+      uniqueAgentCount: prog.uniqueAgentCount,
+      totalHours: prog.totalHours,
+      totalGoals: prog.totalGoals,
+      gph: prog.gph,
+      attainment: prog.attainment,
+      planGoals: prog.planGoals,
+      actGoals: prog.actGoals,
+      distUnique: prog.distUnique,
+      q1Agents: prog.q1Agents,
+      q3Agents: prog.q3Agents,
+      q4Agents: prog.q4Agents,
+      regions: prog.regions,
+      healthScore: prog.healthScore,
+      totalNewXI: prog.totalNewXI,
+      totalXmLines: prog.totalXmLines,
+      newHiresInProgram: prog.newHiresInProgram,
+      fiscalInfo,
+      totalRgu: prog.totalRgu,
+      sphActual: prog.totalHours > 0 ? prog.actGoals / prog.totalHours : 0,
+      sphGoal: (() => {
+        if (!prog.goalEntry) return null;
+        const rows = uniqueRowsFromEntry(prog.goalEntry);
+        const vals = rows.map(r => computePlanRow(r).sphGoal).filter(v => v > 0);
+        return vals.length ? vals.reduce((s,v) => s+v, 0) / vals.length : null;
+      })(),
+    };
+    const cachedNarrative = getAICache("narrative", prog.jobType, prog.totalGoals);
+    const cachedOpps = getAICache("opps", prog.jobType, prog.totalGoals);
+    let narrative = cachedNarrative ? (Array.isArray(cachedNarrative) ? cachedNarrative.join("\n\n") : cachedNarrative) : null;
+    let opps = cachedOpps ? (Array.isArray(cachedOpps) ? cachedOpps.join("\n") : cachedOpps) : null;
+    if (!narrative) {
+      try {
+        const prompt = buildAIPrompt("narrative", aiData);
+        const raw = await ollamaGenerate(prompt);
+        if (raw) {
+          const arr = raw.split(/\n\n+/).filter(l => l.trim());
+          setAICache("narrative", prog.jobType, prog.totalGoals, arr);
+          narrative = arr.join("\n\n");
+        }
+      } catch { narrative = null; }
+    }
+    if (!opps) {
+      try {
+        const prompt = buildAIPrompt("opps", aiData);
+        const raw = await ollamaGenerate(prompt);
+        if (raw) {
+          const arr = raw.split(/\n/).filter(l => l.trim()).map(l => l.replace(/^[\d\-\.\*\)]+\s*/, "").trim()).filter(Boolean);
+          setAICache("opps", prog.jobType, prog.totalGoals, arr);
+          opps = arr.join("\n");
+        }
+      } catch { opps = null; }
+    }
+    insights[prog.jobType] = { narrative, opps };
+  }
+  if (onProgress) onProgress("Building slides...", programs.length, programs.length);
+  buildMbrTitleSlide(pres, fiscalInfo);
+  buildMbrSummarySlide(pres, perf);
+  programs.forEach(prog => {
+    const ins = insights[prog.jobType] || {};
+    buildMbrProgramSlide(pres, prog, fiscalInfo, ins.narrative, ins.opps);
+  });
+  buildMbrSiteRankingSlide(pres, perf);
+  buildMbrPlaceholderSlides(pres, programs);
+  const filename = formatFiscalFilename(fiscalInfo?.fiscalEnd);
+  await pres.writeFile({ fileName: filename });
+  return filename;
+}
+
+function MbrExportModal({ perf, onClose }) {
+  const [state, setState] = useState("confirm");
+  const [progress, setProgress] = useState("");
+  const [error, setError] = useState(null);
+  const { programs, fiscalInfo } = perf;
+
+  const handleGenerate = useCallback(async () => {
+    setState("generating");
+    try {
+      await generateMBR(perf, (msg) => setProgress(msg));
+      onClose();
+    } catch (e) {
+      console.error("MBR generation failed:", e);
+      setState("error");
+      setError(String(e.message || e));
+    }
+  }, [perf, onClose]);
+
+  const fiscalStart = fiscalInfo?.fiscalStart || "unknown";
+  const fiscalEnd = fiscalInfo?.fiscalEnd || "unknown";
+  const lastData = fiscalInfo?.lastDataDate || "unknown";
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}
+      onClick={state === "generating" ? undefined : onClose}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: `var(--card-bg, #fff)`, borderRadius: "var(--radius-md, 10px)",
+        border: "1px solid var(--glass-border)", padding: "1.5rem", width: "28rem", maxWidth: "90vw",
+        fontFamily: "var(--font-ui, Inter, sans-serif)", boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+      }}>
+        {state === "confirm" && (<>
+          <div style={{ fontSize: "1rem", fontWeight: 700, color: `var(--text-primary)`, marginBottom: "0.75rem" }}>
+            Generate Monthly Business Review
+          </div>
+          <div style={{ fontSize: "0.82rem", color: `var(--text-muted)`, marginBottom: "0.5rem" }}>
+            {programs.length} program{programs.length !== 1 ? "s" : ""} &middot; Fiscal period {fiscalStart} &ndash; {fiscalEnd} &middot; Data through {lastData}
+          </div>
+          <div style={{ fontSize: "0.78rem", color: `var(--text-dim)`, marginBottom: "1rem", maxHeight: "8rem", overflowY: "auto" }}>
+            {programs.map(p => (
+              <div key={p.jobType} style={{ padding: "0.2rem 0", borderBottom: "1px solid var(--border-muted)" }}>
+                {p.jobType}
+              </div>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
+            <button onClick={onClose} style={{
+              padding: "0.4rem 1rem", borderRadius: "var(--radius-sm, 6px)",
+              border: "1px solid var(--border-muted)", background: "transparent",
+              color: `var(--text-muted)`, fontFamily: "var(--font-ui, Inter, sans-serif)",
+              fontSize: "0.82rem", cursor: "pointer",
+            }}>Cancel</button>
+            <button onClick={handleGenerate} style={{
+              padding: "0.4rem 1rem", borderRadius: "var(--radius-sm, 6px)",
+              border: "none", background: "#6137F4", color: "#fff",
+              fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem",
+              cursor: "pointer", fontWeight: 600,
+            }}>Generate</button>
+          </div>
+        </>)}
+        {state === "generating" && (
+          <div style={{ textAlign: "center", padding: "1rem 0" }}>
+            <div style={{ fontSize: "0.9rem", fontWeight: 600, color: `var(--text-primary)`, marginBottom: "0.75rem" }}>
+              Generating MBR...
+            </div>
+            <div style={{ fontSize: "0.82rem", color: `var(--text-muted)` }}>{progress}</div>
+          </div>
+        )}
+        {state === "error" && (<>
+          <div style={{ fontSize: "0.9rem", fontWeight: 600, color: "#dc2626", marginBottom: "0.5rem" }}>
+            Export Failed
+          </div>
+          <div style={{ fontSize: "0.82rem", color: `var(--text-muted)`, marginBottom: "1rem" }}>{error}</div>
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <button onClick={onClose} style={{
+              padding: "0.4rem 1rem", borderRadius: "var(--radius-sm, 6px)",
+              border: "1px solid var(--border-muted)", background: "transparent",
+              color: `var(--text-muted)`, fontFamily: "var(--font-ui, Inter, sans-serif)",
+              fontSize: "0.82rem", cursor: "pointer",
+            }}>Close</button>
+          </div>
+        </>)}
+      </div>
+    </div>
+  );
+}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // SECTION 12 — BUSINESS OVERVIEW  (pages/BusinessOverview.jsx)
@@ -10658,6 +11726,7 @@ export default function App() {
   const [slideIndex, setSlideIndex] = useState(0);
   const [showToday,  setShowToday]  = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showMbrModal, setShowMbrModal] = useState(false);
   const [localAI, setLocalAI]      = useState(false);
   const [ollamaAvailable, setOllamaAvailable] = useState(null); // null=checking, true/false
   const [hoursThreshold, _setHoursThreshold] = useState(_hoursThreshold);
@@ -11056,6 +12125,7 @@ export default function App() {
 
   return (
     <div style={wrapStyle}>
+      {showMbrModal && rawData && <MbrExportModal perf={perf} onClose={() => setShowMbrModal(false)} />}
       {/* Top bar — compact by default, expands on hover to show file controls below */}
       <div style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 200, background: `var(--nav-bg)`, backdropFilter: "blur(16px) saturate(180%)", WebkitBackdropFilter: "blur(16px) saturate(180%)", borderBottom: `1px solid var(--glass-border)`, padding: "0.35rem 1.5rem" }}
         onMouseEnter={e => { e.currentTarget.dataset.expanded = "true"; const tb = e.currentTarget.querySelector("[data-toolbar]"); if (tb) { tb.style.pointerEvents = "none"; setTimeout(() => { tb.style.pointerEvents = "auto"; }, 300); } }}
@@ -11127,6 +12197,7 @@ export default function App() {
           )}
           <input ref={priorGoalsInputRef} type="file" accept=".csv" style={{ display: "none" }} onChange={e => loadFile(e.target.files[0], setPriorMonthGoalsRaw)} />
           <div style={{ flex: 1 }} />
+          {rawData && <button onClick={() => setShowMbrModal(true)} style={{ padding: "0.3rem 0.65rem", background: "transparent", border: "1px solid var(--border-muted)", borderRadius: "var(--radius-sm, 6px)", color: "var(--text-muted)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", cursor: "pointer", fontWeight: 500 }}>Export MBR</button>}
           <button onClick={() => { setRawData(null); setSlideIndex(0); setShowToday(false); }}
             style={{ background: "transparent", border: "1px solid var(--border-muted)", borderRadius: "var(--radius-sm, 6px)", color: `var(--text-muted)`, padding: "0.3rem 0.65rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", cursor: "pointer", fontWeight: 500 }}>
             New File
