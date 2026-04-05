@@ -13539,16 +13539,7 @@ export default function App() {
             if (nRes.ok) { const nRows = parseCSV(await nRes.text()); if (nRows.length > 0) setNHRaw(nRows); }
           } catch(e) {}
         }
-        // Auto-load tNPS sheet if URL configured
-        if (!cancelled && tnpsSheetUrl && !tnpsRaw) {
-          try {
-            const proxyT = url => `https://corsproxy.io/?${encodeURIComponent(url)}`;
-            let tRes;
-            try { tRes = await fetch(tnpsSheetUrl); } catch(e) { tRes = null; }
-            if (!tRes || !tRes.ok) tRes = await fetch(proxyT(tnpsSheetUrl));
-            if (tRes.ok) { const tRows = parseCSV(await tRes.text()); if (tRows.length > 0) setTnpsRaw(tRows); }
-          } catch(e) {}
-        }
+        // tNPS loads separately after main data (see deferred useEffect below)
       } catch (e) {
         if (!cancelled) setSheetError("Auto-load unavailable — use file upload or paste");
       } finally {
@@ -13596,6 +13587,22 @@ export default function App() {
     })();
     return () => { cancelled = true; };
   }, [rawData, priorGoalsSheetUrl, priorMonthGoalsRaw]);
+
+  // Auto-load tNPS data from Google Sheet (deferred — after main data loads, non-blocking)
+  useEffect(() => {
+    if (!rawData || tnpsRaw || !tnpsSheetUrl) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const proxyT = url => `https://corsproxy.io/?${encodeURIComponent(url)}`;
+        let res;
+        try { res = await fetch(tnpsSheetUrl); } catch(e) { res = null; }
+        if (!res || !res.ok) res = await fetch(proxyT(tnpsSheetUrl));
+        if (res.ok) { const rows = parseCSV(await res.text()); if (!cancelled && rows.length > 0) setTnpsRaw(rows); }
+      } catch(e) { /* silent */ }
+    })();
+    return () => { cancelled = true; };
+  }, [rawData, tnpsSheetUrl, tnpsRaw]);
 
   // Last-7-days unique agent names for Today attendance comparison
   const recentAgentNames = useMemo(() => {
