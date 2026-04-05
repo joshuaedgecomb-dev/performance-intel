@@ -5989,7 +5989,7 @@ function TNPSSlide({ perf, onNav, lightMode }) {
           {/* GCS Site Comparison — bar chart */}
           <div style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem 1.5rem" }}>
             <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: "1rem" }}>GCS Site Comparison</div>
-            <div style={{ display: "flex", gap: "1rem", alignItems: "flex-end", height: 200 }}>
+            <div style={{ display: "flex", gap: "1rem", alignItems: "flex-end", height: 220, paddingTop: 24 }}>
               {tnpsBySite.filter(s => s.isGCS).map((site, i) => {
                 const maxScore = Math.max(...tnpsBySite.filter(s => s.isGCS).map(s => Math.abs(s.score || 0)), 1);
                 const barH = Math.max(20, (Math.abs(site.score || 0) / maxScore) * 160);
