@@ -6250,17 +6250,6 @@ function TNPSSlide({ perf, onNav, lightMode }) {
         </div>
       )}
 
-      {/* Navigation footer */}
-      <div style={{ borderTop: "1px solid var(--border)", padding: "0.9rem 0", display: "flex", justifyContent: "space-between", marginTop: "1.5rem" }}>
-        <button onClick={() => onNav(-1)}
-          style={{ padding: "0.5rem 1.1rem", background: "transparent", border: "1px solid var(--text-faint)", borderRadius: "6px", color: "var(--text-secondary)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", cursor: "pointer" }}>
-          ← Overview
-        </button>
-        <button onClick={() => onNav(1)}
-          style={{ padding: "0.5rem 1.1rem", background: "transparent", border: "1px solid var(--text-faint)", borderRadius: "6px", color: "var(--text-secondary)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", cursor: "pointer" }}>
-          NEXT →
-        </button>
-      </div>
     </div>
   );
 }
@@ -6270,7 +6259,7 @@ function TNPSSlide({ perf, onNav, lightMode }) {
 // Consumes engine output directly. No computation inside.
 // ══════════════════════════════════════════════════════════════════════════════
 
-function BusinessOverview({ perf, onNav, localAI, priorAgents, priorGoalLookup, lightMode }) {
+function BusinessOverview({ perf, onNav, goToSlide, tnpsSlideIdx, localAI, priorAgents, priorGoalLookup, lightMode }) {
   const [tab, setTab] = useState("overview");
 
   const {
@@ -6887,7 +6876,7 @@ function BusinessOverview({ perf, onNav, localAI, priorAgents, priorGoalLookup, 
 
           return (
             <div
-              onClick={() => onNav(1)}
+              onClick={() => goToSlide(tnpsSlideIdx)}
               style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1rem 1.5rem", cursor: "pointer", transition: "all 200ms", marginTop: "0.75rem" }}
               onMouseEnter={e => { e.currentTarget.style.borderColor = "#d97706"; e.currentTarget.style.boxShadow = "0 0 12px #d9770620"; }}
               onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.boxShadow = "none"; }}
@@ -13141,10 +13130,10 @@ export default function App() {
   const perf = usePerformanceEngine({ rawData, goalsRaw, newHiresRaw, tnpsRaw });
   const { programs, jobTypes, newHireSet, newHires, allAgentNames } = perf;
   const hasTnps = perf.tnpsData && perf.tnpsData.length > 0;
-  const totalSlides = 1 + (hasTnps ? 1 : 0) + programs.length + 1; // Overview + tNPS? + programs + Campaign Comparison
-  const tnpsSlideIdx = hasTnps ? 1 : -1;
-  const programStartIdx = 1 + (hasTnps ? 1 : 0);
+  const programStartIdx = 1;
   const campaignCompareIdx = programStartIdx + programs.length;
+  const tnpsSlideIdx = hasTnps ? campaignCompareIdx + 1 : -1;
+  const totalSlides = 1 + programs.length + 1 + (hasTnps ? 1 : 0); // Overview + programs + MoM + tNPS?
 
   // Prior month derived data (hoisted for app-wide access)
   const priorAgents = useMemo(() => normalizeAgents(priorMonthRaw || []), [priorMonthRaw]);
@@ -13560,38 +13549,16 @@ export default function App() {
             onNewHiresLoad={setNHRaw}
           />
         ) : isOverview ? (
-          <BusinessOverview perf={perf} onNav={navTo} localAI={localAI} priorAgents={priorAgents} priorGoalLookup={priorGoalLookup} lightMode={lightMode} />
-        ) : isTnpsSlide ? (
-          <TNPSSlide perf={perf} onNav={navTo} lightMode={lightMode} />
-        ) : isCampaignCompare ? (
-          <CampaignComparisonPanel
-            currentAgents={perf.agents}
-            onNav={navTo}
-            localAI={localAI}
-            priorAgents={priorAgents}
-            priorGoalLookup={priorGoalLookup}
-            priorSheetLoading={priorSheetLoading}
-            setPriorRaw={setPriorMonthRaw}
-            setPriorGoalsRaw={setPriorMonthGoalsRaw}
-          />
-        ) : program ? (
+          <BusinessOverview perf={perf} onNav={navTo} goToSlide={goToSlide} tnpsSlideIdx={tnpsSlideIdx} localAI={localAI} priorAgents={priorAgents} priorGoalLookup={priorGoalLookup} lightMode={lightMode} />
+        ) : (isTnpsSlide || isCampaignCompare || program) ? (
           <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-            {/* Program navigation bar */}
+            {/* Shared navigation bar — programs, MoM Compare, tNPS */}
             <div style={{ flexShrink: 0, borderBottom: "1px solid var(--glass-border)", padding: "0.5rem 1.5rem", background: `var(--glass-bg-subtle)`, backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", display: "flex", alignItems: "center", gap: "0.35rem", overflowX: "auto" }}>
               <button onClick={() => goToSlide(0)}
                 style={{ padding: "0.4rem 0.75rem", borderRadius: "var(--radius-sm, 6px)", border: "1px solid var(--border-muted)", background: "transparent", color: `var(--text-muted)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, fontWeight: 500 }}>
                 {"\u2190"} Overview
               </button>
               <div style={{ width: "1px", height: "18px", background: `var(--border-muted)`, flexShrink: 0, margin: "0 0.15rem" }} />
-              {hasTnps && (
-                <>
-                  <button onClick={() => goToSlide(tnpsSlideIdx)}
-                    style={{ padding: "0.4rem 0.7rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${slideIndex === tnpsSlideIdx ? "#d9770650" : "transparent"}`, background: slideIndex === tnpsSlideIdx ? "#d9770612" : "transparent", color: slideIndex === tnpsSlideIdx ? "#d97706" : "var(--text-dim)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, fontWeight: slideIndex === tnpsSlideIdx ? 600 : 400 }}>
-                    tNPS
-                  </button>
-                  <div style={{ width: "1px", height: "18px", background: "var(--border-muted)", flexShrink: 0, margin: "0 0.15rem" }} />
-                </>
-              )}
               {programs.map((p, pi) => ({ p, pi })).sort((a, b) => (b.p.attainment ?? b.p.healthScore ?? 0) - (a.p.attainment ?? a.p.healthScore ?? 0)).map(({ p, pi }) => {
                 const pIdx = pi + programStartIdx;
                 const isActive = slideIndex === pIdx;
@@ -13608,25 +13575,49 @@ export default function App() {
               })}
               <div style={{ width: "1px", height: "18px", background: `var(--border-muted)`, flexShrink: 0, margin: "0 0.15rem" }} />
               <button onClick={() => goToSlide(campaignCompareIdx)}
-                style={{ padding: "0.4rem 0.7rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${slideIndex === campaignCompareIdx ? "#d9770650" : "transparent"}`, background: slideIndex === campaignCompareIdx ? "#d9770612" : "transparent", color: slideIndex === campaignCompareIdx ? "#d97706" : `var(--text-dim)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, fontWeight: slideIndex === campaignCompareIdx ? 600 : 400 }}>
+                style={{ padding: "0.4rem 0.7rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${isCampaignCompare ? "#d9770650" : "transparent"}`, background: isCampaignCompare ? "#d9770612" : "transparent", color: isCampaignCompare ? "#d97706" : `var(--text-dim)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, fontWeight: isCampaignCompare ? 600 : 400 }}>
                 MoM Compare
               </button>
+              {hasTnps && (
+                <>
+                  <div style={{ width: "1px", height: "18px", background: "var(--border-muted)", flexShrink: 0, margin: "0 0.15rem" }} />
+                  <button onClick={() => goToSlide(tnpsSlideIdx)}
+                    style={{ padding: "0.4rem 0.7rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${isTnpsSlide ? "#d9770650" : "transparent"}`, background: isTnpsSlide ? "#d9770612" : "transparent", color: isTnpsSlide ? "#d97706" : "var(--text-dim)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, fontWeight: isTnpsSlide ? 600 : 400 }}>
+                    tNPS
+                  </button>
+                </>
+              )}
             </div>
             <div style={{ flex: 1, overflow: "hidden" }}>
-            <Slide
-            key={program.jobType}
-            program={program}
-            newHireSet={newHireSet}
-            goalLookup={perf.goalLookup}
-            fiscalInfo={perf.fiscalInfo}
-            slideIndex={slideIndex}
-            total={totalSlides}
-            onNav={navTo}
-            allAgents={perf.agents}
-            localAI={localAI}
-            priorAgents={priorAgents}
-            tnpsByAgent={perf.tnpsByAgent}
-          />
+            {isTnpsSlide ? (
+              <TNPSSlide perf={perf} onNav={navTo} lightMode={lightMode} />
+            ) : isCampaignCompare ? (
+              <CampaignComparisonPanel
+                currentAgents={perf.agents}
+                onNav={navTo}
+                localAI={localAI}
+                priorAgents={priorAgents}
+                priorGoalLookup={priorGoalLookup}
+                priorSheetLoading={priorSheetLoading}
+                setPriorRaw={setPriorMonthRaw}
+                setPriorGoalsRaw={setPriorMonthGoalsRaw}
+              />
+            ) : (
+              <Slide
+                key={program.jobType}
+                program={program}
+                newHireSet={newHireSet}
+                goalLookup={perf.goalLookup}
+                fiscalInfo={perf.fiscalInfo}
+                slideIndex={slideIndex}
+                total={totalSlides}
+                onNav={navTo}
+                allAgents={perf.agents}
+                localAI={localAI}
+                priorAgents={priorAgents}
+                tnpsByAgent={perf.tnpsByAgent}
+              />
+            )}
             </div>
           </div>
         ) : (
