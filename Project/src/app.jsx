@@ -6066,9 +6066,8 @@ function TNPSSlide({ perf, onNav, lightMode }) {
               vendorMap[s.month][vendor].push(s);
             });
             const vendorColors = { "GCS": "#d97706", "Avantive": "#6366f1", "Global Telesourcing": "#0ea5e9", "Results": "#8b5cf6" };
-            // Consistent vendor list across all months
-            const allVendors = [...new Set((allSurveys || []).map(s => s.isGCS ? "GCS" : s.siteLabel))];
-            const uniqueVendors = [...new Set(allVendors)].sort((a, b) => a === "GCS" ? -1 : b === "GCS" ? 1 : a.localeCompare(b));
+            // Only show known vendors (filter out unmapped grey bars)
+            const uniqueVendors = ["GCS", "Avantive", "Global Telesourcing", "Results"];
 
             return (
               <div style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem 1.5rem" }}>
@@ -6094,20 +6093,20 @@ function TNPSSlide({ perf, onNav, lightMode }) {
 
                     return (
                       <React.Fragment key={mi}>
-                        {mi > 0 && <div style={{ width: 1, background: "var(--border)", margin: "0 0.25rem", flexShrink: 0 }} />}
+                        {mi > 0 && <div style={{ width: 1, background: "var(--border)", margin: "0 0.5rem", flexShrink: 0 }} />}
                         <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
                           {/* Positive zone (above baseline) */}
-                          <div style={{ display: "flex", gap: 3, alignItems: "flex-end", height: 120, width: "100%", justifyContent: "center" }}>
+                          <div style={{ display: "flex", gap: 6, alignItems: "flex-end", height: 130, width: "100%", justifyContent: "center" }}>
                             {vendorScores.map((vs, vi) => {
                               const isGCS = vs.vendor === "GCS";
-                              if ((vs.score || 0) < 0) return <div key={vi} style={{ width: 28 }} />;
-                              const barH = Math.max(4, ((vs.score || 0) / 100) * 100);
+                              if ((vs.score || 0) < 0) return <div key={vi} style={{ width: 44 }} />;
+                              const barH = Math.max(6, ((vs.score || 0) / 100) * 110);
                               return (
-                                <div key={vi} style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 28 }}>
-                                  <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: isGCS ? "0.72rem" : "0.58rem", fontWeight: isGCS ? 700 : 500, color: vendorColors[vs.vendor] || "#94a3b8", marginBottom: 2, whiteSpace: "nowrap" }}>
+                                <div key={vi} style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 44 }}>
+                                  <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: isGCS ? "0.78rem" : "0.65rem", fontWeight: isGCS ? 700 : 500, color: vendorColors[vs.vendor], marginBottom: 2, whiteSpace: "nowrap" }}>
                                     +{vs.score}
                                   </div>
-                                  <div style={{ width: isGCS ? 26 : 20, height: barH, borderRadius: "3px 3px 0 0", background: (vendorColors[vs.vendor] || "#94a3b8") + (isGCS ? "dd" : "99"), border: isGCS ? `2px solid ${vendorColors[vs.vendor]}` : "none" }}
+                                  <div style={{ width: isGCS ? 40 : 32, height: barH, borderRadius: "4px 4px 0 0", background: vendorColors[vs.vendor] + (isGCS ? "dd" : "99"), border: isGCS ? `2px solid ${vendorColors[vs.vendor]}` : "none" }}
                                     title={`${vs.vendor}: +${vs.score} (${vs.total} surveys)`} />
                                 </div>
                               );
@@ -6116,27 +6115,30 @@ function TNPSSlide({ perf, onNav, lightMode }) {
                           {/* Baseline */}
                           <div style={{ width: "90%", height: 1, background: "var(--text-dim)", opacity: 0.4 }} />
                           {/* Negative zone (below baseline) */}
-                          <div style={{ display: "flex", gap: 3, alignItems: "flex-start", height: 60, width: "100%", justifyContent: "center" }}>
+                          <div style={{ display: "flex", gap: 6, alignItems: "flex-start", height: 70, width: "100%", justifyContent: "center" }}>
                             {vendorScores.map((vs, vi) => {
                               const isGCS = vs.vendor === "GCS";
-                              if ((vs.score || 0) >= 0) return <div key={vi} style={{ width: 28 }} />;
-                              const barH = Math.max(4, (Math.abs(vs.score || 0) / 100) * 50);
+                              if ((vs.score || 0) >= 0) return <div key={vi} style={{ width: 44 }} />;
+                              const barH = Math.max(6, (Math.abs(vs.score || 0) / 100) * 55);
                               return (
-                                <div key={vi} style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 28 }}>
-                                  <div style={{ width: isGCS ? 26 : 20, height: barH, borderRadius: "0 0 3px 3px", background: (vendorColors[vs.vendor] || "#94a3b8") + (isGCS ? "dd" : "99"), border: isGCS ? `2px solid ${vendorColors[vs.vendor]}` : "none" }}
+                                <div key={vi} style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 44 }}>
+                                  <div style={{ width: isGCS ? 40 : 32, height: barH, borderRadius: "0 0 4px 4px", background: vendorColors[vs.vendor] + (isGCS ? "dd" : "99"), border: isGCS ? `2px solid ${vendorColors[vs.vendor]}` : "none" }}
                                     title={`${vs.vendor}: ${vs.score} (${vs.total} surveys)`} />
-                                  <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: isGCS ? "0.72rem" : "0.58rem", fontWeight: isGCS ? 700 : 500, color: vendorColors[vs.vendor] || "#94a3b8", marginTop: 2, whiteSpace: "nowrap" }}>
+                                  <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: isGCS ? "0.78rem" : "0.65rem", fontWeight: isGCS ? 700 : 500, color: vendorColors[vs.vendor], marginTop: 2, whiteSpace: "nowrap" }}>
                                     {vs.score}
                                   </div>
                                 </div>
                               );
                             })}
                           </div>
-                          {/* Month label + survey counts */}
-                          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", color: "var(--text-warm)", fontWeight: 600, marginTop: 4 }}>{mLabel}</div>
-                          <div style={{ display: "flex", gap: 4, marginTop: 2, flexWrap: "wrap", justifyContent: "center" }}>
+                          {/* Month label */}
+                          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: "var(--text-warm)", fontWeight: 600, marginTop: 6 }}>{mLabel}</div>
+                          {/* Survey counts under each bar, color-coded */}
+                          <div style={{ display: "flex", gap: 6, marginTop: 3, justifyContent: "center" }}>
                             {vendorScores.map((vs, vi) => (
-                              <span key={vi} style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.55rem", color: vendorColors[vs.vendor] || "#94a3b8" }}>{vs.total}</span>
+                              <div key={vi} style={{ width: 44, textAlign: "center", fontFamily: "var(--font-data, monospace)", fontSize: "0.6rem", color: vendorColors[vs.vendor], opacity: 0.8 }}>
+                                {vs.total}
+                              </div>
                             ))}
                           </div>
                         </div>
