@@ -5771,7 +5771,7 @@ function buildMbrPlaceholderSlides(pres, programs) {
   });
 }
 
-async function generateMBR(perf, onProgress) {
+async function generateMBR(perf, onProgress, { includeAI = true } = {}) {
   const { programs, fiscalInfo } = perf;
   const pres = new pptxgen();
   pres.layout = "LAYOUT_WIDE";
@@ -5780,6 +5780,7 @@ async function generateMBR(perf, onProgress) {
   const insights = {};
   for (let i = 0; i < programs.length; i++) {
     const prog = programs[i];
+    if (!includeAI) { insights[prog.jobType] = { narrative: null, opps: null }; continue; }
     if (onProgress) onProgress(`Generating insights for ${prog.jobType}...`, i, programs.length);
     const aiData = {
       jobType: prog.jobType,
@@ -5856,19 +5857,20 @@ function MbrExportModal({ perf, onClose }) {
   const [state, setState] = useState("confirm");
   const [progress, setProgress] = useState("");
   const [error, setError] = useState(null);
+  const [includeAI, setIncludeAI] = useState(true);
   const { programs, fiscalInfo } = perf;
 
   const handleGenerate = useCallback(async () => {
     setState("generating");
     try {
-      await generateMBR(perf, (msg) => setProgress(msg));
+      await generateMBR(perf, (msg) => setProgress(msg), { includeAI });
       onClose();
     } catch (e) {
       console.error("MBR generation failed:", e);
       setState("error");
       setError(String(e.message || e));
     }
-  }, [perf, onClose]);
+  }, [perf, onClose, includeAI]);
 
   const fiscalStart = fiscalInfo?.fiscalStart || "unknown";
   const fiscalEnd = fiscalInfo?.fiscalEnd || "unknown";
@@ -5895,6 +5897,18 @@ function MbrExportModal({ perf, onClose }) {
                 {p.jobType}
               </div>
             ))}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.75rem" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "var(--text-secondary)" }}
+              onClick={() => setIncludeAI(v => !v)}>
+              <div style={{ width: 36, height: 20, borderRadius: 10, background: includeAI ? "#6137F4" : "var(--border)", position: "relative", transition: "background 200ms" }}>
+                <div style={{ width: 16, height: 16, borderRadius: 8, background: "#fff", position: "absolute", top: 2, left: includeAI ? 18 : 2, transition: "left 200ms", boxShadow: "0 1px 3px rgba(0,0,0,0.2)" }} />
+              </div>
+              AI-generated feedback
+            </label>
+            <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: "var(--text-dim)" }}>
+              {includeAI ? "Narratives & opportunities included" : "Data only — no AI text"}
+            </span>
           </div>
           <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
             <button onClick={onClose} style={{
