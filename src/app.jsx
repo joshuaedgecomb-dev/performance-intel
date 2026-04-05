@@ -5745,6 +5745,167 @@ function MbrExportModal({ perf, onClose }) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// SECTION 11b — tNPS DEEP-DIVE SLIDE  (pages/TNPSSlide.jsx)
+// Full tNPS analysis with 4 sub-tabs: Summary, By Campaign, By Supervisor, Customer Voices
+// ══════════════════════════════════════════════════════════════════════════════
+
+function TNPSSlide({ perf, onNav, lightMode }) {
+  const [tab, setTab] = useState("summary");
+  const { tnpsData, tnpsGCS, tnpsOverall, tnpsBySite, tnpsByMonth, bpLookup } = perf;
+
+  if (!tnpsData || tnpsData.length === 0) {
+    return (
+      <div style={{ minHeight: "90vh", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-faint)", fontFamily: "var(--font-ui, Inter, sans-serif)" }}>
+        No tNPS data loaded.
+      </div>
+    );
+  }
+
+  const tabs = [
+    { key: "summary", label: "Summary" },
+    { key: "campaign", label: "By Campaign" },
+    { key: "supervisor", label: "By Supervisor" },
+    { key: "voices", label: "Customer Voices" },
+  ];
+
+  return (
+    <div style={{ maxWidth: 1100, margin: "0 auto", padding: "0 2.5rem 2rem" }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.75rem" }}>
+        <div>
+          <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.5rem", fontWeight: 700, color: "var(--text-warm)" }}>Customer Experience — tNPS</div>
+          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: "var(--text-dim)" }}>{tnpsData.length} total surveys · {tnpsGCS.length} GCS surveys</div>
+        </div>
+      </div>
+
+      {/* Sub-tab navigation */}
+      <div style={{ display: "flex", gap: "0.35rem", marginBottom: "1.25rem", borderBottom: "1px solid var(--border)" }}>
+        {tabs.map(t => (
+          <button key={t.key} onClick={() => setTab(t.key)}
+            style={{ padding: "0.55rem 1rem", border: "none", borderBottom: tab === t.key ? "2px solid #d97706" : "2px solid transparent", background: "transparent", color: tab === t.key ? "var(--text-warm)" : "var(--text-dim)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", fontWeight: tab === t.key ? 600 : 400, cursor: "pointer", transition: "all 150ms" }}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* SUMMARY TAB */}
+      {tab === "summary" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+
+          {/* KPI Cards */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.75rem" }}>
+            {[
+              { label: "GCS tNPS Score", value: `${tnpsOverall.score > 0 ? "+" : ""}${tnpsOverall.score}`, accent: tnpsColor(tnpsOverall.score), sub: `${tnpsOverall.total} surveys` },
+              { label: "Promoters", value: `${Math.round(tnpsOverall.promoterPct)}%`, accent: "#16a34a", sub: `${tnpsOverall.promoters} surveys` },
+              { label: "Passives", value: `${Math.round(tnpsOverall.passivePct)}%`, accent: "#d97706", sub: `${tnpsOverall.passives} surveys` },
+              { label: "Detractors", value: `${Math.round(tnpsOverall.detractorPct)}%`, accent: "#dc2626", sub: `${tnpsOverall.detractors} surveys` },
+            ].map((c, i) => (
+              <div key={i} style={{ background: "var(--glass-bg)", border: `1px solid ${c.accent}18`, borderTop: `3px solid ${c.accent}`, borderRadius: "var(--radius-md, 10px)", padding: "1rem" }}>
+                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: "var(--text-muted)", letterSpacing: "0.06em", textTransform: "uppercase" }}>{c.label}</div>
+                <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "2.25rem", color: c.accent, fontWeight: 800 }}>{c.value}</div>
+                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "var(--text-dim)" }}>{c.sub}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* GCS Site Comparison — bar chart */}
+          <div style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem 1.5rem" }}>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: "1rem" }}>GCS Site Comparison</div>
+            <div style={{ display: "flex", gap: "1rem", alignItems: "flex-end", height: 200 }}>
+              {tnpsBySite.filter(s => s.isGCS).map((site, i) => {
+                const maxScore = Math.max(...tnpsBySite.filter(s => s.isGCS).map(s => Math.abs(s.score || 0)), 1);
+                const barH = Math.max(20, (Math.abs(site.score || 0) / maxScore) * 160);
+                return (
+                  <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
+                    <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "1.1rem", fontWeight: 700, color: tnpsColor(site.score), marginBottom: 4 }}>
+                      {site.score > 0 ? "+" : ""}{site.score}
+                    </div>
+                    <div style={{ width: "60%", height: barH, borderRadius: "6px 6px 0 0", background: tnpsColor(site.score) + "cc" }} />
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: "var(--text-warm)", marginTop: 6, fontWeight: 600 }}>{site.label}</div>
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.68rem", color: "var(--text-dim)" }}>{site.total} surveys</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Partner Ranking Leaderboard */}
+          <div style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem 1.5rem" }}>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: "0.75rem" }}>Partner Ranking</div>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr>
+                  {["#", "Site / Partner", "tNPS", "Surveys", "Promoter %", "Detractor %"].map((h, i) => (
+                    <th key={i} style={{ padding: "0.5rem", textAlign: i > 1 ? "right" : "left", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: "var(--text-muted)", borderBottom: "1px solid var(--border)", fontWeight: 500, letterSpacing: "0.05em", textTransform: "uppercase" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {tnpsBySite.map((site, i) => (
+                  <tr key={i} style={{ background: site.isGCS ? (lightMode ? "#fffbeb" : "#d9770608") : "transparent" }}>
+                    <td style={{ padding: "0.6rem 0.5rem", fontFamily: "var(--font-data, monospace)", fontSize: "0.82rem", color: "var(--text-dim)" }}>{i + 1}</td>
+                    <td style={{ padding: "0.6rem 0.5rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: "var(--text-warm)", fontWeight: site.isGCS ? 600 : 400 }}>
+                      {site.label}
+                      {site.isGCS && <span style={{ marginLeft: 6, fontSize: "0.65rem", padding: "1px 5px", borderRadius: 3, background: "#d9770618", color: "#d97706", fontWeight: 600 }}>GCS</span>}
+                    </td>
+                    <td style={{ padding: "0.6rem 0.5rem", textAlign: "right", fontFamily: "var(--font-data, monospace)", fontSize: "0.95rem", fontWeight: 700, color: tnpsColor(site.score) }}>
+                      {site.score > 0 ? "+" : ""}{site.score}
+                    </td>
+                    <td style={{ padding: "0.6rem 0.5rem", textAlign: "right", fontFamily: "var(--font-data, monospace)", fontSize: "0.82rem", color: "var(--text-secondary)" }}>{site.total}</td>
+                    <td style={{ padding: "0.6rem 0.5rem", textAlign: "right", fontFamily: "var(--font-data, monospace)", fontSize: "0.82rem", color: "#16a34a" }}>{Math.round(site.promoterPct)}%</td>
+                    <td style={{ padding: "0.6rem 0.5rem", textAlign: "right", fontFamily: "var(--font-data, monospace)", fontSize: "0.82rem", color: "#dc2626" }}>{Math.round(site.detractorPct)}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Monthly Trend */}
+          {tnpsByMonth.length > 0 && (
+            <div style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem 1.5rem" }}>
+              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: "1rem" }}>Monthly Trend — GCS Overall</div>
+              <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-end", height: 180 }}>
+                {tnpsByMonth.map((m, i) => {
+                  const maxAbs = Math.max(...tnpsByMonth.map(x => Math.abs(x.score || 0)), 1);
+                  const barH = Math.max(20, (Math.abs(m.score || 0) / maxAbs) * 140);
+                  return (
+                    <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
+                      <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "1rem", fontWeight: 700, color: tnpsColor(m.score), marginBottom: 4 }}>
+                        {m.score > 0 ? "+" : ""}{m.score}
+                      </div>
+                      <div style={{ width: "70%", height: barH, borderRadius: "6px 6px 0 0", background: tnpsColor(m.score) + "cc" }} />
+                      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", color: "var(--text-warm)", marginTop: 6, fontWeight: 500 }}>{m.label}</div>
+                      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.65rem", color: "var(--text-dim)" }}>{m.total} surveys</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Phase 2 tabs render here — placeholder for now */}
+      {tab === "campaign" && <div style={{ color: "var(--text-dim)", fontFamily: "var(--font-ui, Inter, sans-serif)", padding: "3rem", textAlign: "center" }}>By Campaign — coming in Phase 2</div>}
+      {tab === "supervisor" && <div style={{ color: "var(--text-dim)", fontFamily: "var(--font-ui, Inter, sans-serif)", padding: "3rem", textAlign: "center" }}>By Supervisor — coming in Phase 2</div>}
+      {tab === "voices" && <div style={{ color: "var(--text-dim)", fontFamily: "var(--font-ui, Inter, sans-serif)", padding: "3rem", textAlign: "center" }}>Customer Voices — coming in Phase 2</div>}
+
+      {/* Navigation footer */}
+      <div style={{ borderTop: "1px solid var(--border)", padding: "0.9rem 0", display: "flex", justifyContent: "space-between", marginTop: "1.5rem" }}>
+        <button onClick={() => onNav(-1)}
+          style={{ padding: "0.5rem 1.1rem", background: "transparent", border: "1px solid var(--text-faint)", borderRadius: "6px", color: "var(--text-secondary)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", cursor: "pointer" }}>
+          ← Overview
+        </button>
+        <button onClick={() => onNav(1)}
+          style={{ padding: "0.5rem 1.1rem", background: "transparent", border: "1px solid var(--text-faint)", borderRadius: "6px", color: "var(--text-secondary)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", cursor: "pointer" }}>
+          NEXT →
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // SECTION 12 — BUSINESS OVERVIEW  (pages/BusinessOverview.jsx)
 // Consumes engine output directly. No computation inside.
 // ══════════════════════════════════════════════════════════════════════════════
