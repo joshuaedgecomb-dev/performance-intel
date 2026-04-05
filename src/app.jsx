@@ -5657,9 +5657,9 @@ function buildMbrTnpsSlide(pres, perf) {
     border: { type: "solid", pt: 0.5, color: MBR_COLORS.cardBorder },
   });
 
-  // ── Campaign Table (right 37%) ──
-  const campX = 0.5 + cw * 0.63;
-  const campW = cw * 0.37;
+  // ── Campaign Table (right side) ──
+  const campX = 0.5 + cw * 0.55;
+  const campW = cw * 0.45;
   slide.addText("tNPS BY CAMPAIGN \u2014 GCS", { x: campX, y: tableY - 0.25, w: campW, h: 0.2, fontSize: 8, fontFace: MBR_FONT, color: MBR_COLORS.purple, bold: true });
 
   // Compute campaign stats from fiscal-filtered GCS surveys
@@ -5686,16 +5686,16 @@ function buildMbrTnpsSlide(pres, perf) {
     ];
   });
 
-  const colW2 = [1.3, 0.65, 0.55, 0.55, 0.5, 0.5];
+  const colW2 = [1.5, 0.75, 0.6, 0.7, 0.65, 0.6];
   slide.addTable([campHdr, ...campRows], {
     x: campX, y: tableY, w: campW,
     colW: colW2,
-    rowH: 0.22,
+    rowH: 0.26,
     border: { type: "solid", pt: 0.5, color: MBR_COLORS.cardBorder },
   });
 
   // ── Monthly Vendor Trend (bottom strip) ──
-  const trendY = 5.7;
+  const trendY = 5.2;
   slide.addText("MONTHLY VENDOR RANKING", { x: 0.5, y: trendY - 0.25, w: cw, h: 0.2, fontSize: 8, fontFace: MBR_FONT, color: MBR_COLORS.purple, bold: true });
 
   const vendorColors = { "GCS": MBR_COLORS.amber, "Avantive": "6366f1", "Global Telesourcing": "0ea5e9", "Results": "8b5cf6" };
