@@ -2167,6 +2167,21 @@ function usePerformanceEngine({ rawData, goalsRaw, newHiresRaw, tnpsRaw }) {
       .map(g => ({ ...g, ...calcTnpsScore(g.surveys) }));
   }, [tnpsGCS]);
 
+  // Per-agent tNPS lookup (keyed by normalized agent name)
+  const tnpsByAgent = useMemo(() => {
+    const map = {};
+    tnpsGCS.forEach(s => {
+      const key = s.agentName.toLowerCase();
+      if (!map[key]) map[key] = [];
+      map[key].push(s);
+    });
+    const result = {};
+    Object.entries(map).forEach(([key, surveys]) => {
+      result[key] = { surveys, ...calcTnpsScore(surveys) };
+    });
+    return result;
+  }, [tnpsGCS]);
+
   const programs = useMemo(() =>
     buildPrograms(agents, goalLookup, newHireSet),
     [agents, goalLookup, newHireSet]);
@@ -2256,6 +2271,7 @@ function usePerformanceEngine({ rawData, goalsRaw, newHiresRaw, tnpsRaw }) {
     tnpsOverall,
     tnpsBySite,
     tnpsByMonth,
+    tnpsByAgent,
     bpLookup,
   };
 }
@@ -10005,11 +10021,12 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
   );
 }
 
-function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total, onNav, allAgents, localAI, priorAgents }) {
+function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total, onNav, allAgents, localAI, priorAgents, tnpsByAgent }) {
   const [tab, setTab] = useState("overview");
   const [rocFilter, setRocFilter] = useState(null); // null = all, or a specific ROC code
   const [rankSort, setRankSort] = useState({ key: "pctToGoal", dir: -1 });
   const [expandedRankSup, setExpandedRankSup] = useState(null);
+  const [expandedAgent, setExpandedAgent] = useState(null);
 
   const {
     jobType, agents, regions,
@@ -10041,6 +10058,19 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
   const winInsights  = useMemo(() => generateWinInsights(program), [program]);
   const narrative    = useMemo(() => generateNarrative(program, fiscalInfo, newHireSet), [program, fiscalInfo, newHireSet]);
   const oppInsights  = useMemo(() => generateOppInsights(program, allAgentsCtx, newHireSet), [program, allAgentsCtx, newHireSet]);
+
+  const agentTnpsBadge = (agentName) => {
+    if (!tnpsByAgent) return null;
+    const data = tnpsByAgent[agentName.toLowerCase()];
+    if (!data || data.total < 3) return null;
+    const color = data.promoters > data.detractors ? "#16a34a" : data.detractors > data.promoters ? "#dc2626" : "#6b7280";
+    return (
+      <span title={`tNPS: ${data.score > 0 ? "+" : ""}${data.score} (${data.total} surveys)`}
+        style={{ display: "inline-block", marginLeft: 5, padding: "1px 5px", borderRadius: 3, fontSize: "0.65rem", fontWeight: 600, fontFamily: "var(--font-data, monospace)", background: color + "18", color, verticalAlign: "middle" }}>
+        {data.score > 0 ? "+" : ""}{data.score}
+      </span>
+    );
+  };
 
   const hasSupervisors = agents.some(a => a.supervisor);
   const hasWeeklyData  = agents.some(a => a.weekNum);
@@ -10367,11 +10397,13 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
                     const gph = a.hours > 0 ? (a.goals / a.hours).toFixed(3) : "0.000";
                     const pct = `${Math.round(a.pctToGoal)}%`;
                     return (
-                    <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.5rem 0", borderBottom: i < topList.length-1 ? "1px solid var(--bg-tertiary)" : "none" }}>
+                    <Fragment key={i}>
+                    <div onClick={() => setExpandedAgent(expandedAgent === a.agentName ? null : a.agentName)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.5rem 0", borderBottom: i < topList.length-1 ? "1px solid var(--bg-tertiary)" : "none", cursor: "pointer" }}>
                       <div>
                         <div style={{ color: `var(--text-warm)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem", display: "flex", alignItems: "center", gap: "0.4rem" }}>
                           {a.agentName}
                           {newHireSet.has(a.agentName) && <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "var(--nh-color)", background: "var(--nh-bg)", padding: "0.05rem 0.3rem", borderRadius: "2px" }}>NEW</span>}
+                          {agentTnpsBadge(a.agentName)}
                         </div>
                         <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)` }}>{mbrSiteName(a.region)} · {fmt(a.hours, 1)} hrs · {gph} GPH</div>
                       </div>
@@ -10380,6 +10412,25 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
                         <QBadge q={a.quartile} />
                       </div>
                     </div>
+                    {expandedAgent === a.agentName && tnpsByAgent && tnpsByAgent[a.agentName.toLowerCase()] && tnpsByAgent[a.agentName.toLowerCase()].total >= 1 && (() => {
+                      const agentTnps = tnpsByAgent[a.agentName.toLowerCase()];
+                      return (
+                        <div style={{ marginTop: "0.75rem", borderTop: "1px solid var(--border)", paddingTop: "0.5rem" }}>
+                          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "var(--text-muted)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "0.35rem" }}>
+                            tNPS Surveys ({agentTnps.total}) · Score: {agentTnps.score > 0 ? "+" : ""}{agentTnps.score}
+                          </div>
+                          {agentTnps.surveys.sort((a, b) => (b.date || 0) - (a.date || 0)).slice(0, 10).map((s, si) => (
+                            <div key={si} style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem", padding: "0.3rem 0", borderBottom: "1px solid var(--bg-tertiary)" }}>
+                              <span style={{ display: "inline-block", padding: "1px 6px", borderRadius: 3, fontSize: "0.72rem", fontWeight: 700, fontFamily: "var(--font-data, monospace)", color: "#fff", background: s.category === "promoter" ? "#16a34a" : s.category === "detractor" ? "#dc2626" : "#d97706", flexShrink: 0 }}>{s.score}</span>
+                              <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "var(--text-dim)", flexShrink: 0, width: 70 }}>{s.date ? s.date.toLocaleDateString("en-US", { month: "short", day: "numeric" }) : ""}</span>
+                              <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "var(--text-dim)", flexShrink: 0, width: 80 }}>{s.campaign}</span>
+                              <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: "var(--text-secondary)", flex: 1 }}>{s.reason || "\u2014"}</span>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                    </Fragment>
                     );
                   });
                 })()}
@@ -10391,12 +10442,14 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
                 {q4Agents.length === 0 ? (
                   <div style={{ color: `var(--text-faint)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem" }}>No Q4 agents — excellent!</div>
                 ) : q4Agents.slice(0, 5).map((a, i) => (
-                  <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.5rem 0", borderBottom: i < Math.min(q4Agents.length,5)-1 ? "1px solid var(--bg-tertiary)" : "none" }}>
+                  <Fragment key={i}>
+                  <div onClick={() => setExpandedAgent(expandedAgent === a.agentName ? null : a.agentName)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.5rem 0", borderBottom: i < Math.min(q4Agents.length,5)-1 ? "1px solid var(--bg-tertiary)" : "none", cursor: "pointer" }}>
                     <div>
                       <div style={{ color: `var(--text-warm)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem", display: "flex", alignItems: "center", gap: "0.4rem" }}>
                         {a.agentName}
                         {newHireSet.has(a.agentName) && <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "var(--nh-color)", background: "var(--nh-bg)", padding: "0.05rem 0.3rem", borderRadius: "2px" }}>NEW</span>}
                         {a.hours > 16 && <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "#6366f1", background: "#6366f120", padding: "0.05rem 0.3rem", borderRadius: "2px" }}>16+ HRS</span>}
+                        {agentTnpsBadge(a.agentName)}
                       </div>
                       <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)` }}>{mbrSiteName(a.region)} · 0 sales</div>
                     </div>
@@ -10405,6 +10458,25 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
                       <QBadge q={a._q} />
                     </div>
                   </div>
+                  {expandedAgent === a.agentName && tnpsByAgent && tnpsByAgent[a.agentName.toLowerCase()] && tnpsByAgent[a.agentName.toLowerCase()].total >= 1 && (() => {
+                    const agentTnps = tnpsByAgent[a.agentName.toLowerCase()];
+                    return (
+                      <div style={{ marginTop: "0.75rem", borderTop: "1px solid var(--border)", paddingTop: "0.5rem" }}>
+                        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "var(--text-muted)", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "0.35rem" }}>
+                          tNPS Surveys ({agentTnps.total}) · Score: {agentTnps.score > 0 ? "+" : ""}{agentTnps.score}
+                        </div>
+                        {agentTnps.surveys.sort((a, b) => (b.date || 0) - (a.date || 0)).slice(0, 10).map((s, si) => (
+                          <div key={si} style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem", padding: "0.3rem 0", borderBottom: "1px solid var(--bg-tertiary)" }}>
+                            <span style={{ display: "inline-block", padding: "1px 6px", borderRadius: 3, fontSize: "0.72rem", fontWeight: 700, fontFamily: "var(--font-data, monospace)", color: "#fff", background: s.category === "promoter" ? "#16a34a" : s.category === "detractor" ? "#dc2626" : "#d97706", flexShrink: 0 }}>{s.score}</span>
+                            <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "var(--text-dim)", flexShrink: 0, width: 70 }}>{s.date ? s.date.toLocaleDateString("en-US", { month: "short", day: "numeric" }) : ""}</span>
+                            <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "var(--text-dim)", flexShrink: 0, width: 80 }}>{s.campaign}</span>
+                            <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: "var(--text-secondary)", flex: 1 }}>{s.reason || "\u2014"}</span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                  </Fragment>
                 ))}
               </div>
             </div>
@@ -13426,6 +13498,7 @@ export default function App() {
             allAgents={perf.agents}
             localAI={localAI}
             priorAgents={priorAgents}
+            tnpsByAgent={perf.tnpsByAgent}
           />
             </div>
           </div>
