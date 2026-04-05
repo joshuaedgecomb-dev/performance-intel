@@ -5564,12 +5564,36 @@ function buildMbrSiteRankingSlide(pres, perf) {
 }
 
 function buildMbrTnpsSlide(pres, perf) {
-  const { tnpsData, tnpsGCS, tnpsOverall, tnpsBySite, tnpsByMonth } = perf;
+  const { tnpsData, tnpsGCS, tnpsBySite, tnpsByMonth, fiscalInfo } = perf;
   if (!tnpsData || tnpsData.length === 0) return;
+
+  // Filter to current fiscal month for KPIs, partner ranking, and campaign tables
+  const fiscalGCS = tnpsFiscalFilter(tnpsGCS, fiscalInfo);
+  const fiscalAll = tnpsFiscalFilter(tnpsData, fiscalInfo);
+  const fiscalOverall = calcTnpsScore(fiscalGCS);
+
+  // Fiscal-month site breakdown
+  const fiscalSiteGroups = {};
+  fiscalAll.forEach(s => {
+    if (!fiscalSiteGroups[s.siteLabel]) fiscalSiteGroups[s.siteLabel] = [];
+    fiscalSiteGroups[s.siteLabel].push(s);
+  });
+  const fiscalBySite = Object.entries(fiscalSiteGroups).map(([label, surveys]) => ({
+    label, isGCS: surveys[0].isGCS, ...calcTnpsScore(surveys),
+  })).sort((a, b) => (b.score ?? -999) - (a.score ?? -999));
+
+  // Fiscal period label
+  let periodLabel = "Current Month";
+  if (fiscalInfo) {
+    const [sy, sm, sd] = fiscalInfo.fiscalStart.split("-").map(Number);
+    const [ey, em, ed] = fiscalInfo.fiscalEnd.split("-").map(Number);
+    const fmt = d => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    periodLabel = `${fmt(new Date(sy, sm-1, sd))} \u2013 ${fmt(new Date(ey, em-1, ed))}`;
+  }
 
   const slide = pres.addSlide();
   slide.bkgd = MBR_COLORS.white;
-  addMbrSlideHeader(slide, pres, "CUSTOMER EXPERIENCE \u2014 tNPS", "Transactional Net Promoter Score");
+  addMbrSlideHeader(slide, pres, "CUSTOMER EXPERIENCE \u2014 tNPS", `Current Fiscal Month: ${periodLabel}`);
 
   const cw = MBR_W - 1;
   const fontSize = 7;
@@ -5579,32 +5603,31 @@ function buildMbrTnpsSlide(pres, perf) {
   // ── KPI Strip ──
   const kpiY = 1.35;
   const kpiCards = [
-    { label: "GCS tNPS", value: `${tnpsOverall.score > 0 ? "+" : ""}${tnpsOverall.score}`, color: tnpsOverall.score >= 50 ? MBR_COLORS.green : tnpsOverall.score >= 20 ? MBR_COLORS.amber : MBR_COLORS.red },
-    { label: "SURVEYS", value: String(tnpsOverall.total), color: MBR_COLORS.purple },
-    { label: "PROMOTER", value: `${Math.round(tnpsOverall.promoterPct)}%`, color: MBR_COLORS.green },
-    { label: "PASSIVE", value: `${Math.round(tnpsOverall.passivePct)}%`, color: MBR_COLORS.amber },
-    { label: "DETRACTOR", value: `${Math.round(tnpsOverall.detractorPct)}%`, color: MBR_COLORS.red },
+    { label: `GCS tNPS (${fiscalOverall.total} surveys)`, value: `${fiscalOverall.score > 0 ? "+" : ""}${fiscalOverall.score}`, color: fiscalOverall.score >= 50 ? MBR_COLORS.green : fiscalOverall.score >= 20 ? MBR_COLORS.amber : MBR_COLORS.red },
+    { label: "PROMOTER", value: `${Math.round(fiscalOverall.promoterPct)}%`, color: MBR_COLORS.green },
+    { label: "PASSIVE", value: `${Math.round(fiscalOverall.passivePct)}%`, color: MBR_COLORS.amber },
+    { label: "DETRACTOR", value: `${Math.round(fiscalOverall.detractorPct)}%`, color: MBR_COLORS.red },
   ];
-  const kpiW = (cw - 0.4) / kpiCards.length;
+  const kpiW = (cw - 0.3) / kpiCards.length;
   kpiCards.forEach((k, i) => {
     const kx = 0.5 + i * (kpiW + 0.1);
     slide.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: kx, y: kpiY, w: kpiW, h: 0.7, rectRadius: 0.05, fill: { color: MBR_COLORS.lightGray }, line: { color: MBR_COLORS.cardBorder, width: 0.5 } });
     slide.addShape(pres.shapes.RECTANGLE, { x: kx, y: kpiY, w: kpiW, h: 0.04, fill: { color: k.color } });
     slide.addText(k.label, { x: kx, y: kpiY + 0.08, w: kpiW, h: 0.2, fontSize: 7, fontFace: MBR_FONT, color: MBR_COLORS.textSecondary, align: "center" });
-    slide.addText(k.value, { x: kx, y: kpiY + 0.25, w: kpiW, h: 0.4, fontSize: 22, fontFace: MBR_FONT, color: k.color, bold: true, align: "center" });
+    slide.addText(k.value, { x: kx, y: kpiY + 0.25, w: kpiW, h: 0.4, fontSize: 24, fontFace: MBR_FONT, color: k.color, bold: true, align: "center" });
   });
 
-  // ── Partner Ranking Table (left half) ──
+  // ── Partner Ranking Table (left 55%) ──
   const tableY = 2.25;
-  const tableW = cw * 0.48;
+  const tableW = cw * 0.55;
   slide.addText("PARTNER RANKING", { x: 0.5, y: tableY - 0.25, w: tableW, h: 0.2, fontSize: 8, fontFace: MBR_FONT, color: MBR_COLORS.purple, bold: true });
 
-  // Build GCS aggregate + partner sites sorted by score
-  const gcsAgg = { label: "GCS (All Sites)", isGCS: true, isAgg: true, ...tnpsOverall };
-  const partnerSites = tnpsBySite.filter(s => !s.isGCS);
-  const gcsSites = tnpsBySite.filter(s => s.isGCS);
+  // Build GCS aggregate + known partners only, sorted by score
+  const knownVendors = ["GCS", "Avantive", "Global Telesourcing", "Results"];
+  const gcsAgg = { label: "GCS (All Sites)", isGCS: true, isAgg: true, ...fiscalOverall };
+  const partnerSites = fiscalBySite.filter(s => !s.isGCS && knownVendors.includes(s.label));
+  const gcsSites = fiscalBySite.filter(s => s.isGCS);
   const ranked = [gcsAgg, ...partnerSites].sort((a, b) => (b.score ?? -999) - (a.score ?? -999));
-  // Insert GCS sub-sites after aggregate
   const aggIdx = ranked.findIndex(s => s.isAgg);
   const allRanked = [...ranked.slice(0, aggIdx + 1), ...gcsSites, ...ranked.slice(aggIdx + 1)];
 
@@ -5618,30 +5641,30 @@ function buildMbrTnpsSlide(pres, perf) {
     const scoreColor = (s.score ?? 0) >= 50 ? MBR_COLORS.green : (s.score ?? 0) >= 20 ? MBR_COLORS.amber : MBR_COLORS.red;
     return [
       { text: isSub ? "" : String(rank), options: { ...base, align: "center", color: MBR_COLORS.textSecondary } },
-      { text: isSub ? `  ${s.label}` : s.label, options: { ...base, align: "left", bold: s.isAgg, color: isSub ? MBR_COLORS.textSecondary : MBR_COLORS.textPrimary, fontSize: isSub ? 6 : 7 } },
-      { text: `${(s.score ?? 0) > 0 ? "+" : ""}${s.score ?? 0}`, options: { ...base, align: "center", bold: true, color: scoreColor } },
+      { text: isSub ? `  ${s.label}` : s.label, options: { ...base, align: "left", bold: s.isAgg, color: isSub ? MBR_COLORS.textSecondary : MBR_COLORS.textPrimary, fontSize: isSub ? 6.5 : 7.5 } },
+      { text: `${(s.score ?? 0) > 0 ? "+" : ""}${s.score ?? 0}`, options: { ...base, align: "center", bold: true, color: scoreColor, fontSize: 8 } },
       { text: String(s.total || 0), options: { ...base, align: "center", color: MBR_COLORS.textSecondary } },
       { text: `${Math.round(s.promoterPct || 0)}%`, options: { ...base, align: "center", color: MBR_COLORS.green } },
       { text: `${Math.round(s.detractorPct || 0)}%`, options: { ...base, align: "center", color: MBR_COLORS.red } },
     ];
   });
 
-  const colW1 = [0.3, 1.45, 0.55, 0.55, 0.5, 0.5];
+  const colW1 = [0.35, 2.0, 0.6, 0.65, 0.55, 0.55];
   slide.addTable([rankHdr, ...rankRows], {
     x: 0.5, y: tableY, w: tableW,
     colW: colW1,
-    rowH: 0.22,
+    rowH: 0.26,
     border: { type: "solid", pt: 0.5, color: MBR_COLORS.cardBorder },
   });
 
-  // ── Campaign Table (right half) ──
-  const campX = 0.5 + cw * 0.52;
-  const campW = cw * 0.48;
+  // ── Campaign Table (right 42%) ──
+  const campX = 0.5 + cw * 0.58;
+  const campW = cw * 0.42;
   slide.addText("tNPS BY CAMPAIGN \u2014 GCS", { x: campX, y: tableY - 0.25, w: campW, h: 0.2, fontSize: 8, fontFace: MBR_FONT, color: MBR_COLORS.purple, bold: true });
 
-  // Compute campaign stats from GCS surveys
+  // Compute campaign stats from fiscal-filtered GCS surveys
   const campGroups = {};
-  tnpsGCS.forEach(s => {
+  fiscalGCS.forEach(s => {
     const key = s.campaign;
     if (!campGroups[key]) campGroups[key] = { campaign: key, program: s.program, surveys: [] };
     campGroups[key].surveys.push(s);
