@@ -639,6 +639,139 @@ function parseNewHires(rows = []) {
   }).filter(Boolean);
 }
 
+// ── BP→Agent Lookup from roster ───────────────────────────────────────────────
+function buildBpLookup(rosterRows = []) {
+  const map = {};
+  for (const row of rosterRows) {
+    const bp = (row["BP"] || "").trim().toLowerCase();
+    if (!bp) continue;
+    const first = (row["First Name"] || row["First"] || "").trim();
+    const last  = (row["Last Name"]  || row["Last"]  || "").trim();
+    const name  = [first, last].filter(Boolean).join(" ");
+    if (!name) continue;
+    const endDate = (row["End Date"] || row["EndDate"] || "").trim();
+    if (endDate) continue; // skip inactive
+    map[bp] = {
+      name,
+      firstName: first,
+      lastName: last,
+      supervisor: (row["Supervisor Name"] || row["Supervisor"] || "").trim(),
+      region: (row["Region"] || "").trim(),
+      hireDate: (row["Hire Date"] || row["StartDate"] || "").trim(),
+      role: (row["Role"] || "").trim(),
+    };
+  }
+  return map;
+}
+
+// ── tNPS Site Mapping ─────────────────────────────────────────────────────────
+const TNPS_SITE_MAP = {
+  "Global Callcenter Solutions Belize": "Belize City",
+  "Global Callcenter Solutions Ignaco": "San Ignacio",
+  "Global Callcenter Solutions Santo Domingo": "Dom. Republic",
+};
+const TNPS_PARTNER_MAP = {
+  "Avantive Solutions Guadalajara": "Avantive",
+  "Avantive Solutions Mexico City": "Avantive",
+  "Global Telesourcing Monterrey": "Global Telesourcing",
+  "iGuard Global Telesourcing Monterrey": "Global Telesourcing",
+  "Results Alaskaland": "Results",
+  "Results Alaskaland Trial": "Results",
+  "Results Alaskaland Telesales": "Results",
+};
+function tnpsSiteLabel(rawSite) {
+  return TNPS_SITE_MAP[rawSite] || TNPS_PARTNER_MAP[rawSite] || rawSite;
+}
+function tnpsIsGCS(rawSite) {
+  return !!TNPS_SITE_MAP[rawSite];
+}
+
+// ── tNPS Campaign → Program mapping ──────────────────────────────────────────
+const TNPS_CAMPAIGN_PROGRAM = {
+  "Add XM": "XM",
+  "Add XMC": "XMC",
+  "Non Subs": "Nonsub",
+};
+function tnpsCampaignLabel(raw) {
+  return (raw || "").trim() || "Untagged";
+}
+function tnpsCampaignProgram(raw) {
+  return TNPS_CAMPAIGN_PROGRAM[(raw || "").trim()] || null;
+}
+
+// ── tNPS Survey Parser ────────────────────────────────────────────────────────
+function parseTnps(rows = [], bpLookup = {}) {
+  return rows.map(row => {
+    const score = parseFloat(row["SMS tNPS"]);
+    if (isNaN(score)) return null;
+
+    const rawSite    = (row["Site"] || "").trim();
+    const rawCampaign = (row["Telesales Campaign"] || "").trim();
+    const ntid       = (row["Employee NTID"] || "").trim().toLowerCase();
+    const dateStr    = (row["Transaction Date"] || "").trim();
+
+    // Parse date — format: "3/20/2026 14:34"
+    const dateParsed = dateStr ? new Date(dateStr) : null;
+    const month      = dateParsed && !isNaN(dateParsed) ? `${dateParsed.getFullYear()}-${String(dateParsed.getMonth() + 1).padStart(2, "0")}` : null;
+    const monthLabel = dateParsed && !isNaN(dateParsed) ? dateParsed.toLocaleString("en-US", { month: "short", year: "numeric" }) : "Unknown";
+
+    // Classification
+    const category = score >= 9 ? "promoter" : score >= 7 ? "passive" : "detractor";
+    const isGCS    = tnpsIsGCS(rawSite);
+    const siteLabel = tnpsSiteLabel(rawSite);
+
+    // Agent lookup
+    const agent = bpLookup[ntid] || null;
+
+    return {
+      score,
+      category,
+      rawSite,
+      siteLabel,
+      isGCS,
+      campaign: tnpsCampaignLabel(rawCampaign),
+      program: tnpsCampaignProgram(rawCampaign),
+      ntid,
+      agentName: agent ? agent.name : ntid || "Unknown",
+      supervisor: agent ? agent.supervisor : "",
+      region: agent ? agent.region : "",
+      date: dateParsed,
+      dateStr,
+      month,
+      monthLabel,
+      reason: (row["Reason for score"] || "").trim(),
+      repSat: parseFloat(row["Rep Sat"]) || null,
+      topics: (row["Topics Tagged Original"] || "").trim(),
+      alertType: (row["Alert type"] || "").trim(),
+      alertStatus: (row["Alert Status"] || row["Alert Closure Status"] || "").trim(),
+    };
+  }).filter(Boolean);
+}
+
+// ── tNPS Score Calculator ─────────────────────────────────────────────────────
+function calcTnpsScore(surveys) {
+  if (!surveys || surveys.length === 0) return { score: null, promoters: 0, passives: 0, detractors: 0, total: 0, promoterPct: 0, passivePct: 0, detractorPct: 0 };
+  const promoters  = surveys.filter(s => s.category === "promoter").length;
+  const passives   = surveys.filter(s => s.category === "passive").length;
+  const detractors = surveys.filter(s => s.category === "detractor").length;
+  const total = surveys.length;
+  const promoterPct  = (promoters / total) * 100;
+  const passivePct   = (passives / total) * 100;
+  const detractorPct = (detractors / total) * 100;
+  return {
+    score: Math.round(promoterPct - detractorPct),
+    promoters, passives, detractors, total,
+    promoterPct, passivePct, detractorPct,
+  };
+}
+
+function tnpsColor(score) {
+  if (score === null) return "var(--text-dim)";
+  if (score >= 50) return "#16a34a";
+  if (score >= 20) return "#d97706";
+  return "#dc2626";
+}
+
 // ── uniqueQuartileDist: use aggregate quartile (one true value per agent) ─────
 // Since every row for an agent now carries the same aggregate quartile,
 // we just deduplicate by agentName and count.
