@@ -5794,8 +5794,8 @@ function TNPSSlide({ perf, onNav, lightMode }) {
   const availableMonths = useMemo(() => {
     const months = [...new Set(tnpsGCS.filter(s => s.month).map(s => s.month))].sort();
     return months.map(m => {
-      const d = new Date(m + "-01");
-      return { key: m, label: d.toLocaleString("en-US", { month: "short", year: "numeric" }) };
+      const [y, mo] = m.split("-").map(Number);
+      return { key: m, label: new Date(y, mo - 1, 1).toLocaleString("en-US", { month: "short", year: "numeric" }) };
     });
   }, [tnpsGCS]);
 
@@ -6204,8 +6204,8 @@ function TNPSSlide({ perf, onNav, lightMode }) {
               style={{ padding: "0.35rem 0.5rem", borderRadius: "var(--radius-sm, 6px)", border: "1px solid var(--border-muted)", background: "var(--bg-secondary)", color: "var(--text-secondary)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem" }}>
               <option value="all">All Months</option>
               {voiceMonths.map(m => {
-                const d = new Date(m + "-01");
-                return <option key={m} value={m}>{d.toLocaleString("en-US", { month: "short", year: "numeric" })}</option>;
+                const [y, mo] = m.split("-").map(Number);
+                return <option key={m} value={m}>{new Date(y, mo - 1, 1).toLocaleString("en-US", { month: "short", year: "numeric" })}</option>;
               })}
             </select>
             <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", color: "var(--text-dim)", alignSelf: "center" }}>{voicesSorted.length} results</div>
