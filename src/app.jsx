@@ -5751,6 +5751,7 @@ function MbrExportModal({ perf, onClose }) {
 
 function TNPSSlide({ perf, onNav, lightMode }) {
   const [tab, setTab] = useState("summary");
+  const [expandedSup, setExpandedSup] = useState(null);
   const { tnpsData, tnpsGCS, tnpsOverall, tnpsBySite, tnpsByMonth, bpLookup } = perf;
 
   // Campaign breakdown (GCS only)
@@ -5765,6 +5766,43 @@ function TNPSSlide({ perf, onNav, lightMode }) {
       .map(g => ({ ...g, ...calcTnpsScore(g.surveys) }))
       .sort((a, b) => (b.score ?? -999) - (a.score ?? -999));
   }, [tnpsGCS]);
+
+  // Supervisor breakdown (GCS only, from roster join)
+  const tnpsBySupervisor = useMemo(() => {
+    const groups = {};
+    tnpsGCS.forEach(s => {
+      const sup = s.supervisor || "Unknown";
+      if (!groups[sup]) groups[sup] = { supervisor: sup, site: s.siteLabel, surveys: [] };
+      groups[sup].surveys.push(s);
+    });
+
+    // Calculate site averages for delta
+    const siteAvgs = {};
+    tnpsBySite.filter(s => s.isGCS).forEach(s => { siteAvgs[s.label] = s.score; });
+
+    return Object.values(groups)
+      .map(g => {
+        const stats = calcTnpsScore(g.surveys);
+        const siteAvg = siteAvgs[g.site] ?? null;
+        return {
+          ...g,
+          ...stats,
+          siteAvg,
+          delta: siteAvg !== null && stats.score !== null ? stats.score - siteAvg : null,
+          agents: (() => {
+            const agentGroups = {};
+            g.surveys.forEach(s => {
+              if (!agentGroups[s.ntid]) agentGroups[s.ntid] = { ntid: s.ntid, name: s.agentName, surveys: [] };
+              agentGroups[s.ntid].surveys.push(s);
+            });
+            return Object.values(agentGroups)
+              .map(a => ({ ...a, ...calcTnpsScore(a.surveys) }))
+              .sort((a, b) => (a.score ?? 999) - (b.score ?? 999));
+          })(),
+        };
+      })
+      .sort((a, b) => (a.score ?? 999) - (b.score ?? 999)); // worst first
+  }, [tnpsGCS, tnpsBySite]);
 
   if (!tnpsData || tnpsData.length === 0) {
     return (
@@ -5954,7 +5992,61 @@ function TNPSSlide({ perf, onNav, lightMode }) {
           </div>
         </div>
       )}
-      {tab === "supervisor" && <div style={{ color: "var(--text-dim)", fontFamily: "var(--font-ui, Inter, sans-serif)", padding: "3rem", textAlign: "center" }}>By Supervisor — coming in Phase 2</div>}
+      {tab === "supervisor" && (
+        <div style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem 1.5rem" }}>
+          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: "0.75rem" }}>tNPS by Supervisor — GCS (sorted by coaching opportunity)</div>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr>
+                {["Supervisor", "Site", "Team tNPS", "Surveys", "Promoter %", "Detractor %", "vs Site Avg"].map((h, i) => (
+                  <th key={i} style={{ padding: "0.5rem", textAlign: i > 1 ? "right" : "left", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: "var(--text-muted)", borderBottom: "1px solid var(--border)", fontWeight: 500, letterSpacing: "0.05em", textTransform: "uppercase" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {tnpsBySupervisor.map((sup, i) => {
+                const isExpanded = expandedSup === sup.supervisor;
+                const belowAvg = sup.delta !== null && sup.delta < -10;
+                return (
+                  <React.Fragment key={i}>
+                    <tr
+                      onClick={() => setExpandedSup(isExpanded ? null : sup.supervisor)}
+                      style={{ cursor: "pointer", borderBottom: "1px solid var(--bg-tertiary)", background: belowAvg ? (lightMode ? "#fef2f2" : "#dc262606") : "transparent" }}
+                    >
+                      <td style={{ padding: "0.6rem 0.5rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: "var(--text-warm)" }}>
+                        <span style={{ marginRight: 6, fontSize: "0.7rem", color: "var(--text-faint)" }}>{isExpanded ? "▼" : "▶"}</span>
+                        {sup.supervisor}
+                      </td>
+                      <td style={{ padding: "0.6rem 0.5rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "var(--text-secondary)" }}>{sup.site}</td>
+                      <td style={{ padding: "0.6rem 0.5rem", textAlign: "right", fontFamily: "var(--font-data, monospace)", fontSize: "0.95rem", fontWeight: 700, color: tnpsColor(sup.score) }}>
+                        {sup.score > 0 ? "+" : ""}{sup.score}
+                      </td>
+                      <td style={{ padding: "0.6rem 0.5rem", textAlign: "right", fontFamily: "var(--font-data, monospace)", fontSize: "0.82rem", color: "var(--text-secondary)" }}>{sup.total}</td>
+                      <td style={{ padding: "0.6rem 0.5rem", textAlign: "right", fontFamily: "var(--font-data, monospace)", fontSize: "0.82rem", color: "#16a34a" }}>{Math.round(sup.promoterPct)}%</td>
+                      <td style={{ padding: "0.6rem 0.5rem", textAlign: "right", fontFamily: "var(--font-data, monospace)", fontSize: "0.82rem", color: "#dc2626" }}>{Math.round(sup.detractorPct)}%</td>
+                      <td style={{ padding: "0.6rem 0.5rem", textAlign: "right", fontFamily: "var(--font-data, monospace)", fontSize: "0.82rem", fontWeight: 600, color: sup.delta !== null ? (sup.delta >= 0 ? "#16a34a" : "#dc2626") : "var(--text-dim)" }}>
+                        {sup.delta !== null ? `${sup.delta >= 0 ? "+" : ""}${sup.delta}` : "—"}
+                      </td>
+                    </tr>
+                    {isExpanded && sup.agents.map((agent, ai) => (
+                      <tr key={`${i}-${ai}`} style={{ background: lightMode ? "#f8f9fa" : "var(--bg-tertiary)" }}>
+                        <td colSpan={2} style={{ padding: "0.4rem 0.5rem 0.4rem 2rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "var(--text-secondary)" }}>{agent.name}</td>
+                        <td style={{ padding: "0.4rem 0.5rem", textAlign: "right", fontFamily: "var(--font-data, monospace)", fontSize: "0.85rem", fontWeight: 600, color: tnpsColor(agent.score) }}>
+                          {agent.score !== null ? `${agent.score > 0 ? "+" : ""}${agent.score}` : "—"}
+                        </td>
+                        <td style={{ padding: "0.4rem 0.5rem", textAlign: "right", fontFamily: "var(--font-data, monospace)", fontSize: "0.78rem", color: "var(--text-dim)" }}>{agent.total}</td>
+                        <td style={{ padding: "0.4rem 0.5rem", textAlign: "right", fontFamily: "var(--font-data, monospace)", fontSize: "0.78rem", color: "#16a34a" }}>{Math.round(agent.promoterPct)}%</td>
+                        <td style={{ padding: "0.4rem 0.5rem", textAlign: "right", fontFamily: "var(--font-data, monospace)", fontSize: "0.78rem", color: "#dc2626" }}>{Math.round(agent.detractorPct)}%</td>
+                        <td />
+                      </tr>
+                    ))}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
       {tab === "voices" && <div style={{ color: "var(--text-dim)", fontFamily: "var(--font-ui, Inter, sans-serif)", padding: "3rem", textAlign: "center" }}>Customer Voices — coming in Phase 2</div>}
 
       {/* Navigation footer */}
