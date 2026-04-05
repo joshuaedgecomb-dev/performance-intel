@@ -6951,7 +6951,7 @@ function BusinessOverview({ perf, onNav, goToSlide, tnpsSlideIdx, localAI, prior
           );
         })()}
 
-        {/* tNPS Campaign Overview — compact row below KPI strip */}
+        {/* tNPS Campaign Overview — table below KPI strip */}
         {tnpsOverall && tnpsOverall.total > 0 && (() => {
           const campGroups = {};
           tnpsFiscalGCS.forEach(s => {
@@ -6965,15 +6965,33 @@ function BusinessOverview({ perf, onNav, goToSlide, tnpsSlideIdx, localAI, prior
           if (camps.length === 0) return null;
           return (
             <div onClick={() => goToSlide(tnpsSlideIdx)}
-              style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginTop: "0.5rem", cursor: "pointer" }}>
-              {camps.map((c, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.3rem 0.65rem", borderRadius: "var(--radius-sm, 6px)", background: "var(--bg-secondary)", border: "1px solid var(--border)" }}>
-                  {c.program && <span style={{ fontSize: "0.6rem", padding: "1px 4px", borderRadius: 2, background: "#d9770618", color: "#d97706", fontWeight: 600, fontFamily: "var(--font-ui, Inter, sans-serif)" }}>{c.program}</span>}
-                  <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", color: "var(--text-secondary)" }}>{c.campaign}</span>
-                  <span style={{ fontFamily: "var(--font-data, monospace)", fontSize: "0.78rem", fontWeight: 700, color: tnpsColor(c.score) }}>{c.score > 0 ? "+" : ""}{c.score}</span>
-                  <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.65rem", color: "var(--text-dim)" }}>({c.total})</span>
-                </div>
-              ))}
+              style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1rem 1.5rem", marginTop: "0.75rem", cursor: "pointer" }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = "#d97706"; e.currentTarget.style.boxShadow = "0 0 12px #d9770620"; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.boxShadow = "none"; }}>
+              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: "0.5rem" }}>tNPS by Campaign — GCS</div>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr>
+                    {["Campaign", "Program", "tNPS", "Surveys", "Promoter %", "Detractor %"].map((h, i) => (
+                      <th key={i} style={{ padding: "0.4rem 0.5rem", textAlign: i > 1 ? "right" : "left", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.65rem", color: "var(--text-muted)", borderBottom: "1px solid var(--border)", fontWeight: 500, letterSpacing: "0.05em", textTransform: "uppercase" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {camps.map((c, i) => (
+                    <tr key={i} style={{ borderBottom: "1px solid var(--bg-tertiary)" }}>
+                      <td style={{ padding: "0.5rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "var(--text-warm)" }}>{c.campaign}</td>
+                      <td style={{ padding: "0.5rem" }}>
+                        {c.program && <span style={{ fontSize: "0.65rem", padding: "2px 5px", borderRadius: 3, background: "#d9770618", color: "#d97706", fontWeight: 600, fontFamily: "var(--font-ui, Inter, sans-serif)" }}>{c.program}</span>}
+                      </td>
+                      <td style={{ padding: "0.5rem", textAlign: "right", fontFamily: "var(--font-data, monospace)", fontSize: "0.9rem", fontWeight: 700, color: tnpsColor(c.score) }}>{c.score > 0 ? "+" : ""}{c.score}</td>
+                      <td style={{ padding: "0.5rem", textAlign: "right", fontFamily: "var(--font-data, monospace)", fontSize: "0.8rem", color: "var(--text-secondary)" }}>{c.total}</td>
+                      <td style={{ padding: "0.5rem", textAlign: "right", fontFamily: "var(--font-data, monospace)", fontSize: "0.8rem", color: "#16a34a" }}>{Math.round(c.promoterPct)}%</td>
+                      <td style={{ padding: "0.5rem", textAlign: "right", fontFamily: "var(--font-data, monospace)", fontSize: "0.8rem", color: "#dc2626" }}>{Math.round(c.detractorPct)}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           );
         })()}
