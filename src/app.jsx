@@ -6052,28 +6052,70 @@ function TNPSSlide({ perf, onNav, lightMode }) {
             </table>
           </div>
 
-          {/* Monthly Trend */}
-          {tnpsByMonth.length > 0 && (
-            <div style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem 1.5rem" }}>
-              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: "1rem" }}>Monthly Trend — GCS Overall</div>
-              <div style={{ display: "flex", gap: "0.75rem", alignItems: "flex-end", height: 180 }}>
-                {tnpsByMonth.map((m, i) => {
-                  const maxAbs = Math.max(...tnpsByMonth.map(x => Math.abs(x.score || 0)), 1);
-                  const barH = Math.max(20, (Math.abs(m.score || 0) / maxAbs) * 140);
-                  return (
-                    <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
-                      <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "1rem", fontWeight: 700, color: tnpsColor(m.score), marginBottom: 4 }}>
-                        {m.score > 0 ? "+" : ""}{m.score}
-                      </div>
-                      <div style={{ width: "70%", height: barH, borderRadius: "6px 6px 0 0", background: tnpsColor(m.score) + "cc" }} />
-                      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", color: "var(--text-warm)", marginTop: 6, fontWeight: 500 }}>{m.label}</div>
-                      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.65rem", color: "var(--text-dim)" }}>{m.total} surveys</div>
+          {/* Monthly Vendor Ranking */}
+          {tnpsByMonth.length > 0 && (() => {
+            // Build per-month scores for each vendor (GCS aggregate + partners)
+            const { tnpsData: allSurveys } = perf;
+            const months = [...new Set((allSurveys || []).filter(s => s.month).map(s => s.month))].sort();
+            // Get unique vendor labels (GCS as aggregate + partner companies)
+            const vendorMap = {}; // month → vendor → surveys
+            (allSurveys || []).forEach(s => {
+              if (!s.month) return;
+              const vendor = s.isGCS ? "GCS" : s.siteLabel;
+              if (!vendorMap[s.month]) vendorMap[s.month] = {};
+              if (!vendorMap[s.month][vendor]) vendorMap[s.month][vendor] = [];
+              vendorMap[s.month][vendor].push(s);
+            });
+            const vendors = [...new Set((allSurveys || []).map(s => s.isGCS ? "GCS" : s.siteLabel))].sort((a, b) => a === "GCS" ? -1 : b === "GCS" ? 1 : a.localeCompare(b));
+            const vendorColors = { "GCS": "#d97706", "Avantive": "#6366f1", "Global Telesourcing": "#0ea5e9", "Results": "#8b5cf6" };
+
+            return (
+              <div style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem 1.5rem" }}>
+                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: "0.5rem" }}>Monthly Vendor Ranking</div>
+                {/* Legend */}
+                <div style={{ display: "flex", gap: "1rem", marginBottom: "1rem", flexWrap: "wrap" }}>
+                  {vendors.map(v => (
+                    <div key={v} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                      <div style={{ width: 10, height: 10, borderRadius: 2, background: vendorColors[v] || "#94a3b8" }} />
+                      <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "var(--text-secondary)" }}>{v}</span>
                     </div>
-                  );
-                })}
+                  ))}
+                </div>
+                {/* Grouped bars per month */}
+                <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end", height: 200, paddingTop: 24 }}>
+                  {months.map((month, mi) => {
+                    const [y, mo] = month.split("-").map(Number);
+                    const mLabel = new Date(y, mo - 1, 1).toLocaleString("en-US", { month: "short", year: "numeric" });
+                    const vendorScores = vendors.map(v => {
+                      const surveys = (vendorMap[month] || {})[v] || [];
+                      return { vendor: v, ...calcTnpsScore(surveys) };
+                    }).filter(v => v.total > 0);
+                    const maxAbs = 100; // fixed scale -100 to +100
+                    return (
+                      <div key={mi} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                        <div style={{ display: "flex", gap: 2, alignItems: "flex-end", height: 160, width: "100%" }}>
+                          {vendorScores.map((vs, vi) => {
+                            const barH = Math.max(8, (Math.abs(vs.score || 0) / maxAbs) * 140);
+                            const isGCS = vs.vendor === "GCS";
+                            return (
+                              <div key={vi} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
+                                <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: isGCS ? "0.75rem" : "0.6rem", fontWeight: isGCS ? 700 : 500, color: vendorColors[vs.vendor] || "#94a3b8", marginBottom: 2 }}>
+                                  {vs.score > 0 ? "+" : ""}{vs.score}
+                                </div>
+                                <div style={{ width: "80%", height: barH, borderRadius: "3px 3px 0 0", background: (vendorColors[vs.vendor] || "#94a3b8") + (isGCS ? "dd" : "88"), border: isGCS ? `2px solid ${vendorColors[vs.vendor]}` : "none" }}
+                                  title={`${vs.vendor}: ${vs.score > 0 ? "+" : ""}${vs.score} (${vs.total} surveys)`} />
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "var(--text-warm)", marginTop: 4, fontWeight: 500 }}>{mLabel}</div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
         </div>
       )}
 
