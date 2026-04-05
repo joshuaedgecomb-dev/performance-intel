@@ -6110,22 +6110,30 @@ function TNPSSlide({ perf, onNav, lightMode }) {
             </table>
           </div>
 
-          {/* Campaign Bar Chart */}
+          {/* Campaign Bar Chart — diverging from center (0) */}
           <div style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem 1.5rem" }}>
             <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: "1rem" }}>tNPS Score by Campaign</div>
             <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
               {tnpsByCampaign.map((c, i) => {
-                const maxAbs = Math.max(...tnpsByCampaign.map(x => Math.abs(x.score || 0)), 1);
-                const barW = Math.max(8, (Math.abs(c.score || 0) / maxAbs) * 100);
+                const barPct = Math.max(2, (Math.abs(c.score || 0) / 100) * 50); // 50% = full scale (±100)
+                const isPos = (c.score || 0) >= 0;
                 return (
-                  <div key={i} style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                    <div style={{ width: 130, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: "var(--text-secondary)", textAlign: "right", flexShrink: 0 }}>{c.campaign}</div>
-                    <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 6 }}>
-                      <div style={{ width: `${barW}%`, height: 18, borderRadius: 4, background: tnpsColor(c.score) + "cc" }} />
-                      <span style={{ fontFamily: "var(--font-data, monospace)", fontSize: "0.78rem", fontWeight: 600, color: tnpsColor(c.score) }}>
-                        {c.score > 0 ? "+" : ""}{c.score}
-                      </span>
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    <div style={{ width: 110, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: "var(--text-secondary)", textAlign: "right", flexShrink: 0 }}>{c.campaign}</div>
+                    <div style={{ flex: 1, display: "flex", alignItems: "center", height: 20, position: "relative" }}>
+                      {/* Center line at 50% */}
+                      <div style={{ position: "absolute", left: "50%", top: 0, bottom: 0, width: 1, background: "var(--border)" }} />
+                      {isPos ? (
+                        /* Positive: bar grows right from center */
+                        <div style={{ position: "absolute", left: "50%", height: 18, width: `${barPct}%`, borderRadius: "0 4px 4px 0", background: tnpsColor(c.score) + "cc" }} />
+                      ) : (
+                        /* Negative: bar grows left from center */
+                        <div style={{ position: "absolute", right: "50%", height: 18, width: `${barPct}%`, borderRadius: "4px 0 0 4px", background: tnpsColor(c.score) + "cc" }} />
+                      )}
                     </div>
+                    <span style={{ width: 45, fontFamily: "var(--font-data, monospace)", fontSize: "0.78rem", fontWeight: 600, color: tnpsColor(c.score), textAlign: "right", flexShrink: 0 }}>
+                      {c.score > 0 ? "+" : ""}{c.score}
+                    </span>
                   </div>
                 );
               })}
