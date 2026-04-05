@@ -2136,14 +2136,35 @@ function usePerformanceEngine({ rawData, goalsRaw, newHiresRaw, tnpsRaw }) {
     parseTnps(tnpsRaw || [], bpLookup),
     [tnpsRaw, bpLookup]);
 
-  // tNPS aggregates for GCS only
-  const tnpsGCS = useMemo(() => tnpsData.filter(s => s.isGCS), [tnpsData]);
+  // tNPS: all GCS surveys (for trending and drill-down)
+  const tnpsGCSAll = useMemo(() => tnpsData.filter(s => s.isGCS), [tnpsData]);
+  const tnpsAllData = tnpsData; // alias for clarity
+
+  // tNPS: fiscal-month-filtered (default view)
+  const tnpsGCS = useMemo(() => {
+    if (!fiscalInfo) return tnpsGCSAll;
+    const start = new Date(fiscalInfo.fiscalStart);
+    const end = new Date(fiscalInfo.fiscalEnd);
+    start.setHours(0, 0, 0, 0);
+    end.setHours(23, 59, 59, 999);
+    return tnpsGCSAll.filter(s => s.date && s.date >= start && s.date <= end);
+  }, [tnpsGCSAll, fiscalInfo]);
+
   const tnpsOverall = useMemo(() => calcTnpsScore(tnpsGCS), [tnpsGCS]);
 
-  // tNPS by site (GCS sites + partner companies)
+  // tNPS by site — fiscal month only (GCS sites + partner companies)
   const tnpsBySite = useMemo(() => {
+    // Filter all data (not just GCS) to fiscal month for partner ranking
+    let filtered = tnpsAllData;
+    if (fiscalInfo) {
+      const start = new Date(fiscalInfo.fiscalStart);
+      const end = new Date(fiscalInfo.fiscalEnd);
+      start.setHours(0, 0, 0, 0);
+      end.setHours(23, 59, 59, 999);
+      filtered = tnpsAllData.filter(s => s.date && s.date >= start && s.date <= end);
+    }
     const groups = {};
-    tnpsData.forEach(s => {
+    filtered.forEach(s => {
       if (!groups[s.siteLabel]) groups[s.siteLabel] = [];
       groups[s.siteLabel].push(s);
     });
@@ -2152,12 +2173,12 @@ function usePerformanceEngine({ rawData, goalsRaw, newHiresRaw, tnpsRaw }) {
       isGCS: surveys[0].isGCS,
       ...calcTnpsScore(surveys),
     })).sort((a, b) => (b.score ?? -999) - (a.score ?? -999));
-  }, [tnpsData]);
+  }, [tnpsAllData, fiscalInfo]);
 
-  // tNPS by month (GCS only, for trending)
+  // tNPS by month — ALL months (GCS only, for trend chart)
   const tnpsByMonth = useMemo(() => {
     const groups = {};
-    tnpsGCS.forEach(s => {
+    tnpsGCSAll.forEach(s => {
       if (!s.month) return;
       if (!groups[s.month]) groups[s.month] = { month: s.month, label: s.monthLabel, surveys: [] };
       groups[s.month].surveys.push(s);
@@ -2165,9 +2186,9 @@ function usePerformanceEngine({ rawData, goalsRaw, newHiresRaw, tnpsRaw }) {
     return Object.values(groups)
       .sort((a, b) => a.month.localeCompare(b.month))
       .map(g => ({ ...g, ...calcTnpsScore(g.surveys) }));
-  }, [tnpsGCS]);
+  }, [tnpsGCSAll]);
 
-  // Per-agent tNPS lookup (keyed by normalized agent name)
+  // Per-agent tNPS lookup — fiscal month only (keyed by normalized agent name)
   const tnpsByAgent = useMemo(() => {
     const map = {};
     tnpsGCS.forEach(s => {
@@ -2268,6 +2289,7 @@ function usePerformanceEngine({ rawData, goalsRaw, newHiresRaw, tnpsRaw }) {
     spanishCallback,
     tnpsData,
     tnpsGCS,
+    tnpsGCSAll,
     tnpsOverall,
     tnpsBySite,
     tnpsByMonth,
@@ -5769,12 +5791,40 @@ function TNPSSlide({ perf, onNav, lightMode }) {
   const [tab, setTab] = useState("summary");
   const [expandedSup, setExpandedSup] = useState(null);
   const [voiceFilter, setVoiceFilter] = useState({ type: "all", site: "all", campaign: "all", month: "all" });
-  const { tnpsData, tnpsGCS, tnpsOverall, tnpsBySite, tnpsByMonth, bpLookup } = perf;
+  const [showAll, setShowAll] = useState(false);
+  const { tnpsData, tnpsGCS: tnpsGCSFiscal, tnpsGCSAll, tnpsOverall: tnpsOverallFiscal, tnpsBySite: tnpsBySiteFiscal, tnpsByMonth, bpLookup, fiscalInfo } = perf;
+
+  // Active GCS data depends on toggle: current fiscal month (default) or all time
+  const activeGCS = showAll ? tnpsGCSAll : tnpsGCSFiscal;
+
+  // Recompute aggregates when in "All Time" mode
+  const tnpsOverall = useMemo(() => showAll ? calcTnpsScore(tnpsGCSAll) : tnpsOverallFiscal, [showAll, tnpsGCSAll, tnpsOverallFiscal]);
+  const tnpsBySite = useMemo(() => {
+    if (!showAll) return tnpsBySiteFiscal;
+    const source = showAll ? tnpsData : tnpsData; // all data for partner ranking
+    const groups = {};
+    source.forEach(s => {
+      if (!groups[s.siteLabel]) groups[s.siteLabel] = [];
+      groups[s.siteLabel].push(s);
+    });
+    return Object.entries(groups).map(([label, surveys]) => ({
+      label, isGCS: surveys[0].isGCS, ...calcTnpsScore(surveys),
+    })).sort((a, b) => (b.score ?? -999) - (a.score ?? -999));
+  }, [showAll, tnpsBySiteFiscal, tnpsData]);
+
+  // Fiscal month label for display
+  const fiscalLabel = useMemo(() => {
+    if (!fiscalInfo) return "Current Month";
+    const s = new Date(fiscalInfo.fiscalStart);
+    const e = new Date(fiscalInfo.fiscalEnd);
+    const fmt = d => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    return `${fmt(s)} – ${fmt(e)}`;
+  }, [fiscalInfo]);
 
   // Campaign breakdown (GCS only)
   const tnpsByCampaign = useMemo(() => {
     const groups = {};
-    tnpsGCS.forEach(s => {
+    activeGCS.forEach(s => {
       const key = s.campaign;
       if (!groups[key]) groups[key] = { campaign: key, program: s.program, surveys: [] };
       groups[key].surveys.push(s);
@@ -5782,12 +5832,12 @@ function TNPSSlide({ perf, onNav, lightMode }) {
     return Object.values(groups)
       .map(g => ({ ...g, ...calcTnpsScore(g.surveys) }))
       .sort((a, b) => (b.score ?? -999) - (a.score ?? -999));
-  }, [tnpsGCS]);
+  }, [activeGCS]);
 
   // Supervisor breakdown (GCS only, from roster join)
   const tnpsBySupervisor = useMemo(() => {
     const groups = {};
-    tnpsGCS.forEach(s => {
+    activeGCS.forEach(s => {
       const sup = s.supervisor || "Unknown";
       if (!groups[sup]) groups[sup] = { supervisor: sup, site: s.siteLabel, surveys: [] };
       groups[sup].surveys.push(s);
@@ -5819,20 +5869,20 @@ function TNPSSlide({ perf, onNav, lightMode }) {
         };
       })
       .sort((a, b) => (a.score ?? 999) - (b.score ?? 999)); // worst first
-  }, [tnpsGCS, tnpsBySite]);
+  }, [activeGCS, tnpsBySite]);
 
   // Customer Voices — filtered GCS surveys with reason text
   const voicesSorted = useMemo(() => {
-    let filtered = tnpsGCS.filter(s => s.reason);
+    let filtered = activeGCS.filter(s => s.reason);
     if (voiceFilter.type !== "all") filtered = filtered.filter(s => s.category === voiceFilter.type);
     if (voiceFilter.site !== "all") filtered = filtered.filter(s => s.siteLabel === voiceFilter.site);
     if (voiceFilter.campaign !== "all") filtered = filtered.filter(s => s.campaign === voiceFilter.campaign);
     if (voiceFilter.month !== "all") filtered = filtered.filter(s => s.month === voiceFilter.month);
     return filtered.sort((a, b) => (b.date || 0) - (a.date || 0));
-  }, [tnpsGCS, voiceFilter]);
+  }, [activeGCS, voiceFilter]);
 
-  const voiceCampaigns = useMemo(() => [...new Set(tnpsGCS.map(s => s.campaign))].sort(), [tnpsGCS]);
-  const voiceMonths = useMemo(() => [...new Set(tnpsGCS.filter(s => s.month).map(s => s.month))].sort(), [tnpsGCS]);
+  const voiceCampaigns = useMemo(() => [...new Set(activeGCS.map(s => s.campaign))].sort(), [activeGCS]);
+  const voiceMonths = useMemo(() => [...new Set(activeGCS.filter(s => s.month).map(s => s.month))].sort(), [activeGCS]);
 
   if (!tnpsData || tnpsData.length === 0) {
     return (
@@ -5855,7 +5905,17 @@ function TNPSSlide({ perf, onNav, lightMode }) {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.75rem" }}>
         <div>
           <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.5rem", fontWeight: 700, color: "var(--text-warm)" }}>Customer Experience — tNPS</div>
-          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: "var(--text-dim)" }}>{tnpsData.length} total surveys · {tnpsGCS.length} GCS surveys</div>
+          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: "var(--text-dim)" }}>
+            {showAll ? `${tnpsGCSAll.length} GCS surveys (all time)` : `${activeGCS.length} GCS surveys · ${fiscalLabel}`}
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: "0.25rem" }}>
+          {[{ key: false, label: "Current Month" }, { key: true, label: "All Time" }].map(opt => (
+            <button key={String(opt.key)} onClick={() => setShowAll(opt.key)}
+              style={{ padding: "0.35rem 0.75rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${showAll === opt.key ? "#d9770650" : "var(--border-muted)"}`, background: showAll === opt.key ? "#d9770612" : "transparent", color: showAll === opt.key ? "#d97706" : "var(--text-dim)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", cursor: "pointer", fontWeight: showAll === opt.key ? 600 : 400 }}>
+              {opt.label}
+            </button>
+          ))}
         </div>
       </div>
 
