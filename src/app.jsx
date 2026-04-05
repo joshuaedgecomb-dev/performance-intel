@@ -5759,6 +5759,7 @@ function BusinessOverview({ perf, onNav, localAI, priorAgents, priorGoalLookup, 
     globalPlanRgu, globalPlanNewXI, globalPlanXmLines,
     globalPlanHours, fiscalInfo,
     spanishCallback,
+    tnpsOverall, tnpsBySite, tnpsByMonth, tnpsGCS,
   } = perf;
 
   // Group regions: XOTM = BZ, everything else = individual DR sites
@@ -6332,6 +6333,95 @@ function BusinessOverview({ perf, onNav, localAI, priorAgents, priorGoalLookup, 
               </table>
             </div>
           </div>
+          );
+        })()}
+
+        {/* tNPS Summary Row — only renders when tNPS data is loaded */}
+        {tnpsOverall && tnpsOverall.total > 0 && (() => {
+          const gcsScore = tnpsOverall;
+          const partnerSurveys = tnpsBySite.filter(s => !s.isGCS);
+          const partnerAvg = partnerSurveys.length > 0
+            ? Math.round(partnerSurveys.reduce((s, p) => s + (p.score || 0), 0) / partnerSurveys.length)
+            : null;
+          // MoM delta: compare last two months
+          const momDelta = tnpsByMonth.length >= 2
+            ? tnpsByMonth[tnpsByMonth.length - 1].score - tnpsByMonth[tnpsByMonth.length - 2].score
+            : null;
+
+          return (
+            <div
+              onClick={() => onNav(1)}
+              style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1rem 1.5rem", cursor: "pointer", transition: "all 200ms", marginTop: "0.75rem" }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = "#d97706"; e.currentTarget.style.boxShadow = "0 0 12px #d9770620"; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.boxShadow = "none"; }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.5rem" }}>
+                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)" }}>
+                  Customer Experience — tNPS
+                </div>
+                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "var(--text-faint)" }}>
+                  Click to view details →
+                </div>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "auto 1fr auto auto auto", gap: "1.5rem", alignItems: "center" }}>
+                {/* Overall tNPS */}
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "2.5rem", fontWeight: 800, color: tnpsColor(gcsScore.score) }}>
+                    {gcsScore.score > 0 ? "+" : ""}{gcsScore.score}
+                  </div>
+                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: "var(--text-dim)" }}>
+                    GCS tNPS · {gcsScore.total} surveys
+                  </div>
+                </div>
+
+                {/* Promoter / Passive / Detractor bar */}
+                <div>
+                  <div style={{ display: "flex", height: 14, borderRadius: 7, overflow: "hidden", gap: 1 }}>
+                    <div style={{ flex: gcsScore.promoterPct, background: "#16a34a", minWidth: gcsScore.promoterPct > 0 ? 4 : 0 }} />
+                    <div style={{ flex: gcsScore.passivePct, background: "#d97706", minWidth: gcsScore.passivePct > 0 ? 4 : 0 }} />
+                    <div style={{ flex: gcsScore.detractorPct, background: "#dc2626", minWidth: gcsScore.detractorPct > 0 ? 4 : 0 }} />
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
+                    <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: "#16a34a" }}>{Math.round(gcsScore.promoterPct)}% Promoter</span>
+                    <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: "#d97706" }}>{Math.round(gcsScore.passivePct)}% Passive</span>
+                    <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: "#dc2626" }}>{Math.round(gcsScore.detractorPct)}% Detractor</span>
+                  </div>
+                </div>
+
+                {/* vs Partners */}
+                {partnerAvg !== null && (
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "1.1rem", fontWeight: 700, color: gcsScore.score >= partnerAvg ? "#16a34a" : "#dc2626" }}>
+                      {gcsScore.score >= partnerAvg ? "+" : ""}{gcsScore.score - partnerAvg}
+                    </div>
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.65rem", color: "var(--text-dim)" }}>vs Partners</div>
+                  </div>
+                )}
+
+                {/* MoM Delta */}
+                {momDelta !== null && (
+                  <div style={{ textAlign: "center" }}>
+                    <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "1.1rem", fontWeight: 700, color: momDelta >= 0 ? "#16a34a" : "#dc2626" }}>
+                      {momDelta >= 0 ? "▲" : "▼"} {Math.abs(momDelta)}
+                    </div>
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.65rem", color: "var(--text-dim)" }}>MoM</div>
+                  </div>
+                )}
+
+                {/* Monthly sparkline */}
+                {tnpsByMonth.length > 1 && (
+                  <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 36 }}>
+                    {tnpsByMonth.map((m, i) => {
+                      const maxScore = Math.max(...tnpsByMonth.map(x => Math.abs(x.score || 0)), 1);
+                      const h = Math.max(4, (Math.abs(m.score || 0) / maxScore) * 32);
+                      return (
+                        <div key={i} style={{ width: 12, height: h, borderRadius: 3, background: tnpsColor(m.score) + "cc" }} title={`${m.label}: ${m.score > 0 ? "+" : ""}${m.score} (${m.total} surveys)`} />
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
           );
         })()}
 
