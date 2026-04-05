@@ -12708,7 +12708,11 @@ export default function App() {
 
   const perf = usePerformanceEngine({ rawData, goalsRaw, newHiresRaw, tnpsRaw });
   const { programs, jobTypes, newHireSet, newHires, allAgentNames } = perf;
-  const totalSlides = 1 + programs.length + 1; // Overview + programs + Campaign Comparison
+  const hasTnps = perf.tnpsData && perf.tnpsData.length > 0;
+  const totalSlides = 1 + (hasTnps ? 1 : 0) + programs.length + 1; // Overview + tNPS? + programs + Campaign Comparison
+  const tnpsSlideIdx = hasTnps ? 1 : -1;
+  const programStartIdx = 1 + (hasTnps ? 1 : 0);
+  const campaignCompareIdx = programStartIdx + programs.length;
 
   // Prior month derived data (hoisted for app-wide access)
   const priorAgents = useMemo(() => normalizeAgents(priorMonthRaw || []), [priorMonthRaw]);
@@ -13010,7 +13014,10 @@ export default function App() {
   }
 
   const isOverview = slideIndex === 0;
-  const program    = isOverview ? null : programs[slideIndex - 1];
+  const isTnpsSlide = hasTnps && slideIndex === tnpsSlideIdx;
+  const isCampaignCompare = slideIndex === campaignCompareIdx;
+  const programIdx = slideIndex - programStartIdx;
+  const program = (!isOverview && !isTnpsSlide && !isCampaignCompare && programIdx >= 0 && programIdx < programs.length) ? programs[programIdx] : null;
 
   return (
     <div style={wrapStyle}>
@@ -13122,7 +13129,9 @@ export default function App() {
           />
         ) : isOverview ? (
           <BusinessOverview perf={perf} onNav={navTo} localAI={localAI} priorAgents={priorAgents} priorGoalLookup={priorGoalLookup} lightMode={lightMode} />
-        ) : (slideIndex === 1 + programs.length) ? (
+        ) : isTnpsSlide ? (
+          <TNPSSlide perf={perf} onNav={navTo} lightMode={lightMode} />
+        ) : isCampaignCompare ? (
           <CampaignComparisonPanel
             currentAgents={perf.agents}
             onNav={navTo}
@@ -13142,8 +13151,17 @@ export default function App() {
                 {"\u2190"} Overview
               </button>
               <div style={{ width: "1px", height: "18px", background: `var(--border-muted)`, flexShrink: 0, margin: "0 0.15rem" }} />
+              {hasTnps && (
+                <>
+                  <button onClick={() => goToSlide(tnpsSlideIdx)}
+                    style={{ padding: "0.4rem 0.7rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${slideIndex === tnpsSlideIdx ? "#d9770650" : "transparent"}`, background: slideIndex === tnpsSlideIdx ? "#d9770612" : "transparent", color: slideIndex === tnpsSlideIdx ? "#d97706" : "var(--text-dim)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, fontWeight: slideIndex === tnpsSlideIdx ? 600 : 400 }}>
+                    tNPS
+                  </button>
+                  <div style={{ width: "1px", height: "18px", background: "var(--border-muted)", flexShrink: 0, margin: "0 0.15rem" }} />
+                </>
+              )}
               {programs.map((p, pi) => ({ p, pi })).sort((a, b) => (b.p.attainment ?? b.p.healthScore ?? 0) - (a.p.attainment ?? a.p.healthScore ?? 0)).map(({ p, pi }) => {
-                const pIdx = pi + 1;
+                const pIdx = pi + programStartIdx;
                 const isActive = slideIndex === pIdx;
                 const att = p.attainment;
                 const aColor = att !== null ? attainColor(att) : `var(--text-dim)`;
@@ -13157,8 +13175,8 @@ export default function App() {
                 );
               })}
               <div style={{ width: "1px", height: "18px", background: `var(--border-muted)`, flexShrink: 0, margin: "0 0.15rem" }} />
-              <button onClick={() => goToSlide(1 + programs.length)}
-                style={{ padding: "0.4rem 0.7rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${slideIndex === 1 + programs.length ? "#d9770650" : "transparent"}`, background: slideIndex === 1 + programs.length ? "#d9770612" : "transparent", color: slideIndex === 1 + programs.length ? "#d97706" : `var(--text-dim)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, fontWeight: slideIndex === 1 + programs.length ? 600 : 400 }}>
+              <button onClick={() => goToSlide(campaignCompareIdx)}
+                style={{ padding: "0.4rem 0.7rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${slideIndex === campaignCompareIdx ? "#d9770650" : "transparent"}`, background: slideIndex === campaignCompareIdx ? "#d9770612" : "transparent", color: slideIndex === campaignCompareIdx ? "#d97706" : `var(--text-dim)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, fontWeight: slideIndex === campaignCompareIdx ? 600 : 400 }}>
                 MoM Compare
               </button>
             </div>
