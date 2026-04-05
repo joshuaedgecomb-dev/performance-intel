@@ -6108,6 +6108,7 @@ function TNPSSlide({ perf, onNav, lightMode }) {
                                   </div>
                                   <div style={{ width: isGCS ? 40 : 32, height: barH, borderRadius: "4px 4px 0 0", background: vendorColors[vs.vendor] + (isGCS ? "dd" : "99"), border: isGCS ? `2px solid ${vendorColors[vs.vendor]}` : "none" }}
                                     title={`${vs.vendor}: +${vs.score} (${vs.total} surveys)`} />
+                                  <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "0.58rem", color: vendorColors[vs.vendor], opacity: 0.7, marginTop: 1 }}>{vs.total}</div>
                                 </div>
                               );
                             })}
@@ -6122,6 +6123,7 @@ function TNPSSlide({ perf, onNav, lightMode }) {
                               const barH = Math.max(6, (Math.abs(vs.score || 0) / 100) * 55);
                               return (
                                 <div key={vi} style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 44 }}>
+                                  <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "0.58rem", color: vendorColors[vs.vendor], opacity: 0.7, marginBottom: 1 }}>{vs.total}</div>
                                   <div style={{ width: isGCS ? 40 : 32, height: barH, borderRadius: "0 0 4px 4px", background: vendorColors[vs.vendor] + (isGCS ? "dd" : "99"), border: isGCS ? `2px solid ${vendorColors[vs.vendor]}` : "none" }}
                                     title={`${vs.vendor}: ${vs.score} (${vs.total} surveys)`} />
                                   <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: isGCS ? "0.78rem" : "0.65rem", fontWeight: isGCS ? 700 : 500, color: vendorColors[vs.vendor], marginTop: 2, whiteSpace: "nowrap" }}>
@@ -6133,14 +6135,6 @@ function TNPSSlide({ perf, onNav, lightMode }) {
                           </div>
                           {/* Month label */}
                           <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: "var(--text-warm)", fontWeight: 600, marginTop: 6 }}>{mLabel}</div>
-                          {/* Survey counts under each bar, color-coded */}
-                          <div style={{ display: "flex", gap: 6, marginTop: 3, justifyContent: "center" }}>
-                            {vendorScores.map((vs, vi) => (
-                              <div key={vi} style={{ width: 44, textAlign: "center", fontFamily: "var(--font-data, monospace)", fontSize: "0.6rem", color: vendorColors[vs.vendor], opacity: 0.8 }}>
-                                {vs.total}
-                              </div>
-                            ))}
-                          </div>
                         </div>
                       </React.Fragment>
                     );
