@@ -13549,6 +13549,22 @@ export default function App() {
     return () => { cancelled = true; };
   }, []);
 
+  // Auto-load tNPS data from Google Sheet (after main data loads, non-blocking, priority over prior month)
+  useEffect(() => {
+    if (!rawData || tnpsRaw || !tnpsSheetUrl) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const proxyT = url => `https://corsproxy.io/?${encodeURIComponent(url)}`;
+        let res;
+        try { res = await fetch(tnpsSheetUrl); } catch(e) { res = null; }
+        if (!res || !res.ok) res = await fetch(proxyT(tnpsSheetUrl));
+        if (res.ok) { const rows = parseCSV(await res.text()); if (!cancelled && rows.length > 0) setTnpsRaw(rows); }
+      } catch(e) { /* silent */ }
+    })();
+    return () => { cancelled = true; };
+  }, [rawData, tnpsSheetUrl, tnpsRaw]);
+
   // Auto-load prior month data from Google Sheet (after main data loads, non-blocking)
   const [priorSheetLoading, setPriorSheetLoading] = useState(false);
   useEffect(() => {
@@ -13583,22 +13599,6 @@ export default function App() {
         const text = await res.text();
         const rows = parseCSV(text);
         if (!cancelled && rows.length > 0) setPriorMonthGoalsRaw(rows);
-      } catch(e) { /* silent */ }
-    })();
-    return () => { cancelled = true; };
-  }, [rawData, priorGoalsSheetUrl, priorMonthGoalsRaw]);
-
-  // Auto-load tNPS data from Google Sheet (deferred — after main data loads, non-blocking)
-  useEffect(() => {
-    if (!rawData || tnpsRaw || !tnpsSheetUrl) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const proxyT = url => `https://corsproxy.io/?${encodeURIComponent(url)}`;
-        let res;
-        try { res = await fetch(tnpsSheetUrl); } catch(e) { res = null; }
-        if (!res || !res.ok) res = await fetch(proxyT(tnpsSheetUrl));
-        if (res.ok) { const rows = parseCSV(await res.text()); if (!cancelled && rows.length > 0) setTnpsRaw(rows); }
       } catch(e) { /* silent */ }
     })();
     return () => { cancelled = true; };
