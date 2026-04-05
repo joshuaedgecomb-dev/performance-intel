@@ -320,7 +320,7 @@ function buildAIPrompt(type, data) {
 
   // Risk agents with full detail
   const riskAgents = (q4Agents || []).filter(a => a.hours >= getMinHours()).slice(0, 5)
-    .map(a => `${a.agentName}: ${a.goals} sales, ${a.hours.toFixed(0)}hrs, ${a.region||"unknown"} site`).join("\n  ");
+    .map(a => `${a.agentName}: ${a.goals} sales, ${a.hours.toFixed(0)}hrs, ${mbrSiteName(a.region)||"unknown"} site`).join("\n  ");
 
   // Q3 bubble agents close to Q2
   const q3Agents = data.q3Agents || [];
@@ -330,7 +330,7 @@ function buildAIPrompt(type, data) {
   // Site comparison
   const siteData = (regions || []).map(r => {
     const gap = r.avgPct !== undefined ? `${Math.round(r.avgPct)}% avg to goal` : "";
-    return `${r.name}: ${r.count || "?"} agents, ${gap}`;
+    return `${mbrSiteName(r.name)}: ${r.count || "?"} agents, ${gap}`;
   }).join("\n  ");
 
   // New hires detail
@@ -1409,7 +1409,7 @@ function generateWinInsights(program) {
     const top = regions[0];
     const gap = (top.avgPct - regions[regions.length - 1].avgPct).toFixed(1);
     results.push(insight("win", "medium", "regional",
-      `${top.name} leads all sites at ${fmtPct(top.avgPct)} avg to goal. ${parseFloat(gap) > 15
+      `${mbrSiteName(top.name)} leads all sites at ${fmtPct(top.avgPct)} avg to goal. ${parseFloat(gap) > 15
         ? `A ${gap}% gap vs. the lowest site suggests meaningful process or coaching differences worth investigating.`
         : "Regional performance is relatively consistent, reflecting well on program-wide alignment."}`));
   }
@@ -1529,9 +1529,9 @@ function generateNarrative(program, fiscalInfo, newHireSet) {
     const top = sorted[0], bottom = sorted[sorted.length - 1];
     const gap = Math.round(top.avgPct - bottom.avgPct);
     if (gap > 10) {
-      lines.push(`${top.name} is outperforming ${bottom.name} by ${gap} percentage points (${pct(top.avgPct)} vs ${pct(bottom.avgPct)} avg % to goal). This gap warrants a coaching alignment review between sites.`);
+      lines.push(`${mbrSiteName(top.name)} is outperforming ${mbrSiteName(bottom.name)} by ${gap} percentage points (${pct(top.avgPct)} vs ${pct(bottom.avgPct)} avg % to goal). This gap warrants a coaching alignment review between sites.`);
     } else {
-      lines.push(`Performance is relatively balanced across sites — ${top.name} leads at ${pct(top.avgPct)} avg with only a ${gap}-point gap to ${bottom.name}.`);
+      lines.push(`Performance is relatively balanced across sites — ${mbrSiteName(top.name)} leads at ${pct(top.avgPct)} avg with only a ${gap}-point gap to ${mbrSiteName(bottom.name)}.`);
     }
   }
 
@@ -1578,6 +1578,25 @@ function generateNarrative(program, fiscalInfo, newHireSet) {
     }
   }
 
+  // ── Daily rates ──
+  if (fiscalInfo && fiscalInfo.elapsedBDays > 0 && program.goalEntry) {
+    const dr = (actual, plan, label) => {
+      const rate = Math.round(actual / fiscalInfo.elapsedBDays);
+      const need = plan && fiscalInfo.totalBDays > 0 ? Math.round(plan / fiscalInfo.totalBDays) : null;
+      const status = need ? (rate >= need ? "on pace" : "behind") : "";
+      return need ? `${label}: ${rate}/day (need ${need}/day — ${status})` : null;
+    };
+    const dailyParts = [
+      dr(actGoals, planGoals, "Sales"),
+      dr(totalNewXI, getPlanForKey(program.goalEntry, "HSD Sell In Goal"), "XI"),
+      dr(totalXmLines, getPlanForKey(program.goalEntry, "XM GOAL"), "XM"),
+      dr(totalRgu, getPlanForKey(program.goalEntry, "RGU GOAL"), "RGU"),
+    ].filter(Boolean);
+    if (dailyParts.length > 0) {
+      lines.push(`Daily rates — ${dailyParts.join(". ")}.`);
+    }
+  }
+
   // ── Closing recommendation ──
   if (healthScore >= 80) {
     lines.push(`Overall health score: ${Math.round(healthScore)}/100. This program is performing well. Focus on sustaining momentum and replicating top-performer behaviors across the team.`);
@@ -1591,7 +1610,8 @@ function generateNarrative(program, fiscalInfo, newHireSet) {
 }
 
 function generateBusinessNarrative(perf, fiscalInfo) {
-  const { programs, globalGoals, planTotal, totalHours, uniqueAgentCount, regions } = perf;
+  const { programs, globalGoals, planTotal, totalHours, uniqueAgentCount, regions,
+    globalNewXI, globalXmLines, globalRgu, globalPlanNewXI, globalPlanXmLines, globalPlanRgu } = perf;
   const lines = [];
   const pct = n => `${Math.round(n)}%`;
   const f = (n, d=1) => Number(n).toFixed(d);
@@ -1623,7 +1643,7 @@ function generateBusinessNarrative(perf, fiscalInfo) {
     const bzGoals = bzRegs.reduce((s, r) => s + r.totalGoals, 0);
     const drGph = drHrs > 0 ? drGoals / drHrs : 0;
     const bzGph = bzHrs > 0 ? bzGoals / bzHrs : 0;
-    lines.push(`DR (SD-Xfinity): ${drGoals} sales, ${f(drGph, 3)} GPH across ${f(drHrs, 0)} hours. Belize: ${bzGoals} sales, ${f(bzGph, 3)} GPH across ${f(bzHrs, 0)} hours.`);
+    lines.push(`Dom. Republic: ${drGoals} sales, ${f(drGph, 3)} GPH across ${f(drHrs, 0)} hours. Belize: ${bzGoals} sales, ${f(bzGph, 3)} GPH across ${f(bzHrs, 0)} hours.`);
   }
 
   // Pacing projection
@@ -1632,6 +1652,24 @@ function generateBusinessNarrative(perf, fiscalInfo) {
     const projPct = planTotal ? Math.round((projected / planTotal) * 100) : null;
     if (projPct !== null) {
       lines.push(`Projected EOM: ${projected} homes (${projPct}% to plan).`);
+    }
+  }
+
+  // Daily rates — Sales, XI, XM, RGU
+  if (fiscalInfo && fiscalInfo.elapsedBDays > 0) {
+    const dailyParts = [];
+    const dr = (actual, plan, label) => {
+      const rate = Math.round(actual / fiscalInfo.elapsedBDays);
+      const need = plan && fiscalInfo.totalBDays > 0 ? Math.round(plan / fiscalInfo.totalBDays) : null;
+      const status = need ? (rate >= need ? "on pace" : "behind") : "";
+      return need ? `${label}: ${rate}/day (need ${need}/day — ${status})` : `${label}: ${rate}/day`;
+    };
+    if (planTotal) dailyParts.push(dr(globalGoals, planTotal, "Sales"));
+    if (globalPlanNewXI) dailyParts.push(dr(globalNewXI, globalPlanNewXI, "XI"));
+    if (globalPlanXmLines) dailyParts.push(dr(globalXmLines, globalPlanXmLines, "XM"));
+    if (globalPlanRgu) dailyParts.push(dr(globalRgu, globalPlanRgu, "RGU"));
+    if (dailyParts.length > 0) {
+      lines.push(`Daily rates — ${dailyParts.join(". ")}.`);
     }
   }
 
@@ -1710,6 +1748,35 @@ function generateSiteNarrative(siteLabel, agents, programs, goalLookup, fiscalIn
     if (q3Risk.length > 0) {
       const named = q3Risk.slice(0, 3).map(a => `${a.agentName} (${f(a.hours, 0)} hrs, ${a.goals} sales)`);
       lines.push(`Bubble agents — Q3 with ${getMinHours()}+ hours: ${named.join("; ")}${q3Risk.length > 3 ? ` and ${q3Risk.length - 3} more` : ""}. Close to Q2 threshold — targeted coaching could push these over.`);
+    }
+  }
+
+  // Daily rates — site-level
+  if (fiscalInfo && fiscalInfo.elapsedBDays > 0 && goalLookup && sitePlanKey) {
+    const siteXI = agents.reduce((s, a) => s + a.newXI, 0);
+    const siteXM = agents.reduce((s, a) => s + a.xmLines, 0);
+    const siteRGU = agents.reduce((s, a) => s + a.rgu, 0);
+    let planHomes = 0, planXI = 0, planXM = 0, planRGU = 0;
+    Object.values(goalLookup.byTA || {}).forEach(siteMap => {
+      (siteMap[sitePlanKey] || []).forEach(r => {
+        const p = computePlanRow(r);
+        planHomes += p.homesGoal; planXI += p.hsdGoal; planXM += p.xmGoal; planRGU += p.rguGoal;
+      });
+    });
+    const dr = (actual, plan, label) => {
+      const rate = Math.round(actual / fiscalInfo.elapsedBDays);
+      const need = plan && fiscalInfo.totalBDays > 0 ? Math.round(plan / fiscalInfo.totalBDays) : null;
+      const status = need ? (rate >= need ? "on pace" : "behind") : "";
+      return need ? `${label}: ${rate}/day (need ${need}/day — ${status})` : null;
+    };
+    const dailyParts = [
+      dr(totalG, planHomes, "Sales"),
+      dr(siteXI, planXI, "XI"),
+      dr(siteXM, planXM, "XM"),
+      dr(siteRGU, planRGU, "RGU"),
+    ].filter(Boolean);
+    if (dailyParts.length > 0) {
+      lines.push(`Daily rates — ${dailyParts.join(". ")}.`);
     }
   }
 
@@ -1853,7 +1920,7 @@ function generateBusinessInsights({ programs, regions, newHireSet, globalGoals, 
 
   if (topRegion) {
     results.push(insight("win", "high", "regional",
-      `${topRegion.name} is the top-performing region with ${topRegion.totalGoals.toLocaleString()} total goals and ${topRegion.uniqueQ1} Q1 agents out of ${topRegion.uniqueAgents}. Worth investigating for replicable process advantages.`));
+      `${mbrSiteName(topRegion.name)} is the top-performing region with ${topRegion.totalGoals.toLocaleString()} total goals and ${topRegion.uniqueQ1} Q1 agents out of ${topRegion.uniqueAgents}. Worth investigating for replicable process advantages.`));
   }
 
   if (totalUniqueQ1 > 0) {
@@ -1886,7 +1953,7 @@ function generateBusinessInsights({ programs, regions, newHireSet, globalGoals, 
 
   if (regions.length > 1 && topRegion && lowRegion && lowRegion.avgPct < topRegion.avgPct - 15) {
     results.push(insight("opp", "medium", "regional",
-      `${lowRegion.name} is lagging all other regions — a significant gap vs. the top site. Regional coaching alignment and a process audit are warranted.`));
+      `${mbrSiteName(lowRegion.name)} is lagging all other regions — a significant gap vs. the top site. Regional coaching alignment and a process audit are warranted.`));
   }
 
   if (under16All.length >= 15) {
@@ -3206,7 +3273,7 @@ function GoalsRollup({ agents, goalEntries, goalLookup, fiscalInfo }) {
     const allRows = [...drRows, ...bzRows];
 
     // Identify DR and BZ region names from agents
-    const allRegions = [...new Set(agents.map(a => (a.Region || a.region || "Unknown").trim()))];
+    const allRegions = [...new Set(agents.map(a => (a.region || "Unknown")))];
     const drRegions  = allRegions.filter(r => !r.toUpperCase().includes("XOTM") && r !== "Unknown");
     const bzRegions  = allRegions.filter(r =>  r.toUpperCase().includes("XOTM"));
 
@@ -3256,7 +3323,7 @@ function GoalsRollup({ agents, goalEntries, goalLookup, fiscalInfo }) {
           <div>
             <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-muted)`, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "0.75rem" }}>By Site</div>
             {SITE_DEFS.map(s => {
-              const sAgents  = agents.filter(a => s.regions.includes((a.Region || a.region || "Unknown").trim()));
+              const sAgents  = agents.filter(a => s.regions.includes((a.region || "Unknown")));
               const hasPlan  = s.rows && s.rows.length > 0;
               const sitePlan = {};
               if (hasPlan) filteredMetrics.forEach(m => { sitePlan[m.goalKey] = planFromRows(s.rows, m); });
@@ -3264,7 +3331,7 @@ function GoalsRollup({ agents, goalEntries, goalLookup, fiscalInfo }) {
               return (
                 <div key={s.label} style={{ marginBottom: "1.5rem" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", marginBottom: "0.6rem" }}>
-                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: s.label.includes("Combined") ? "#16a34a" : "#d97706", background: s.label.includes("Combined") ? "#16a34a15" : "#d9770615", border: `1px solid ${s.label.includes("Combined") ? "#16a34a30" : "#d9770630"}`, borderRadius: "var(--radius-sm, 6px)", padding: "0.15rem 0.5rem" }}>{s.label}</div>
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: s.label.includes("Combined") ? "#16a34a" : "#d97706", background: s.label.includes("Combined") ? "#16a34a15" : "#d9770615", border: `1px solid ${s.label.includes("Combined") ? "#16a34a30" : "#d9770630"}`, borderRadius: "var(--radius-sm, 6px)", padding: "0.15rem 0.5rem" }}>{mbrSiteName(s.label)}</div>
                     <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: `var(--text-dim)` }}>
                       {sAgents.length} agents · {fmt(sAgents.reduce((a,ag)=>a+ag.hours,0), 0)} hrs
                     </span>
@@ -3411,7 +3478,7 @@ function GoalsRollup({ agents, goalEntries, goalLookup, fiscalInfo }) {
                         const sColor = sProjAtt >= 95 ? "#16a34a" : sProjAtt < 80 ? "#dc2626" : "#d97706";
                         return (
                           <tr key={s.label} style={{ borderBottom: "1px solid var(--bg-tertiary)" }}>
-                            <td style={{ padding: "0.3rem 0.5rem", color: s.label === "BZ" ? "#16a34a" : "#6366f1", fontWeight: 700 }}>{s.label === "BZ" ? "Belize" : s.label}</td>
+                            <td style={{ padding: "0.3rem 0.5rem", color: s.label === "BZ" ? "#16a34a" : "#6366f1", fontWeight: 700 }}>{s.label === "BZ" ? "Belize" : mbrSiteName(s.label)}</td>
                             <td style={{ padding: "0.3rem 0.5rem", textAlign: "right", color: `var(--text-dim)` }}>{s.plan.toLocaleString()}</td>
                             <td style={{ padding: "0.3rem 0.5rem", textAlign: "right", color: `var(--text-warm)` }}>{s.actual.toLocaleString()}</td>
                             <td style={{ padding: "0.3rem 0.5rem", textAlign: "right", color: attainColor(sAtt), fontWeight: 700 }}>{Math.round(sAtt)}%</td>
@@ -3597,7 +3664,7 @@ function DropZone({ onData, goalsRaw, onGoalsLoad, newHiresRaw, onNewHiresLoad }
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.6rem", maxWidth: "720px", width: "100%", animation: "fadeInUp 0.6s cubic-bezier(0.4,0,0.2,1) 0.3s both" }}>
         {[
           ["Job Type", "One slide per program"],
-          ["Region",   "SD-Xfinity / BZ sites"],
+          ["Region",   "Dom. Republic / BZ sites"],
           ["% to Goal","Quartile ranking engine"],
           ["AgentName / Hours","Agent-level detail & flags"],
           ["Goals / GPH","Conversion metrics"],
@@ -3717,7 +3784,7 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
   const hasMultipleRegions = regions.length > 1;
 
   const activeRegions = (subRegion && hasMultipleRegions) ? [subRegion] : regions;
-  const agents   = allAgents.filter(a => !a.isSpanishCallback && activeRegions.includes((a.Region || a.region || "Unknown").trim()));
+  const agents   = allAgents.filter(a => !a.isSpanishCallback && activeRegions.includes((a.region || "Unknown")));
   const totalHrs = agents.reduce((s, a) => s + a.hours, 0);
   const distU    = uniqueQuartileDist(agents);
   const uCount   = uniqueNames(agents).size;
@@ -3764,7 +3831,7 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
   const siteHourAttain = sitePlanMetrics && sitePlanMetrics.hours > 0 ? (totalHrs / sitePlanMetrics.hours) * 100 : null;
 
   const regionStats = regions.map(r => {
-    const ra = allAgents.filter(a => (a.Region || a.region || "Unknown").trim() === r);
+    const ra = allAgents.filter(a => (a.region || "Unknown") === r);
     const rg = ra.reduce((s, a) => s + a.goals, 0);
     const rh = ra.reduce((s, a) => s + a.hours, 0);
     const rd = uniqueQuartileDist(ra);
@@ -3773,7 +3840,7 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
   });
 
   const sitePrograms = programs.map(p => {
-    const pa = p.agents.filter(a => activeRegions.includes((a.Region || a.region || "Unknown").trim()));
+    const pa = p.agents.filter(a => activeRegions.includes((a.region || "Unknown")));
     if (!pa.length) return null;
     const totalGoals = pa.reduce((s, a) => s + a.goals, 0);
     const totalHours = pa.reduce((s, a) => s + a.hours, 0);
@@ -3818,7 +3885,7 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
              attain, hsdAtt, cpAtt, sitePlanGoals, sitePlanHsd, sitePlanXm, sitePlanHours, hsdAct, xmAct, goalBreakout };
   }).filter(Boolean);
 
-  const displayLabel = subRegion || siteLabel;
+  const displayLabel = mbrSiteName(subRegion || siteLabel);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
@@ -3835,7 +3902,7 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
             {regions.map(r => (
               <button key={r} onClick={() => setSubRegion(r)}
                 style={{ padding: "0.35rem 0.9rem", borderRadius: "6px", border: `1px solid ${subRegion===r?"#6366f1":`var(--border)`}`, background: subRegion===r?"#6366f118":"transparent", color: subRegion===r?"#818cf8":`var(--text-muted)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", cursor: "pointer" }}>
-                {r}
+                {mbrSiteName(r)}
               </button>
             ))}
           </div>
@@ -5516,11 +5583,11 @@ function BusinessOverview({ perf, onNav, localAI, priorAgents, priorGoalLookup, 
 
   // Group regions: XOTM = BZ, everything else = individual DR sites
   const siteGroups = useMemo(() => {
-    const allRegions = [...new Set(agents.map(a => (a.Region || a.region || "Unknown").trim()))].filter(r => r !== "Unknown").sort();
+    const allRegions = [...new Set(agents.map(a => (a.region || "Unknown")))].filter(r => r !== "Unknown").sort();
     const bzRegions  = allRegions.filter(r => r.toUpperCase().includes("XOTM"));
     const drRegions  = allRegions.filter(r => !r.toUpperCase().includes("XOTM"));
     const groups = [];
-    if (drRegions.length > 0) groups.push({ label: drRegions.length === 1 ? drRegions[0] : "DR", regions: drRegions });
+    if (drRegions.length > 0) groups.push({ label: drRegions.length === 1 ? mbrSiteName(drRegions[0]) : "DR", regions: drRegions });
     if (bzRegions.length > 0) groups.push({ label: "BZ", regions: bzRegions });
     return groups;
   }, [agents]);
@@ -5606,9 +5673,11 @@ function BusinessOverview({ perf, onNav, localAI, priorAgents, priorGoalLookup, 
                 <button key={g.label} onClick={() => setSelectedGroup(g)}
                   style={{ padding: "0.4rem 1rem", borderRadius: "6px", border: `1px solid ${activeGroup?.label===g.label?"#d97706":`var(--border)`}`, background: activeGroup?.label===g.label?"#d9770618":"transparent", color: activeGroup?.label===g.label?"#d97706":`var(--text-muted)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", cursor: "pointer" }}>
                   {g.label}
-                  <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-dim)`, marginLeft: "0.4rem" }}>
-                    ({g.regions.length > 1 ? `${g.regions.length} sites` : g.regions[0]})
-                  </span>
+                  {g.regions.length > 1 && (
+                    <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-dim)`, marginLeft: "0.4rem" }}>
+                      ({g.regions.length} sites)
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
@@ -7675,7 +7744,7 @@ function WeeklyTrendsPanel({ currentAgents, priorAgents, fiscalInfo, goalLookup,
         // Collect visible regions for site legend (only when showing multi-site)
         const visibleRegions = showSiteBars ? [...new Set(chartData.flatMap(p => p.weekGroups.flatMap(w => w.bars.map(b => b.region))))].sort() : [];
 
-        const siteLabel = siteFilter === "ALL" ? "All Sites" : siteFilter === "BZ" ? "Belize" : siteFilter === "DR" ? "Dom. Republic" : (siteLabels[siteFilter] || siteFilter);
+        const siteLabel = siteFilter === "ALL" ? "All Sites" : siteFilter === "BZ" ? "Belize" : siteFilter === "DR" ? "Dom. Republic" : mbrSiteName(siteFilter);
 
         return (
           <div style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem 1.5rem" }}>
@@ -7721,7 +7790,7 @@ function WeeklyTrendsPanel({ currentAgents, priorAgents, fiscalInfo, goalLookup,
                                 </div>
                                 <div
                                   style={{ width: showSiteBars ? 28 : 36, height: Math.max(h, 2), background: color, borderRadius: "3px 3px 0 0", transition: "height 0.4s ease" }}
-                                  title={`${showSiteBars ? (siteLabels[bar.region] || bar.region) + " " : ""}Wk ${wg.weekNum}: SPH ${bar.sph.toFixed(3)} / Goal ${prog.sphGoal.toFixed(2)} = ${Math.round(bar.pctToGoal)}% (${bar.goals} goals, ${Math.round(bar.hours)} hrs)`}
+                                  title={`${showSiteBars ? mbrSiteName(bar.region) + " " : ""}Wk ${wg.weekNum}: SPH ${bar.sph.toFixed(3)} / Goal ${prog.sphGoal.toFixed(2)} = ${Math.round(bar.pctToGoal)}% (${bar.goals} goals, ${Math.round(bar.hours)} hrs)`}
                                 />
                               </div>
                             );
@@ -7745,7 +7814,7 @@ function WeeklyTrendsPanel({ currentAgents, priorAgents, fiscalInfo, goalLookup,
                   {visibleRegions.map(r => (
                     <div key={r} style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
                       <div style={{ width: 12, height: 8, background: siteColors[r] || "#6b7280", borderRadius: 2 }} />
-                      <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: "var(--text-dim)" }}>{siteLabels[r] || r}</span>
+                      <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: "var(--text-dim)" }}>{mbrSiteName(r)}</span>
                     </div>
                   ))}
                   <div style={{ width: 1, height: 14, background: "var(--border)", margin: "0 0.25rem" }} />
@@ -8475,7 +8544,7 @@ function ProgramBySiteTab({ agents, regions, siteBuckets, jobType, goalEntry, go
         {siteStats.map(s => (
           <button key={s.label} onClick={() => setActiveSite(activeSite === s.label ? null : s.label)}
             style={{ padding: "0.4rem 1rem", borderRadius: "6px", border: `1px solid ${activeSite===s.label?"#6366f1":`var(--border)`}`, background: activeSite===s.label?"#6366f118":"transparent", color: activeSite===s.label?"#818cf8":`var(--text-muted)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", cursor: "pointer" }}>
-            {s.label}
+            {mbrSiteName(s.label)}
             <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)`, marginLeft: "0.4rem" }}>
               ({s.uCount} agents)
             </span>
@@ -8495,7 +8564,7 @@ function ProgramBySiteTab({ agents, regions, siteBuckets, jobType, goalEntry, go
               return (
                 <div key={s.label} onClick={() => setActiveSite(s.label)}
                   style={{ cursor: "pointer", padding: "1.25rem", background: `var(--bg-primary)`, borderRadius: "var(--radius-md, 10px)", border: `1px solid ${color}25`, borderTop: `3px solid ${color}`, transition: "all 0.2s" }}>
-                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "1.5rem", color: `var(--text-warm)`, marginBottom: "0.75rem", fontWeight: 600 }}>{s.label}</div>
+                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "1.5rem", color: `var(--text-warm)`, marginBottom: "0.75rem", fontWeight: 600 }}>{mbrSiteName(s.label)}</div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem 1rem" }}>
                     {[
                       { l: "Agents", v: s.uCount, c: `var(--text-secondary)` },
@@ -8575,7 +8644,7 @@ function ProgramBySiteTab({ agents, regions, siteBuckets, jobType, goalEntry, go
             {/* Goals vs Plan — site-specific (with hours + pacing) */}
             {(s.sitePlanGoals || s.sitePlanHours) && (
               <MetricComparePanel
-                title={`Goals vs Plan — ${s.label}`}
+                title={`Goals vs Plan — ${mbrSiteName(s.label)}`}
                 fiscalInfo={fiscalInfo}
                 metrics={[
                   { label: "Hours", actual: s.totalHours, plan: s.sitePlanHours },
@@ -8590,7 +8659,7 @@ function ProgramBySiteTab({ agents, regions, siteBuckets, jobType, goalEntry, go
             {/* Quartile breakdown */}
             <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem" }}>
               <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.75rem" }}>
-                Quartile Mix — {s.label}
+                Quartile Mix — {mbrSiteName(s.label)}
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.5rem", marginBottom: "0.75rem" }}>
                 {["Q1","Q2","Q3","Q4"].map(q => (
@@ -8610,7 +8679,7 @@ function ProgramBySiteTab({ agents, regions, siteBuckets, jobType, goalEntry, go
             {/* Top performers + Priority coaching side by side */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.25rem" }}>
               <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem" }}>
-                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "#16a34a", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.35rem" }}>Top Performers — {s.label}</div>
+                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "#16a34a", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.35rem" }}>Top Performers — {mbrSiteName(s.label)}</div>
                 <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)`, marginBottom: "0.9rem" }}>Q1 {getMinHours()}+ hours</div>
                 {s.q1List.length === 0
                   ? <div style={{ color: `var(--text-faint)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem" }}>No Q1 agents with {getMinHours()}+ hours at this site</div>
@@ -8632,7 +8701,7 @@ function ProgramBySiteTab({ agents, regions, siteBuckets, jobType, goalEntry, go
               </div>
 
               <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem" }}>
-                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "#dc2626", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.35rem" }}>Priority Coaching — {s.label}</div>
+                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "#dc2626", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.35rem" }}>Priority Coaching — {mbrSiteName(s.label)}</div>
                 <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)`, marginBottom: "0.9rem" }}>Zero sales · ranked by hours</div>
                 {s.q4List.length === 0
                   ? <div style={{ color: `var(--text-faint)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem" }}>No Q4 agents at this site — excellent!</div>
@@ -8654,12 +8723,12 @@ function ProgramBySiteTab({ agents, regions, siteBuckets, jobType, goalEntry, go
             {/* AI Site Analysis */}
             {localAI && (
               <CollapsibleNarrative
-                title={`Site Analysis — ${s.label}`}
+                title={`Site Analysis — ${mbrSiteName(s.label)}`}
                 lines={[]}
                 defaultOpen={false}
                 aiEnabled={true}
                 aiPromptData={{
-                  jobType: `${jobType} — ${s.label}`,
+                  jobType: `${jobType} — ${mbrSiteName(s.label)}`,
                   uniqueAgentCount: s.uCount,
                   totalHours: s.totalHours,
                   totalGoals: s.totalGoals,
@@ -8684,7 +8753,7 @@ function ProgramBySiteTab({ agents, regions, siteBuckets, jobType, goalEntry, go
             {s.regions.length > 1 && (
               <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem" }}>
                 <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "1rem" }}>
-                  Sub-regions — {s.label}
+                  Sub-regions — {mbrSiteName(s.label)}
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
                   {s.regions.map(regName => {
@@ -8699,7 +8768,7 @@ function ProgramBySiteTab({ agents, regions, siteBuckets, jobType, goalEntry, go
                     return (
                       <div key={regName} style={{ padding: "0.85rem 1rem", background: `var(--bg-primary)`, borderRadius: "var(--radius-md, 10px)", border: "1px solid var(--bg-tertiary)" }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
-                          <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "1.27rem", color: `var(--text-primary)` }}>{regName}</span>
+                          <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "1.27rem", color: `var(--text-primary)` }}>{mbrSiteName(regName)}</span>
                           <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)` }}>{rU} agents · {fmt(rHours, 0)} hrs</span>
                         </div>
                         <div style={{ display: "flex", height: "5px", background: `var(--bg-tertiary)`, borderRadius: "3px", overflow: "hidden", marginBottom: "0.4rem" }}>
@@ -11593,9 +11662,9 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
                   return (
                     <button key={st.label} onClick={() => { setProgSiteFilter(isActive ? null : st.label); setBzSiteFilter(null); }}
                       style={{ padding: "0.3rem 0.8rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${isActive?btnColor:`var(--border)`}`, background: isActive?btnColor+"18":"transparent", color: isActive?btnColor:`var(--text-muted)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", cursor: "pointer" }}>
-                      {st.label}
+                      {mbrSiteName(st.label)}
                       <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-dim)`, marginLeft: "0.35rem" }}>
-                        ({st.regs.length > 1 ? `${st.regs.length} sites` : st.regs[0]})
+                        ({st.regs.length > 1 ? `${st.regs.length} sites` : mbrSiteName(st.regs[0])})
                       </span>
                     </button>
                   );
@@ -11611,12 +11680,10 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
                   {bzRegs.map(reg => {
                     const isActive = bzSiteFilter === reg;
                     const regColor = getRegColor(reg);
-                    // Short label: strip "-XOTM" suffix for cleaner display
-                    const shortLabel = reg.replace(/-XOTM$/i, "");
                     return (
                       <button key={reg} onClick={() => setBzSiteFilter(isActive ? null : reg)}
                         style={{ padding: "0.25rem 0.7rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${isActive ? regColor : `var(--border)`}`, background: isActive ? regColor + "18" : "transparent", color: isActive ? regColor : `var(--text-dim)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "1.02rem", cursor: "pointer", transition: "all 0.15s" }}>
-                        {shortLabel}
+                        {mbrSiteName(reg)}
                       </button>
                     );
                   })}
@@ -11695,7 +11762,7 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
                       <td style={{ padding: "0.4rem 0.75rem", color: `var(--text-primary)`, fontFamily: "var(--font-ui, Inter, sans-serif)", ...style.tdProgram }}>{style.progLabel || p.grp}</td>
                       <td style={{ padding: "0.4rem 0.75rem", color: `var(--text-dim)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem" }}>{p.roc || "\u2014"}</td>
                       <td style={{ padding: "0.4rem 0.75rem" }}>
-                        <span style={{ background: regColor+"18", border: `1px solid ${regColor}40`, borderRadius: "3px", color: regColor, padding: "0.1rem 0.35rem" }}>{p.isCombined ? "BZ" : p.reg}</span>
+                        <span style={{ background: regColor+"18", border: `1px solid ${regColor}40`, borderRadius: "3px", color: regColor, padding: "0.1rem 0.35rem" }}>{p.isCombined ? "BZ" : mbrSiteName(p.reg)}</span>
                       </td>
                       <td style={{ padding: "0.4rem 0.75rem", color: `var(--text-secondary)`, textAlign: "right" }}>{p.agentCount}</td>
                       <td style={{ padding: "0.4rem 0.75rem", color: "#6366f1", textAlign: "right" }}>{fmt(p.hrs, 2)}</td>
@@ -11946,7 +12013,7 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
                   <tr key={`${a.name}|${a.job || i}`} style={{ borderBottom: "1px solid var(--bg-tertiary)", background: i%2===0?"transparent":`var(--bg-row-alt)` }}>
                     <td style={{ padding: "0.4rem 0.6rem", color: `var(--text-warm)`, fontFamily: "var(--font-ui, Inter, sans-serif)" }}>{a.name}</td>
                     <td style={{ padding: "0.4rem 0.6rem" }}>
-                      <span style={{ background: regColor+"18", border: `1px solid ${regColor}40`, borderRadius: "3px", color: regColor, padding: "0.1rem 0.35rem" }}>{a.reg}</span>
+                      <span style={{ background: regColor+"18", border: `1px solid ${regColor}40`, borderRadius: "3px", color: regColor, padding: "0.1rem 0.35rem" }}>{mbrSiteName(a.reg)}</span>
                     </td>
                     <td style={{ padding: "0.4rem 0.6rem", color: `var(--text-muted)`, maxWidth: "140px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={grpStr}>{grpStr}</td>
                     <td style={{ padding: "0.4rem 0.6rem", color: "#6366f1", textAlign: "right" }}>{fmt(a.hrs, 2)}</td>
