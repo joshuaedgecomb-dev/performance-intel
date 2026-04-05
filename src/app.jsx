@@ -2286,7 +2286,7 @@ function AgentTable({ agents, newHireSet }) {
             return (
               <button key={r.name} onClick={() => setRegionFilter(active ? null : r.name)}
                 style={{ padding: "0.3rem 0.7rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${active ? "#6366f150" : "transparent"}`, background: active ? "#6366f112" : "transparent", color: active ? "#6366f1" : `var(--text-dim)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", cursor: "pointer", fontWeight: active ? 600 : 400 }}>
-                {r.name} <span style={{ opacity: 0.5, fontSize: "0.7rem", fontFamily: "var(--font-data, monospace)" }}>{r.count} <span style={{ display: "inline-block", width: "0.5em" }} /> {regGph.toFixed(3)}</span>
+                {mbrSiteName(r.name)} <span style={{ opacity: 0.5, fontSize: "0.7rem", fontFamily: "var(--font-data, monospace)" }}>{r.count} <span style={{ display: "inline-block", width: "0.5em" }} /> {regGph.toFixed(3)}</span>
               </button>
             );
           })}
@@ -2317,7 +2317,7 @@ function AgentTable({ agents, newHireSet }) {
               <tr key={a.agentName} style={{ borderBottom: "1px solid var(--bg-tertiary)", background: i % 2 === 0 ? "transparent" : `var(--bg-row-alt)` }}>
                 <td style={{ padding: "0.5rem 0.75rem" }}><QBadge q={a.quartile} /></td>
                 <td style={{ padding: "0.5rem 0.75rem", color: `var(--text-warm)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem" }}>{a.agentName}</td>
-                <td style={{ padding: "0.5rem 0.75rem", color: `var(--text-secondary)` }}>{a.region}</td>
+                <td style={{ padding: "0.5rem 0.75rem", color: `var(--text-secondary)` }}>{mbrSiteName(a.region)}</td>
                 <td style={{ padding: "0.5rem 0.75rem", color: `var(--text-muted)`, fontSize: "0.82rem" }}>{a.supervisor || "—"}</td>
                 <td style={{ padding: "0.5rem 0.75rem", color: a.hours >= getMinHours() ? "#6366f1" : `var(--text-secondary)`, textAlign: "right" }}>{fmt(a.hours, 1)}</td>
                 <td style={{ padding: "0.5rem 0.75rem", color: `var(--text-secondary)`, textAlign: "right" }}>{a.goals}</td>
@@ -2349,7 +2349,7 @@ function RegionComparePanel({ regionStats, agents = [] }) {
         <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.75rem" }}>Region Breakdown</div>
         {regionStats.length === 1 && (
           <div style={{ display: "flex", gap: "1.5rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: `var(--text-muted)` }}>
-            <span>{regionStats[0].name}</span>
+            <span>{mbrSiteName(regionStats[0].name)}</span>
             <span>{regionStats[0].count} agents</span>
             <span>{fmt(regionStats[0].totalHours, 0)} hrs total</span>
             <span>{fmtPct(regionStats[0].avgPct)} avg to goal</span>
@@ -2380,7 +2380,7 @@ function RegionComparePanel({ regionStats, agents = [] }) {
 
       {parseFloat(variance) > 15 && (
         <div style={{ background: "#d9770610", border: "1px solid #d9770630", borderRadius: "var(--radius-md, 10px)", padding: "0.75rem 1rem", marginBottom: "1.25rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "#fde68a", lineHeight: 1.5 }}>
-          {variance}% variance between {best.name} ({fmtPct(best.avgPct)}) and {worst.name} ({fmtPct(worst.avgPct)}). Regional coaching alignment is recommended.
+          {variance}% variance between {mbrSiteName(best.name)} ({fmtPct(best.avgPct)}) and {mbrSiteName(worst.name)} ({fmtPct(worst.avgPct)}). Regional coaching alignment is recommended.
         </div>
       )}
 
@@ -2396,7 +2396,7 @@ function RegionComparePanel({ regionStats, agents = [] }) {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
                 {isTop && <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "#d97706", background: "#d9770620", padding: "0.1rem 0.4rem", borderRadius: "3px" }}>BEST</span>}
-                <span style={{ color: `var(--text-primary)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "1.32rem" }}>{r.name}</span>
+                <span style={{ color: `var(--text-primary)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "1.32rem" }}>{mbrSiteName(r.name)}</span>
                 <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-muted)` }}>{r.count} agents</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
@@ -3849,7 +3849,7 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
                 <div key={r.name} onClick={() => setSubRegion(subRegion === r.name ? null : r.name)}
                   style={{ cursor: "pointer", padding: "0.6rem 0.75rem", borderRadius: "var(--radius-md, 10px)", background: subRegion===r.name?"#6366f115":"transparent", border: `1px solid ${subRegion===r.name?"#6366f140":`var(--bg-tertiary)`}`, opacity: isActive ? 1 : 0.45, transition: "all 0.2s" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.3rem" }}>
-                    <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem", color: `var(--text-primary)` }}>{r.name}</span>
+                    <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem", color: `var(--text-primary)` }}>{mbrSiteName(r.name)}</span>
                     <div style={{ display: "flex", gap: "1rem" }}>
                       <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "#16a34a" }}>{r.goals.toLocaleString()} goals</span>
                       <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)` }}>GPH {fmt(r.gph, 2)}</span>
@@ -5502,7 +5502,7 @@ function MbrExportModal({ perf, onClose }) {
 // Consumes engine output directly. No computation inside.
 // ══════════════════════════════════════════════════════════════════════════════
 
-function BusinessOverview({ perf, onNav, localAI, priorAgents, priorGoalLookup }) {
+function BusinessOverview({ perf, onNav, localAI, priorAgents, priorGoalLookup, lightMode }) {
   const [tab, setTab] = useState("overview");
 
   const {
@@ -5728,6 +5728,7 @@ function BusinessOverview({ perf, onNav, localAI, priorAgents, priorGoalLookup }
 
         {/* Program Gainshare Scorecard */}
         {(() => {
+          const projColor = pct => pct >= 100 ? "#16a34a" : pct >= 85 ? "#2563eb" : "#dc2626";
           // Pre-compute totals for the header strip
           const tHours = programs.reduce((s, p) => s + p.totalHours, 0);
           const tGoals = programs.reduce((s, p) => s + p.actGoals, 0);
@@ -5736,6 +5737,53 @@ function BusinessOverview({ perf, onNav, localAI, priorAgents, priorGoalLookup }
           const tPace  = fiscalInfo && tGoals && tPlan ? calcPacing(tGoals, tPlan, fiscalInfo.elapsedBDays, fiscalInfo.totalBDays) : null;
           const behindCount = programs.filter(p => { const pc = fiscalInfo && p.actGoals && p.planGoals ? calcPacing(p.actGoals, p.planGoals, fiscalInfo.elapsedBDays, fiscalInfo.totalBDays) : null; return pc && pc.projectedPct < 85; }).length;
           const aheadCount = programs.filter(p => { const pc = fiscalInfo && p.actGoals && p.planGoals ? calcPacing(p.actGoals, p.planGoals, fiscalInfo.elapsedBDays, fiscalInfo.totalBDays) : null; return pc && pc.projectedPct >= 100; }).length;
+
+          // Pre-compute per-program scorecard data
+          const progData = programs.map((p, i) => {
+            // Avg agents per day
+            const agentsPerDay = {};
+            p.agents.forEach(a => {
+              if (!a.date || !a.agentName) return;
+              if (!agentsPerDay[a.date]) agentsPerDay[a.date] = new Set();
+              agentsPerDay[a.date].add(a.agentName);
+            });
+            const dayCount = Object.keys(agentsPerDay).length;
+            const avgDay = dayCount > 0
+              ? Math.round(Object.values(agentsPerDay).reduce((sum, set) => sum + set.size, 0) / dayCount)
+              : 0;
+
+            // Sales pacing
+            const pace = fiscalInfo && p.actGoals && p.planGoals
+              ? calcPacing(p.actGoals, p.planGoals, fiscalInfo.elapsedBDays, fiscalInfo.totalBDays)
+              : null;
+
+            // GPH goal (SPH GOAL is a rate — average across plan rows, not sum)
+            const sphGoal = (() => {
+              if (!p.goalEntry) return null;
+              const rows = uniqueRowsFromEntry(p.goalEntry);
+              const vals = rows.map(r => parseNum(findCol(r, "SPH GOAL", "SPH Goal", "Sph Goal"))).filter(v => v > 0);
+              return vals.length > 0 ? vals.reduce((s, v) => s + v, 0) / vals.length : null;
+            })();
+
+            // Sub-metric plans
+            const planHrs = p.goalEntry ? getPlanForKey(p.goalEntry, "Hours Goal") : null;
+            const planHsd = p.goalEntry ? getPlanForKey(p.goalEntry, "HSD Sell In Goal") : null;
+            const planXm  = p.goalEntry ? getPlanForKey(p.goalEntry, "XM GOAL") : null;
+            const planRgu = p.goalEntry ? getPlanForKey(p.goalEntry, "RGU GOAL") : null;
+
+            // Sub-metric pacing (projected %)
+            const hrsPace = fiscalInfo && planHrs ? calcPacing(p.totalHours, planHrs, fiscalInfo.elapsedBDays, fiscalInfo.totalBDays) : null;
+            const hsdPace = fiscalInfo && planHsd ? calcPacing(p.totalNewXI, planHsd, fiscalInfo.elapsedBDays, fiscalInfo.totalBDays) : null;
+            const xmPace  = fiscalInfo && planXm  ? calcPacing(p.totalXmLines, planXm, fiscalInfo.elapsedBDays, fiscalInfo.totalBDays) : null;
+            const rguPace = fiscalInfo && planRgu ? calcPacing(p.totalRgu, planRgu, fiscalInfo.elapsedBDays, fiscalInfo.totalBDays) : null;
+
+            // Belize-only detection
+            const isBelizeOnly = p.agents.length > 0 && p.agents.every(a =>
+              a.region && a.region.includes("XOTM")
+            );
+
+            return { ...p, _origIdx: i, avgDay, pace, sphGoal, planHrs, planHsd, planXm, planRgu, hrsPace, hsdPace, xmPace, rguPace, isBelizeOnly };
+          });
 
           return (
           <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "clamp(1rem, 3vw, 1.75rem)" }}>
@@ -5754,19 +5802,38 @@ function BusinessOverview({ perf, onNav, localAI, priorAgents, priorGoalLookup }
               {tPace && (
                 <div style={{ display: "flex", gap: "1.25rem", alignItems: "center" }}>
                   <div style={{ textAlign: "right" }}>
-                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Business Attainment</div>
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Sales to Plan</div>
                     <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.75rem", color: tAtt !== null ? attainColor(tAtt) : "var(--text-faint)", fontWeight: 700, lineHeight: 1 }}>{tAtt !== null ? `${Math.round(tAtt)}%` : "—"}</div>
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "var(--text-dim)" }}>{tGoals.toLocaleString()} of {tPlan.toLocaleString()} goal</div>
                   </div>
                   <div style={{ textAlign: "right" }}>
-                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Projected EOM</div>
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Projected Month-End Sales</div>
                     <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.75rem", color: attainColor(tPace.projectedPct), fontWeight: 700, lineHeight: 1 }}>{tPace.projected.toLocaleString()}</div>
                     <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: attainColor(tPace.projectedPct) }}>{Math.round(tPace.projectedPct)}% of plan</div>
                   </div>
                   <div style={{ textAlign: "right" }}>
-                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Daily Rate</div>
-                    <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.75rem", color: tPace.requiredDaily && tPace.dailyRate >= tPace.requiredDaily ? "#16a34a" : "#dc2626", fontWeight: 700, lineHeight: 1 }}>{tPace.dailyRate.toFixed(1)}</div>
-                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "var(--text-dim)" }}>need {tPace.requiredDaily ? tPace.requiredDaily.toFixed(1) : "?"}/day</div>
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Avg Daily Sales</div>
+                    <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.75rem", color: tPace.requiredDaily && tPace.dailyRate >= tPace.requiredDaily ? "#16a34a" : "#dc2626", fontWeight: 700, lineHeight: 1 }}>{Math.round(tPace.dailyRate)}</div>
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "var(--text-dim)" }}>need {tPace.requiredDaily ? Math.round(tPace.requiredDaily) : "?"}/day</div>
                   </div>
+                  <div style={{ width: 1, height: 36, background: "var(--border-muted, var(--border))", margin: "0 0.25rem" }} />
+                  {[
+                    { label: "Avg Daily XI", actual: globalNewXI, plan: globalPlanNewXI },
+                    { label: "Avg Daily XM", actual: globalXmLines, plan: globalPlanXmLines },
+                    { label: "Avg Daily RGU", actual: globalRgu, plan: globalPlanRgu },
+                  ].map(m => {
+                    const mp = fiscalInfo && m.plan ? calcPacing(m.actual, m.plan, fiscalInfo.elapsedBDays, fiscalInfo.totalBDays) : null;
+                    const dailyRate = fiscalInfo && fiscalInfo.elapsedBDays > 0 ? m.actual / fiscalInfo.elapsedBDays : 0;
+                    const requiredDaily = fiscalInfo && m.plan && fiscalInfo.totalBDays > 0 ? m.plan / fiscalInfo.totalBDays : null;
+                    const rateColor = requiredDaily && dailyRate >= requiredDaily ? "#16a34a" : "#dc2626";
+                    return (
+                      <div key={m.label} style={{ textAlign: "right" }}>
+                        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em" }}>{m.label}</div>
+                        <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.75rem", color: m.plan ? rateColor : "var(--text-faint)", fontWeight: 700, lineHeight: 1 }}>{Math.round(dailyRate)}</div>
+                        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "var(--text-dim)" }}>{requiredDaily ? `need ${Math.round(requiredDaily)}/day` : ""}</div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -5776,81 +5843,150 @@ function BusinessOverview({ perf, onNav, localAI, priorAgents, priorGoalLookup }
               <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.92rem" }}>
                 <thead>
                   <tr style={{ borderBottom: "2px solid var(--border)" }}>
-                    <th style={{ padding: "0.6rem 0.6rem", textAlign: "left", color: "var(--text-muted)", fontWeight: 600, fontSize: "0.8rem", letterSpacing: "0.04em" }}>Program</th>
-                    <th style={{ padding: "0.6rem 0.5rem", textAlign: "center", color: "var(--text-muted)", fontWeight: 600, fontSize: "0.8rem" }}>Agents</th>
-                    <th style={{ padding: "0.6rem 0.5rem", textAlign: "right", color: "var(--text-muted)", fontWeight: 600, fontSize: "0.8rem" }}>Sales / Plan</th>
-                    <th style={{ padding: "0.6rem 0.5rem", textAlign: "center", color: "var(--text-muted)", fontWeight: 600, fontSize: "0.8rem" }}>Attain</th>
-                    <th style={{ padding: "0.6rem 0.5rem", textAlign: "right", color: "var(--text-muted)", fontWeight: 600, fontSize: "0.8rem" }}>Hours</th>
-                    <th style={{ padding: "0.6rem 0.5rem", textAlign: "center", color: "var(--text-muted)", fontWeight: 600, fontSize: "0.8rem" }}>GPH</th>
-                    <th style={{ padding: "0.6rem 0.5rem", textAlign: "center", color: "var(--text-muted)", fontWeight: 600, fontSize: "0.8rem" }}>HSD</th>
-                    <th style={{ padding: "0.6rem 0.5rem", textAlign: "center", color: "var(--text-muted)", fontWeight: 600, fontSize: "0.8rem" }}>RGU</th>
-                    <th style={{ padding: "0.6rem 0.5rem", textAlign: "center", color: "var(--text-muted)", fontWeight: 600, fontSize: "0.8rem" }}>Q1 / Q4</th>
-                    <th style={{ padding: "0.6rem 0.5rem", textAlign: "center", color: "var(--text-muted)", fontWeight: 600, fontSize: "0.8rem" }}>Pacing</th>
-                    <th style={{ padding: "0.6rem 0.5rem", textAlign: "right", color: "var(--text-muted)", fontWeight: 600, fontSize: "0.8rem" }}>Proj. EOM</th>
+                    <th style={{ padding: "0.6rem 0.6rem", textAlign: "left", color: "var(--text-muted)", fontWeight: 600, fontSize: "0.75rem", letterSpacing: "0.04em", textTransform: "uppercase" }}>Program</th>
+                    <th style={{ padding: "0.6rem 0.5rem", textAlign: "center", color: "var(--text-muted)", fontWeight: 600, fontSize: "0.75rem" }}>Avg/Day</th>
+                    <th style={{ padding: "0.6rem 0.5rem", textAlign: "left", color: "var(--text-muted)", fontWeight: 600, fontSize: "0.75rem", minWidth: 200 }}>Sales vs Plan</th>
+                    <th style={{ padding: "0.6rem 0.5rem", textAlign: "center", color: "var(--text-muted)", fontWeight: 600, fontSize: "0.75rem" }}>Hours</th>
+                    <th style={{ padding: "0.6rem 0.5rem", textAlign: "left", color: "var(--text-muted)", fontWeight: 600, fontSize: "0.75rem", minWidth: 130 }}>GPH vs Goal</th>
+                    <th style={{ padding: "0.6rem 0.5rem", textAlign: "center", color: "var(--text-muted)", fontWeight: 600, fontSize: "0.75rem" }}>HSD</th>
+                    <th style={{ padding: "0.6rem 0.5rem", textAlign: "center", color: "var(--text-muted)", fontWeight: 600, fontSize: "0.75rem" }}>XM</th>
+                    <th style={{ padding: "0.6rem 0.5rem", textAlign: "center", color: "var(--text-muted)", fontWeight: 600, fontSize: "0.75rem" }}>RGU</th>
+                    <th style={{ padding: "0.6rem 0.5rem", textAlign: "center", color: "var(--text-muted)", fontWeight: 600, fontSize: "0.75rem", minWidth: 140 }}>Quartile Distribution</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {[...programs].sort((a, b) => (b.attainment ?? b.healthScore ?? 0) - (a.attainment ?? a.healthScore ?? 0)).map((p, i) => {
-                    const color = qColor(p.attainment ?? p.q1Rate);
-                    const pace = fiscalInfo && p.actGoals && p.planGoals ? calcPacing(p.actGoals, p.planGoals, fiscalInfo.elapsedBDays, fiscalInfo.totalBDays) : null;
-                    const paceColor = pace ? (pace.projectedPct >= 100 ? "#16a34a" : pace.projectedPct >= 85 ? "#2563eb" : "#dc2626") : "var(--text-faint)";
-                    const paceLabel = pace ? (pace.projectedPct >= 100 ? "AHEAD" : pace.projectedPct >= 85 ? "NEAR" : "BEHIND") : "—";
-                    const planHrs = p.goalEntry ? getPlanForKey(p.goalEntry, "Hours Goal") : null;
-                    const planHsd = p.goalEntry ? getPlanForKey(p.goalEntry, "HSD Sell In Goal") : null;
-                    const planRgu = p.goalEntry ? getPlanForKey(p.goalEntry, "RGU GOAL") : null;
-                    const hsdAtt = planHsd ? (p.totalNewXI / planHsd) * 100 : null;
-                    const rguAtt = planRgu ? (p.totalRgu / planRgu) * 100 : null;
-                    const hrsAtt = planHrs ? (p.totalHours / planHrs) * 100 : null;
-                    const pidx = programs.indexOf(p);
-                    // Row background: subtle tint based on pacing
-                    const rowBg = pace ? (pace.projectedPct >= 100 ? "#16a34a06" : pace.projectedPct >= 85 ? "transparent" : "#dc262606") : "transparent";
-                    const altBg = i % 2 === 1 ? "var(--bg-row-alt)" : "transparent";
+                  {[...progData].sort((a, b) => (b.attainment ?? b.healthScore ?? 0) - (a.attainment ?? a.healthScore ?? 0)).map((p, i) => {
+                    const paceColor = p.pace ? projColor(p.pace.projectedPct) : "var(--text-faint)";
+                    const rowBg = p.pace && p.pace.projectedPct < 85 ? (lightMode ? "#fef2f2" : "#dc262606") : i % 2 === 1 ? "var(--bg-row-alt)" : "transparent";
+                    const pidx = p._origIdx;
+                    const gphPct = p.sphGoal ? (p.gph / p.sphGoal) * 100 : null;
+                    const gphBarColor = gphPct !== null ? projColor(gphPct) : "var(--text-faint)";
+                    const gphBarW = gphPct !== null ? Math.min(gphPct, 100) : 0;
+                    const attPct = p.planGoals ? (p.actGoals / p.planGoals) * 100 : null;
+
                     return (
-                      <tr key={p.jobType} onClick={() => onNav(pidx + 1)} style={{ borderBottom: "1px solid var(--bg-tertiary)", cursor: "pointer", background: pace && pace.projectedPct < 85 ? rowBg : altBg }}>
-                        <td style={{ padding: "0.7rem 0.6rem", whiteSpace: "nowrap" }}>
+                      <tr key={p.jobType} onClick={() => onNav(pidx + 1)} style={{ borderBottom: "1px solid var(--bg-tertiary)", cursor: "pointer", background: rowBg }}>
+                        {/* Program name + badge */}
+                        <td style={{ padding: "0.7rem 0.6rem" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                            <span style={{ display: "inline-block", width: "6px", height: "6px", borderRadius: "50%", background: color, flexShrink: 0 }} />
+                            <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: p.pace ? paceColor : "var(--text-faint)", flexShrink: 0 }} />
                             <span style={{ color: "var(--text-warm)", fontWeight: 600, fontSize: "0.95rem" }}>{p.jobType}</span>
                           </div>
+                          {p.isBelizeOnly && (
+                            <div style={{ fontSize: "0.65rem", color: "#7c3aed", marginLeft: 12, marginTop: 2, fontWeight: 600, letterSpacing: "0.04em" }}>BELIZE ONLY</div>
+                          )}
                         </td>
-                        <td style={{ padding: "0.7rem 0.5rem", textAlign: "center", color: "var(--text-secondary)", fontSize: "0.95rem" }}>{p.uniqueAgentCount}</td>
-                        <td style={{ padding: "0.7rem 0.5rem", textAlign: "right" }}>
-                          <span style={{ color: "var(--text-warm)", fontWeight: 600, fontSize: "1rem" }}>{p.actGoals.toLocaleString()}</span>
-                          {p.planGoals && <span style={{ color: "var(--text-faint)", fontSize: "0.82rem" }}> / {p.planGoals.toLocaleString()}</span>}
-                        </td>
-                        <td style={{ padding: "0.7rem 0.5rem", textAlign: "center" }}>
-                          <span style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.2rem", color, fontWeight: 700 }}>
-                            {p.attainment !== null ? `${Math.round(p.attainment)}%` : "—"}
-                          </span>
-                        </td>
-                        <td style={{ padding: "0.7rem 0.5rem", textAlign: "right" }}>
-                          <span style={{ color: hrsAtt !== null ? attainColor(hrsAtt) : "var(--text-secondary)", fontWeight: 600, fontSize: "0.95rem" }}>{fmt(p.totalHours, 0)}</span>
-                          {planHrs ? <span style={{ color: "var(--text-faint)", fontSize: "0.78rem" }}> / {fmt(planHrs, 0)}</span> : null}
-                        </td>
-                        <td style={{ padding: "0.7rem 0.5rem", textAlign: "center", fontFamily: "var(--font-data, monospace)", fontSize: "0.95rem", color: "var(--text-secondary)" }}>{p.gph.toFixed(3)}</td>
-                        <td style={{ padding: "0.7rem 0.5rem", textAlign: "center" }}>
-                          <span style={{ color: hsdAtt !== null ? attainColor(hsdAtt) : "var(--text-secondary)", fontWeight: 600, fontSize: "0.95rem" }}>{p.totalNewXI}</span>
-                          {hsdAtt !== null && <div style={{ fontSize: "0.75rem", color: attainColor(hsdAtt), fontWeight: 600 }}>{Math.round(hsdAtt)}%</div>}
-                        </td>
-                        <td style={{ padding: "0.7rem 0.5rem", textAlign: "center" }}>
-                          <span style={{ color: rguAtt !== null ? attainColor(rguAtt) : "var(--text-secondary)", fontWeight: 600, fontSize: "0.95rem" }}>{p.totalRgu}</span>
-                          {rguAtt !== null && <div style={{ fontSize: "0.75rem", color: attainColor(rguAtt), fontWeight: 600 }}>{Math.round(rguAtt)}%</div>}
-                        </td>
-                        <td style={{ padding: "0.7rem 0.5rem", textAlign: "center" }}>
-                          <span style={{ color: Q.Q1.color, fontWeight: 700, fontSize: "0.95rem" }}>{p.distUnique.Q1}</span>
-                          <span style={{ color: "var(--text-faint)", margin: "0 0.15rem" }}>/</span>
-                          <span style={{ color: p.distUnique.Q4 > 0 ? Q.Q4.color : "var(--text-faint)", fontWeight: p.distUnique.Q4 > 0 ? 700 : 400, fontSize: "0.95rem" }}>{p.distUnique.Q4}</span>
-                        </td>
-                        <td style={{ padding: "0.7rem 0.5rem", textAlign: "center" }}>
-                          <span style={{ fontSize: "0.82rem", fontWeight: 700, color: paceColor, background: paceColor + "14", padding: "0.2rem 0.6rem", borderRadius: "4px", border: `1px solid ${paceColor}30`, display: "inline-block" }}>{paceLabel}</span>
-                        </td>
-                        <td style={{ padding: "0.7rem 0.5rem", textAlign: "right" }}>
-                          {pace ? (
-                            <div>
-                              <span style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.1rem", color: attainColor(pace.projectedPct), fontWeight: 700 }}>{pace.projected.toLocaleString()}</span>
-                              <div style={{ fontSize: "0.75rem", color: attainColor(pace.projectedPct), fontWeight: 600 }}>{Math.round(pace.projectedPct)}%</div>
+
+                        {/* Avg/Day */}
+                        <td style={{ padding: "0.7rem 0.5rem", textAlign: "center", color: "var(--text-secondary)", fontSize: "0.95rem" }}>{p.avgDay}</td>
+
+                        {/* Sales vs Plan with projection */}
+                        <td style={{ padding: "0.7rem 0.5rem" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <div style={{ flex: 1, height: 6, background: "var(--bg-tertiary)", borderRadius: 3, overflow: "hidden" }}>
+                              <div style={{ width: `${Math.min(attPct || 0, 100)}%`, height: "100%", background: p.pace ? paceColor : "var(--text-faint)", borderRadius: 3 }} />
                             </div>
-                          ) : <span style={{ color: "var(--text-faint)" }}>—</span>}
+                            <span style={{ fontSize: "0.82rem", color: "var(--text-warm)", whiteSpace: "nowrap", fontWeight: 600 }}>
+                              {p.actGoals.toLocaleString()}{p.planGoals ? <span style={{ color: "var(--text-faint)", fontWeight: 400 }}> / {p.planGoals.toLocaleString()}</span> : null}
+                            </span>
+                          </div>
+                          {p.pace && (
+                            <>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
+                                <div style={{ flex: 1, height: 3, background: "var(--bg-tertiary)", borderRadius: 2, overflow: "hidden" }}>
+                                  <div style={{ width: `${Math.min(p.pace.projectedPct, 100)}%`, height: "100%", background: paceColor + "40", borderRadius: 2, borderRight: `2px solid ${paceColor}` }} />
+                                </div>
+                                <span style={{ fontSize: "0.75rem", color: paceColor, whiteSpace: "nowrap", fontWeight: 600 }}>{Math.round(p.pace.projectedPct)}%</span>
+                              </div>
+                              <div style={{ textAlign: "right", fontSize: "0.68rem", color: paceColor + "90", marginTop: 1 }}>proj {p.pace.projected.toLocaleString()}</div>
+                            </>
+                          )}
+                        </td>
+
+                        {/* Hours */}
+                        <td style={{ padding: "0.7rem 0.5rem", textAlign: "center" }}>
+                          <div style={{ color: "var(--text-secondary)", fontWeight: 600, fontSize: "0.95rem" }}>
+                            {fmt(p.totalHours, 0)}{p.planHrs ? <span style={{ color: "var(--text-faint)", fontWeight: 400, fontSize: "0.82rem" }}> / {fmt(p.planHrs, 0)}</span> : null}
+                          </div>
+                          {p.hrsPace && (
+                            <div style={{ fontSize: "0.68rem", color: projColor(p.hrsPace.projectedPct), fontWeight: 600 }}>
+                              {Math.round(p.hrsPace.projectedPct)}% proj
+                            </div>
+                          )}
+                        </td>
+
+                        {/* GPH vs Goal */}
+                        <td style={{ padding: "0.7rem 0.5rem" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <div style={{ flex: 1, height: 6, background: "var(--bg-tertiary)", borderRadius: 3, overflow: "hidden" }}>
+                              {gphPct !== null && <div style={{ width: `${gphBarW}%`, height: "100%", background: gphBarColor, borderRadius: 3 }} />}
+                            </div>
+                            <span style={{ fontSize: "0.82rem", color: "var(--text-warm)", whiteSpace: "nowrap" }}>
+                              <span style={{ fontWeight: 600 }}>{p.gph.toFixed(3)}</span>
+                              {p.sphGoal ? <span style={{ color: "var(--text-faint)" }}> / {p.sphGoal.toFixed(2)}</span> : null}
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* HSD */}
+                        <td style={{ padding: "0.7rem 0.5rem", textAlign: "center" }}>
+                          <div style={{ color: "var(--text-secondary)", fontWeight: 600, fontSize: "0.95rem" }}>
+                            {p.totalNewXI}{p.planHsd ? <span style={{ color: "var(--text-faint)", fontWeight: 400, fontSize: "0.82rem" }}> / {p.planHsd.toLocaleString()}</span> : null}
+                          </div>
+                          {p.hsdPace && (
+                            <div style={{ fontSize: "0.68rem", color: projColor(p.hsdPace.projectedPct), fontWeight: 600 }}>
+                              {Math.round(p.hsdPace.projectedPct)}% proj
+                            </div>
+                          )}
+                        </td>
+
+                        {/* XM */}
+                        <td style={{ padding: "0.7rem 0.5rem", textAlign: "center" }}>
+                          <div style={{ color: "var(--text-secondary)", fontWeight: 600, fontSize: "0.95rem" }}>
+                            {p.totalXmLines}{p.planXm ? <span style={{ color: "var(--text-faint)", fontWeight: 400, fontSize: "0.82rem" }}> / {p.planXm.toLocaleString()}</span> : null}
+                          </div>
+                          {p.xmPace && (
+                            <div style={{ fontSize: "0.68rem", color: projColor(p.xmPace.projectedPct), fontWeight: 600 }}>
+                              {Math.round(p.xmPace.projectedPct)}% proj
+                            </div>
+                          )}
+                        </td>
+
+                        {/* RGU */}
+                        <td style={{ padding: "0.7rem 0.5rem", textAlign: "center" }}>
+                          <div style={{ color: "var(--text-secondary)", fontWeight: 600, fontSize: "0.95rem" }}>
+                            {p.totalRgu}{p.planRgu ? <span style={{ color: "var(--text-faint)", fontWeight: 400, fontSize: "0.82rem" }}> / {p.planRgu.toLocaleString()}</span> : null}
+                          </div>
+                          {p.rguPace && (
+                            <div style={{ fontSize: "0.68rem", color: projColor(p.rguPace.projectedPct), fontWeight: 600 }}>
+                              {Math.round(p.rguPace.projectedPct)}% proj
+                            </div>
+                          )}
+                        </td>
+
+                        {/* Quartile Distribution */}
+                        <td style={{ padding: "0.7rem 0.5rem" }}>
+                          {(() => {
+                            const counts = { Q1: p.distUnique.Q1 || 0, Q2: p.distUnique.Q2 || 0, Q3: p.distUnique.Q3 || 0, Q4: p.distUnique.Q4 || 0 };
+                            const total = counts.Q1 + counts.Q2 + counts.Q3 + counts.Q4;
+                            if (total === 0) return <div style={{ color: "var(--text-faint)", fontSize: "0.68rem", textAlign: "center" }}>No qualified agents</div>;
+                            return (
+                              <>
+                                <div style={{ display: "flex", height: 10, borderRadius: 5, overflow: "hidden", gap: 1 }}>
+                                  {["Q1","Q2","Q3","Q4"].map(q => (
+                                    <div key={q} style={{ flex: counts[q], background: Q[q].color }} />
+                                  ))}
+                                </div>
+                                <div style={{ display: "flex", marginTop: 3, fontSize: "0.68rem", gap: 1 }}>
+                                  {["Q1","Q2","Q3","Q4"].map(q => (
+                                    <div key={q} style={{ flex: Math.max(counts[q], 1), textAlign: "center", color: Q[q].color }}>
+                                      {counts[q]}
+                                    </div>
+                                  ))}
+                                </div>
+                              </>
+                            );
+                          })()}
                         </td>
                       </tr>
                     );
@@ -5858,39 +5994,86 @@ function BusinessOverview({ perf, onNav, localAI, priorAgents, priorGoalLookup }
                   {/* Totals row */}
                   {goalLookup && (() => {
                     const tHsd = programs.reduce((s, p) => s + p.totalNewXI, 0);
+                    const tXm  = programs.reduce((s, p) => s + p.totalXmLines, 0);
                     const tRgu = programs.reduce((s, p) => s + p.totalRgu, 0);
-                    const tQ1 = programs.reduce((s, p) => s + p.distUnique.Q1, 0);
-                    const tQ4 = programs.reduce((s, p) => s + p.distUnique.Q4, 0);
-                    const tColor = tAtt !== null ? attainColor(tAtt) : "var(--text-muted)";
+                    const tQ1  = programs.reduce((s, p) => s + (p.distUnique.Q1 || 0), 0);
+                    const tQ2  = programs.reduce((s, p) => s + (p.distUnique.Q2 || 0), 0);
+                    const tQ3  = programs.reduce((s, p) => s + (p.distUnique.Q3 || 0), 0);
+                    const tQ4  = programs.reduce((s, p) => s + (p.distUnique.Q4 || 0), 0);
+                    const tAvgDay = progData.reduce((s, p) => s + p.avgDay, 0);
+                    const tGph = tHours > 0 ? tGoals / tHours : 0;
+                    const tSphGoal = null; // No meaningful aggregate SPH goal
+                    const tCounts = { Q1: tQ1, Q2: tQ2, Q3: tQ3, Q4: tQ4 };
+                    const tQTotal = tQ1 + tQ2 + tQ3 + tQ4;
+
                     return (
                       <tr style={{ borderTop: "2px solid var(--border)" }}>
                         <td style={{ padding: "0.75rem 0.6rem", color: "var(--text-warm)", fontWeight: 700, fontSize: "0.95rem" }}>TOTAL</td>
-                        <td style={{ padding: "0.75rem 0.5rem", textAlign: "center", color: "var(--text-secondary)", fontWeight: 700 }}>{uniqueAgentCount}</td>
-                        <td style={{ padding: "0.75rem 0.5rem", textAlign: "right", fontWeight: 700 }}>
-                          <span style={{ color: "var(--text-warm)", fontSize: "1rem" }}>{tGoals.toLocaleString()}</span>
-                          {tPlan > 0 && <span style={{ color: "var(--text-faint)", fontSize: "0.82rem" }}> / {tPlan.toLocaleString()}</span>}
-                        </td>
-                        <td style={{ padding: "0.75rem 0.5rem", textAlign: "center" }}>
-                          <span style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.2rem", color: tColor, fontWeight: 700 }}>{tAtt !== null ? `${Math.round(tAtt)}%` : "—"}</span>
-                        </td>
-                        <td style={{ padding: "0.75rem 0.5rem", textAlign: "right", color: "var(--text-secondary)", fontWeight: 700, fontSize: "0.95rem" }}>{fmt(tHours, 0)}</td>
-                        <td style={{ padding: "0.75rem 0.5rem", textAlign: "center", fontFamily: "var(--font-data, monospace)", fontWeight: 700, color: "var(--text-secondary)", fontSize: "0.95rem" }}>{tHours > 0 ? (tGoals / tHours).toFixed(3) : "—"}</td>
-                        <td style={{ padding: "0.75rem 0.5rem", textAlign: "center", color: "var(--text-secondary)", fontWeight: 700, fontSize: "0.95rem" }}>{tHsd}</td>
-                        <td style={{ padding: "0.75rem 0.5rem", textAlign: "center", color: "var(--text-secondary)", fontWeight: 700, fontSize: "0.95rem" }}>{tRgu}</td>
-                        <td style={{ padding: "0.75rem 0.5rem", textAlign: "center" }}>
-                          <span style={{ color: Q.Q1.color, fontWeight: 700, fontSize: "0.95rem" }}>{tQ1}</span>
-                          <span style={{ color: "var(--text-faint)", margin: "0 0.15rem" }}>/</span>
-                          <span style={{ color: tQ4 > 0 ? Q.Q4.color : "var(--text-faint)", fontWeight: 700, fontSize: "0.95rem" }}>{tQ4}</span>
-                        </td>
-                        <td style={{ padding: "0.75rem 0.5rem", textAlign: "center" }}>
-                          {tPace && <span style={{ fontSize: "0.82rem", fontWeight: 700, color: tPace.projectedPct >= 100 ? "#16a34a" : tPace.projectedPct >= 85 ? "#2563eb" : "#dc2626", background: (tPace.projectedPct >= 100 ? "#16a34a" : tPace.projectedPct >= 85 ? "#2563eb" : "#dc2626") + "14", padding: "0.2rem 0.6rem", borderRadius: "4px" }}>{tPace.projectedPct >= 100 ? "AHEAD" : tPace.projectedPct >= 85 ? "NEAR" : "BEHIND"}</span>}
-                        </td>
-                        <td style={{ padding: "0.75rem 0.5rem", textAlign: "right" }}>
-                          {tPace ? (
-                            <div>
-                              <span style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.1rem", color: attainColor(tPace.projectedPct), fontWeight: 700 }}>{tPace.projected.toLocaleString()}</span>
-                              <div style={{ fontSize: "0.75rem", color: attainColor(tPace.projectedPct), fontWeight: 600 }}>{Math.round(tPace.projectedPct)}%</div>
+                        <td style={{ padding: "0.75rem 0.5rem", textAlign: "center", color: "var(--text-warm)", fontWeight: 700, fontSize: "0.95rem" }}>{tAvgDay}</td>
+                        <td style={{ padding: "0.75rem 0.5rem" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <div style={{ flex: 1, height: 6, background: "var(--bg-tertiary)", borderRadius: 3, overflow: "hidden" }}>
+                              <div style={{ width: `${Math.min(tAtt || 0, 100)}%`, height: "100%", background: tPace ? projColor(tPace.projectedPct) : "var(--text-faint)", borderRadius: 3 }} />
                             </div>
+                            <span style={{ fontSize: "0.82rem", color: "var(--text-warm)", whiteSpace: "nowrap", fontWeight: 700 }}>
+                              {tGoals.toLocaleString()}<span style={{ color: "var(--text-faint)", fontWeight: 400 }}> / {tPlan.toLocaleString()}</span>
+                            </span>
+                          </div>
+                          {tPace && (
+                            <>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 4 }}>
+                                <div style={{ flex: 1, height: 3, background: "var(--bg-tertiary)", borderRadius: 2, overflow: "hidden" }}>
+                                  <div style={{ width: `${Math.min(tPace.projectedPct, 100)}%`, height: "100%", background: projColor(tPace.projectedPct) + "40", borderRadius: 2, borderRight: `2px solid ${projColor(tPace.projectedPct)}` }} />
+                                </div>
+                                <span style={{ fontSize: "0.75rem", color: projColor(tPace.projectedPct), whiteSpace: "nowrap", fontWeight: 600 }}>{Math.round(tPace.projectedPct)}%</span>
+                              </div>
+                              <div style={{ textAlign: "right", fontSize: "0.68rem", color: projColor(tPace.projectedPct) + "90", marginTop: 1 }}>proj {tPace.projected.toLocaleString()}</div>
+                            </>
+                          )}
+                        </td>
+                        <td style={{ padding: "0.75rem 0.5rem", textAlign: "center" }}>
+                          <div style={{ color: "var(--text-warm)", fontWeight: 700, fontSize: "0.95rem" }}>
+                            {fmt(tHours, 0)}{globalPlanHours ? <span style={{ color: "var(--text-faint)", fontWeight: 400, fontSize: "0.82rem" }}> / {fmt(globalPlanHours, 0)}</span> : null}
+                          </div>
+                          {(() => { const hp = fiscalInfo && globalPlanHours ? calcPacing(tHours, globalPlanHours, fiscalInfo.elapsedBDays, fiscalInfo.totalBDays) : null; return hp ? <div style={{ fontSize: "0.68rem", color: projColor(hp.projectedPct), fontWeight: 600 }}>{Math.round(hp.projectedPct)}% proj</div> : null; })()}
+                        </td>
+                        <td style={{ padding: "0.75rem 0.5rem", textAlign: "center" }}>
+                          <span style={{ fontSize: "0.95rem", color: "var(--text-warm)", fontWeight: 700 }}>{tGph > 0 ? tGph.toFixed(3) : "—"}</span>
+                        </td>
+                        <td style={{ padding: "0.75rem 0.5rem", textAlign: "center" }}>
+                          <div style={{ color: "var(--text-warm)", fontWeight: 700, fontSize: "0.95rem" }}>
+                            {tHsd}{globalPlanNewXI ? <span style={{ color: "var(--text-faint)", fontWeight: 400, fontSize: "0.82rem" }}> / {globalPlanNewXI.toLocaleString()}</span> : null}
+                          </div>
+                          {(() => { const hp = fiscalInfo && globalPlanNewXI ? calcPacing(tHsd, globalPlanNewXI, fiscalInfo.elapsedBDays, fiscalInfo.totalBDays) : null; return hp ? <div style={{ fontSize: "0.68rem", color: projColor(hp.projectedPct), fontWeight: 600 }}>{Math.round(hp.projectedPct)}% proj</div> : null; })()}
+                        </td>
+                        <td style={{ padding: "0.75rem 0.5rem", textAlign: "center" }}>
+                          <div style={{ color: "var(--text-warm)", fontWeight: 700, fontSize: "0.95rem" }}>
+                            {tXm}{globalPlanXmLines ? <span style={{ color: "var(--text-faint)", fontWeight: 400, fontSize: "0.82rem" }}> / {globalPlanXmLines.toLocaleString()}</span> : null}
+                          </div>
+                          {(() => { const xp = fiscalInfo && globalPlanXmLines ? calcPacing(tXm, globalPlanXmLines, fiscalInfo.elapsedBDays, fiscalInfo.totalBDays) : null; return xp ? <div style={{ fontSize: "0.68rem", color: projColor(xp.projectedPct), fontWeight: 600 }}>{Math.round(xp.projectedPct)}% proj</div> : null; })()}
+                        </td>
+                        <td style={{ padding: "0.75rem 0.5rem", textAlign: "center" }}>
+                          <div style={{ color: "var(--text-warm)", fontWeight: 700, fontSize: "0.95rem" }}>
+                            {tRgu}{globalPlanRgu ? <span style={{ color: "var(--text-faint)", fontWeight: 400, fontSize: "0.82rem" }}> / {globalPlanRgu.toLocaleString()}</span> : null}
+                          </div>
+                          {(() => { const rp = fiscalInfo && globalPlanRgu ? calcPacing(tRgu, globalPlanRgu, fiscalInfo.elapsedBDays, fiscalInfo.totalBDays) : null; return rp ? <div style={{ fontSize: "0.68rem", color: projColor(rp.projectedPct), fontWeight: 600 }}>{Math.round(rp.projectedPct)}% proj</div> : null; })()}
+                        </td>
+                        <td style={{ padding: "0.75rem 0.5rem" }}>
+                          {tQTotal > 0 ? (
+                            <>
+                              <div style={{ display: "flex", height: 10, borderRadius: 5, overflow: "hidden", gap: 1 }}>
+                                {["Q1","Q2","Q3","Q4"].map(q => (
+                                  <div key={q} style={{ flex: tCounts[q], background: Q[q].color }} />
+                                ))}
+                              </div>
+                              <div style={{ display: "flex", marginTop: 3, fontSize: "0.68rem", gap: 1 }}>
+                                {["Q1","Q2","Q3","Q4"].map(q => (
+                                  <div key={q} style={{ flex: Math.max(tCounts[q], 1), textAlign: "center", color: Q[q].color }}>
+                                    {tCounts[q]}
+                                  </div>
+                                ))}
+                              </div>
+                            </>
                           ) : null}
                         </td>
                       </tr>
@@ -5922,7 +6105,7 @@ function BusinessOverview({ perf, onNav, localAI, priorAgents, priorGoalLookup }
                       {a.agentName}
                       {newHireSet.has(a.agentName) && <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "var(--nh-color)", background: "var(--nh-bg)", padding: "0.05rem 0.25rem", borderRadius: "2px", marginLeft: "0.35rem" }}>NEW</span>}
                     </div>
-                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: `var(--text-dim)` }}>{a.jobType} · {a.region}</div>
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: `var(--text-dim)` }}>{a.jobType} · {mbrSiteName(a.region)}</div>
                   </div>
                   <div style={{ textAlign: "right" }}>
                     <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.5rem", color: "#6366f1", fontWeight: 700 }}>{fmt(a.hours, 1)} hrs</div>
@@ -5943,7 +6126,7 @@ function BusinessOverview({ perf, onNav, localAI, priorAgents, priorGoalLookup }
 
         {/* ── TRENDS TAB ── */}
         {tab === "trends" && (
-          <WeeklyTrendsPanel currentAgents={agents.filter(a => !a.isSpanishCallback)} priorAgents={priorAgents} fiscalInfo={fiscalInfo} />
+          <WeeklyTrendsPanel currentAgents={agents.filter(a => !a.isSpanishCallback)} priorAgents={priorAgents} fiscalInfo={fiscalInfo} goalLookup={goalLookup} programs={programs} />
         )}
       </div>
 
@@ -7068,7 +7251,7 @@ function DOWCards({ agents, priorAgents, label }) {
 
 // ── WeeklyTrendsPanel ─────────────────────────────────────────────────────────
 // Week-by-week comparison with expandable daily detail, site/campaign breakouts.
-function WeeklyTrendsPanel({ currentAgents, priorAgents, fiscalInfo }) {
+function WeeklyTrendsPanel({ currentAgents, priorAgents, fiscalInfo, goalLookup, programs }) {
   const [siteFilter, setSiteFilter] = useState("ALL");
   const [programFilter, setProgramFilter] = useState("All");
   const [expandedWeek, setExpandedWeek] = useState(null); // week position number
@@ -7184,9 +7367,9 @@ function WeeklyTrendsPanel({ currentAgents, priorAgents, fiscalInfo }) {
           <div>
             <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: `var(--text-faint)`, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "0.3rem" }}>Site</div>
             <div style={{ display: "flex", gap: "0.3rem", flexWrap: "wrap" }}>
-              {siteList.map(s => (
-                <button key={s} onClick={() => setSiteFilter(s)} style={filterBtnStyle(siteFilter === s, "#6366f1")}>{s}</button>
-              ))}
+              {siteList.map(s => {
+                return <button key={s} onClick={() => setSiteFilter(s)} style={filterBtnStyle(siteFilter === s, "#6366f1")}>{mbrSiteName(s)}</button>;
+              })}
             </div>
           </div>
           <div>
@@ -7370,47 +7553,231 @@ function WeeklyTrendsPanel({ currentAgents, priorAgents, fiscalInfo }) {
         </div>
       </div>
 
-      {/* Week-over-week GPH trend mini-chart */}
-      {weeks.filter(w => w.cur).length >= 2 && (() => {
-        const curWeeks = weeks.filter(w => w.cur);
-        const maxGph = Math.max(...curWeeks.map(w => w.cur.gph), ...(hasPrior ? weeks.filter(w => w.prev).map(w => w.prev.gph) : [0]));
-        const barH = 80;
+      {/* SPH % to Goal — Weekly Trend by Program */}
+      {goalLookup && programs ? (() => {
+        // Week colors for bars
+        const weekColors = ["#d97706", "#2563eb", "#16a34a", "#7c3aed", "#ec4899", "#f59e0b", "#06b6d4", "#ef4444"];
+
+        // Filter programs by site availability and campaign filter
+        const filteredProgs = programs.filter(p => {
+          if (programFilter !== "All" && p.jobType !== programFilter) return false;
+          if (!p.goalEntry) return false;
+          // Check if program has agents matching site filter
+          const hasMatchingSite = p.agents.some(a => {
+            if (siteFilter === "ALL") return true;
+            if (siteFilter === "BZ") return (a.region || "").toUpperCase().includes("XOTM");
+            if (siteFilter === "DR") return !(a.region || "").toUpperCase().includes("XOTM");
+            return a.region === siteFilter;
+          });
+          return hasMatchingSite;
+        });
+
+        // Determine which sites to show as separate bars
+        const siteColors = { "Belize City-XOTM": "#16a34a", "SD-Xfinity": "#2563eb", "San Ignacio-XOTM": "#7c3aed" };
+        const siteLabels = { "Belize City-XOTM": "Belize City", "SD-Xfinity": "Dom. Republic", "San Ignacio-XOTM": "San Ignacio" };
+        const showSiteBars = siteFilter === "ALL" || siteFilter === "BZ";
+
+        // Build chart data: per-program, per-week, optionally per-site
+        const chartData = filteredProgs.map(p => {
+          const planRows = uniqueRowsFromEntry(p.goalEntry);
+          const sphVals = planRows.map(r => parseNum(findCol(r, "SPH GOAL", "SPH Goal", "Sph Goal"))).filter(v => v > 0);
+          const sphGoal = sphVals.length > 0 ? sphVals.reduce((s, v) => s + v, 0) / sphVals.length : null;
+          if (!sphGoal) return null;
+
+          // Filter agents by site filter
+          const siteAgents = p.agents.filter(a => {
+            if (siteFilter === "ALL") return true;
+            if (siteFilter === "BZ") return (a.region || "").toUpperCase().includes("XOTM");
+            if (siteFilter === "DR") return !(a.region || "").toUpperCase().includes("XOTM");
+            return a.region === siteFilter;
+          });
+
+          if (showSiteBars) {
+            // Group by weekNum → region
+            const weekSiteMap = {};
+            siteAgents.forEach(a => {
+              const wk = a.weekNum || "";
+              const reg = a.region || "";
+              if (!wk || !reg) return;
+              const key = `${wk}|${reg}`;
+              if (!weekSiteMap[key]) weekSiteMap[key] = { hours: 0, goals: 0, weekNum: wk, region: reg, dates: new Set() };
+              weekSiteMap[key].hours += a.hours;
+              weekSiteMap[key].goals += a.goals;
+              if (a.date) weekSiteMap[key].dates.add(a.date);
+            });
+
+            // Get sorted weeks
+            const weekNums = [...new Set(Object.values(weekSiteMap).map(e => e.weekNum))].sort((a, b) => parseInt(a) - parseInt(b));
+            // Get sorted regions
+            const regions = [...new Set(Object.values(weekSiteMap).map(e => e.region))].sort();
+
+            // Build week groups: each week has bars per region
+            const weekGroups = weekNums.map(wk => {
+              const bars = regions.map(reg => {
+                const entry = weekSiteMap[`${wk}|${reg}`];
+                if (!entry || entry.hours < 10) return null;
+                const sph = entry.goals / entry.hours;
+                const pctToGoal = (sph / sphGoal) * 100;
+                return { region: reg, sph, pctToGoal, hours: entry.hours, goals: entry.goals };
+              }).filter(Boolean);
+              if (bars.length === 0) return null;
+              const sortedDates = [...new Set(Object.values(weekSiteMap).filter(e => e.weekNum === wk).flatMap(e => [...e.dates]))].sort();
+              const dateLabel = sortedDates.length > 0 ? `${sortedDates[0].slice(5)} – ${sortedDates[sortedDates.length - 1].slice(5)}` : "";
+              return { weekNum: wk, bars, dateLabel, dates: new Set(sortedDates) };
+            }).filter(Boolean);
+
+            if (weekGroups.length === 0) return null;
+            const bestPct = Math.max(...weekGroups.flatMap(w => w.bars.map(b => b.pctToGoal)));
+            return { jobType: p.jobType, sphGoal, weekGroups, bestPct, multiSite: true };
+          } else {
+            // Single site — group by weekNum only
+            const weekMap = {};
+            siteAgents.forEach(a => {
+              const wk = a.weekNum || "";
+              if (!wk) return;
+              if (!weekMap[wk]) weekMap[wk] = { hours: 0, goals: 0, weekNum: wk, dates: new Set() };
+              weekMap[wk].hours += a.hours;
+              weekMap[wk].goals += a.goals;
+              if (a.date) weekMap[wk].dates.add(a.date);
+            });
+
+            const weekGroups = Object.values(weekMap)
+              .sort((a, b) => parseInt(a.weekNum) - parseInt(b.weekNum))
+              .map(w => {
+                if (w.hours < 10) return null;
+                const sph = w.goals / w.hours;
+                const pctToGoal = (sph / sphGoal) * 100;
+                const sortedDates = [...w.dates].sort();
+                const dateLabel = sortedDates.length > 0 ? `${sortedDates[0].slice(5)} – ${sortedDates[sortedDates.length - 1].slice(5)}` : "";
+                return { weekNum: w.weekNum, bars: [{ region: siteFilter, sph, pctToGoal, hours: w.hours, goals: w.goals }], dateLabel, dates: w.dates };
+              }).filter(Boolean);
+
+            if (weekGroups.length === 0) return null;
+            const bestPct = Math.max(...weekGroups.flatMap(w => w.bars.map(b => b.pctToGoal)));
+            return { jobType: p.jobType, sphGoal, weekGroups, bestPct, multiSite: false };
+          }
+        }).filter(Boolean).sort((a, b) => b.bestPct - a.bestPct);
+
+        if (chartData.length === 0) return null;
+
+        // Collect week date ranges for legend
+        const weekDateMap = {};
+        chartData.forEach(p => p.weekGroups.forEach(w => {
+          if (!weekDateMap[w.weekNum]) weekDateMap[w.weekNum] = new Set();
+          (w.dates || []).forEach(d => weekDateMap[w.weekNum].add(d));
+        }));
+        const allWeekNums = Object.keys(weekDateMap).sort((a, b) => parseInt(a) - parseInt(b));
+        const allPcts = chartData.flatMap(p => p.weekGroups.flatMap(w => w.bars.map(b => b.pctToGoal)));
+        const maxPct = Math.max(100, ...allPcts);
+        const chartMax = Math.min(maxPct + 10, 120);
+        const barH = 160;
+
+        // Collect visible regions for site legend (only when showing multi-site)
+        const visibleRegions = showSiteBars ? [...new Set(chartData.flatMap(p => p.weekGroups.flatMap(w => w.bars.map(b => b.region))))].sort() : [];
+
+        const siteLabel = siteFilter === "ALL" ? "All Sites" : siteFilter === "BZ" ? "Belize" : siteFilter === "DR" ? "Dom. Republic" : (siteLabels[siteFilter] || siteFilter);
+
         return (
-          <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem 1.5rem" }}>
-            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.75rem" }}>
-              GPH Trend by Week
+          <div style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem 1.5rem" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
+                SPH % to Goal — Week over Week
+                <span style={{ color: "#6366f1", marginLeft: "0.5rem", fontSize: "0.78rem", textTransform: "none" }}>({siteLabel})</span>
+              </div>
+              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: "var(--text-faint)" }}>
+                ◆ 100% = at goal
+              </div>
             </div>
-            <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end", height: `${barH + 30}px` }}>
-              {weeks.map((w, i) => {
-                const curH = w.cur && maxGph > 0 ? (w.cur.gph / maxGph) * barH : 0;
-                const prevH = w.prev && maxGph > 0 ? (w.prev.gph / maxGph) * barH : 0;
+
+            {/* Chart area */}
+            <div style={{ position: "relative", paddingLeft: "2.5rem" }}>
+              {/* Y-axis labels and gridlines */}
+              {[0, 20, 40, 60, 80, 100, 120].filter(v => v <= chartMax).map(v => {
+                const bottom = (v / chartMax) * barH;
                 return (
-                  <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "0.15rem" }}>
-                    <div style={{ display: "flex", gap: "2px", alignItems: "flex-end", height: `${barH}px` }}>
-                      {w.cur && <div style={{ width: "18px", height: `${Math.max(curH, 2)}px`, background: "#d97706", borderRadius: "3px 3px 0 0", transition: "height 0.4s ease" }} title={`Current: ${w.cur.gph.toFixed(3)}`} />}
-                      {hasPrior && w.prev && <div style={{ width: "18px", height: `${Math.max(prevH, 2)}px`, background: "#8b5cf650", borderRadius: "3px 3px 0 0", transition: "height 0.4s ease" }} title={`Prior: ${w.prev.gph.toFixed(3)}`} />}
-                    </div>
-                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.68rem", color: `var(--text-faint)` }}>Wk{w.position}</div>
-                    {w.cur && <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "0.65rem", color: `var(--text-dim)` }}>{w.cur.gph.toFixed(3)}</div>}
+                  <div key={v} style={{ position: "absolute", left: 0, bottom: bottom + 30, width: "100%", display: "flex", alignItems: "center" }}>
+                    <span style={{ fontFamily: "var(--font-data, monospace)", fontSize: "0.65rem", color: "var(--text-dim)", width: "2rem", textAlign: "right", marginRight: "0.5rem" }}>{v}</span>
+                    <div style={{ flex: 1, borderTop: v === 100 ? "2px dashed var(--text-faint)" : "1px solid var(--bg-tertiary)" }} />
                   </div>
                 );
               })}
-            </div>
-            {hasPrior && (
-              <div style={{ display: "flex", gap: "1rem", marginTop: "0.5rem", justifyContent: "center" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
-                  <div style={{ width: "12px", height: "8px", background: "#d97706", borderRadius: "2px" }} />
-                  <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: `var(--text-dim)` }}>Current</span>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
-                  <div style={{ width: "12px", height: "8px", background: "#8b5cf650", borderRadius: "2px" }} />
-                  <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: `var(--text-dim)` }}>Prior</span>
-                </div>
+
+              {/* Bars — grouped by program → week → site */}
+              <div style={{ display: "flex", gap: "1.5rem", alignItems: "flex-end", height: barH + 30, paddingTop: 20, position: "relative", zIndex: 1 }}>
+                {chartData.map(prog => (
+                  <div key={prog.jobType} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                    <div style={{ display: "flex", gap: showSiteBars ? 6 : 2, alignItems: "flex-end", height: barH }}>
+                      {prog.weekGroups.map((wg, wi) => (
+                        <React.Fragment key={wg.weekNum}>
+                        {wi > 0 && <div style={{ width: 1, height: barH * 0.6, background: "var(--border)", alignSelf: "flex-end", margin: "0 2px" }} />}
+                        <div style={{ display: "flex", gap: 1, alignItems: "flex-end" }}>
+                          {wg.bars.map(bar => {
+                            const h = Math.min(bar.pctToGoal, chartMax) / chartMax * barH;
+                            const color = showSiteBars ? (siteColors[bar.region] || "#6b7280") : weekColors[wi % weekColors.length];
+                            return (
+                              <div key={bar.region} style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                                <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "0.6rem", color: "var(--text-dim)", marginBottom: 2, fontWeight: 600 }}>
+                                  {Math.round(bar.pctToGoal)}%
+                                </div>
+                                <div
+                                  style={{ width: showSiteBars ? 28 : 36, height: Math.max(h, 2), background: color, borderRadius: "3px 3px 0 0", transition: "height 0.4s ease" }}
+                                  title={`${showSiteBars ? (siteLabels[bar.region] || bar.region) + " " : ""}Wk ${wg.weekNum}: SPH ${bar.sph.toFixed(3)} / Goal ${prog.sphGoal.toFixed(2)} = ${Math.round(bar.pctToGoal)}% (${bar.goals} goals, ${Math.round(bar.hours)} hrs)`}
+                                />
+                              </div>
+                            );
+                          })}
+                        </div>
+                        </React.Fragment>
+                      ))}
+                    </div>
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "var(--text-dim)", textAlign: "center", whiteSpace: "nowrap" }}>
+                      {prog.jobType}
+                    </div>
+                  </div>
+                ))}
               </div>
-            )}
+            </div>
+
+            {/* Legend */}
+            <div style={{ display: "flex", gap: "1rem", marginTop: "0.75rem", justifyContent: "center", flexWrap: "wrap" }}>
+              {showSiteBars ? (
+                <>
+                  {visibleRegions.map(r => (
+                    <div key={r} style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
+                      <div style={{ width: 12, height: 8, background: siteColors[r] || "#6b7280", borderRadius: 2 }} />
+                      <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: "var(--text-dim)" }}>{siteLabels[r] || r}</span>
+                    </div>
+                  ))}
+                  <div style={{ width: 1, height: 14, background: "var(--border)", margin: "0 0.25rem" }} />
+                  {allWeekNums.map(wk => {
+                    const dates = [...(weekDateMap[wk] || [])].sort();
+                    const range = dates.length > 0 ? `${dates[0].slice(5)} – ${dates[dates.length - 1].slice(5)}` : `Wk ${wk}`;
+                    return <span key={wk} style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.68rem", color: "var(--text-faint)" }}>{range}</span>;
+                  })}
+                </>
+              ) : (
+                allWeekNums.map((wk, i) => {
+                  const dates = [...(weekDateMap[wk] || [])].sort();
+                  const range = dates.length > 0 ? `${dates[0].slice(5)} – ${dates[dates.length - 1].slice(5)}` : "";
+                  return (
+                    <div key={wk} style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
+                      <div style={{ width: 12, height: 8, background: weekColors[i % weekColors.length], borderRadius: 2 }} />
+                      <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: "var(--text-dim)" }}>{range || `Wk ${wk}`}</span>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
         );
-      })()}
+      })() : (
+        <div style={{ background: "#6366f110", border: "1px solid #6366f140", borderLeft: "4px solid #6366f1", borderRadius: "var(--radius-md, 10px)", padding: "0.75rem 1rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
+          <span style={{ fontSize: "1rem" }}>📊</span>
+          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "var(--text-secondary)" }}>
+            Load goals CSV to unlock SPH % to Goal chart
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -8276,7 +8643,7 @@ function ProgramBySiteTab({ agents, regions, siteBuckets, jobType, goalEntry, go
                           {a.agentName}
                           {newHireSet.has(a.agentName) && <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "var(--nh-color)", background: "var(--nh-bg)", padding: "0.05rem 0.3rem", borderRadius: "2px", marginLeft: "0.35rem" }}>NEW</span>}
                         </div>
-                        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)` }}>{a.region} · 0 sales</div>
+                        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)` }}>{mbrSiteName(a.region)} · 0 sales</div>
                       </div>
                       <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.15rem", color: "#6366f1", fontWeight: 700 }}>{fmt(a.hours, 1)} hrs</div>
                     </div>
@@ -9203,7 +9570,7 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
                     return (
                       <div key={r.name} style={{ padding: "0.9rem 1rem", background: `var(--bg-primary)`, borderRadius: "var(--radius-md, 10px)", border: "1px solid var(--bg-tertiary)" }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.6rem" }}>
-                          <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "1.27rem", color: `var(--text-primary)`, fontWeight: 600 }}>{r.name}</span>
+                          <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "1.27rem", color: `var(--text-primary)`, fontWeight: 600 }}>{mbrSiteName(r.name)}</span>
                           <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
                             <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "#6366f1" }}>{fmt(totalRHrs, 0)} hrs{over16 > 0 ? ` · ${over16} at 16+` : ""}</span>
                             <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)` }}>{rTotal} agents</span>
@@ -9273,7 +9640,7 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
                           {a.agentName}
                           {newHireSet.has(a.agentName) && <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "var(--nh-color)", background: "var(--nh-bg)", padding: "0.05rem 0.3rem", borderRadius: "2px" }}>NEW</span>}
                         </div>
-                        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)` }}>{a.region} · {fmt(a.hours, 1)} hrs · {gph} GPH</div>
+                        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)` }}>{mbrSiteName(a.region)} · {fmt(a.hours, 1)} hrs · {gph} GPH</div>
                       </div>
                       <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.25rem" }}>
                         <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.15rem", color: Q[a.quartile].color, fontWeight: 700 }}>{pct}</div>
@@ -9298,7 +9665,7 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
                         {newHireSet.has(a.agentName) && <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "var(--nh-color)", background: "var(--nh-bg)", padding: "0.05rem 0.3rem", borderRadius: "2px" }}>NEW</span>}
                         {a.hours > 16 && <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "#6366f1", background: "#6366f120", padding: "0.05rem 0.3rem", borderRadius: "2px" }}>16+ HRS</span>}
                       </div>
-                      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)` }}>{a.region} · 0 sales</div>
+                      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)` }}>{mbrSiteName(a.region)} · 0 sales</div>
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.25rem" }}>
                       <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.15rem", color: "#6366f1", fontWeight: 700 }}>{fmt(a.hours, 1)} hrs</div>
@@ -9461,7 +9828,7 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
                             {s.name}
                             {isTop && <span style={{ marginLeft: "0.4rem", fontSize: "0.8rem", color: "#16a34a", background: "#16a34a15", border: "1px solid #16a34a30", borderRadius: "3px", padding: "0.05rem 0.3rem" }}>TOP</span>}
                           </td>
-                          <td style={{ padding: "0.4rem 0.5rem", color: `var(--text-dim)`, fontSize: "0.85rem", maxWidth: "120px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={s.regions}>{s.regions}</td>
+                          <td style={{ padding: "0.4rem 0.5rem", color: `var(--text-dim)`, fontSize: "0.85rem", maxWidth: "120px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={s.regions.split(", ").map(r => mbrSiteName(r)).join(", ")}>{s.regions.split(", ").map(r => mbrSiteName(r)).join(", ")}</td>
                           <td style={{ padding: "0.4rem 0.5rem", textAlign: "right", color: `var(--text-dim)` }}>{s.count}</td>
                           <td style={{ padding: "0.4rem 0.5rem", textAlign: "right", color: "#6366f1" }}>{fmt(s.hours, 1)}</td>
                           <td style={{ padding: "0.4rem 0.5rem", textAlign: "right", color: s.goals > 0 ? "#d97706" : `var(--text-faint)`, fontWeight: 700 }}>{s.goals || "\u2014"}</td>
@@ -12232,7 +12599,7 @@ export default function App() {
             onNewHiresLoad={setNHRaw}
           />
         ) : isOverview ? (
-          <BusinessOverview perf={perf} onNav={navTo} localAI={localAI} priorAgents={priorAgents} priorGoalLookup={priorGoalLookup} />
+          <BusinessOverview perf={perf} onNav={navTo} localAI={localAI} priorAgents={priorAgents} priorGoalLookup={priorGoalLookup} lightMode={lightMode} />
         ) : (slideIndex === 1 + programs.length) ? (
           <CampaignComparisonPanel
             currentAgents={perf.agents}
