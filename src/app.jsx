@@ -712,8 +712,14 @@ function parseTnps(rows = [], bpLookup = {}) {
 
     // Parse date — format: "3/20/2026 14:34"
     const dateParsed = dateStr ? new Date(dateStr) : null;
-    const month      = dateParsed && !isNaN(dateParsed) ? `${dateParsed.getFullYear()}-${String(dateParsed.getMonth() + 1).padStart(2, "0")}` : null;
-    const monthLabel = dateParsed && !isNaN(dateParsed) ? dateParsed.toLocaleString("en-US", { month: "short", year: "numeric" }) : "Unknown";
+    // Fiscal month: 22nd starts next month's fiscal period (matches 22nd→21st cycle)
+    let month = null, monthLabel = "Unknown";
+    if (dateParsed && !isNaN(dateParsed)) {
+      let fm = dateParsed.getMonth(), fy = dateParsed.getFullYear();
+      if (dateParsed.getDate() >= 22) { fm++; if (fm > 11) { fm = 0; fy++; } }
+      month = `${fy}-${String(fm + 1).padStart(2, "0")}`;
+      monthLabel = new Date(fy, fm, 1).toLocaleString("en-US", { month: "short", year: "numeric" });
+    }
 
     // Classification
     const category = score >= 9 ? "promoter" : score >= 7 ? "passive" : "detractor";
