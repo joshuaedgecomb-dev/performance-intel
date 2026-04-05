@@ -6019,21 +6019,35 @@ function TNPSSlide({ perf, onNav, lightMode }) {
                 </tr>
               </thead>
               <tbody>
-                {tnpsBySite.map((site, i) => (
-                  <tr key={i} style={{ background: site.isGCS ? (lightMode ? "#fffbeb" : "#d9770608") : "transparent" }}>
-                    <td style={{ padding: "0.6rem 0.5rem", fontFamily: "var(--font-data, monospace)", fontSize: "0.82rem", color: "var(--text-dim)" }}>{i + 1}</td>
-                    <td style={{ padding: "0.6rem 0.5rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: "var(--text-warm)", fontWeight: site.isGCS ? 600 : 400 }}>
-                      {site.label}
-                      {site.isGCS && <span style={{ marginLeft: 6, fontSize: "0.65rem", padding: "1px 5px", borderRadius: 3, background: "#d9770618", color: "#d97706", fontWeight: 600 }}>GCS</span>}
-                    </td>
-                    <td style={{ padding: "0.6rem 0.5rem", textAlign: "right", fontFamily: "var(--font-data, monospace)", fontSize: "0.95rem", fontWeight: 700, color: tnpsColor(site.score) }}>
-                      {site.score > 0 ? "+" : ""}{site.score}
-                    </td>
-                    <td style={{ padding: "0.6rem 0.5rem", textAlign: "right", fontFamily: "var(--font-data, monospace)", fontSize: "0.82rem", color: "var(--text-secondary)" }}>{site.total}</td>
-                    <td style={{ padding: "0.6rem 0.5rem", textAlign: "right", fontFamily: "var(--font-data, monospace)", fontSize: "0.82rem", color: "#16a34a" }}>{Math.round(site.promoterPct)}%</td>
-                    <td style={{ padding: "0.6rem 0.5rem", textAlign: "right", fontFamily: "var(--font-data, monospace)", fontSize: "0.82rem", color: "#dc2626" }}>{Math.round(site.detractorPct)}%</td>
-                  </tr>
-                ))}
+                {(() => {
+                  // Build ranking: GCS aggregate + individual GCS sites + partner companies
+                  const gcsAggregate = { label: "GCS (All Sites)", isGCS: true, isAggregate: true, ...tnpsOverall };
+                  const withAggregate = [gcsAggregate, ...tnpsBySite.filter(s => !s.isGCS)].sort((a, b) => (b.score ?? -999) - (a.score ?? -999));
+                  // Insert individual GCS sites right after the aggregate (not ranked)
+                  const gcsSites = tnpsBySite.filter(s => s.isGCS);
+                  const aggIdx = withAggregate.findIndex(s => s.isAggregate);
+                  const ranked = [...withAggregate.slice(0, aggIdx + 1), ...gcsSites, ...withAggregate.slice(aggIdx + 1)];
+                  let rank = 0;
+                  return ranked.map((site, i) => {
+                    const isSub = site.isGCS && !site.isAggregate;
+                    if (!isSub) rank++;
+                    return (
+                      <tr key={i} style={{ background: site.isGCS ? (lightMode ? "#fffbeb" : "#d9770608") : "transparent", borderBottom: site.isAggregate && gcsSites.length > 0 ? "none" : undefined }}>
+                        <td style={{ padding: "0.6rem 0.5rem", fontFamily: "var(--font-data, monospace)", fontSize: isSub ? "0.75rem" : "0.82rem", color: "var(--text-dim)" }}>{isSub ? "" : rank}</td>
+                        <td style={{ padding: isSub ? "0.35rem 0.5rem 0.35rem 1.5rem" : "0.6rem 0.5rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: isSub ? "0.78rem" : "0.85rem", color: isSub ? "var(--text-secondary)" : "var(--text-warm)", fontWeight: site.isAggregate ? 700 : site.isGCS ? 500 : 400 }}>
+                          {site.label}
+                          {site.isAggregate && <span style={{ marginLeft: 6, fontSize: "0.65rem", padding: "1px 5px", borderRadius: 3, background: "#d9770618", color: "#d97706", fontWeight: 600 }}>GCS</span>}
+                        </td>
+                        <td style={{ padding: isSub ? "0.35rem 0.5rem" : "0.6rem 0.5rem", textAlign: "right", fontFamily: "var(--font-data, monospace)", fontSize: site.isAggregate ? "0.95rem" : isSub ? "0.82rem" : "0.95rem", fontWeight: 700, color: tnpsColor(site.score) }}>
+                          {site.score > 0 ? "+" : ""}{site.score}
+                        </td>
+                        <td style={{ padding: isSub ? "0.35rem 0.5rem" : "0.6rem 0.5rem", textAlign: "right", fontFamily: "var(--font-data, monospace)", fontSize: isSub ? "0.75rem" : "0.82rem", color: "var(--text-secondary)" }}>{site.total}</td>
+                        <td style={{ padding: isSub ? "0.35rem 0.5rem" : "0.6rem 0.5rem", textAlign: "right", fontFamily: "var(--font-data, monospace)", fontSize: isSub ? "0.75rem" : "0.82rem", color: "#16a34a" }}>{Math.round(site.promoterPct)}%</td>
+                        <td style={{ padding: isSub ? "0.35rem 0.5rem" : "0.6rem 0.5rem", textAlign: "right", fontFamily: "var(--font-data, monospace)", fontSize: isSub ? "0.75rem" : "0.82rem", color: "#dc2626" }}>{Math.round(site.detractorPct)}%</td>
+                      </tr>
+                    );
+                  });
+                })()}
               </tbody>
             </table>
           </div>
