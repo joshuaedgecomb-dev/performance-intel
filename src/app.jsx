@@ -2111,7 +2111,7 @@ function generateBusinessInsights({ programs, regions, newHireSet, globalGoals, 
 // Central data orchestration. All memos live here. UI consumes results only.
 // ══════════════════════════════════════════════════════════════════════════════
 
-function usePerformanceEngine({ rawData, goalsRaw, newHiresRaw }) {
+function usePerformanceEngine({ rawData, goalsRaw, newHiresRaw, tnpsRaw }) {
   const agents = useMemo(() =>
     normalizeAgents(rawData || []),
     [rawData]);
@@ -2127,6 +2127,45 @@ function usePerformanceEngine({ rawData, goalsRaw, newHiresRaw }) {
   const newHireSet = useMemo(() =>
     new Set(newHires.filter(h => h.days <= 60).map(h => h.name)),
     [newHires]);
+
+  const bpLookup = useMemo(() =>
+    buildBpLookup(newHiresRaw || []),
+    [newHiresRaw]);
+
+  const tnpsData = useMemo(() =>
+    parseTnps(tnpsRaw || [], bpLookup),
+    [tnpsRaw, bpLookup]);
+
+  // tNPS aggregates for GCS only
+  const tnpsGCS = useMemo(() => tnpsData.filter(s => s.isGCS), [tnpsData]);
+  const tnpsOverall = useMemo(() => calcTnpsScore(tnpsGCS), [tnpsGCS]);
+
+  // tNPS by site (GCS sites + partner companies)
+  const tnpsBySite = useMemo(() => {
+    const groups = {};
+    tnpsData.forEach(s => {
+      if (!groups[s.siteLabel]) groups[s.siteLabel] = [];
+      groups[s.siteLabel].push(s);
+    });
+    return Object.entries(groups).map(([label, surveys]) => ({
+      label,
+      isGCS: surveys[0].isGCS,
+      ...calcTnpsScore(surveys),
+    })).sort((a, b) => (b.score ?? -999) - (a.score ?? -999));
+  }, [tnpsData]);
+
+  // tNPS by month (GCS only, for trending)
+  const tnpsByMonth = useMemo(() => {
+    const groups = {};
+    tnpsGCS.forEach(s => {
+      if (!s.month) return;
+      if (!groups[s.month]) groups[s.month] = { month: s.month, label: s.monthLabel, surveys: [] };
+      groups[s.month].surveys.push(s);
+    });
+    return Object.values(groups)
+      .sort((a, b) => a.month.localeCompare(b.month))
+      .map(g => ({ ...g, ...calcTnpsScore(g.surveys) }));
+  }, [tnpsGCS]);
 
   const programs = useMemo(() =>
     buildPrograms(agents, goalLookup, newHireSet),
@@ -2212,6 +2251,12 @@ function usePerformanceEngine({ rawData, goalsRaw, newHiresRaw }) {
     globalPlanHours,
     fiscalInfo,
     spanishCallback,
+    tnpsData,
+    tnpsGCS,
+    tnpsOverall,
+    tnpsBySite,
+    tnpsByMonth,
+    bpLookup,
   };
 }
 
