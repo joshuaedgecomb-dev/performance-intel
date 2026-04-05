@@ -459,6 +459,8 @@ const DEFAULT_GOALS_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-
 const DEFAULT_NH_SHEET_URL    = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRagC_XDSQ84y25onmWs6MUOZcEdWZNA6fVRRDFUzNWQp3ginYLtOIQsSrwmbAERkOJ-daTvbHqEtoy/pub?gid=25912283&single=true&output=csv";
 const DEFAULT_PRIOR_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTZkBGVIxieyjBKftqL1oecSaUxRkao-gz2B9q4Z8zCY8hEtSy1M28S00RDCS8JVPgPFXJAv2LbsZru/pub?gid=667346347&single=true&output=csv";
 const DEFAULT_PRIOR_GOALS_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTZkBGVIxieyjBKftqL1oecSaUxRkao-gz2B9q4Z8zCY8hEtSy1M28S00RDCS8JVPgPFXJAv2LbsZru/pub?gid=1685208822&single=true&output=csv";
+const DEFAULT_TNPS_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRagC_XDSQ84y25onmWs6MUOZcEdWZNA6fVRRDFUzNWQp3ginYLtOIQsSrwmbAERkOJ-daTvbHqEtoy/pub?gid=2128252142&single=true&output=csv";
+const TNPS_STORAGE_KEY = "perf_intel_tnps_v1";
 
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -12202,6 +12204,7 @@ export default function App() {
   const nhSheetUrl    = sheetUrls.nh || DEFAULT_NH_SHEET_URL;
   const priorSheetUrl = sheetUrls.prior || DEFAULT_PRIOR_SHEET_URL;
   const priorGoalsSheetUrl = sheetUrls.priorGoals || DEFAULT_PRIOR_GOALS_SHEET_URL;
+  const tnpsSheetUrl = sheetUrls.tnps || DEFAULT_TNPS_SHEET_URL;
 
   // Goals persisted to localStorage
   const [goalsRaw, _setGoalsRaw] = useState(() => {
@@ -12247,6 +12250,19 @@ export default function App() {
     try { if (data) localStorage.setItem(PRIOR_MONTH_STORAGE_KEY + "_goals", JSON.stringify(data)); else localStorage.removeItem(PRIOR_MONTH_STORAGE_KEY + "_goals"); } catch(e) {}
   }, []);
 
+  // tNPS survey data — persisted to localStorage
+  const [tnpsRaw, _setTnpsRaw] = useState(() => {
+    try { const s = localStorage.getItem(TNPS_STORAGE_KEY); return s ? JSON.parse(s) : null; }
+    catch(e) { return null; }
+  });
+  const setTnpsRaw = useCallback(data => {
+    _setTnpsRaw(data);
+    try {
+      if (data) localStorage.setItem(TNPS_STORAGE_KEY, JSON.stringify(data));
+      else localStorage.removeItem(TNPS_STORAGE_KEY);
+    } catch(e) {}
+  }, []);
+
   // Compute fiscal info early for threshold auto-scaling
   const earlyFiscalInfo = useMemo(() => {
     if (!rawData) return null;
@@ -12261,7 +12277,7 @@ export default function App() {
     return eff;
   }, [hoursThreshold, hoursAutoScale, earlyFiscalInfo]);
 
-  const perf = usePerformanceEngine({ rawData, goalsRaw, newHiresRaw });
+  const perf = usePerformanceEngine({ rawData, goalsRaw, newHiresRaw, tnpsRaw });
   const { programs, jobTypes, newHireSet, newHires, allAgentNames } = perf;
   const totalSlides = 1 + programs.length + 1; // Overview + programs + Campaign Comparison
 
@@ -12345,6 +12361,16 @@ export default function App() {
             try { nRes = await fetch(nhSheetUrl); } catch(e) { nRes = null; }
             if (!nRes || !nRes.ok) nRes = await fetch(proxyN(nhSheetUrl));
             if (nRes.ok) { const nRows = parseCSV(await nRes.text()); if (nRows.length > 0) setNHRaw(nRows); }
+          } catch(e) {}
+        }
+        // Auto-load tNPS sheet if URL configured
+        if (!cancelled && tnpsSheetUrl && !tnpsRaw) {
+          try {
+            const proxyT = url => `https://corsproxy.io/?${encodeURIComponent(url)}`;
+            let tRes;
+            try { tRes = await fetch(tnpsSheetUrl); } catch(e) { tRes = null; }
+            if (!tRes || !tRes.ok) tRes = await fetch(proxyT(tnpsSheetUrl));
+            if (tRes.ok) { const tRows = parseCSV(await tRes.text()); if (tRows.length > 0) setTnpsRaw(tRows); }
           } catch(e) {}
         }
       } catch (e) {
