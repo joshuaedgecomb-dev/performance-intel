@@ -678,6 +678,7 @@ const TNPS_PARTNER_MAP = {
   "Results Alaskaland": "Results",
   "Results Alaskaland Trial": "Results",
   "Results Alaskaland Telesales": "Results",
+  "Results Telesales Alaskaland": "Results",
 };
 function tnpsSiteLabel(rawSite) {
   return TNPS_SITE_MAP[rawSite] || TNPS_PARTNER_MAP[rawSite] || rawSite;
@@ -6054,11 +6055,9 @@ function TNPSSlide({ perf, onNav, lightMode }) {
 
           {/* Monthly Vendor Ranking */}
           {tnpsByMonth.length > 0 && (() => {
-            // Build per-month scores for each vendor (GCS aggregate + partners)
             const { tnpsData: allSurveys } = perf;
             const months = [...new Set((allSurveys || []).filter(s => s.month).map(s => s.month))].sort();
-            // Get unique vendor labels (GCS as aggregate + partner companies)
-            const vendorMap = {}; // month → vendor → surveys
+            const vendorMap = {};
             (allSurveys || []).forEach(s => {
               if (!s.month) return;
               const vendor = s.isGCS ? "GCS" : s.siteLabel;
@@ -6066,50 +6065,82 @@ function TNPSSlide({ perf, onNav, lightMode }) {
               if (!vendorMap[s.month][vendor]) vendorMap[s.month][vendor] = [];
               vendorMap[s.month][vendor].push(s);
             });
-            const vendors = [...new Set((allSurveys || []).map(s => s.isGCS ? "GCS" : s.siteLabel))].sort((a, b) => a === "GCS" ? -1 : b === "GCS" ? 1 : a.localeCompare(b));
             const vendorColors = { "GCS": "#d97706", "Avantive": "#6366f1", "Global Telesourcing": "#0ea5e9", "Results": "#8b5cf6" };
+            // Consistent vendor list across all months
+            const allVendors = [...new Set((allSurveys || []).map(s => s.isGCS ? "GCS" : s.siteLabel))];
+            const uniqueVendors = [...new Set(allVendors)].sort((a, b) => a === "GCS" ? -1 : b === "GCS" ? 1 : a.localeCompare(b));
 
             return (
               <div style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem 1.5rem" }}>
                 <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: "0.5rem" }}>Monthly Vendor Ranking</div>
                 {/* Legend */}
                 <div style={{ display: "flex", gap: "1rem", marginBottom: "1rem", flexWrap: "wrap" }}>
-                  {vendors.map(v => (
+                  {uniqueVendors.map(v => (
                     <div key={v} style={{ display: "flex", alignItems: "center", gap: 4 }}>
                       <div style={{ width: 10, height: 10, borderRadius: 2, background: vendorColors[v] || "#94a3b8" }} />
                       <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "var(--text-secondary)" }}>{v}</span>
                     </div>
                   ))}
                 </div>
-                {/* Grouped bars per month */}
-                <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end", height: 200, paddingTop: 24 }}>
+                {/* Diverging grouped bars — 0 baseline centered */}
+                <div style={{ display: "flex", alignItems: "stretch" }}>
                   {months.map((month, mi) => {
                     const [y, mo] = month.split("-").map(Number);
                     const mLabel = new Date(y, mo - 1, 1).toLocaleString("en-US", { month: "short", year: "numeric" });
-                    const vendorScores = vendors.map(v => {
+                    const vendorScores = uniqueVendors.map(v => {
                       const surveys = (vendorMap[month] || {})[v] || [];
                       return { vendor: v, ...calcTnpsScore(surveys) };
-                    }).filter(v => v.total > 0);
-                    const maxAbs = 100; // fixed scale -100 to +100
+                    }).filter(v => v.total > 0).sort((a, b) => (b.score ?? -999) - (a.score ?? -999));
+
                     return (
-                      <div key={mi} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-                        <div style={{ display: "flex", gap: 2, alignItems: "flex-end", height: 160, width: "100%" }}>
-                          {vendorScores.map((vs, vi) => {
-                            const barH = Math.max(8, (Math.abs(vs.score || 0) / maxAbs) * 140);
-                            const isGCS = vs.vendor === "GCS";
-                            return (
-                              <div key={vi} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
-                                <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: isGCS ? "0.75rem" : "0.6rem", fontWeight: isGCS ? 700 : 500, color: vendorColors[vs.vendor] || "#94a3b8", marginBottom: 2 }}>
-                                  {vs.score > 0 ? "+" : ""}{vs.score}
+                      <React.Fragment key={mi}>
+                        {mi > 0 && <div style={{ width: 1, background: "var(--border)", margin: "0 0.25rem", flexShrink: 0 }} />}
+                        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
+                          {/* Positive zone (above baseline) */}
+                          <div style={{ display: "flex", gap: 3, alignItems: "flex-end", height: 120, width: "100%", justifyContent: "center" }}>
+                            {vendorScores.map((vs, vi) => {
+                              const isGCS = vs.vendor === "GCS";
+                              if ((vs.score || 0) < 0) return <div key={vi} style={{ width: 28 }} />;
+                              const barH = Math.max(4, ((vs.score || 0) / 100) * 100);
+                              return (
+                                <div key={vi} style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 28 }}>
+                                  <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: isGCS ? "0.72rem" : "0.58rem", fontWeight: isGCS ? 700 : 500, color: vendorColors[vs.vendor] || "#94a3b8", marginBottom: 2, whiteSpace: "nowrap" }}>
+                                    +{vs.score}
+                                  </div>
+                                  <div style={{ width: isGCS ? 26 : 20, height: barH, borderRadius: "3px 3px 0 0", background: (vendorColors[vs.vendor] || "#94a3b8") + (isGCS ? "dd" : "99"), border: isGCS ? `2px solid ${vendorColors[vs.vendor]}` : "none" }}
+                                    title={`${vs.vendor}: +${vs.score} (${vs.total} surveys)`} />
                                 </div>
-                                <div style={{ width: "80%", height: barH, borderRadius: "3px 3px 0 0", background: (vendorColors[vs.vendor] || "#94a3b8") + (isGCS ? "dd" : "88"), border: isGCS ? `2px solid ${vendorColors[vs.vendor]}` : "none" }}
-                                  title={`${vs.vendor}: ${vs.score > 0 ? "+" : ""}${vs.score} (${vs.total} surveys)`} />
-                              </div>
-                            );
-                          })}
+                              );
+                            })}
+                          </div>
+                          {/* Baseline */}
+                          <div style={{ width: "90%", height: 1, background: "var(--text-dim)", opacity: 0.4 }} />
+                          {/* Negative zone (below baseline) */}
+                          <div style={{ display: "flex", gap: 3, alignItems: "flex-start", height: 60, width: "100%", justifyContent: "center" }}>
+                            {vendorScores.map((vs, vi) => {
+                              const isGCS = vs.vendor === "GCS";
+                              if ((vs.score || 0) >= 0) return <div key={vi} style={{ width: 28 }} />;
+                              const barH = Math.max(4, (Math.abs(vs.score || 0) / 100) * 50);
+                              return (
+                                <div key={vi} style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 28 }}>
+                                  <div style={{ width: isGCS ? 26 : 20, height: barH, borderRadius: "0 0 3px 3px", background: (vendorColors[vs.vendor] || "#94a3b8") + (isGCS ? "dd" : "99"), border: isGCS ? `2px solid ${vendorColors[vs.vendor]}` : "none" }}
+                                    title={`${vs.vendor}: ${vs.score} (${vs.total} surveys)`} />
+                                  <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: isGCS ? "0.72rem" : "0.58rem", fontWeight: isGCS ? 700 : 500, color: vendorColors[vs.vendor] || "#94a3b8", marginTop: 2, whiteSpace: "nowrap" }}>
+                                    {vs.score}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                          {/* Month label + survey counts */}
+                          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", color: "var(--text-warm)", fontWeight: 600, marginTop: 4 }}>{mLabel}</div>
+                          <div style={{ display: "flex", gap: 4, marginTop: 2, flexWrap: "wrap", justifyContent: "center" }}>
+                            {vendorScores.map((vs, vi) => (
+                              <span key={vi} style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.55rem", color: vendorColors[vs.vendor] || "#94a3b8" }}>{vs.total}</span>
+                            ))}
+                          </div>
                         </div>
-                        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "var(--text-warm)", marginTop: 4, fontWeight: 500 }}>{mLabel}</div>
-                      </div>
+                      </React.Fragment>
                     );
                   })}
                 </div>
