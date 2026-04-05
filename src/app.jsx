@@ -5752,6 +5752,7 @@ function MbrExportModal({ perf, onClose }) {
 function TNPSSlide({ perf, onNav, lightMode }) {
   const [tab, setTab] = useState("summary");
   const [expandedSup, setExpandedSup] = useState(null);
+  const [voiceFilter, setVoiceFilter] = useState({ type: "all", site: "all", campaign: "all", month: "all" });
   const { tnpsData, tnpsGCS, tnpsOverall, tnpsBySite, tnpsByMonth, bpLookup } = perf;
 
   // Campaign breakdown (GCS only)
@@ -5803,6 +5804,19 @@ function TNPSSlide({ perf, onNav, lightMode }) {
       })
       .sort((a, b) => (a.score ?? 999) - (b.score ?? 999)); // worst first
   }, [tnpsGCS, tnpsBySite]);
+
+  // Customer Voices — filtered GCS surveys with reason text
+  const voicesSorted = useMemo(() => {
+    let filtered = tnpsGCS.filter(s => s.reason);
+    if (voiceFilter.type !== "all") filtered = filtered.filter(s => s.category === voiceFilter.type);
+    if (voiceFilter.site !== "all") filtered = filtered.filter(s => s.siteLabel === voiceFilter.site);
+    if (voiceFilter.campaign !== "all") filtered = filtered.filter(s => s.campaign === voiceFilter.campaign);
+    if (voiceFilter.month !== "all") filtered = filtered.filter(s => s.month === voiceFilter.month);
+    return filtered.sort((a, b) => (b.date || 0) - (a.date || 0));
+  }, [tnpsGCS, voiceFilter]);
+
+  const voiceCampaigns = useMemo(() => [...new Set(tnpsGCS.map(s => s.campaign))].sort(), [tnpsGCS]);
+  const voiceMonths = useMemo(() => [...new Set(tnpsGCS.filter(s => s.month).map(s => s.month))].sort(), [tnpsGCS]);
 
   if (!tnpsData || tnpsData.length === 0) {
     return (
@@ -5936,7 +5950,7 @@ function TNPSSlide({ perf, onNav, lightMode }) {
         </div>
       )}
 
-      {/* Phase 2 tabs render here — placeholder for now */}
+      {/* CAMPAIGN TAB */}
       {tab === "campaign" && (
         <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
           {/* Campaign Table */}
@@ -6047,7 +6061,67 @@ function TNPSSlide({ perf, onNav, lightMode }) {
           </table>
         </div>
       )}
-      {tab === "voices" && <div style={{ color: "var(--text-dim)", fontFamily: "var(--font-ui, Inter, sans-serif)", padding: "3rem", textAlign: "center" }}>Customer Voices — coming in Phase 2</div>}
+      {tab === "voices" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+          {/* Filters */}
+          <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+            {/* Score type filter */}
+            <div style={{ display: "flex", gap: "0.25rem" }}>
+              {[{ key: "all", label: "All" }, { key: "promoter", label: "Promoter", color: "#16a34a" }, { key: "passive", label: "Passive", color: "#d97706" }, { key: "detractor", label: "Detractor", color: "#dc2626" }].map(f => (
+                <button key={f.key} onClick={() => setVoiceFilter(v => ({ ...v, type: f.key }))}
+                  style={{ padding: "0.35rem 0.65rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${voiceFilter.type === f.key ? (f.color || "#d97706") + "50" : "var(--border-muted)"}`, background: voiceFilter.type === f.key ? (f.color || "#d97706") + "12" : "transparent", color: voiceFilter.type === f.key ? (f.color || "var(--text-warm)") : "var(--text-dim)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", cursor: "pointer", fontWeight: voiceFilter.type === f.key ? 600 : 400 }}>
+                  {f.label}
+                </button>
+              ))}
+            </div>
+            {/* Site filter */}
+            <select value={voiceFilter.site} onChange={e => setVoiceFilter(v => ({ ...v, site: e.target.value }))}
+              style={{ padding: "0.35rem 0.5rem", borderRadius: "var(--radius-sm, 6px)", border: "1px solid var(--border-muted)", background: "var(--bg-secondary)", color: "var(--text-secondary)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem" }}>
+              <option value="all">All GCS Sites</option>
+              {tnpsBySite.filter(s => s.isGCS).map(s => <option key={s.label} value={s.label}>{s.label}</option>)}
+            </select>
+            {/* Campaign filter */}
+            <select value={voiceFilter.campaign} onChange={e => setVoiceFilter(v => ({ ...v, campaign: e.target.value }))}
+              style={{ padding: "0.35rem 0.5rem", borderRadius: "var(--radius-sm, 6px)", border: "1px solid var(--border-muted)", background: "var(--bg-secondary)", color: "var(--text-secondary)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem" }}>
+              <option value="all">All Campaigns</option>
+              {voiceCampaigns.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            {/* Month filter */}
+            <select value={voiceFilter.month} onChange={e => setVoiceFilter(v => ({ ...v, month: e.target.value }))}
+              style={{ padding: "0.35rem 0.5rem", borderRadius: "var(--radius-sm, 6px)", border: "1px solid var(--border-muted)", background: "var(--bg-secondary)", color: "var(--text-secondary)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem" }}>
+              <option value="all">All Months</option>
+              {voiceMonths.map(m => {
+                const d = new Date(m + "-01");
+                return <option key={m} value={m}>{d.toLocaleString("en-US", { month: "short", year: "numeric" })}</option>;
+              })}
+            </select>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", color: "var(--text-dim)", alignSelf: "center" }}>{voicesSorted.length} results</div>
+          </div>
+
+          {/* Scrollable list */}
+          <div style={{ maxHeight: 600, overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+            {voicesSorted.slice(0, 100).map((s, i) => (
+              <div key={i} style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderLeft: `4px solid ${s.category === "promoter" ? "#16a34a" : s.category === "detractor" ? "#dc2626" : "#d97706"}`, borderRadius: "var(--radius-md, 10px)", padding: "0.75rem 1rem" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.4rem" }}>
+                  <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 4, fontFamily: "var(--font-data, monospace)", fontSize: "0.78rem", fontWeight: 700, color: "#fff", background: s.category === "promoter" ? "#16a34a" : s.category === "detractor" ? "#dc2626" : "#d97706" }}>{s.score}</span>
+                  <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "var(--text-warm)", fontWeight: 600 }}>{s.agentName}</span>
+                  <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "var(--text-dim)" }}>{s.campaign} · {s.siteLabel}</span>
+                  <span style={{ marginLeft: "auto", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: "var(--text-faint)" }}>{s.date ? s.date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : ""}</span>
+                </div>
+                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "var(--text-primary)", lineHeight: 1.5 }}>{s.reason}</div>
+              </div>
+            ))}
+            {voicesSorted.length > 100 && (
+              <div style={{ textAlign: "center", padding: "1rem", color: "var(--text-dim)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem" }}>
+                Showing first 100 of {voicesSorted.length} results. Use filters to narrow down.
+              </div>
+            )}
+            {voicesSorted.length === 0 && (
+              <div style={{ textAlign: "center", padding: "3rem", color: "var(--text-dim)", fontFamily: "var(--font-ui, Inter, sans-serif)" }}>No customer feedback matches the current filters.</div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Navigation footer */}
       <div style={{ borderTop: "1px solid var(--border)", padding: "0.9rem 0", display: "flex", justifyContent: "space-between", marginTop: "1.5rem" }}>
