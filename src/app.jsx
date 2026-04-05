@@ -5563,6 +5563,165 @@ function buildMbrSiteRankingSlide(pres, perf) {
   });
 }
 
+function buildMbrTnpsSlide(pres, perf) {
+  const { tnpsData, tnpsGCS, tnpsOverall, tnpsBySite, tnpsByMonth } = perf;
+  if (!tnpsData || tnpsData.length === 0) return;
+
+  const slide = pres.addSlide();
+  slide.bkgd = MBR_COLORS.white;
+  addMbrSlideHeader(slide, pres, "CUSTOMER EXPERIENCE \u2014 tNPS", "Transactional Net Promoter Score");
+
+  const cw = MBR_W - 1;
+  const fontSize = 7;
+  const cellBase = { fontSize, fontFace: MBR_FONT, valign: "middle" };
+  const hdrBase = { fontSize, fontFace: MBR_FONT, bold: true, align: "center", valign: "middle", color: MBR_COLORS.white, fill: { color: MBR_COLORS.purple } };
+
+  // ── KPI Strip ──
+  const kpiY = 1.35;
+  const kpiCards = [
+    { label: "GCS tNPS", value: `${tnpsOverall.score > 0 ? "+" : ""}${tnpsOverall.score}`, color: tnpsOverall.score >= 50 ? MBR_COLORS.green : tnpsOverall.score >= 20 ? MBR_COLORS.amber : MBR_COLORS.red },
+    { label: "SURVEYS", value: String(tnpsOverall.total), color: MBR_COLORS.purple },
+    { label: "PROMOTER", value: `${Math.round(tnpsOverall.promoterPct)}%`, color: MBR_COLORS.green },
+    { label: "PASSIVE", value: `${Math.round(tnpsOverall.passivePct)}%`, color: MBR_COLORS.amber },
+    { label: "DETRACTOR", value: `${Math.round(tnpsOverall.detractorPct)}%`, color: MBR_COLORS.red },
+  ];
+  const kpiW = (cw - 0.4) / kpiCards.length;
+  kpiCards.forEach((k, i) => {
+    const kx = 0.5 + i * (kpiW + 0.1);
+    slide.addShape(pres.shapes.ROUNDED_RECTANGLE, { x: kx, y: kpiY, w: kpiW, h: 0.7, rectRadius: 0.05, fill: { color: MBR_COLORS.lightGray }, line: { color: MBR_COLORS.cardBorder, width: 0.5 } });
+    slide.addShape(pres.shapes.RECTANGLE, { x: kx, y: kpiY, w: kpiW, h: 0.04, fill: { color: k.color } });
+    slide.addText(k.label, { x: kx, y: kpiY + 0.08, w: kpiW, h: 0.2, fontSize: 7, fontFace: MBR_FONT, color: MBR_COLORS.textSecondary, align: "center" });
+    slide.addText(k.value, { x: kx, y: kpiY + 0.25, w: kpiW, h: 0.4, fontSize: 22, fontFace: MBR_FONT, color: k.color, bold: true, align: "center" });
+  });
+
+  // ── Partner Ranking Table (left half) ──
+  const tableY = 2.25;
+  const tableW = cw * 0.48;
+  slide.addText("PARTNER RANKING", { x: 0.5, y: tableY - 0.25, w: tableW, h: 0.2, fontSize: 8, fontFace: MBR_FONT, color: MBR_COLORS.purple, bold: true });
+
+  // Build GCS aggregate + partner sites sorted by score
+  const gcsAgg = { label: "GCS (All Sites)", isGCS: true, isAgg: true, ...tnpsOverall };
+  const partnerSites = tnpsBySite.filter(s => !s.isGCS);
+  const gcsSites = tnpsBySite.filter(s => s.isGCS);
+  const ranked = [gcsAgg, ...partnerSites].sort((a, b) => (b.score ?? -999) - (a.score ?? -999));
+  // Insert GCS sub-sites after aggregate
+  const aggIdx = ranked.findIndex(s => s.isAgg);
+  const allRanked = [...ranked.slice(0, aggIdx + 1), ...gcsSites, ...ranked.slice(aggIdx + 1)];
+
+  const rankHdr = ["#", "Site / Partner", "tNPS", "Surveys", "Prom%", "Det%"].map(h => ({ text: h, options: { ...hdrBase, align: h === "Site / Partner" ? "left" : "center" } }));
+  let rank = 0;
+  const rankRows = allRanked.map((s, i) => {
+    const isSub = s.isGCS && !s.isAgg;
+    if (!isSub) rank++;
+    const rowBg = s.isGCS ? "FFFBEB" : (i % 2 === 0 ? MBR_COLORS.white : "F5F5FA");
+    const base = { ...cellBase, fill: { color: rowBg } };
+    const scoreColor = (s.score ?? 0) >= 50 ? MBR_COLORS.green : (s.score ?? 0) >= 20 ? MBR_COLORS.amber : MBR_COLORS.red;
+    return [
+      { text: isSub ? "" : String(rank), options: { ...base, align: "center", color: MBR_COLORS.textSecondary } },
+      { text: isSub ? `  ${s.label}` : s.label, options: { ...base, align: "left", bold: s.isAgg, color: isSub ? MBR_COLORS.textSecondary : MBR_COLORS.textPrimary, fontSize: isSub ? 6 : 7 } },
+      { text: `${(s.score ?? 0) > 0 ? "+" : ""}${s.score ?? 0}`, options: { ...base, align: "center", bold: true, color: scoreColor } },
+      { text: String(s.total || 0), options: { ...base, align: "center", color: MBR_COLORS.textSecondary } },
+      { text: `${Math.round(s.promoterPct || 0)}%`, options: { ...base, align: "center", color: MBR_COLORS.green } },
+      { text: `${Math.round(s.detractorPct || 0)}%`, options: { ...base, align: "center", color: MBR_COLORS.red } },
+    ];
+  });
+
+  const colW1 = [0.3, 1.45, 0.55, 0.55, 0.5, 0.5];
+  slide.addTable([rankHdr, ...rankRows], {
+    x: 0.5, y: tableY, w: tableW,
+    colW: colW1,
+    rowH: 0.22,
+    border: { type: "solid", pt: 0.5, color: MBR_COLORS.cardBorder },
+  });
+
+  // ── Campaign Table (right half) ──
+  const campX = 0.5 + cw * 0.52;
+  const campW = cw * 0.48;
+  slide.addText("tNPS BY CAMPAIGN \u2014 GCS", { x: campX, y: tableY - 0.25, w: campW, h: 0.2, fontSize: 8, fontFace: MBR_FONT, color: MBR_COLORS.purple, bold: true });
+
+  // Compute campaign stats from GCS surveys
+  const campGroups = {};
+  tnpsGCS.forEach(s => {
+    const key = s.campaign;
+    if (!campGroups[key]) campGroups[key] = { campaign: key, program: s.program, surveys: [] };
+    campGroups[key].surveys.push(s);
+  });
+  const camps = Object.values(campGroups).map(g => ({ ...g, ...calcTnpsScore(g.surveys) })).sort((a, b) => (b.score ?? -999) - (a.score ?? -999));
+
+  const campHdr = ["Campaign", "Program", "tNPS", "Surveys", "Prom%", "Det%"].map(h => ({ text: h, options: { ...hdrBase, align: h === "Campaign" || h === "Program" ? "left" : "center" } }));
+  const campRows = camps.map((c, i) => {
+    const rowBg = i % 2 === 0 ? MBR_COLORS.white : "F5F5FA";
+    const base = { ...cellBase, fill: { color: rowBg } };
+    const scoreColor = (c.score ?? 0) >= 50 ? MBR_COLORS.green : (c.score ?? 0) >= 20 ? MBR_COLORS.amber : MBR_COLORS.red;
+    return [
+      { text: c.campaign, options: { ...base, align: "left", color: MBR_COLORS.textPrimary } },
+      { text: c.program || "", options: { ...base, align: "left", color: MBR_COLORS.amber, bold: !!c.program } },
+      { text: `${(c.score ?? 0) > 0 ? "+" : ""}${c.score ?? 0}`, options: { ...base, align: "center", bold: true, color: scoreColor } },
+      { text: String(c.total || 0), options: { ...base, align: "center", color: MBR_COLORS.textSecondary } },
+      { text: `${Math.round(c.promoterPct || 0)}%`, options: { ...base, align: "center", color: MBR_COLORS.green } },
+      { text: `${Math.round(c.detractorPct || 0)}%`, options: { ...base, align: "center", color: MBR_COLORS.red } },
+    ];
+  });
+
+  const colW2 = [1.3, 0.65, 0.55, 0.55, 0.5, 0.5];
+  slide.addTable([campHdr, ...campRows], {
+    x: campX, y: tableY, w: campW,
+    colW: colW2,
+    rowH: 0.22,
+    border: { type: "solid", pt: 0.5, color: MBR_COLORS.cardBorder },
+  });
+
+  // ── Monthly Vendor Trend (bottom strip) ──
+  const trendY = 5.5;
+  slide.addText("MONTHLY VENDOR RANKING", { x: 0.5, y: trendY - 0.25, w: cw, h: 0.2, fontSize: 8, fontFace: MBR_FONT, color: MBR_COLORS.purple, bold: true });
+
+  const vendorColors = { "GCS": MBR_COLORS.amber, "Avantive": "6366f1", "Global Telesourcing": "0ea5e9", "Results": "8b5cf6" };
+  const vendorNames = ["GCS", "Avantive", "Global Telesourcing", "Results"];
+  const months = [...new Set(tnpsData.filter(s => s.month).map(s => s.month))].sort();
+  const vendorMap = {};
+  tnpsData.forEach(s => {
+    if (!s.month) return;
+    const vendor = s.isGCS ? "GCS" : s.siteLabel;
+    if (!vendorNames.includes(vendor)) return;
+    if (!vendorMap[s.month]) vendorMap[s.month] = {};
+    if (!vendorMap[s.month][vendor]) vendorMap[s.month][vendor] = [];
+    vendorMap[s.month][vendor].push(s);
+  });
+
+  // Legend
+  const legX = 0.5;
+  vendorNames.forEach((v, i) => {
+    slide.addShape(pres.shapes.RECTANGLE, { x: legX + i * 1.8, y: trendY + 0.0, w: 0.15, h: 0.12, fill: { color: vendorColors[v] } });
+    slide.addText(v, { x: legX + 0.2 + i * 1.8, y: trendY - 0.02, w: 1.5, h: 0.18, fontSize: 6, fontFace: MBR_FONT, color: MBR_COLORS.textSecondary });
+  });
+
+  // Monthly grouped bars as a table (score per vendor per month)
+  const trendHdr = [{ text: "", options: hdrBase }, ...months.map(m => {
+    const [y, mo] = m.split("-").map(Number);
+    return { text: new Date(y, mo - 1, 1).toLocaleString("en-US", { month: "short", year: "numeric" }), options: hdrBase };
+  })];
+  const trendRows = vendorNames.map(v => {
+    const base = { ...cellBase, align: "center" };
+    return [
+      { text: v, options: { ...base, align: "left", bold: v === "GCS", color: vendorColors[v] } },
+      ...months.map(m => {
+        const surveys = (vendorMap[m] || {})[v] || [];
+        const stats = calcTnpsScore(surveys);
+        const scoreColor = (stats.score ?? 0) >= 50 ? MBR_COLORS.green : (stats.score ?? 0) >= 20 ? MBR_COLORS.amber : MBR_COLORS.red;
+        return { text: stats.total > 0 ? `${stats.score > 0 ? "+" : ""}${stats.score}  (${stats.total})` : "\u2014", options: { ...base, color: stats.total > 0 ? scoreColor : MBR_COLORS.textSecondary, bold: v === "GCS" } };
+      }),
+    ];
+  });
+
+  const trendColW = [1.5, ...months.map(() => (cw - 1.5) / months.length)];
+  slide.addTable([trendHdr, ...trendRows], {
+    x: 0.5, y: trendY + 0.2, w: cw,
+    colW: trendColW,
+    rowH: 0.28,
+    border: { type: "solid", pt: 0.5, color: MBR_COLORS.cardBorder },
+  });
+}
+
 function buildMbrPlaceholderSlides(pres, programs) {
   const cw = MBR_W - 1; // content width (0.5" margins each side)
   const s1 = pres.addSlide();
@@ -5686,6 +5845,7 @@ async function generateMBR(perf, onProgress) {
     buildMbrProgramSlide(pres, prog, fiscalInfo, ins.narrative, ins.opps);
   });
   buildMbrSiteRankingSlide(pres, perf);
+  buildMbrTnpsSlide(pres, perf);
   buildMbrPlaceholderSlides(pres, programs);
   const filename = formatFiscalFilename(fiscalInfo?.fiscalEnd);
   await pres.writeFile({ fileName: filename });
