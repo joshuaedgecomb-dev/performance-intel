@@ -5753,6 +5753,19 @@ function TNPSSlide({ perf, onNav, lightMode }) {
   const [tab, setTab] = useState("summary");
   const { tnpsData, tnpsGCS, tnpsOverall, tnpsBySite, tnpsByMonth, bpLookup } = perf;
 
+  // Campaign breakdown (GCS only)
+  const tnpsByCampaign = useMemo(() => {
+    const groups = {};
+    tnpsGCS.forEach(s => {
+      const key = s.campaign;
+      if (!groups[key]) groups[key] = { campaign: key, program: s.program, surveys: [] };
+      groups[key].surveys.push(s);
+    });
+    return Object.values(groups)
+      .map(g => ({ ...g, ...calcTnpsScore(g.surveys) }))
+      .sort((a, b) => (b.score ?? -999) - (a.score ?? -999));
+  }, [tnpsGCS]);
+
   if (!tnpsData || tnpsData.length === 0) {
     return (
       <div style={{ minHeight: "90vh", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-faint)", fontFamily: "var(--font-ui, Inter, sans-serif)" }}>
@@ -5886,7 +5899,61 @@ function TNPSSlide({ perf, onNav, lightMode }) {
       )}
 
       {/* Phase 2 tabs render here — placeholder for now */}
-      {tab === "campaign" && <div style={{ color: "var(--text-dim)", fontFamily: "var(--font-ui, Inter, sans-serif)", padding: "3rem", textAlign: "center" }}>By Campaign — coming in Phase 2</div>}
+      {tab === "campaign" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+          {/* Campaign Table */}
+          <div style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem 1.5rem" }}>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: "0.75rem" }}>tNPS by Campaign — GCS</div>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr>
+                  {["Campaign", "Program", "tNPS", "Surveys", "Promoter %", "Detractor %"].map((h, i) => (
+                    <th key={i} style={{ padding: "0.5rem", textAlign: i > 1 ? "right" : "left", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: "var(--text-muted)", borderBottom: "1px solid var(--border)", fontWeight: 500, letterSpacing: "0.05em", textTransform: "uppercase" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {tnpsByCampaign.map((c, i) => (
+                  <tr key={i} style={{ borderBottom: "1px solid var(--bg-tertiary)" }}>
+                    <td style={{ padding: "0.6rem 0.5rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: "var(--text-warm)" }}>{c.campaign}</td>
+                    <td style={{ padding: "0.6rem 0.5rem" }}>
+                      {c.program && <span style={{ fontSize: "0.68rem", padding: "2px 6px", borderRadius: 3, background: "#d9770618", color: "#d97706", fontWeight: 600, fontFamily: "var(--font-ui, Inter, sans-serif)" }}>{c.program}</span>}
+                    </td>
+                    <td style={{ padding: "0.6rem 0.5rem", textAlign: "right", fontFamily: "var(--font-data, monospace)", fontSize: "0.95rem", fontWeight: 700, color: tnpsColor(c.score) }}>
+                      {c.score > 0 ? "+" : ""}{c.score}
+                    </td>
+                    <td style={{ padding: "0.6rem 0.5rem", textAlign: "right", fontFamily: "var(--font-data, monospace)", fontSize: "0.82rem", color: "var(--text-secondary)" }}>{c.total}</td>
+                    <td style={{ padding: "0.6rem 0.5rem", textAlign: "right", fontFamily: "var(--font-data, monospace)", fontSize: "0.82rem", color: "#16a34a" }}>{Math.round(c.promoterPct)}%</td>
+                    <td style={{ padding: "0.6rem 0.5rem", textAlign: "right", fontFamily: "var(--font-data, monospace)", fontSize: "0.82rem", color: "#dc2626" }}>{Math.round(c.detractorPct)}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Campaign Bar Chart */}
+          <div style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem 1.5rem" }}>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: "1rem" }}>tNPS Score by Campaign</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+              {tnpsByCampaign.map((c, i) => {
+                const maxAbs = Math.max(...tnpsByCampaign.map(x => Math.abs(x.score || 0)), 1);
+                const barW = Math.max(8, (Math.abs(c.score || 0) / maxAbs) * 100);
+                return (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                    <div style={{ width: 130, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: "var(--text-secondary)", textAlign: "right", flexShrink: 0 }}>{c.campaign}</div>
+                    <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 6 }}>
+                      <div style={{ width: `${barW}%`, height: 18, borderRadius: 4, background: tnpsColor(c.score) + "cc" }} />
+                      <span style={{ fontFamily: "var(--font-data, monospace)", fontSize: "0.78rem", fontWeight: 600, color: tnpsColor(c.score) }}>
+                        {c.score > 0 ? "+" : ""}{c.score}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
       {tab === "supervisor" && <div style={{ color: "var(--text-dim)", fontFamily: "var(--font-ui, Inter, sans-serif)", padding: "3rem", textAlign: "center" }}>By Supervisor — coming in Phase 2</div>}
       {tab === "voices" && <div style={{ color: "var(--text-dim)", fontFamily: "var(--font-ui, Inter, sans-serif)", padding: "3rem", textAlign: "center" }}>Customer Voices — coming in Phase 2</div>}
 
