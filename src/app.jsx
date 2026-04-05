@@ -706,9 +706,9 @@ function parseTnps(rows = [], bpLookup = {}) {
     if (isNaN(score)) return null;
 
     const rawSite    = (row["Site"] || "").trim();
-    const rawCampaign = (row["Telesales Campaign"] || "").trim();
+    const rawCampaign = (row["Telesales Outcome Category"] || row["Telesales Campaign"] || "").trim();
     const ntid       = (row["Employee NTID"] || "").trim().toLowerCase();
-    const dateStr    = (row["Transaction Date"] || "").trim();
+    const dateStr    = (row["Response Date"] || row["Transaction Date"] || "").trim();
 
     // Parse date — format: "3/20/2026 14:34"
     const dateParsed = dateStr ? new Date(dateStr) : null;
