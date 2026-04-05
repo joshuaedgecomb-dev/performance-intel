@@ -6113,8 +6113,11 @@ function TNPSSlide({ perf, onNav, lightMode }) {
                               );
                             })}
                           </div>
-                          {/* Baseline */}
-                          <div style={{ width: "90%", height: 1, background: "var(--text-dim)", opacity: 0.4 }} />
+                          {/* Baseline — 0 line */}
+                          <div style={{ width: "100%", position: "relative", height: 0 }}>
+                            <div style={{ width: "100%", height: 2, background: "var(--text-secondary)", opacity: 0.6 }} />
+                            {mi === 0 && <span style={{ position: "absolute", left: -16, top: -7, fontFamily: "var(--font-data, monospace)", fontSize: "0.65rem", color: "var(--text-muted)", fontWeight: 600 }}>0</span>}
+                          </div>
                           {/* Negative zone (below baseline) */}
                           <div style={{ display: "flex", gap: 6, alignItems: "flex-start", height: 70, width: "100%", justifyContent: "center" }}>
                             {vendorScores.map((vs, vi) => {
