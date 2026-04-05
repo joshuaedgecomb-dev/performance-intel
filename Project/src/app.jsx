@@ -5695,7 +5695,7 @@ function buildMbrTnpsSlide(pres, perf) {
   });
 
   // ── Monthly Vendor Trend (bottom strip) ──
-  const trendY = 5.2;
+  const trendY = 5.45;
   slide.addText("MONTHLY VENDOR RANKING", { x: 0.5, y: trendY - 0.25, w: cw, h: 0.2, fontSize: 8, fontFace: MBR_FONT, color: MBR_COLORS.purple, bold: true });
 
   const vendorColors = { "GCS": MBR_COLORS.amber, "Avantive": "6366f1", "Global Telesourcing": "0ea5e9", "Results": "8b5cf6" };
