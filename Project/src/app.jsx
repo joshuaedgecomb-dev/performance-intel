@@ -6951,6 +6951,33 @@ function BusinessOverview({ perf, onNav, goToSlide, tnpsSlideIdx, localAI, prior
           );
         })()}
 
+        {/* tNPS Campaign Overview — compact row below KPI strip */}
+        {tnpsOverall && tnpsOverall.total > 0 && (() => {
+          const campGroups = {};
+          tnpsFiscalGCS.forEach(s => {
+            const key = s.campaign;
+            if (!campGroups[key]) campGroups[key] = { campaign: key, program: s.program, surveys: [] };
+            campGroups[key].surveys.push(s);
+          });
+          const camps = Object.values(campGroups)
+            .map(g => ({ ...g, ...calcTnpsScore(g.surveys) }))
+            .sort((a, b) => (b.score ?? -999) - (a.score ?? -999));
+          if (camps.length === 0) return null;
+          return (
+            <div onClick={() => goToSlide(tnpsSlideIdx)}
+              style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginTop: "0.5rem", cursor: "pointer" }}>
+              {camps.map((c, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.3rem 0.65rem", borderRadius: "var(--radius-sm, 6px)", background: "var(--bg-secondary)", border: "1px solid var(--border)" }}>
+                  {c.program && <span style={{ fontSize: "0.6rem", padding: "1px 4px", borderRadius: 2, background: "#d9770618", color: "#d97706", fontWeight: 600, fontFamily: "var(--font-ui, Inter, sans-serif)" }}>{c.program}</span>}
+                  <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", color: "var(--text-secondary)" }}>{c.campaign}</span>
+                  <span style={{ fontFamily: "var(--font-data, monospace)", fontSize: "0.78rem", fontWeight: 700, color: tnpsColor(c.score) }}>{c.score > 0 ? "+" : ""}{c.score}</span>
+                  <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.65rem", color: "var(--text-dim)" }}>({c.total})</span>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
+
         {/* Wins + Opportunities from engine insights */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.25rem" }}>
           <InsightCard type="win" insights={wins} aiEnabled={localAI} aiPromptData={localAI ? { jobType: "Business Wide", uniqueAgentCount, totalHours, totalGoals: globalGoals, gph: totalHours > 0 ? globalGoals / totalHours : 0, attainment: planTotal ? (globalGoals / planTotal) * 100 : null, planGoals: planTotal, actGoals: globalGoals, distUnique: {}, q1Agents: [], q4Agents: [], regions, healthScore: null, totalNewXI: globalNewXI, totalXmLines: globalXmLines, newHiresInProgram: [], fiscalInfo } : null} />
