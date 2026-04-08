@@ -1,0 +1,882 @@
+/* ==========================================================================
+   Performance Intel Dashboard — Custom Stylesheet
+   Glassmorphism design with dark/light theme support via CSS custom properties.
+   ========================================================================== */
+
+/* ==========================================================================
+   1. ROOT VARIABLES
+   ========================================================================== */
+
+:root {
+  /* ---- Dark theme (default) ---- */
+  --bg-primary: #06090d;
+  --bg-secondary: #0c1017;
+  --bg-row-alt: #090d13;
+  --bg-tertiary: #141a23;
+  --border: #1e2530;
+  --border-muted: #2a3240;
+  --text-faint: #334155;
+  --text-dim: #475569;
+  --text-muted: #64748b;
+  --text-secondary: #94a3b8;
+  --text-primary: #e2e8f0;
+  --text-warm: #f1f5f9;
+  --glass-bg: rgba(12, 16, 23, 0.75);
+  --glass-bg-subtle: rgba(12, 16, 23, 0.5);
+  --glass-border: rgba(255, 255, 255, 0.06);
+  --card-glow: 0 0 0 1px rgba(255, 255, 255, 0.04), 0 4px 24px rgba(0, 0, 0, 0.3);
+  --card-hover-glow: 0 0 0 1px rgba(217, 119, 6, 0.12), 0 8px 32px rgba(0, 0, 0, 0.4);
+  --accent-surface: rgba(217, 119, 6, 0.06);
+  --nav-bg: rgba(6, 9, 13, 0.85);
+  --nh-color: #d97706;
+  --nh-bg: #d9770618;
+  --nh-border: #d9770640;
+
+  /* ---- Fonts ---- */
+  --font-ui: Inter, system-ui, sans-serif;
+  --font-data: 'Fira Code', monospace;
+
+  /* ---- Radii ---- */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+}
+
+[data-theme="light"] {
+  --bg-primary: #f1f5f9;
+  --bg-secondary: #ffffff;
+  --bg-row-alt: #f8fafc;
+  --bg-tertiary: #e2e8f0;
+  --border: #cbd5e1;
+  --border-muted: #e2e8f0;
+  --text-faint: #94a3b8;
+  --text-dim: #64748b;
+  --text-muted: #475569;
+  --text-secondary: #334155;
+  --text-primary: #0f172a;
+  --text-warm: #1e293b;
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-bg-subtle: rgba(255, 255, 255, 0.5);
+  --glass-border: rgba(0, 0, 0, 0.06);
+  --card-glow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 4px 16px rgba(0, 0, 0, 0.04);
+  --card-hover-glow: 0 2px 8px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.06);
+  --accent-surface: rgba(217, 119, 6, 0.04);
+  --nav-bg: rgba(241, 245, 249, 0.85);
+  --nh-color: #92400e;
+  --nh-bg: #92400e14;
+  --nh-border: #92400e35;
+}
+
+/* ==========================================================================
+   2. BASE STYLES
+   ========================================================================== */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-muted);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-faint);
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-muted) var(--bg-primary);
+}
+
+/* Selection */
+::selection {
+  background: rgba(217, 119, 6, 0.3);
+  color: var(--text-warm);
+}
+
+/* ==========================================================================
+   3. NAVBAR OVERRIDES
+   ========================================================================== */
+
+.perf-navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1030;
+  background: var(--nav-bg);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border-bottom: 1px solid var(--glass-border);
+  padding: 0.5rem 1rem;
+}
+
+.perf-navbar .navbar-brand {
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.perf-navbar .navbar-brand:hover {
+  color: var(--text-muted);
+}
+
+.perf-navbar .status-badge {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  padding: 0.15rem 0.5rem;
+  border-radius: var(--radius-sm);
+  background: var(--glass-bg-subtle);
+  border: 1px solid var(--glass-border);
+}
+
+.perf-navbar .nav-tabs {
+  border-bottom: none;
+}
+
+.perf-navbar .nav-tabs .nav-link {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 500;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 0.5rem 0.85rem;
+  transition: color 0.2s ease, border-color 0.2s ease;
+  background: transparent;
+}
+
+.perf-navbar .nav-tabs .nav-link:hover {
+  color: var(--text-secondary);
+  border-bottom-color: var(--border-muted);
+}
+
+.perf-navbar .nav-tabs .nav-link.active {
+  color: var(--text-warm);
+  border-bottom-color: #d97706;
+  background: transparent;
+}
+
+/* ==========================================================================
+   4. CARD COMPONENTS
+   ========================================================================== */
+
+.perf-card {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--card-glow);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+  transition: box-shadow 0.25s ease;
+}
+
+.perf-card:hover {
+  box-shadow: var(--card-hover-glow);
+}
+
+/* Stat card — metric display */
+.stat-card {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--card-glow);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem;
+  transition: box-shadow 0.25s ease;
+}
+
+.stat-card:hover {
+  box-shadow: var(--card-hover-glow);
+}
+
+.stat-card .label {
+  color: var(--text-dim);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 0.35rem;
+}
+
+.stat-card .value {
+  color: var(--text-warm);
+  font-size: 1.5rem;
+  font-family: var(--font-data);
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.stat-card .sub {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  margin-top: 0.25rem;
+}
+
+.stat-card .accent {
+  border-left: 3px solid #d97706;
+  padding-left: 0.75rem;
+}
+
+/* ==========================================================================
+   5. QUARTILE COLORS
+   ========================================================================== */
+
+.q1 { color: #16a34a; }
+.q2 { color: #2563eb; }
+.q3 { color: #d97706; }
+.q4 { color: #dc2626; }
+
+.q-badge {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  line-height: 1.4;
+}
+
+.q-badge.q1 {
+  background: rgba(22, 163, 74, 0.12);
+  color: #16a34a;
+}
+
+.q-badge.q2 {
+  background: rgba(37, 99, 235, 0.12);
+  color: #2563eb;
+}
+
+.q-badge.q3 {
+  background: rgba(217, 119, 6, 0.12);
+  color: #d97706;
+}
+
+.q-badge.q4 {
+  background: rgba(220, 38, 38, 0.12);
+  color: #dc2626;
+}
+
+/* ==========================================================================
+   6. TABLE OVERRIDES (DataTables / Bootstrap)
+   ========================================================================== */
+
+.table,
+table.dataTable {
+  --bs-table-bg: var(--bg-secondary);
+  --bs-table-color: var(--text-primary);
+  --bs-table-border-color: var(--border);
+  --bs-table-striped-bg: var(--bg-row-alt);
+  --bs-table-hover-bg: var(--bg-tertiary);
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  border-color: var(--border);
+  font-size: 0.85rem;
+}
+
+table.dataTable thead th,
+table.dataTable thead td,
+.table thead th {
+  color: var(--text-dim);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid var(--border);
+  background-color: var(--bg-secondary);
+  padding: 0.6rem 0.75rem;
+  white-space: nowrap;
+}
+
+table.dataTable tbody td,
+.table tbody td {
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  font-family: var(--font-data);
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+table.dataTable tbody tr:nth-child(even),
+.table-striped > tbody > tr:nth-of-type(even) > * {
+  background-color: var(--bg-row-alt);
+}
+
+table.dataTable tbody tr:hover,
+.table-hover > tbody > tr:hover > * {
+  background-color: var(--bg-tertiary);
+}
+
+/* DataTables wrapper scrollbar */
+.dataTables_wrapper .dataTables_scroll .dataTables_scrollBody::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.dataTables_wrapper .dataTables_scroll .dataTables_scrollBody::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+
+.dataTables_wrapper .dataTables_scroll .dataTables_scrollBody::-webkit-scrollbar-thumb {
+  background: var(--border-muted);
+  border-radius: 3px;
+}
+
+/* DataTables controls */
+.dataTables_wrapper .dataTables_length,
+.dataTables_wrapper .dataTables_filter,
+.dataTables_wrapper .dataTables_info,
+.dataTables_wrapper .dataTables_paginate {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.dataTables_wrapper .dataTables_filter input,
+.dataTables_wrapper .dataTables_length select {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.25rem 0.5rem;
+}
+
+.dataTables_wrapper .dataTables_paginate .paginate_button {
+  color: var(--text-muted) !important;
+  background: transparent !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-sm);
+}
+
+.dataTables_wrapper .dataTables_paginate .paginate_button.current {
+  color: var(--text-warm) !important;
+  background: var(--accent-surface) !important;
+  border-color: #d97706 !important;
+}
+
+.dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+  color: var(--text-primary) !important;
+  background: var(--bg-tertiary) !important;
+}
+
+/* ==========================================================================
+   7. CHART CONTAINER
+   ========================================================================== */
+
+.chart-container {
+  min-height: 300px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  padding: 1rem;
+  background: var(--glass-bg-subtle);
+}
+
+/* ==========================================================================
+   8. INSIGHT CARDS
+   ========================================================================== */
+
+.insight-win {
+  border-left: 3px solid #16a34a;
+  background: var(--accent-surface);
+  border-radius: var(--radius-md);
+  padding: 0.85rem 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.insight-opp {
+  border-left: 3px solid #d97706;
+  background: var(--accent-surface);
+  border-radius: var(--radius-md);
+  padding: 0.85rem 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.insight-text {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* ==========================================================================
+   9. GAINSHARE TABLE
+   ========================================================================== */
+
+.gainshare-row.positive {
+  background: rgba(22, 163, 74, 0.06);
+}
+
+.gainshare-row.positive:hover {
+  background: rgba(22, 163, 74, 0.1);
+}
+
+.gainshare-row.negative {
+  background: rgba(220, 38, 38, 0.06);
+}
+
+.gainshare-row.negative:hover {
+  background: rgba(220, 38, 38, 0.1);
+}
+
+.gainshare-row.current {
+  border: 1px solid #d97706;
+  box-shadow: 0 0 0 1px rgba(217, 119, 6, 0.15);
+}
+
+/* ==========================================================================
+   10. PACING BANNER
+   ========================================================================== */
+
+.pacing-banner {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  padding: 1rem 1.25rem;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.pacing-banner .progress {
+  height: 6px;
+  background: var(--bg-tertiary);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 0.5rem;
+}
+
+.pacing-banner .progress-bar {
+  background: linear-gradient(90deg, #d97706, #f59e0b);
+  border-radius: 3px;
+  transition: width 0.6s ease;
+}
+
+/* ==========================================================================
+   11. SUPERVISOR CARDS
+   ========================================================================== */
+
+.supervisor-card {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--card-glow);
+  border-radius: var(--radius-md);
+  padding: 0.85rem 1rem;
+  transition: box-shadow 0.25s ease;
+}
+
+.supervisor-card:hover {
+  box-shadow: var(--card-hover-glow);
+}
+
+.supervisor-card .sparkline-area {
+  height: 32px;
+  width: 100%;
+  margin-top: 0.35rem;
+}
+
+/* ==========================================================================
+   12. TV MODE
+   ========================================================================== */
+
+.tv-mode {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  background: var(--bg-primary);
+  overflow: hidden;
+  z-index: 9999;
+}
+
+.tv-card {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--card-glow);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  font-size: 1.1rem;
+}
+
+.tv-card .value {
+  font-size: 2rem;
+  font-family: var(--font-data);
+  color: var(--text-warm);
+  font-weight: 700;
+}
+
+.tv-card .label {
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+@keyframes tvAutoScroll {
+  0%   { transform: translateY(0); }
+  100% { transform: translateY(var(--scroll-distance, -100%)); }
+}
+
+.tv-card .auto-scroll {
+  animation: tvAutoScroll var(--scroll-duration, 30s) linear infinite;
+}
+
+/* ==========================================================================
+   13. LOADING OVERLAY
+   ========================================================================== */
+
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(6, 9, 13, 0.88);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+.loading-overlay .spinner-border {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-color: var(--border-muted);
+  border-right-color: #d97706;
+}
+
+/* ==========================================================================
+   14. ANIMATIONS
+   ========================================================================== */
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes pulseGlow {
+  0%, 100% { opacity: 0.5; }
+  50%      { opacity: 1; }
+}
+
+.fade-in {
+  animation: fadeInUp 0.3s ease-out;
+}
+
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--bg-tertiary) 25%,
+    var(--border-muted) 50%,
+    var(--bg-tertiary) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+.pulse-glow {
+  animation: pulseGlow 2s ease-in-out infinite;
+}
+
+/* ==========================================================================
+   15. RESPONSIVE
+   ========================================================================== */
+
+@media (max-width: 768px) {
+  .stat-card.hide-sm {
+    display: none;
+  }
+
+  .perf-card {
+    padding: 0.85rem;
+    border-radius: var(--radius-md);
+  }
+
+  .stat-card .value {
+    font-size: 1.2rem;
+  }
+
+  .chart-container {
+    min-height: 220px;
+  }
+
+  table.dataTable tbody td,
+  .table tbody td {
+    font-size: 0.78rem;
+    padding: 0.35rem 0.5rem;
+  }
+
+  table.dataTable thead th,
+  .table thead th {
+    font-size: 0.66rem;
+    padding: 0.4rem 0.5rem;
+  }
+
+  .tv-card .value {
+    font-size: 1.4rem;
+  }
+}
+
+@media (max-width: 576px) {
+  .perf-navbar .navbar-brand {
+    font-size: 0.68rem;
+  }
+
+  .stat-card .value {
+    font-size: 1rem;
+  }
+
+  .stat-card .label {
+    font-size: 0.65rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .fade-in {
+    animation: none;
+  }
+
+  .shimmer {
+    animation: none;
+  }
+
+  .pulse-glow {
+    animation: none;
+  }
+
+  .tv-card .auto-scroll {
+    animation: none;
+  }
+}
+
+/* ==========================================================================
+   16. TAB STYLING (Bootstrap Overrides)
+   ========================================================================== */
+
+.nav-tabs {
+  border-bottom: 1px solid var(--border);
+}
+
+.nav-tabs .nav-link {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 500;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  padding: 0.55rem 1rem;
+  transition: color 0.2s ease, border-color 0.2s ease;
+}
+
+.nav-tabs .nav-link:hover,
+.nav-tabs .nav-link:focus {
+  color: var(--text-secondary);
+  border-bottom-color: var(--border-muted);
+  background: transparent;
+  isolation: auto;
+}
+
+.nav-tabs .nav-link.active,
+.nav-tabs .nav-item.show .nav-link {
+  color: var(--text-warm);
+  background: transparent;
+  border-color: transparent;
+  border-bottom-color: #d97706;
+}
+
+.nav-pills .nav-link {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 500;
+  border-radius: var(--radius-sm);
+  padding: 0.4rem 0.85rem;
+  transition: color 0.2s ease, background 0.2s ease;
+}
+
+.nav-pills .nav-link:hover {
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+}
+
+.nav-pills .nav-link.active,
+.nav-pills .show > .nav-link {
+  color: #fff;
+  background: #d97706;
+}
+
+/* ==========================================================================
+   17. MODAL OVERRIDES
+   ========================================================================== */
+
+.modal-content {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  color: var(--text-primary);
+  box-shadow: 0 16px 64px rgba(0, 0, 0, 0.4);
+}
+
+.modal-header {
+  border-bottom: 1px solid var(--border);
+  padding: 1rem 1.25rem;
+}
+
+.modal-header .btn-close {
+  filter: invert(0.5);
+}
+
+.modal-footer {
+  border-top: 1px solid var(--border);
+  padding: 0.85rem 1.25rem;
+}
+
+.modal-body .form-control,
+.modal-body .form-select {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+}
+
+.modal-body .form-control:focus,
+.modal-body .form-select:focus {
+  border-color: #d97706;
+  box-shadow: 0 0 0 2px rgba(217, 119, 6, 0.15);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.modal-body .form-control::placeholder {
+  color: var(--text-faint);
+}
+
+/* ==========================================================================
+   18. SETTINGS-SPECIFIC
+   ========================================================================== */
+
+.config-field label {
+  color: var(--text-dim);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 0.3rem;
+}
+
+.config-field .form-control,
+.config-field .form-select {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+}
+
+.config-field .form-control:focus,
+.config-field .form-select:focus {
+  border-color: #d97706;
+  box-shadow: 0 0 0 2px rgba(217, 119, 6, 0.15);
+}
+
+/* ==========================================================================
+   19. NEW HIRE BADGE
+   ========================================================================== */
+
+.nh-badge {
+  display: inline-block;
+  color: var(--nh-color);
+  background: var(--nh-bg);
+  border: 1px solid var(--nh-border);
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+/* ==========================================================================
+   20. AI CONTENT
+   ========================================================================== */
+
+.ai-content {
+  border-left: 3px solid #0ea5e9;
+  background: rgba(14, 165, 233, 0.05);
+  border-radius: var(--radius-md);
+  padding: 0.85rem 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.ai-content p {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  line-height: 1.6;
+  margin: 0;
+}
+
+[data-theme="light"] .ai-content {
+  background: rgba(14, 165, 233, 0.04);
+}
+
+/* ==========================================================================
+   UTILITY HELPERS
+   ========================================================================== */
+
+.font-data {
+  font-family: var(--font-data);
+}
+
+.text-amber {
+  color: #d97706;
+}
+
+.border-glass {
+  border: 1px solid var(--glass-border);
+}
+
+.bg-glass {
+  background: var(--glass-bg);
+}
+
+.bg-glass-subtle {
+  background: var(--glass-bg-subtle);
+}
