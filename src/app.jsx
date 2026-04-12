@@ -6469,6 +6469,20 @@ function normalizeVirgilMonthKey(s) {
   return s.replace(/['"`]/g, "").replace(/\s+/g, " ").trim();
 }
 
+function getPriorMonthLabel(label) {
+  if (!label) return "";
+  const m = String(label).trim().match(/^([A-Za-z]{3,})\s*'?(\d{2,4})$/);
+  if (!m) return "";
+  const mon = m[1].slice(0, 3).toLowerCase();
+  const monIdx = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12 }[mon];
+  if (!monIdx) return "";
+  const year = Number(m[2].length === 4 ? m[2].slice(2) : m[2]);
+  let pMon = monIdx - 1, pYear = year;
+  if (pMon === 0) { pMon = 12; pYear = year - 1; }
+  const monNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  return `${monNames[pMon - 1]} '${String(pYear).padStart(2, "0")}`;
+}
+
 // Returns { org: {coachingPct, acknowledgePct, totalSessions}, dr: {...}, bz: {...} }
 // Org values come from coachingDetails (authoritative monthly totals).
 // DR/BZ splits come from weekly rows joined to bpLookup.
@@ -6499,7 +6513,14 @@ function buildCoachingStats(coachingDetails, coachingWeekly, bpLookup, reporting
     acknowledgePct: 0, // weekly CSV has no acknowledgement signal — blank for site split
     totalSessions: s.sessions,
   });
-  return { org, dr: siteSummary(dr), bz: siteSummary(bz) };
+  const priorKey = getPriorMonthLabel(reportingMonthLabel);
+  const priorBucket = (coachingDetails[priorKey] || coachingDetails[normalizeVirgilMonthKey(priorKey)]) || {};
+  const orgPrior = {
+    coachingPct: Number(priorBucket["% Coached"]) || 0,
+    acknowledgePct: Number(priorBucket["Acknowledged %"] || priorBucket["Acknowledged % "]) || 0,
+    totalSessions: Number(priorBucket["Total Sessions"]) || 0,
+  };
+  return { org, orgPrior, dr: siteSummary(dr), bz: siteSummary(bz) };
 }
 
 // Returns an array of { bucket, pct, users } for the reporting month, in canonical bucket order.
@@ -6511,6 +6532,16 @@ function buildLoginDistribution(loginBuckets, reportingMonthLabel) {
     pct: (monthBucket[b] && monthBucket[b].pct) || 0,
     users: (monthBucket[b] && monthBucket[b].users) || 0,
   }));
+}
+
+// Approximates "% of users with 1+ login" by treating the "0-3" bucket as mostly zero-loggers.
+// Caveat: true 1+ login rate would be finer — this is the closest we can get from the 4-bucket CSV.
+function buildLoginActivitySingle(loginBuckets, monthLabel) {
+  const bucket = loginBuckets[monthLabel] || {};
+  const total = (bucket["0-3"]?.users || 0) + (bucket["4-7"]?.users || 0) + (bucket["8-15"]?.users || 0) + (bucket["16-20+"]?.users || 0);
+  if (!total) return 0;
+  const nonZero = (bucket["4-7"]?.users || 0) + (bucket["8-15"]?.users || 0) + (bucket["16-20+"]?.users || 0);
+  return nonZero / total;
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -6594,7 +6625,7 @@ function buildVirgilTitleSlide(pres, reportingMonthLabel, fiscalInfo, virgilLast
   }
 }
 
-function buildVirgilMyPerformanceSlide(pres, stats, loginDist, reportingMonthLabel, insightsText) {
+function buildVirgilMyPerformanceSlide(pres, stats, loginPriorPct, loginCurrPct, reportingMonthLabel, insightsText) {
   const slide = pres.addSlide();
   slide.background = { color: virgilTheme.slideBg };
   virgilBrandBars(pres, slide);
@@ -6604,82 +6635,134 @@ function buildVirgilMyPerformanceSlide(pres, stats, loginDist, reportingMonthLab
     x: 0.5, y: 0.35, w: 6, h: 0.25,
     fontSize: 10, color: virgilTheme.eyebrow, bold: true, charSpacing: 2,
   });
-  slide.addText(`My Performance / Quality — ${reportingMonthLabel}`, {
+  slide.addText(`Quality and Coaching — ${reportingMonthLabel}`, {
     x: 0.5, y: 0.65, w: 12, h: 0.55,
     fontSize: 26, color: virgilTheme.bodyText, bold: true,
   });
 
-  // Top row — 3 KPI blocks
-  const blocks = [
-    { label: "Coaching Standard Attainment", org: stats.org.coachingPct, dr: stats.dr.coachingPct, bz: stats.bz.coachingPct, pct: true },
-    { label: "Acknowledgement %", org: stats.org.acknowledgePct, dr: stats.dr.acknowledgePct, bz: stats.bz.acknowledgePct, pct: true },
-    { label: "Total Coaching Sessions", org: stats.org.totalSessions, dr: stats.dr.totalSessions, bz: stats.bz.totalSessions, pct: false },
-  ];
-  const blockY = 1.5;
-  const blockW = 3.9;
-  const blockH = 1.8;
-  blocks.forEach((b, i) => {
-    const x = 0.5 + i * (blockW + 0.2);
+  // Legend (top right)
+  const legendY = 0.7;
+  slide.addShape("rect", { x: 9.4, y: legendY, w: 0.25, h: 0.18, fill: { color: "7C3AED" }, line: { color: "7C3AED", width: 0 } });
+  slide.addText("Month Prior", { x: 9.7, y: legendY - 0.03, w: 1.2, h: 0.25, fontSize: 10, color: virgilTheme.bodyText });
+  slide.addShape("rect", { x: 10.9, y: legendY, w: 0.25, h: 0.18, fill: { color: "1E3A8A" }, line: { color: "1E3A8A", width: 0 } });
+  slide.addText("EOM Discussion", { x: 11.2, y: legendY - 0.03, w: 1.5, h: 0.25, fontSize: 10, color: virgilTheme.bodyText });
+  slide.addText("---  Goal (75%)", { x: 9.4, y: legendY + 0.22, w: 3.2, h: 0.2, fontSize: 9, color: virgilTheme.subtle, italic: true });
+
+  // Top row — 3 bar charts
+  const chartY = 1.45;
+  const chartH = 2.7;
+  const chartW = 3.9;
+  const gap = 0.3;
+  const drawBarChart = (x, title, priorPct, currPct) => {
+    // Title
+    slide.addText(title, {
+      x, y: chartY, w: chartW, h: 0.3,
+      fontSize: 13, color: virgilTheme.bodyText, bold: true, align: "center",
+    });
+    // Axis area
+    const axisX = x + 0.4;
+    const axisY = chartY + 0.4;
+    const axisW = chartW - 0.6;
+    const axisH = chartH - 0.8;
+    // Plot background
     slide.addShape("rect", {
-      x, y: blockY, w: blockW, h: blockH,
-      fill: { color: "F3F4F6" },
+      x: axisX, y: axisY, w: axisW, h: axisH,
+      fill: { color: "FAFAFA" },
       line: { color: "E5E7EB", width: 0.5 },
     });
-    slide.addText(b.label, {
-      x: x + 0.2, y: blockY + 0.1, w: blockW - 0.4, h: 0.3,
-      fontSize: 11, color: virgilTheme.subtle, bold: true,
+    // 75% goal line (dashed, rendered as a thin gray rect)
+    const goalY = axisY + axisH * (1 - 0.75);
+    slide.addShape("line", {
+      x: axisX, y: goalY, w: axisW, h: 0,
+      line: { color: "9CA3AF", width: 1.2, dashType: "dash" },
     });
-    const fmt = (v) => b.pct ? `${(v * 100).toFixed(1)}%` : String(Math.round(v));
-    slide.addText(fmt(b.org), {
-      x: x + 0.2, y: blockY + 0.4, w: blockW - 0.4, h: 0.6,
-      fontSize: 28, color: virgilTheme.bodyText, bold: true,
-    });
-    slide.addText(`DR ${fmt(b.dr)}   ·   BZ ${fmt(b.bz)}`, {
-      x: x + 0.2, y: blockY + 1.1, w: blockW - 0.4, h: 0.4,
-      fontSize: 12, color: virgilTheme.subtle,
-    });
-  });
-
-  // Middle — login activity stacked bar
-  slide.addText("myPerformance Login Activity", {
-    x: 0.5, y: 3.6, w: 12, h: 0.3,
-    fontSize: 14, color: virgilTheme.eyebrow, bold: true,
-  });
-  const barX = 0.5;
-  const barY = 4.0;
-  const barW = 12.3;
-  const barH = 0.6;
-  const bucketColors = ["0E7490", "3B82F6", "8B5CF6", "7C3AED"];
-  const totalUsers = loginDist.reduce((s, d) => s + (d.users || 0), 0) || 1;
-  let runX = barX;
-  loginDist.forEach((d, i) => {
-    const segW = (d.pct || 0) * barW;
-    if (segW <= 0) return;
+    // Bars
+    const barW = axisW * 0.22;
+    const bar1X = axisX + axisW * 0.22 - barW / 2;
+    const bar2X = axisX + axisW * 0.78 - barW / 2;
+    const priorH = axisH * Math.max(0, Math.min(1, priorPct));
+    const currH = axisH * Math.max(0, Math.min(1, currPct));
     slide.addShape("rect", {
-      x: runX, y: barY, w: segW, h: barH,
-      fill: { color: bucketColors[i] || "9CA3AF" },
-      line: { color: bucketColors[i] || "9CA3AF", width: 0 },
+      x: bar1X, y: axisY + axisH - priorH, w: barW, h: priorH,
+      fill: { color: "7C3AED" }, line: { color: "7C3AED", width: 0 },
     });
-    slide.addText(`${d.bucket}\n${(d.pct * 100).toFixed(0)}% · ${d.users}`, {
-      x: runX, y: barY, w: segW, h: barH,
-      fontSize: 10, color: "FFFFFF", align: "center", valign: "middle", bold: true,
+    slide.addShape("rect", {
+      x: bar2X, y: axisY + axisH - currH, w: barW, h: currH,
+      fill: { color: "1E3A8A" }, line: { color: "1E3A8A", width: 0 },
     });
-    runX += segW;
+    // Value labels inside bar tops
+    slide.addText(`${(priorPct * 100).toFixed(1)}%`, {
+      x: bar1X - 0.2, y: axisY + axisH - priorH + 0.05, w: barW + 0.4, h: 0.25,
+      fontSize: 10, color: "FFFFFF", bold: true, align: "center",
+    });
+    slide.addText(`${(currPct * 100).toFixed(1)}%`, {
+      x: bar2X - 0.2, y: axisY + axisH - currH + 0.05, w: barW + 0.4, h: 0.25,
+      fontSize: 10, color: "FFFFFF", bold: true, align: "center",
+    });
+    // X-axis labels
+    slide.addText("Month Prior", {
+      x: bar1X - 0.3, y: axisY + axisH + 0.05, w: barW + 0.6, h: 0.22,
+      fontSize: 9, color: virgilTheme.subtle, align: "center",
+    });
+    slide.addText("EOM Discussion", {
+      x: bar2X - 0.4, y: axisY + axisH + 0.05, w: barW + 0.8, h: 0.22,
+      fontSize: 9, color: virgilTheme.subtle, align: "center",
+    });
+  };
+
+  const col1X = 0.5;
+  const col2X = col1X + chartW + gap;
+  const col3X = col2X + chartW + gap;
+
+  drawBarChart(col1X, "Coaching Standard Attainment", stats.orgPrior.coachingPct || 0, stats.org.coachingPct || 0);
+  drawBarChart(col2X, "myPerformance Login Activity", loginPriorPct || 0, loginCurrPct || 0);
+  drawBarChart(col3X, "Acknowledge %", stats.orgPrior.acknowledgePct || 0, stats.org.acknowledgePct || 0);
+
+  // Bottom row
+  const bottomY = 4.5;
+  const bottomH = 2.3;
+  const bottomColW = 6.3;
+
+  // Outbound Coaching Attainment (left) — placeholder
+  slide.addText("Outbound Coaching Attainment", {
+    x: 0.5, y: bottomY, w: bottomColW, h: 0.3,
+    fontSize: 13, color: virgilTheme.bodyText, bold: true, align: "center",
   });
-  slide.addText(`Total Users: ${totalUsers}`, {
-    x: barX, y: barY + barH + 0.1, w: barW, h: 0.25,
-    fontSize: 10, color: virgilTheme.subtle, italic: true,
+  slide.addShape("rect", {
+    x: 0.5, y: bottomY + 0.35, w: bottomColW, h: bottomH - 0.35,
+    fill: { color: "FAFAFA" },
+    line: { color: "E5E7EB", width: 0.5, dashType: "dash" },
+  });
+  slide.addText("Vendor comparison data not yet wired\n(Results / Avantive / GCS / GTS)", {
+    x: 0.5, y: bottomY + 0.9, w: bottomColW, h: 0.8,
+    fontSize: 12, color: virgilTheme.subtle, italic: true, align: "center",
   });
 
-  // Bottom — insights
+  // Insights (right)
+  const insX = 0.5 + bottomColW + gap;
+  slide.addShape("rect", {
+    x: insX, y: bottomY, w: bottomColW, h: 0.4,
+    fill: { color: "1E3A8A" }, line: { color: "1E3A8A", width: 0 },
+  });
   slide.addText("Insights", {
-    x: 0.5, y: 5.2, w: 12, h: 0.3,
-    fontSize: 14, color: virgilTheme.eyebrow, bold: true,
+    x: insX, y: bottomY + 0.03, w: bottomColW, h: 0.35,
+    fontSize: 14, color: "FFFFFF", bold: true, align: "center",
   });
-  slide.addText(insightsText || "", {
-    x: 0.5, y: 5.5, w: 12.3, h: 1.3,
-    fontSize: 12, color: virgilTheme.bodyText, valign: "top",
-  });
+  const bullets = (insightsText || "").split(/\n+/).map(s => s.trim()).filter(Boolean);
+  if (bullets.length === 0) {
+    slide.addText("Provide insights in the export modal", {
+      x: insX + 0.2, y: bottomY + 0.55, w: bottomColW - 0.4, h: bottomH - 0.6,
+      fontSize: 11, color: virgilTheme.subtle, italic: true, valign: "top",
+    });
+  } else {
+    slide.addText(
+      bullets.map(t => ({ text: t, options: { bullet: { code: "2022" } } })),
+      {
+        x: insX + 0.2, y: bottomY + 0.55, w: bottomColW - 0.4, h: bottomH - 0.6,
+        fontSize: 11, color: virgilTheme.bodyText, valign: "top", paraSpaceAfter: 4,
+      }
+    );
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -6697,10 +6780,12 @@ function buildVirgilMbrPresentation(perf, options) {
     perf && perf.bpLookup,
     options.reportingMonthLabel
   );
-  const loginDist = buildLoginDistribution(options.loginBuckets || {}, options.reportingMonthLabel);
+  const priorMonthKey = getPriorMonthLabel(options.reportingMonthLabel);
+  const loginPriorPct = buildLoginActivitySingle(options.loginBuckets || {}, priorMonthKey);
+  const loginCurrPct = buildLoginActivitySingle(options.loginBuckets || {}, options.reportingMonthLabel);
 
   buildVirgilTitleSlide(pres, options.reportingMonthLabel, perf && perf.fiscalInfo, options.virgilLastName);
-  buildVirgilMyPerformanceSlide(pres, stats, loginDist, options.reportingMonthLabel, (options.insights && options.insights.slide2) || "");
+  buildVirgilMyPerformanceSlide(pres, stats, loginPriorPct, loginCurrPct, options.reportingMonthLabel, (options.insights && options.insights.slide2) || "");
 
   return pres;
 }
@@ -6786,16 +6871,20 @@ function VirgilMbrExportModal({ perf, coachingDetailsRaw, coachingWeeklyRaw, log
     if (useAiInsights && ollamaAvailable) {
       try {
         const stats = buildCoachingStats(coachingDetails, coachingWeekly, perf && perf.bpLookup, reportingMonth);
-        const dist = buildLoginDistribution(loginBuckets, reportingMonth);
-        const prompt = `Write a 2-3 sentence performance summary for a monthly business review slide.
+        const priorKey = getPriorMonthLabel(reportingMonth);
+        const loginPrior = buildLoginActivitySingle(loginBuckets, priorKey);
+        const loginCurr = buildLoginActivitySingle(loginBuckets, reportingMonth);
+        const prompt = `Write 2–3 short bullet points for a monthly performance slide.
 
-Reporting Month: ${reportingMonth}
-Coaching Standard Attainment (org): ${(stats.org.coachingPct * 100).toFixed(1)}% (DR ${(stats.dr.coachingPct * 100).toFixed(1)}% / BZ ${(stats.bz.coachingPct * 100).toFixed(1)}%)
-Acknowledgement % (org): ${(stats.org.acknowledgePct * 100).toFixed(1)}%
-Total Coaching Sessions: ${stats.org.totalSessions}
-Login Distribution: ${dist.map(d => `${d.bucket}: ${(d.pct*100).toFixed(0)}% (${d.users} users)`).join(", ")}
+Reporting Month: ${reportingMonth}   (Prior Month: ${priorKey || "unknown"})
 
-Focus on what's notable: strengths, concerns, and momentum. Plain prose only. No bullet points.`;
+Coaching Standard Attainment: Prior ${(stats.orgPrior.coachingPct * 100).toFixed(1)}% → Reporting ${(stats.org.coachingPct * 100).toFixed(1)}%
+Acknowledgement %: Prior ${(stats.orgPrior.acknowledgePct * 100).toFixed(1)}% → Reporting ${(stats.org.acknowledgePct * 100).toFixed(1)}%
+myPerformance Login Activity (% of users w/ 1+ login): Prior ${(loginPrior * 100).toFixed(1)}% → Reporting ${(loginCurr * 100).toFixed(1)}%
+Total Coaching Sessions (reporting month): ${stats.org.totalSessions}
+Goal line across all three metrics: 75%
+
+Write bullet-point style insights focused on movement vs prior, gaps vs 75% goal, and whether momentum is positive or concerning. One sentence per bullet. No intro, just bullets separated by newlines.`;
         slide2Insights = await ollamaGenerate(prompt) || "";
       } catch(e) {
         console.error("AI insights generation failed:", e);
