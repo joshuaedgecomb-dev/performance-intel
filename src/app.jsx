@@ -6684,13 +6684,13 @@ function buildVirgilMyPerformanceSlide(pres, stats, loginBuckets, priorPriorMont
 
   // Legend (top right) — 3 months + goal line
   const legendY = 0.7;
-  slide.addShape("rect", { x: 7.8, y: legendY, w: 0.25, h: 0.18, fill: { color: "A78BFA" }, line: { type: "none" } });
-  slide.addText(priorPriorAbbrev, { x: 8.1, y: legendY - 0.03, w: 1.0, h: 0.25, fontSize: 10, color: virgilTheme.bodyText });
-  slide.addShape("rect", { x: 9.3, y: legendY, w: 0.25, h: 0.18, fill: { color: "7C3AED" }, line: { type: "none" } });
-  slide.addText(priorAbbrev, { x: 9.6, y: legendY - 0.03, w: 1.0, h: 0.25, fontSize: 10, color: virgilTheme.bodyText });
-  slide.addShape("rect", { x: 10.8, y: legendY, w: 0.25, h: 0.18, fill: { color: "1E3A8A" }, line: { type: "none" } });
-  slide.addText(currAbbrev, { x: 11.1, y: legendY - 0.03, w: 1.2, h: 0.25, fontSize: 10, color: virgilTheme.bodyText });
-  slide.addText("---  Goal (75%)", { x: 7.8, y: legendY + 0.22, w: 3.5, h: 0.2, fontSize: 9, color: virgilTheme.subtle, italic: true });
+  slide.addShape("rect", { x: 9.5, y: legendY, w: 0.22, h: 0.18, fill: { color: "A78BFA" }, line: { type: "none" } });
+  slide.addText(priorPriorAbbrev, { x: 9.78, y: legendY - 0.03, w: 0.7, h: 0.25, fontSize: 10, color: virgilTheme.bodyText });
+  slide.addShape("rect", { x: 10.65, y: legendY, w: 0.22, h: 0.18, fill: { color: "7C3AED" }, line: { type: "none" } });
+  slide.addText(priorAbbrev, { x: 10.93, y: legendY - 0.03, w: 0.7, h: 0.25, fontSize: 10, color: virgilTheme.bodyText });
+  slide.addShape("rect", { x: 11.8, y: legendY, w: 0.22, h: 0.18, fill: { color: "1E3A8A" }, line: { type: "none" } });
+  slide.addText(currAbbrev, { x: 12.08, y: legendY - 0.03, w: 0.75, h: 0.25, fontSize: 10, color: virgilTheme.bodyText });
+  slide.addText("---  Goal (75%)", { x: 9.5, y: legendY + 0.22, w: 3.3, h: 0.2, fontSize: 9, color: virgilTheme.subtle, italic: true });
 
   // Full-month-name helper
   const monFull = (label) => {
