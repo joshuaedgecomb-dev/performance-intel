@@ -13981,10 +13981,6 @@ export default function App() {
   const perf = usePerformanceEngine({ rawData, goalsRaw, newHiresRaw, tnpsRaw });
   const { programs, jobTypes, newHireSet, newHires, allAgentNames } = perf;
   const hasTnps = perf.tnpsData && perf.tnpsData.length > 0;
-  const programStartIdx = 1;
-  const campaignCompareIdx = programStartIdx + programs.length;
-  const tnpsSlideIdx = hasTnps ? campaignCompareIdx + 1 : -1;
-  const totalSlides = 1 + programs.length + 1 + (hasTnps ? 1 : 0); // Overview + programs + MoM + tNPS?
 
   // Prior month derived data (hoisted for app-wide access)
   const priorAgents = useMemo(() => normalizeAgents(priorMonthRaw || []), [priorMonthRaw]);
@@ -14110,7 +14106,7 @@ export default function App() {
         const rows = parseCSV(text);
         if (!cancelled && rows.length > 0) {
           setRawData(rows);
-          setSlideIndex(0);
+          setCurrentPage({ section: "overview" });
         }
         // Auto-load goals sheet if URL configured
         if (!cancelled && goalsSheetUrl && !goalsRaw) {
@@ -14232,9 +14228,19 @@ export default function App() {
     r.readAsText(f);
   };
 
-  const navTo = delta => setSlideIndex(i => Math.max(0, Math.min(totalSlides - 1, i + delta)));
-  const goToSlide = idx => setSlideIndex(Math.max(0, Math.min(totalSlides - 1, idx)));
-  const [showProgramPicker, setShowProgramPicker] = useState(false);
+  const handleRefresh = useCallback(async () => {
+    try {
+      setSheetLoading(true);
+      const res = await fetch(agentSheetUrl);
+      const text = await res.text();
+      const rows = parseCSV(text);
+      if (rows.length > 0) {
+        setRawData(rows);
+        setCurrentPage({ section: "overview" });
+      }
+    } catch(e) { alert("Could not fetch sheet: " + e.message); }
+    finally { setSheetLoading(false); }
+  }, [agentSheetUrl]);
 
   useEffect(() => {
     const vars = lightMode ? THEMES.light : THEMES.dark;
@@ -14246,33 +14252,19 @@ export default function App() {
   const wrapStyle = { minHeight: "100vh", background: "var(--bg-primary)", color: "var(--text-primary)" };
 
   // If no agent data and not showing Today, show the drop zone
-  if (!rawData && !showToday) {
-    return (
-      <div style={wrapStyle}>
-        {/* Minimal top bar so TODAY is always accessible */}
-        <div style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 200, background: `var(--nav-bg)`, backdropFilter: "blur(16px) saturate(180%)", WebkitBackdropFilter: "blur(16px) saturate(180%)", borderBottom: `1px solid var(--glass-border)`, padding: "0.6rem 1.5rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: `var(--text-dim)`, letterSpacing: "0.08em", fontWeight: 500 }}>
-            PERFORMANCE INTEL
-          </span>
-          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-            <button onClick={() => setLightMode(v => !v)}
-              style={{ background: "transparent", border: `1px solid var(--border-muted)`, borderRadius: "var(--radius-sm, 6px)", color: `var(--text-muted)`, padding: "0.35rem 0.65rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", cursor: "pointer", fontWeight: 500 }}>
-              {lightMode ? "\u2600" : "\u263E"}
-            </button>
-            <button onClick={() => setShowToday(true)}
-              style={{ background: "transparent", border: `1px solid var(--border-muted)`, borderRadius: "var(--radius-sm, 6px)", color: `var(--text-muted)`, padding: "0.35rem 0.75rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", cursor: "pointer", fontWeight: 500, letterSpacing: "0.04em" }}>
-              TODAY
-            </button>
-          </div>
-        </div>
-        {/* Settings panel */}
+
+  return (
+    <div style={wrapStyle}>
+      {showMbrModal && rawData && <MbrExportModal perf={perf} onClose={() => setShowMbrModal(false)} />}
+
+      {/* Settings panel — keep existing modal, just gate by showSettings */}
       {showSettings && (
         <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}
           onClick={e => { if (e.target === e.currentTarget) setShowSettings(false); }}>
-          <div style={{ background: `var(--bg-primary)`, border: "1px solid var(--glass-border)", borderRadius: "var(--radius-xl, 20px)", padding: "1.75rem", width: "100%", maxWidth: "650px", boxShadow: "0 24px 80px rgba(0,0,0,0.3)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)" }}>
+          <div style={{ background: "var(--bg-primary)", border: "1px solid var(--glass-border)", borderRadius: "var(--radius-xl, 20px)", padding: "1.75rem", width: "100%", maxWidth: "650px", boxShadow: "0 24px 80px rgba(0,0,0,0.3)" }}>
             <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: "#6366f1", letterSpacing: "0.08em", marginBottom: "1.25rem", fontWeight: 600, textTransform: "uppercase" }}>Data Source Settings</div>
-            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)`, marginBottom: "1rem", lineHeight: 1.5 }}>
-              Publish Google Sheets as CSV (File \u2192 Share \u2192 Publish to web \u2192 CSV format). Update URLs here when sheets change monthly.
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "var(--text-dim)", marginBottom: "1rem", lineHeight: 1.5 }}>
+              Publish Google Sheets as CSV (File → Share → Publish to web → CSV format). Update URLs here when sheets change monthly.
             </div>
             {[
               { key: "agent", label: "Agent Data Sheet", color: "#d97706", current: agentSheetUrl, placeholder: "https://docs.google.com/spreadsheets/.../pub?output=csv" },
@@ -14283,20 +14275,9 @@ export default function App() {
             ].map(({ key, label, color, current, placeholder }) => (
               <div key={key} style={{ marginBottom: "1rem" }}>
                 <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color, letterSpacing: "0.08em", marginBottom: "0.3rem" }}>{label}</div>
-                <input
-                  defaultValue={current}
-                  placeholder={placeholder}
-                  onBlur={e => {
-                    const val = e.target.value.trim();
-                    setSheetUrls(prev => ({ ...prev, [key]: val }));
-                  }}
-                  style={{ width: "100%", padding: "0.5rem 0.75rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem", background: `var(--bg-secondary)`, color: `var(--text-primary)`, border: `1px solid var(--border)`, borderRadius: "6px", boxSizing: "border-box" }}
-                />
-                {current && (
-                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-faint)`, marginTop: "0.2rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {current.slice(0, 80)}{current.length > 80 ? "..." : ""}
-                  </div>
-                )}
+                <input defaultValue={current} placeholder={placeholder}
+                  onBlur={e => setSheetUrls(prev => ({ ...prev, [key]: e.target.value.trim() }))}
+                  style={{ width: "100%", padding: "0.5rem 0.75rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem", background: "var(--bg-secondary)", color: "var(--text-primary)", border: "1px solid var(--border)", borderRadius: "6px", boxSizing: "border-box" }} />
               </div>
             ))}
             {/* Hours Threshold */}
@@ -14328,10 +14309,9 @@ export default function App() {
                 </div>
               )}
             </div>
-
             <div style={{ display: "flex", gap: "0.5rem", justifyContent: "space-between", marginTop: "1rem" }}>
-              <button onClick={() => { setSheetUrls({}); }}
-                style={{ padding: "0.4rem 1rem", borderRadius: "6px", border: "1px solid var(--border)", background: "transparent", color: `var(--text-muted)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", cursor: "pointer" }}>
+              <button onClick={() => setSheetUrls({})}
+                style={{ padding: "0.4rem 1rem", borderRadius: "6px", border: "1px solid var(--border)", background: "transparent", color: "var(--text-muted)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", cursor: "pointer" }}>
                 Reset to Defaults
               </button>
               <button onClick={() => { setShowSettings(false); setRawData(null); setGoalsRaw(null); setNHRaw(null); }}
@@ -14343,208 +14323,109 @@ export default function App() {
         </div>
       )}
 
-      <div style={{ paddingTop: "42px" }}>
-          <DropZone
-            onData={d => { setRawData(d); setSlideIndex(0); }}
-            goalsRaw={goalsRaw}
-            onGoalsLoad={setGoalsRaw}
-            newHiresRaw={newHiresRaw}
-            onNewHiresLoad={setNHRaw}
-          />
-        </div>
-      </div>
-    );
-  }
+      {/* Hidden file inputs */}
+      <input ref={goalsInputRef} type="file" accept=".csv" style={{ display: "none" }} onChange={e => loadFile(e.target.files[0], setGoalsRaw)} />
+      <input ref={nhInputRef} type="file" accept=".csv" style={{ display: "none" }} onChange={e => loadFile(e.target.files[0], setNHRaw)} />
+      <input ref={priorGoalsInputRef} type="file" accept=".csv" style={{ display: "none" }} onChange={e => loadFile(e.target.files[0], setPriorMonthGoalsRaw)} />
 
-  const isOverview = slideIndex === 0;
-  const isTnpsSlide = hasTnps && slideIndex === tnpsSlideIdx;
-  const isCampaignCompare = slideIndex === campaignCompareIdx;
-  const programIdx = slideIndex - programStartIdx;
-  const program = (!isOverview && !isTnpsSlide && !isCampaignCompare && programIdx >= 0 && programIdx < programs.length) ? programs[programIdx] : null;
+      <TopNav
+        rawData={rawData}
+        currentPage={currentPage}
+        setCurrentPage={setCurrentPage}
+        openMenu={openMenu}
+        setOpenMenu={setOpenMenu}
+        programsBySite={programsBySite}
+        siteAttainments={siteAttainments}
+        fiscalInfo={perf.fiscalInfo}
+        hasTnps={hasTnps}
+        lightMode={lightMode}
+        setLightMode={setLightMode}
+        showToday={showToday}
+        setShowToday={setShowToday}
+        ollamaAvailable={ollamaAvailable}
+        localAI={localAI}
+        setLocalAI={setLocalAI}
+        onExportMbr={() => setShowMbrModal(true)}
+        onRefresh={handleRefresh}
+        onUploadGoals={() => goalsInputRef.current.click()}
+        onUploadRoster={() => nhInputRef.current.click()}
+        onUploadPriorGoals={() => priorGoalsInputRef.current.click()}
+        onOpenSettings={() => setShowSettings(true)}
+      />
 
-  return (
-    <div style={wrapStyle}>
-      {showMbrModal && rawData && <MbrExportModal perf={perf} onClose={() => setShowMbrModal(false)} />}
-      {/* Top bar — compact by default, expands on hover to show file controls below */}
-      <div style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 200, background: `var(--nav-bg)`, backdropFilter: "blur(16px) saturate(180%)", WebkitBackdropFilter: "blur(16px) saturate(180%)", borderBottom: `1px solid var(--glass-border)`, padding: "0.35rem 1.5rem" }}
-        onMouseEnter={e => { e.currentTarget.dataset.expanded = "true"; const tb = e.currentTarget.querySelector("[data-toolbar]"); if (tb) { tb.style.pointerEvents = "none"; setTimeout(() => { tb.style.pointerEvents = "auto"; }, 300); } }}
-        onMouseLeave={e => e.currentTarget.dataset.expanded = "false"}
-        ref={el => { if (el) { const update = () => { const exp = el.dataset.expanded === "true"; const tb = el.querySelector("[data-toolbar]"); if (tb) tb.style.display = exp ? "flex" : "none"; }; el.dataset.expanded = "false"; const obs = new MutationObserver(update); obs.observe(el, { attributes: true, attributeFilter: ["data-expanded"] }); update(); } }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", color: `var(--text-dim)`, letterSpacing: "0.06em", fontWeight: 500 }}>
-            {rawData
-              ? <>
-                  <span style={{ color: `var(--text-muted)`, fontWeight: 600 }}>PERF INTEL</span>
-                  <span style={{ margin: "0 0.4rem", opacity: 0.3 }}>|</span>
-                  {programs.length} programs
-                  <span style={{ margin: "0 0.4rem", opacity: 0.3 }}>|</span>
-                  {perf.uniqueAgentCount} agents
-                  {goalsRaw && <><span style={{ margin: "0 0.4rem", opacity: 0.3 }}>|</span><span style={{ color: "#16a34a" }}>goals</span></>}
-                  {newHireSet.size > 0 && <><span style={{ margin: "0 0.4rem", opacity: 0.3 }}>|</span><span style={{ color: "var(--nh-color)" }}>{newHireSet.size} NH</span></>}
-                </>
-              : <span><span style={{ fontWeight: 600 }}>PERFORMANCE INTEL</span></span>
-            }
-          </span>
-          <div style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
-            <button onClick={() => setLightMode(v => !v)}
-              style={{ background: "transparent", border: `1px solid var(--border-muted)`, borderRadius: "var(--radius-sm, 6px)", color: `var(--text-muted)`, padding: "0.3rem 0.55rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", cursor: "pointer" }}>
-              {lightMode ? "\u2600" : "\u263E"}
-            </button>
-            <button onClick={() => setShowToday(v => !v)}
-              style={{ background: showToday?"#16a34a12":"transparent", border: `1px solid ${showToday?"#16a34a50":`var(--border-muted)`}`, borderRadius: "var(--radius-sm, 6px)", color: showToday?"#16a34a":`var(--text-muted)`, padding: "0.3rem 0.6rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", cursor: "pointer", fontWeight: 500, letterSpacing: "0.03em" }}>
-              {showToday ? "\u25CF" : "\u25CB"} TODAY
-            </button>
-            <button onClick={() => setShowSettings(v => !v)}
-              style={{ background: showSettings?"#6366f112":"transparent", border: `1px solid ${showSettings?"#6366f150":`var(--border-muted)`}`, borderRadius: "var(--radius-sm, 6px)", color: showSettings?"#6366f1":`var(--text-muted)`, padding: "0.3rem 0.6rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", cursor: "pointer", fontWeight: 500, letterSpacing: "0.03em" }}>
-              DATA
-            </button>
-          </div>
-        </div>
-        {/* File management row — appears below on hover */}
-        <div data-toolbar="" style={{ display: "none", gap: "0.5rem", alignItems: "center", paddingTop: "0.4rem", paddingBottom: "0.15rem", flexWrap: "wrap" }}>
-          {ollamaAvailable && (
-            <button onClick={() => setLocalAI(v => !v)}
-              style={{ background: localAI ? `${AI_COLOR}12` : "transparent", border: `1px solid ${localAI ? `${AI_COLOR}50` : "var(--border-muted)"}`, borderRadius: "var(--radius-sm, 6px)", color: localAI ? AI_COLOR : `var(--text-muted)`, padding: "0.3rem 0.65rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", cursor: "pointer", fontWeight: 500 }}>
-              {localAI ? "\u25CF" : "\u25CB"} Local AI
-            </button>
-          )}
-          <button onClick={() => goalsInputRef.current.click()}
-            style={{ background: goalsRaw?"#16a34a10":"transparent", border: `1px solid ${goalsRaw?"#16a34a40":`var(--border-muted)`}`, borderRadius: "var(--radius-sm, 6px)", color: goalsRaw?"#16a34a":`var(--text-muted)`, padding: "0.3rem 0.65rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", cursor: "pointer", fontWeight: 500 }}>
-            {goalsRaw ? "\u2713 Goals" : "+ Goals"}
-          </button>
-          {goalsRaw && (
-            <button onClick={() => setGoalsRaw(null)} title="Clear saved goals"
-              style={{ background: "transparent", border: "1px solid var(--border-muted)", borderRadius: "var(--radius-sm, 6px)", color: `var(--text-dim)`, padding: "0.3rem 0.45rem", fontSize: "0.75rem", cursor: "pointer", lineHeight: 1 }}>{"\u2715"}</button>
-          )}
-          <input ref={goalsInputRef} type="file" accept=".csv" style={{ display: "none" }} onChange={e => loadFile(e.target.files[0], setGoalsRaw)} />
-          <button onClick={() => nhInputRef.current.click()}
-            style={{ background: newHiresRaw?"#d9770610":"transparent", border: `1px solid ${newHiresRaw?"#d9770640":`var(--border-muted)`}`, borderRadius: "var(--radius-sm, 6px)", color: newHiresRaw?"#d97706":`var(--text-muted)`, padding: "0.3rem 0.65rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", cursor: "pointer", fontWeight: 500 }}>
-            {newHiresRaw ? `\u2713 ${newHireSet.size} NH` : "+ New Hires"}
-          </button>
-          {newHiresRaw && (
-            <button onClick={() => setNHRaw(null)} title="Clear saved roster"
-              style={{ background: "transparent", border: "1px solid var(--border-muted)", borderRadius: "var(--radius-sm, 6px)", color: `var(--text-dim)`, padding: "0.3rem 0.45rem", fontSize: "0.75rem", cursor: "pointer", lineHeight: 1 }}>{"\u2715"}</button>
-          )}
-          <input ref={nhInputRef} type="file" accept=".csv" style={{ display: "none" }} onChange={e => loadFile(e.target.files[0], setNHRaw)} />
-          <button onClick={() => priorGoalsInputRef.current.click()}
-            style={{ background: priorMonthGoalsRaw?"#8b5cf610":"transparent", border: `1px solid ${priorMonthGoalsRaw?"#8b5cf640":`var(--border-muted)`}`, borderRadius: "var(--radius-sm, 6px)", color: priorMonthGoalsRaw?"#8b5cf6":`var(--text-muted)`, padding: "0.3rem 0.65rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", cursor: "pointer", fontWeight: 500 }}>
-            {priorMonthGoalsRaw ? "\u2713 Prior Goals" : "+ Prior Goals"}
-          </button>
-          {priorMonthGoalsRaw && (
-            <button onClick={() => setPriorMonthGoalsRaw(null)} title="Clear saved prior goals"
-              style={{ background: "transparent", border: "1px solid var(--border-muted)", borderRadius: "var(--radius-sm, 6px)", color: `var(--text-dim)`, padding: "0.3rem 0.45rem", fontSize: "0.75rem", cursor: "pointer", lineHeight: 1 }}>{"\u2715"}</button>
-          )}
-          <input ref={priorGoalsInputRef} type="file" accept=".csv" style={{ display: "none" }} onChange={e => loadFile(e.target.files[0], setPriorMonthGoalsRaw)} />
-          <div style={{ flex: 1 }} />
-          {rawData && <button onClick={() => setShowMbrModal(true)} style={{ padding: "0.3rem 0.65rem", background: "transparent", border: "1px solid var(--border-muted)", borderRadius: "var(--radius-sm, 6px)", color: "var(--text-muted)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", cursor: "pointer", fontWeight: 500 }}>Export MBR</button>}
-          <button onClick={() => { setRawData(null); setSlideIndex(0); setShowToday(false); }}
-            style={{ background: "transparent", border: "1px solid var(--border-muted)", borderRadius: "var(--radius-sm, 6px)", color: `var(--text-muted)`, padding: "0.3rem 0.65rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", cursor: "pointer", fontWeight: 500 }}>
-            New File
-          </button>
-          <button onClick={() => { const t = prompt("Paste agent CSV data:"); if (t) { const rows = parseCSV(t); if (rows.length > 0) { setRawData(rows); setSlideIndex(0); } } }}
-            style={{ background: "transparent", border: "1px solid var(--border-muted)", borderRadius: "var(--radius-sm, 6px)", color: `var(--text-muted)`, padding: "0.3rem 0.65rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", cursor: "pointer", fontWeight: 500 }}>
-            Paste
-          </button>
-          <button onClick={async () => { try { setSheetLoading(true); const res = await fetch(agentSheetUrl); const text = await res.text(); const rows = parseCSV(text); if (rows.length > 0) { setRawData(rows); setSlideIndex(0); } } catch(e) { alert("Could not fetch sheet: " + e.message); } finally { setSheetLoading(false); } }}
-            style={{ background: "#2563eb10", border: "1px solid #2563eb40", borderRadius: "var(--radius-sm, 6px)", color: "#2563eb", padding: "0.3rem 0.65rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", cursor: "pointer", fontWeight: 600 }}>
-            {sheetLoading ? "Loading..." : "Refresh"}
-          </button>
-        </div>
-      </div>
-
-      <div style={{ paddingTop: "42px" }}>
+      <div style={{ paddingTop: showToday ? 0 : "48px" }}>
+        <Breadcrumb
+          section={currentPage.section}
+          program={currentPage.program}
+          attainment={filteredProgram ? filteredProgram.attainment : null}
+        />
         {showToday ? (
           <TodayView recentAgentNames={recentAgentNames} historicalAgentMap={historicalAgentMap} goalLookup={perf.goalLookup} />
         ) : sheetLoading && !rawData ? (
-          <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: `var(--bg-primary)`, animation: "fadeIn 0.4s ease" }}>
-            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)`, letterSpacing: "0.1em", marginBottom: "1.25rem", fontWeight: 500 }}>LOADING FROM GOOGLE SHEETS</div>
-            <div style={{ width: "180px", height: "2px", background: `var(--border)`, borderRadius: "2px", overflow: "hidden" }}>
+          <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "var(--bg-primary)", animation: "fadeIn 0.4s ease" }}>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "var(--text-muted)", letterSpacing: "0.1em", marginBottom: "1.25rem", fontWeight: 500 }}>LOADING FROM GOOGLE SHEETS</div>
+            <div style={{ width: "180px", height: "2px", background: "var(--border)", borderRadius: "2px", overflow: "hidden" }}>
               <div style={{ width: "40%", height: "100%", background: "linear-gradient(90deg, #d97706, #f59e0b)", borderRadius: "2px", animation: "shimmer 1.5s ease-in-out infinite" }} />
             </div>
           </div>
         ) : !rawData ? (
           <DropZone
-            onData={d => { setRawData(d); setSlideIndex(0); }}
+            onData={d => { setRawData(d); setCurrentPage({ section: "overview" }); }}
             goalsRaw={goalsRaw}
             onGoalsLoad={setGoalsRaw}
             newHiresRaw={newHiresRaw}
             onNewHiresLoad={setNHRaw}
           />
-        ) : isOverview ? (
-          <BusinessOverview perf={perf} onNav={navTo} goToSlide={goToSlide} tnpsSlideIdx={tnpsSlideIdx} localAI={localAI} priorAgents={priorAgents} priorGoalLookup={priorGoalLookup} lightMode={lightMode} />
-        ) : (isTnpsSlide || isCampaignCompare || program) ? (
-          <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-            {/* Shared navigation bar — programs, MoM Compare, tNPS */}
-            <div style={{ flexShrink: 0, borderBottom: "1px solid var(--glass-border)", padding: "0.5rem 1.5rem", background: `var(--glass-bg-subtle)`, backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", display: "flex", alignItems: "center", gap: "0.35rem", overflowX: "auto" }}>
-              <button onClick={() => goToSlide(0)}
-                style={{ padding: "0.4rem 0.75rem", borderRadius: "var(--radius-sm, 6px)", border: "1px solid var(--border-muted)", background: "transparent", color: `var(--text-muted)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, fontWeight: 500 }}>
-                {"\u2190"} Overview
-              </button>
-              <div style={{ width: "1px", height: "18px", background: `var(--border-muted)`, flexShrink: 0, margin: "0 0.15rem" }} />
-              {programs.map((p, pi) => ({ p, pi })).sort((a, b) => (b.p.attainment ?? b.p.healthScore ?? 0) - (a.p.attainment ?? a.p.healthScore ?? 0)).map(({ p, pi }) => {
-                const pIdx = pi + programStartIdx;
-                const isActive = slideIndex === pIdx;
-                const att = p.attainment;
-                const aColor = att !== null ? attainColor(att) : `var(--text-dim)`;
-                return (
-                  <button key={p.jobType} onClick={() => goToSlide(pIdx)}
-                    style={{ padding: "0.4rem 0.7rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${isActive ? aColor + "50" : "transparent"}`, background: isActive ? aColor + "12" : "transparent", color: isActive ? aColor : `var(--text-dim)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", cursor: "pointer", fontWeight: isActive ? 600 : 400, whiteSpace: "nowrap", flexShrink: 0, transition: "all 200ms cubic-bezier(0.4,0,0.2,1)", position: "relative" }}>
-                    {p.jobType}
-                    {att !== null && <span style={{ marginLeft: "0.3rem", fontSize: "0.75rem", opacity: 0.6, fontFamily: "var(--font-data, monospace)" }}>{Math.round(att)}%</span>}
-                    {isActive && <span style={{ position: "absolute", bottom: "-0.5rem", left: "50%", transform: "translateX(-50%)", width: "20px", height: "2px", background: aColor, borderRadius: "1px" }} />}
-                  </button>
-                );
-              })}
-              <div style={{ width: "1px", height: "18px", background: `var(--border-muted)`, flexShrink: 0, margin: "0 0.15rem" }} />
-              <button onClick={() => goToSlide(campaignCompareIdx)}
-                style={{ padding: "0.4rem 0.7rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${isCampaignCompare ? "#d9770650" : "transparent"}`, background: isCampaignCompare ? "#d9770612" : "transparent", color: isCampaignCompare ? "#d97706" : `var(--text-dim)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, fontWeight: isCampaignCompare ? 600 : 400 }}>
-                MoM Compare
-              </button>
-              {hasTnps && (
-                <>
-                  <div style={{ width: "1px", height: "18px", background: "var(--border-muted)", flexShrink: 0, margin: "0 0.15rem" }} />
-                  <button onClick={() => goToSlide(tnpsSlideIdx)}
-                    style={{ padding: "0.4rem 0.7rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${isTnpsSlide ? "#d9770650" : "transparent"}`, background: isTnpsSlide ? "#d9770612" : "transparent", color: isTnpsSlide ? "#d97706" : "var(--text-dim)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, fontWeight: isTnpsSlide ? 600 : 400 }}>
-                    tNPS
-                  </button>
-                </>
-              )}
-            </div>
-            <div style={{ flex: 1, overflow: "hidden" }}>
-            {isTnpsSlide ? (
-              <TNPSSlide perf={perf} onNav={navTo} lightMode={lightMode} />
-            ) : isCampaignCompare ? (
-              <CampaignComparisonPanel
-                currentAgents={perf.agents}
-                onNav={navTo}
-                localAI={localAI}
-                priorAgents={priorAgents}
-                priorGoalLookup={priorGoalLookup}
-                priorSheetLoading={priorSheetLoading}
-                setPriorRaw={setPriorMonthRaw}
-                setPriorGoalsRaw={setPriorMonthGoalsRaw}
-              />
-            ) : (
-              <Slide
-                key={program.jobType}
-                program={program}
-                newHireSet={newHireSet}
-                goalLookup={perf.goalLookup}
-                fiscalInfo={perf.fiscalInfo}
-                slideIndex={slideIndex}
-                total={totalSlides}
-                onNav={navTo}
-                allAgents={perf.agents}
-                localAI={localAI}
-                priorAgents={priorAgents}
-                tnpsByAgent={perf.tnpsByAgent}
-              />
-            )}
-            </div>
-          </div>
-        ) : (
-          <div style={{ minHeight: "90vh", display: "flex", alignItems: "center", justifyContent: "center", color: `var(--text-faint)`, fontFamily: "var(--font-ui, Inter, sans-serif)" }}>
+        ) : programs.length === 0 ? (
+          <div style={{ minHeight: "90vh", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-faint)", fontFamily: "var(--font-ui, Inter, sans-serif)" }}>
             No "Job Type" column found in your data.
+          </div>
+        ) : currentPage.section === "overview" ? (
+          <BusinessOverview perf={perf} onNav={() => {}} goToSlide={() => {}} tnpsSlideIdx={-1} localAI={localAI} priorAgents={priorAgents} priorGoalLookup={priorGoalLookup} lightMode={lightMode} />
+        ) : currentPage.section === "tnps" && hasTnps ? (
+          <TNPSSlide perf={perf} onNav={() => {}} lightMode={lightMode} />
+        ) : currentPage.section === "mom" ? (
+          <CampaignComparisonPanel
+            currentAgents={perf.agents}
+            onNav={() => {}}
+            localAI={localAI}
+            priorAgents={priorAgents}
+            priorGoalLookup={priorGoalLookup}
+            priorSheetLoading={priorSheetLoading}
+            setPriorRaw={setPriorMonthRaw}
+            setPriorGoalsRaw={setPriorMonthGoalsRaw}
+          />
+        ) : (currentPage.section === "dr" || currentPage.section === "bz") && !currentPage.program ? (
+          <SiteDrilldown
+            siteLabel={currentPage.section === "dr" ? "Dom. Republic" : "Belize"}
+            regions={currentPage.section === "dr" ? siteRegionGroups.dr : siteRegionGroups.bz}
+            allAgents={perf.agents}
+            programs={programs}
+            goalLookup={perf.goalLookup}
+            newHireSet={newHireSet}
+            fiscalInfo={perf.fiscalInfo}
+          />
+        ) : (currentPage.section === "dr" || currentPage.section === "bz") && filteredProgram ? (
+          <Slide
+            key={`${currentPage.section}-${currentPage.program}`}
+            program={filteredProgram}
+            newHireSet={newHireSet}
+            goalLookup={perf.goalLookup}
+            fiscalInfo={perf.fiscalInfo}
+            slideIndex={0} total={1} onNav={() => {}}
+            allAgents={perf.agents}
+            localAI={localAI}
+            priorAgents={priorAgents}
+            tnpsByAgent={perf.tnpsByAgent}
+            siteFilter={currentPage.section.toUpperCase()}
+          />
+        ) : (
+          <div style={{ minHeight: "60vh", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: "1rem", color: "var(--text-dim)", fontFamily: "var(--font-ui, Inter, sans-serif)" }}>
+            <div>This view is no longer available.</div>
+            <button onClick={() => setCurrentPage({ section: "overview" })}
+              style={{ padding: "0.5rem 1rem", borderRadius: "var(--radius-sm, 6px)", border: "1px solid #ed8936", background: "#ed893618", color: "#ed8936", cursor: "pointer", fontWeight: 600 }}>
+              Go to Overview
+            </button>
           </div>
         )}
       </div>
