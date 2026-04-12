@@ -7022,20 +7022,6 @@ function BusinessOverview({ perf, onNav, goToSlide, tnpsSlideIdx, localAI, prior
     })).sort((a, b) => (b.score ?? -999) - (a.score ?? -999));
   }, [tnpsData, tnpsBySiteAll, fiscalInfo]);
 
-  // Group regions: XOTM = BZ, everything else = individual DR sites
-  const siteGroups = useMemo(() => {
-    const allRegions = [...new Set(agents.map(a => (a.region || "Unknown")))].filter(r => r !== "Unknown").sort();
-    const bzRegions  = allRegions.filter(r => r.toUpperCase().includes("XOTM"));
-    const drRegions  = allRegions.filter(r => !r.toUpperCase().includes("XOTM"));
-    const groups = [];
-    if (drRegions.length > 0) groups.push({ label: drRegions.length === 1 ? mbrSiteName(drRegions[0]) : "DR", regions: drRegions });
-    if (bzRegions.length > 0) groups.push({ label: "BZ", regions: bzRegions });
-    return groups;
-  }, [agents]);
-
-  const [selectedGroup, setSelectedGroup] = useState(null);
-  const activeGroup = selectedGroup || siteGroups[0] || null;
-
   const wins = insights.filter(i => i.type === "win");
   const opps = insights.filter(i => i.type === "opp");
 
@@ -7130,11 +7116,11 @@ function BusinessOverview({ perf, onNav, goToSlide, tnpsSlideIdx, localAI, prior
         <div>
           <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: `var(--text-muted)`, letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 600, marginBottom: "0.2rem" }}>Business Overview</div>
           <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "2rem", color: `var(--text-warm)`, fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1.15 }}>
-            {tab === "bysite" && activeGroup ? activeGroup.label : tab === "daily" ? "Daily Performance" : tab === "trends" ? "Week-over-Week Trends" : "Highlights & Lowlights"}
+            {tab === "daily" ? "Daily Performance" : tab === "trends" ? "Week-over-Week Trends" : "Highlights & Lowlights"}
           </div>
         </div>
         <div style={{ display: "flex", gap: "0.35rem", alignItems: "center", flexWrap: "wrap" }}>
-          {[["overview","Overview"],["bysite","By Site"],["daily","Daily"],["trends","Trends"]].map(([t, label]) => (
+          {[["overview","Overview"],["daily","Daily"],["trends","Trends"]].map(([t, label]) => (
             <button key={t} onClick={() => setTab(t)}
               style={{ padding: "0.4rem 0.85rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${tab===t?"#d9770650":"var(--text-faint)"}`, background: tab===t?"#d9770612":"transparent", color: tab===t?"#d97706":`var(--text-muted)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", cursor: "pointer", fontWeight: tab===t ? 600 : 400, transition: "all 200ms cubic-bezier(0.4,0,0.2,1)" }}>
               {label}
@@ -7159,39 +7145,6 @@ function BusinessOverview({ perf, onNav, goToSlide, tnpsSlideIdx, localAI, prior
                 Upload your goals CSV to unlock Goals vs Plan comparisons and a Goals tab on every program slide. Until then, metrics reflect performance distribution only.
               </div>
             </div>
-          </div>
-        )}
-
-        {/* ── BY SITE TAB ── */}
-        {tab === "bysite" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-            {/* Site group selector */}
-            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-              {siteGroups.map(g => (
-                <button key={g.label} onClick={() => setSelectedGroup(g)}
-                  style={{ padding: "0.4rem 1rem", borderRadius: "6px", border: `1px solid ${activeGroup?.label===g.label?"#d97706":`var(--border)`}`, background: activeGroup?.label===g.label?"#d9770618":"transparent", color: activeGroup?.label===g.label?"#d97706":`var(--text-muted)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", cursor: "pointer" }}>
-                  {g.label}
-                  {g.regions.length > 1 && (
-                    <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-dim)`, marginLeft: "0.4rem" }}>
-                      ({g.regions.length} sites)
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
-            {activeGroup && (
-              <ErrorBoundary>
-              <SiteDrilldown
-                siteLabel={activeGroup.label}
-                regions={activeGroup.regions}
-                allAgents={agents}
-                programs={programs}
-                goalLookup={goalLookup}
-                newHireSet={newHireSet}
-                fiscalInfo={fiscalInfo}
-              />
-              </ErrorBoundary>
-            )}
           </div>
         )}
 
