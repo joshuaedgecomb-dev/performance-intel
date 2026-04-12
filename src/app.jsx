@@ -6549,6 +6549,94 @@ function buildVirgilTitleSlide(pres, reportingMonthLabel, fiscalInfo, virgilLast
   }
 }
 
+function buildVirgilMyPerformanceSlide(pres, stats, loginDist, reportingMonthLabel, insightsText) {
+  const slide = pres.addSlide();
+  slide.background = { color: virgilTheme.slideBg };
+  virgilBrandBars(pres, slide);
+
+  // Eyebrow + title
+  slide.addText("OPERATIONAL PERFORMANCE", {
+    x: 0.5, y: 0.35, w: 6, h: 0.25,
+    fontSize: 10, color: virgilTheme.eyebrow, bold: true, charSpacing: 2,
+  });
+  slide.addText(`My Performance / Quality — ${reportingMonthLabel}`, {
+    x: 0.5, y: 0.65, w: 12, h: 0.55,
+    fontSize: 26, color: virgilTheme.bodyText, bold: true,
+  });
+
+  // Top row — 3 KPI blocks
+  const blocks = [
+    { label: "Coaching Standard Attainment", org: stats.org.coachingPct, dr: stats.dr.coachingPct, bz: stats.bz.coachingPct, pct: true },
+    { label: "Acknowledgement %", org: stats.org.acknowledgePct, dr: stats.dr.acknowledgePct, bz: stats.bz.acknowledgePct, pct: true },
+    { label: "Total Coaching Sessions", org: stats.org.totalSessions, dr: stats.dr.totalSessions, bz: stats.bz.totalSessions, pct: false },
+  ];
+  const blockY = 1.5;
+  const blockW = 3.9;
+  const blockH = 1.8;
+  blocks.forEach((b, i) => {
+    const x = 0.5 + i * (blockW + 0.2);
+    slide.addShape("rect", {
+      x, y: blockY, w: blockW, h: blockH,
+      fill: { color: "F3F4F6" },
+      line: { color: "E5E7EB", width: 0.5 },
+    });
+    slide.addText(b.label, {
+      x: x + 0.2, y: blockY + 0.1, w: blockW - 0.4, h: 0.3,
+      fontSize: 11, color: virgilTheme.subtle, bold: true,
+    });
+    const fmt = (v) => b.pct ? `${(v * 100).toFixed(1)}%` : String(Math.round(v));
+    slide.addText(fmt(b.org), {
+      x: x + 0.2, y: blockY + 0.4, w: blockW - 0.4, h: 0.6,
+      fontSize: 28, color: virgilTheme.bodyText, bold: true,
+    });
+    slide.addText(`DR ${fmt(b.dr)}   ·   BZ ${fmt(b.bz)}`, {
+      x: x + 0.2, y: blockY + 1.1, w: blockW - 0.4, h: 0.4,
+      fontSize: 12, color: virgilTheme.subtle,
+    });
+  });
+
+  // Middle — login activity stacked bar
+  slide.addText("myPerformance Login Activity", {
+    x: 0.5, y: 3.6, w: 12, h: 0.3,
+    fontSize: 14, color: virgilTheme.eyebrow, bold: true,
+  });
+  const barX = 0.5;
+  const barY = 4.0;
+  const barW = 12.3;
+  const barH = 0.6;
+  const bucketColors = ["0E7490", "3B82F6", "8B5CF6", "7C3AED"];
+  const totalUsers = loginDist.reduce((s, d) => s + (d.users || 0), 0) || 1;
+  let runX = barX;
+  loginDist.forEach((d, i) => {
+    const segW = (d.pct || 0) * barW;
+    if (segW <= 0) return;
+    slide.addShape("rect", {
+      x: runX, y: barY, w: segW, h: barH,
+      fill: { color: bucketColors[i] || "9CA3AF" },
+      line: { color: bucketColors[i] || "9CA3AF", width: 0 },
+    });
+    slide.addText(`${d.bucket}\n${(d.pct * 100).toFixed(0)}% · ${d.users}`, {
+      x: runX, y: barY, w: segW, h: barH,
+      fontSize: 10, color: "FFFFFF", align: "center", valign: "middle", bold: true,
+    });
+    runX += segW;
+  });
+  slide.addText(`Total Users: ${totalUsers}`, {
+    x: barX, y: barY + barH + 0.1, w: barW, h: 0.25,
+    fontSize: 10, color: virgilTheme.subtle, italic: true,
+  });
+
+  // Bottom — insights
+  slide.addText("Insights", {
+    x: 0.5, y: 5.2, w: 12, h: 0.3,
+    fontSize: 14, color: virgilTheme.eyebrow, bold: true,
+  });
+  slide.addText(insightsText || "", {
+    x: 0.5, y: 5.5, w: 12.3, h: 1.3,
+    fontSize: 12, color: virgilTheme.bodyText, valign: "top",
+  });
+}
+
 function MbrExportModal({ perf, onClose }) {
   const [state, setState] = useState("confirm");
   const [progress, setProgress] = useState("");
