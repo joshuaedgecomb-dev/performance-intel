@@ -6656,6 +6656,13 @@ function buildVirgilTitleSlide(pres, reportingMonthLabel, fiscalInfo, virgilLast
     charSpacing: 5, align: "center",
   });
 
+  // Presenters
+  slide.addText("Presented by Joshua Edgecomb, Frank Daley, Jasmine Mendoza", {
+    x: 1.0, y: 4.35, w: w - 2.0, h: 0.35,
+    fontSize: 11, color: "FFFFFF", italic: true,
+    align: "center",
+  });
+
   // xfinity wordmark bottom-right
   slide.addText("xfinity", {
     x: w - 1.5, y: h - 0.55, w: 1.2, h: 0.35,
