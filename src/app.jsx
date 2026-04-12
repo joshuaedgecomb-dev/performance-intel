@@ -13592,6 +13592,41 @@ export default function App() {
   const [showToday,  setShowToday]  = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showMbrModal, setShowMbrModal] = useState(false);
+
+  const [showVirgilMbrModal, setShowVirgilMbrModal] = useState(false);
+
+  const [coachingDetailsRaw, _setCoachingDetailsRaw] = useState(() => {
+    try { return localStorage.getItem("perf_intel_coaching_details_v1") || ""; } catch(e) { return ""; }
+  });
+  const setCoachingDetailsRaw = useCallback(v => {
+    _setCoachingDetailsRaw(v);
+    try { localStorage.setItem("perf_intel_coaching_details_v1", v || ""); } catch(e) {}
+  }, []);
+
+  const [coachingWeeklyRaw, _setCoachingWeeklyRaw] = useState(() => {
+    try { return localStorage.getItem("perf_intel_coaching_weekly_v1") || ""; } catch(e) { return ""; }
+  });
+  const setCoachingWeeklyRaw = useCallback(v => {
+    _setCoachingWeeklyRaw(v);
+    try { localStorage.setItem("perf_intel_coaching_weekly_v1", v || ""); } catch(e) {}
+  }, []);
+
+  const [loginBucketsRaw, _setLoginBucketsRaw] = useState(() => {
+    try { return localStorage.getItem("perf_intel_login_buckets_v1") || ""; } catch(e) { return ""; }
+  });
+  const setLoginBucketsRaw = useCallback(v => {
+    _setLoginBucketsRaw(v);
+    try { localStorage.setItem("perf_intel_login_buckets_v1", v || ""); } catch(e) {}
+  }, []);
+
+  const [virgilInsights, _setVirgilInsights] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("perf_intel_virgil_insights_v1") || "{}"); } catch(e) { return {}; }
+  });
+  const setVirgilInsights = useCallback(v => {
+    _setVirgilInsights(v);
+    try { localStorage.setItem("perf_intel_virgil_insights_v1", JSON.stringify(v || {})); } catch(e) {}
+  }, []);
+
   const [localAI, setLocalAI]      = useState(false);
   const [ollamaAvailable, setOllamaAvailable] = useState(null); // null=checking, true/false
   const [hoursThreshold, _setHoursThreshold] = useState(_hoursThreshold);
