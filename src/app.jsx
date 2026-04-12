@@ -6637,14 +6637,21 @@ function buildVirgilTitleSlide(pres, reportingMonthLabel, fiscalInfo, virgilLast
   const year = today.getFullYear();
   const dateText = `${monthFull} ${day}${ord(day).toUpperCase()}, ${year}`;
   slide.addText(dateText, {
-    x: 1.0, y: 3.55, w: 5.5, h: 0.35,
+    x: 0.5, y: 3.55, w: 12.33, h: 0.35,
     fontSize: 11, color: "FFFFFF", bold: true,
     charSpacing: 5, align: "center",
   });
 
-  // --- Presenters (below the date, still centered under the title area) ---
+  // --- Business partner line ---
+  slide.addText("GLOBAL CALLCENTER SOLUTIONS", {
+    x: 0.5, y: 3.95, w: 12.33, h: 0.35,
+    fontSize: 11, color: "FFFFFF", bold: true,
+    charSpacing: 4, align: "center",
+  });
+
+  // --- Presenters ---
   slide.addText("Presented by Joshua Edgecomb, Frank Daley, Jasmine Mendoza", {
-    x: 1.0, y: 4.0, w: 5.5, h: 0.3,
+    x: 0.5, y: 4.35, w: 12.33, h: 0.3,
     fontSize: 10, color: "FFFFFF", italic: true,
     align: "center",
   });
@@ -6670,7 +6677,7 @@ function buildVirgilMyPerformanceSlide(pres, stats, loginBuckets, priorPriorMont
     x: 0.5, y: 0.35, w: 6, h: 0.25,
     fontSize: 10, color: virgilTheme.eyebrow, bold: true, charSpacing: 2,
   });
-  slide.addText(`Quality and Coaching — ${reportingMonthLabel}`, {
+  slide.addText(`Global Callcenter Solutions | Quality and Coaching`, {
     x: 0.5, y: 0.65, w: 12, h: 0.55,
     fontSize: 26, color: virgilTheme.bodyText, bold: true,
   });
