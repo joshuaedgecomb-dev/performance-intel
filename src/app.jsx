@@ -6612,36 +6612,20 @@ function buildVirgilTitleSlide(pres, reportingMonthLabel, fiscalInfo, virgilLast
   const w = 13.333;
   const h = 7.5;
 
-  // --- Background: single solid indigo ---
-  slide.background = { color: "4F46E5" };
-
-  // --- X watermark (two rotated white bars, left-of-center) ---
-  const xCenterX = 2.8;
-  const xCenterY = 3.75;
-  const barW = 0.85;
-  const barH = 5.5;
-  const drawXBar = (angle) => {
-    slide.addShape("rect", {
-      x: xCenterX - barW / 2,
-      y: xCenterY - barH / 2,
-      w: barW,
-      h: barH,
-      fill: { color: "FFFFFF", transparency: 82 },
-      line: { type: "none" },
-      rotate: angle,
-    });
-  };
-  drawXBar(25);
-  drawXBar(-25);
-
-  // --- Title ---
-  slide.addText("OUTBOUND FISCAL MONTH MBR", {
-    x: 5.0, y: 3.0, w: 7.5, h: 0.55,
-    fontSize: 22, color: "FFFFFF", bold: true,
-    charSpacing: 3, align: "center",
+  // --- Pre-rendered title background (gradient + X + title + xfinity all baked in) ---
+  slide.addImage({
+    path: `${import.meta.env.BASE_URL}corp-mbr-title-bg.png`,
+    x: 0, y: 0, w, h,
   });
 
-  // --- Date (today's date, "APRIL 14TH, 2026" format) ---
+  // --- Mask the baked-in "APRIL 14TH, 2026" date on the image ---
+  slide.addShape("rect", {
+    x: 3.3, y: 3.28, w: 2.7, h: 0.35,
+    fill: { color: "4F3FCF" },
+    line: { type: "none" },
+  });
+
+  // --- Dynamic date overlay (today's presentation date) ---
   const ord = (d) => {
     const s = ["th", "st", "nd", "rd"];
     const v = d % 100;
@@ -6653,23 +6637,16 @@ function buildVirgilTitleSlide(pres, reportingMonthLabel, fiscalInfo, virgilLast
   const year = today.getFullYear();
   const dateText = `${monthFull} ${day}${ord(day).toUpperCase()}, ${year}`;
   slide.addText(dateText, {
-    x: 5.0, y: 3.7, w: 7.5, h: 0.35,
+    x: 3.3, y: 3.28, w: 2.7, h: 0.35,
     fontSize: 11, color: "FFFFFF", bold: true,
     charSpacing: 5, align: "center",
   });
 
-  // --- Presenters ---
+  // --- Presenters (below the baked-in date area) ---
   slide.addText("Presented by Joshua Edgecomb, Frank Daley, Jasmine Mendoza", {
-    x: 5.0, y: 4.15, w: 7.5, h: 0.3,
+    x: 0.8, y: 3.85, w: 5.8, h: 0.3,
     fontSize: 10, color: "FFFFFF", italic: true,
     align: "center",
-  });
-
-  // --- xfinity wordmark ---
-  slide.addText("xfinity", {
-    x: w - 1.3, y: h - 0.45, w: 1.1, h: 0.3,
-    fontSize: 12, color: "FFFFFF",
-    align: "right",
   });
 }
 
