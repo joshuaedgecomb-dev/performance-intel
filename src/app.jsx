@@ -1253,6 +1253,15 @@ function calculateHealthScore({ attainment, q1Rate, hoursUtilization, stability 
   );
 }
 
+// Filter goalEntries down to a single site's plan rows. Used when building a
+// site-scoped program so attainment is site-actual ÷ site-plan, not vs combined.
+function filterGoalEntriesBySite(goalEntries, siteKey) {
+  return (goalEntries || []).map(entry => ({
+    targetAudience: entry.targetAudience,
+    siteMap: entry.siteMap && entry.siteMap[siteKey] ? { [siteKey]: entry.siteMap[siteKey] } : {},
+  }));
+}
+
 function buildProgram(agents, jobType, goalEntries, newHireSet) {
   // goalEntries = [{ targetAudience, siteMap }, ...]
   // For backward compat, collapse all entries into a single siteMap for plan totals
@@ -10609,6 +10618,122 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
   );
 }
 
+// ── ProgramSiteCompareCard — DR vs BZ scorecard for shared programs ─────────
+// Renders only when both DR and BZ have agents in this program.
+function ProgramSiteCompareCard({ program, allAgents, newHireSet }) {
+  const data = useMemo(() => {
+    const allRegions = [...new Set(allAgents.map(a => a.region).filter(Boolean))];
+    const drRegions = allRegions.filter(r => !r.toUpperCase().includes("XOTM"));
+    const bzRegions = allRegions.filter(r => r.toUpperCase().includes("XOTM"));
+    const programAgents = allAgents.filter(a => a.jobType === program.jobType);
+    const buildSide = (regions, siteKey) => {
+      const siteAgents = programAgents.filter(a => regions.includes(a.region));
+      if (siteAgents.length === 0) return null;
+      const sub = buildProgram(siteAgents, program.jobType, filterGoalEntriesBySite(program.goalEntries, siteKey), newHireSet);
+      const cps = sub.totalGoals > 0 ? (sub.totalHours * MBR_BILLING_RATE) / sub.totalGoals : sub.totalHours * MBR_BILLING_RATE;
+      return {
+        attainment: sub.attainment,
+        goals: sub.totalGoals,
+        plan: sub.planGoals,
+        hours: sub.totalHours,
+        gph: sub.gph,
+        agents: sub.uniqueAgentCount,
+        q1Rate: sub.q1Rate,
+        q1Count: sub.distUnique.Q1,
+        cps,
+      };
+    };
+    return { dr: buildSide(drRegions, "DR"), bz: buildSide(bzRegions, "BZ") };
+  }, [program, allAgents, newHireSet]);
+
+  if (!data.dr || !data.bz) return null;
+
+  // Build winner-per-metric line
+  const fmtPts = v => `${v >= 0 ? "+" : ""}${v.toFixed(1)}pts`;
+  const fmtNum = v => `${v >= 0 ? "+" : ""}${Math.round(v)}`;
+  const fmtGph = v => `${v >= 0 ? "+" : ""}${v.toFixed(2)}`;
+  const fmtCps = v => `${v >= 0 ? "+" : "−"}$${Math.abs(Math.round(v))}`;
+  const drWins = [], bzWins = [];
+  if (data.dr.attainment != null && data.bz.attainment != null) {
+    const d = data.dr.attainment - data.bz.attainment;
+    if (Math.abs(d) >= 0.5) (d > 0 ? drWins : bzWins).push(`attainment ${fmtPts(Math.abs(d))}`);
+  }
+  if (data.dr.gph != null && data.bz.gph != null) {
+    const d = data.dr.gph - data.bz.gph;
+    if (Math.abs(d) >= 0.005) (d > 0 ? drWins : bzWins).push(`GPH ${fmtGph(Math.abs(d))}`);
+  }
+  const dHours = data.dr.hours - data.bz.hours;
+  if (Math.abs(dHours) >= 1) (dHours > 0 ? drWins : bzWins).push(`hours ${fmtNum(Math.abs(dHours))}`);
+  const dQ1 = data.dr.q1Rate - data.bz.q1Rate;
+  if (Math.abs(dQ1) >= 0.5) (dQ1 > 0 ? drWins : bzWins).push(`Q1 rate ${fmtPts(Math.abs(dQ1))}`);
+  const dCps = data.dr.cps - data.bz.cps;
+  if (Math.abs(dCps) >= 1) (dCps < 0 ? drWins : bzWins).push(`CPS ${fmtCps(-Math.abs(dCps))}`);
+
+  const Site = ({ side, accent, label }) => {
+    const d = data[side];
+    return (
+      <div style={{ flex: 1, padding: "12px 16px", minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.5rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: accent, letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 600 }}>
+          <span style={{ width: 6, height: 6, borderRadius: 3, background: accent }} />
+          {label}
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "0.5rem" }}>
+          <div>
+            <div style={{ fontSize: "0.62rem", color: "var(--text-dim)", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 600, marginBottom: 2 }}>Goal</div>
+            <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "1.05rem", color: d.attainment != null ? attainColor(d.attainment) : "var(--text-primary)", fontWeight: 700 }}>{d.attainment != null ? `${Math.round(d.attainment)}%` : "—"}</div>
+            <div style={{ fontSize: "0.62rem", color: "var(--text-faint)", fontFamily: "var(--font-data, monospace)" }}>{d.goals}{d.plan ? `/${d.plan}` : ""}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: "0.62rem", color: "var(--text-dim)", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 600, marginBottom: 2 }}>GPH</div>
+            <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "1.05rem", color: "var(--text-primary)", fontWeight: 700 }}>{fmt(d.gph, 2)}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: "0.62rem", color: "var(--text-dim)", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 600, marginBottom: 2 }}>Hours</div>
+            <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "1.05rem", color: "var(--text-primary)", fontWeight: 700 }}>{Math.round(d.hours)}</div>
+            <div style={{ fontSize: "0.62rem", color: "var(--text-faint)", fontFamily: "var(--font-data, monospace)" }}>{d.agents} ag</div>
+          </div>
+          <div>
+            <div style={{ fontSize: "0.62rem", color: "var(--text-dim)", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 600, marginBottom: 2 }}>Q1 rate</div>
+            <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "1.05rem", color: "var(--text-primary)", fontWeight: 700 }}>{Math.round(d.q1Rate)}%</div>
+            <div style={{ fontSize: "0.62rem", color: "var(--text-faint)", fontFamily: "var(--font-data, monospace)" }}>{d.q1Count} of {d.agents}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: "0.62rem", color: "var(--text-dim)", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 600, marginBottom: 2 }}>CPS</div>
+            <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "1.05rem", color: "var(--text-primary)", fontWeight: 700 }}>${Math.round(d.cps)}</div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-md, 10px)", overflow: "hidden" }}>
+      <div style={{ padding: "10px 16px 8px", borderBottom: "1px solid var(--border-muted)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: "var(--text-muted)", letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 600 }}>
+          DR vs BZ — {program.jobType}
+        </div>
+        <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "0.65rem", color: "var(--text-dim)" }}>both sites dialing</div>
+      </div>
+      <div style={{ display: "flex" }}>
+        <Site side="dr" accent="#ed8936" label="DR" />
+        <div style={{ width: 1, background: "var(--border-muted)" }} />
+        <Site side="bz" accent="#48bb78" label="BZ" />
+      </div>
+      {(drWins.length > 0 || bzWins.length > 0) && (
+        <div style={{ padding: "10px 16px", background: "var(--bg-row-alt)", borderTop: "1px solid var(--border-muted)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: "var(--text-secondary)", lineHeight: 1.6 }}>
+          {drWins.length > 0 && (
+            <span><span style={{ color: "#ed8936", fontWeight: 600 }}>DR</span> leads {drWins.join(", ")}.</span>
+          )}
+          {drWins.length > 0 && bzWins.length > 0 && <span> </span>}
+          {bzWins.length > 0 && (
+            <span><span style={{ color: "#48bb78", fontWeight: 600 }}>BZ</span> leads {bzWins.join(", ")}.</span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Slide({ program, newHireSet, goalLookup, fiscalInfo, allAgents, localAI, priorAgents, tnpsByAgent, siteFilter = null }) {
   const [tab, setTab] = useState("overview");
   const [rocFilter, setRocFilter] = useState(null); // null = all, or a specific ROC code
@@ -10728,6 +10853,10 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, allAgents, localAI
         {/* ── OVERVIEW TAB ── */}
         {tab === "overview" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+            {/* Site comparison card — only renders when both DR and BZ dial this program */}
+            {siteFilter && (
+              <ProgramSiteCompareCard program={program} allAgents={allAgents} newHireSet={newHireSet} />
+            )}
             {/* Stat cards */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "0.75rem" }}>
               <StatCard label="Agents"       value={fUniqueCount}            sub={rocFilter ? `filtered by ${rocFilter}` : `${distUnique.Q1} Q1 of ${uniqueAgentCount}`} accent="#d97706" />
@@ -13593,7 +13722,7 @@ export default function App() {
       perf.programs.forEach(prog => {
         const siteAgents = prog.agents.filter(a => regs.includes(a.region));
         if (siteAgents.length === 0) return;
-        const sub = buildProgram(siteAgents, prog.jobType, prog.goalEntries, newHireSet);
+        const sub = buildProgram(siteAgents, prog.jobType, filterGoalEntriesBySite(prog.goalEntries, siteKey), newHireSet);
         const pacing = sub.attainment != null && sub.planGoals
           ? calcPacing(sub.actGoals, sub.planGoals, elapsedBDays, totalBDays) : null;
         result[siteKey].push({
@@ -13633,10 +13762,11 @@ export default function App() {
     if (currentPage.section !== "dr" && currentPage.section !== "bz") return null;
     const baseProgram = perf.programMap[currentPage.program];
     if (!baseProgram) return null;
+    const siteKey = currentPage.section === "dr" ? "DR" : "BZ";
     const regs = currentPage.section === "dr" ? siteRegionGroups.dr : siteRegionGroups.bz;
     const siteAgents = baseProgram.agents.filter(a => regs.includes(a.region));
     if (siteAgents.length === 0) return null;
-    return buildProgram(siteAgents, baseProgram.jobType, baseProgram.goalEntries, newHireSet);
+    return buildProgram(siteAgents, baseProgram.jobType, filterGoalEntriesBySite(baseProgram.goalEntries, siteKey), newHireSet);
   }, [currentPage, perf.programMap, siteRegionGroups, newHireSet]);
 
   // AI prefetch counter — triggers re-renders as cache fills
