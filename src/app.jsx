@@ -7358,9 +7358,10 @@ function buildCorpQuartileSlide(pres, agentRaw, goalsRaw, newHiresRaw, reporting
     fontSize: 24, color: virgilTheme.bodyText, bold: true,
   });
 
+  const reportingPeriodLabel = getPriorMonthLabel(reportingMonthLabel);
+  const mtdLabel = reportingMonthLabel;
   const reporting = buildQuartileReport(agentRaw, goalsRaw, newHiresRaw,
-    makeMonthFilter(reportingMonthLabel), endOfMonthDate(reportingMonthLabel));
-  const mtdLabel = getNextMonthLabel(reportingMonthLabel);
+    makeMonthFilter(reportingPeriodLabel), endOfMonthDate(reportingPeriodLabel));
   const mtd = buildQuartileReport(agentRaw, goalsRaw, newHiresRaw,
     makeMonthFilter(mtdLabel), new Date());
 
@@ -7444,7 +7445,7 @@ function buildCorpQuartileSlide(pres, agentRaw, goalsRaw, newHiresRaw, reporting
     drawSection(4.55, "XI Participation (GLN)", report.xi);
   };
 
-  drawQuartileColumn(col1X, `Month Reporting On — ${reportingMonthLabel}`, reporting);
+  drawQuartileColumn(col1X, `Month Reporting On — ${reportingPeriodLabel}`, reporting);
   drawQuartileColumn(col2X, `MTD — ${mtdLabel}`, mtd);
 }
 
@@ -7462,11 +7463,11 @@ function buildCorpCampaignHoursSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
     fontSize: 24, color: virgilTheme.bodyText, bold: true,
   });
 
-  const priorKey = getPriorMonthLabel(reportingMonthLabel);
-  const mtdLabel = getNextMonthLabel(reportingMonthLabel);
-
-  const prior = buildCampaignHoursByFunding(priorAgentRaw, priorGoalsRaw, makeMonthFilter(priorKey));
-  const curr = buildCampaignHoursByFunding(agentRaw, goalsRaw, makeMonthFilter(reportingMonthLabel));
+  const reportingPeriodLabel = getPriorMonthLabel(reportingMonthLabel);  // input-1
+  const previousMonthLabel = getPriorMonthLabel(reportingPeriodLabel);   // input-2
+  const mtdLabel = reportingMonthLabel;                                   // input
+  const prior = buildCampaignHoursByFunding(priorAgentRaw, priorGoalsRaw, makeMonthFilter(previousMonthLabel));
+  const reporting = buildCampaignHoursByFunding(priorAgentRaw, priorGoalsRaw, makeMonthFilter(reportingPeriodLabel));
   const mtd = buildCampaignHoursByFunding(agentRaw, goalsRaw, makeMonthFilter(mtdLabel));
 
   const fundingOrder = ["Growth", "National", "Marketing", "HQ"];
@@ -7521,8 +7522,8 @@ function buildCorpCampaignHoursSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
     });
   };
 
-  drawBarGroup(1.25, priorKey, prior);
-  drawBarGroup(2.65, reportingMonthLabel, curr);
+  drawBarGroup(1.25, previousMonthLabel, prior);
+  drawBarGroup(2.65, reportingPeriodLabel, reporting);
   drawBarGroup(4.05, `${mtdLabel} MTD`, mtd);
 
   // Bottom half: Campaign Outlook (Growth) | Base Management (HQ, Marketing, National)
@@ -7772,11 +7773,11 @@ Write bullet-point style insights focused on movement vs prior, gaps vs 75% goal
         </p>
 
         <label style={{ display: "block", marginTop: 16, fontSize: 13, fontWeight: 600 }}>
-          Reporting Month Label
+          Current Fiscal Month Label
           <input type="text" value={reportingMonth} onChange={e => setReportingMonth(e.target.value)}
             placeholder="Mar '26"
             style={{ display: "block", marginTop: 4, width: "100%", padding: 8, border: "1px solid #d1d5db", borderRadius: 6 }} />
-          <small style={{ color: "#6b7280" }}>Must match the "Fiscal Month" value in your Coaching Details CSV.</small>
+          <small style={{ color: "#6b7280" }}>The current in-progress fiscal month (MTD). Must match format like "Apr '26". Reporting month auto-derives as (this − 1).</small>
         </label>
 
         <div style={{ marginTop: 16, padding: 12, background: "#f9fafb", borderRadius: 6 }}>
