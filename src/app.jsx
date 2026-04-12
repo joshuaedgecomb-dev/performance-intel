@@ -463,6 +463,8 @@ const DEFAULT_TNPS_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1
 const DEFAULT_CORP_COACHING_DETAILS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRagC_XDSQ84y25onmWs6MUOZcEdWZNA6fVRRDFUzNWQp3ginYLtOIQsSrwmbAERkOJ-daTvbHqEtoy/pub?gid=875297648&single=true&output=csv";
 const DEFAULT_CORP_COACHING_WEEKLY_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRagC_XDSQ84y25onmWs6MUOZcEdWZNA6fVRRDFUzNWQp3ginYLtOIQsSrwmbAERkOJ-daTvbHqEtoy/pub?gid=671384384&single=true&output=csv";
 const DEFAULT_CORP_LOGIN_BUCKETS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRagC_XDSQ84y25onmWs6MUOZcEdWZNA6fVRRDFUzNWQp3ginYLtOIQsSrwmbAERkOJ-daTvbHqEtoy/pub?gid=583266390&single=true&output=csv";
+const DEFAULT_CORP_PRIOR_QUARTER_AGENT_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTq4wsNJmMf82DO5PWH0reYQE3I_8-NW8YAuav1z5zbs753xJSATuCesxDif_ZVFTj4YjQL_k77y_Sf/pub?gid=31959038&single=true&output=csv";
+const DEFAULT_CORP_PRIOR_QUARTER_GOALS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTq4wsNJmMf82DO5PWH0reYQE3I_8-NW8YAuav1z5zbs753xJSATuCesxDif_ZVFTj4YjQL_k77y_Sf/pub?gid=1361915394&single=true&output=csv";
 const TNPS_STORAGE_KEY = "perf_intel_tnps_v1";
 
 
@@ -14408,6 +14410,38 @@ export default function App() {
   const setLoginBucketsSheetUrl = useCallback(v => {
     _setLoginBucketsSheetUrl(v);
     try { localStorage.setItem("perf_intel_login_buckets_url_v1", v || ""); } catch(e) {}
+  }, []);
+
+  const [priorQuarterAgentUrl, _setPriorQuarterAgentUrl] = useState(() => {
+    try { return localStorage.getItem("perf_intel_prior_quarter_agent_url_v1") || DEFAULT_CORP_PRIOR_QUARTER_AGENT_URL; } catch(e) { return DEFAULT_CORP_PRIOR_QUARTER_AGENT_URL; }
+  });
+  const setPriorQuarterAgentUrl = useCallback(v => {
+    _setPriorQuarterAgentUrl(v);
+    try { localStorage.setItem("perf_intel_prior_quarter_agent_url_v1", v || ""); } catch(e) {}
+  }, []);
+
+  const [priorQuarterGoalsUrl, _setPriorQuarterGoalsUrl] = useState(() => {
+    try { return localStorage.getItem("perf_intel_prior_quarter_goals_url_v1") || DEFAULT_CORP_PRIOR_QUARTER_GOALS_URL; } catch(e) { return DEFAULT_CORP_PRIOR_QUARTER_GOALS_URL; }
+  });
+  const setPriorQuarterGoalsUrl = useCallback(v => {
+    _setPriorQuarterGoalsUrl(v);
+    try { localStorage.setItem("perf_intel_prior_quarter_goals_url_v1", v || ""); } catch(e) {}
+  }, []);
+
+  const [priorQuarterAgentRaw, _setPriorQuarterAgentRaw] = useState(() => {
+    try { return localStorage.getItem("perf_intel_prior_quarter_agent_v1") || ""; } catch(e) { return ""; }
+  });
+  const setPriorQuarterAgentRaw = useCallback(v => {
+    _setPriorQuarterAgentRaw(v);
+    try { localStorage.setItem("perf_intel_prior_quarter_agent_v1", v || ""); } catch(e) {}
+  }, []);
+
+  const [priorQuarterGoalsRaw, _setPriorQuarterGoalsRaw] = useState(() => {
+    try { return localStorage.getItem("perf_intel_prior_quarter_goals_v1") || ""; } catch(e) { return ""; }
+  });
+  const setPriorQuarterGoalsRaw = useCallback(v => {
+    _setPriorQuarterGoalsRaw(v);
+    try { localStorage.setItem("perf_intel_prior_quarter_goals_v1", v || ""); } catch(e) {}
   }, []);
 
   const [localAI, setLocalAI]      = useState(false);
