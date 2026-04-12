@@ -6692,22 +6692,39 @@ function buildVirgilMyPerformanceSlide(pres, stats, loginBuckets, priorPriorMont
   slide.addText(currAbbrev, { x: 11.1, y: legendY - 0.03, w: 1.2, h: 0.25, fontSize: 10, color: virgilTheme.bodyText });
   slide.addText("---  Goal (75%)", { x: 7.8, y: legendY + 0.22, w: 3.5, h: 0.2, fontSize: 9, color: virgilTheme.subtle, italic: true });
 
-  // Top row — 3 bar charts
-  const chartY = 1.45;
-  const chartH = 2.7;
-  const chartW = 3.9;
-  const gap = 0.3;
-  const drawBarChart = (x, title, priorPriorPct, priorPct, currPct) => {
+  // Full-month-name helper
+  const monFull = (label) => {
+    if (!label) return "";
+    const m = String(label).trim().match(/^([A-Za-z]{3,})/);
+    const full = { jan:"January", feb:"February", mar:"March", apr:"April", may:"May", jun:"June", jul:"July", aug:"August", sep:"September", oct:"October", nov:"November", dec:"December" };
+    return m ? (full[m[1].slice(0, 3).toLowerCase()] || m[1]) : label;
+  };
+  const priorPriorFull = monFull(priorPriorMonthLabel);
+  const priorFull = monFull(priorMonthLabel);
+  const currFull = monFull(reportingMonthLabel);
+
+  // 2-column layout constants
+  const leftColX = 0.5;
+  const leftColW = 5.3;
+  const chartTopY = 1.3;
+  const chartTopH = 2.7;
+  const chartBotY = 4.15;
+  const chartBotH = 2.7;
+  const rightColX = 6.2;
+  const rightColW = 6.6;
+
+  // Bar chart helper — parameterized x, y, width, height
+  const drawBarChart = (x, y, width, height, title, priorPriorPct, priorPct, currPct) => {
     // Title
     slide.addText(title, {
-      x, y: chartY, w: chartW, h: 0.3,
+      x, y, w: width, h: 0.3,
       fontSize: 13, color: virgilTheme.bodyText, bold: true, align: "center",
     });
     // Axis area
     const axisX = x + 0.4;
-    const axisY = chartY + 0.4;
-    const axisW = chartW - 0.6;
-    const axisH = chartH - 0.8;
+    const axisY = y + 0.4;
+    const axisW = width - 0.6;
+    const axisH = height - 0.8;
     // Plot background
     slide.addShape("rect", {
       x: axisX, y: axisY, w: axisW, h: axisH,
@@ -6757,13 +6774,13 @@ function buildVirgilMyPerformanceSlide(pres, stats, loginBuckets, priorPriorMont
     });
   };
 
-  const col1X = 0.5;
-  const col2X = col1X + chartW + gap;
-  const col3X = col2X + chartW + gap;
+  // Left column — two stacked bar charts
+  drawBarChart(leftColX, chartTopY, leftColW, chartTopH, "Coaching Standard Attainment",
+    stats.orgPriorPrior.coachingPct || 0, stats.orgPrior.coachingPct || 0, stats.org.coachingPct || 0);
+  drawBarChart(leftColX, chartBotY, leftColW, chartBotH, "Acknowledge %",
+    stats.orgPriorPrior.acknowledgePct || 0, stats.orgPrior.acknowledgePct || 0, stats.org.acknowledgePct || 0);
 
-  drawBarChart(col1X, "Coaching Standard Attainment", stats.orgPriorPrior.coachingPct || 0, stats.orgPrior.coachingPct || 0, stats.org.coachingPct || 0);
-
-  // Login Activity table (replaces bar chart in col2)
+  // Right column — Login Activity table
   const bucketOrder = ["16-20+", "8-15", "4-7", "0-3"];
   const loginTable = bucketOrder.map(b => {
     const pickMonth = (label) => loginBuckets[normalizeVirgilMonthKey(label)] || loginBuckets[label] || {};
@@ -6781,24 +6798,24 @@ function buildVirgilMyPerformanceSlide(pres, stats, loginBuckets, priorPriorMont
     };
   });
   slide.addText("myPerformance Login Activity", {
-    x: col2X, y: chartY, w: chartW, h: 0.3,
+    x: rightColX, y: chartTopY, w: rightColW, h: 0.3,
     fontSize: 13, color: virgilTheme.bodyText, bold: true, align: "center",
   });
   const tableRows = [
     [
       { text: "", options: { fill: { color: "F3F4F6" } } },
-      { text: priorPriorAbbrev, options: { fill: { color: "EDE9FE" }, color: "1F2937", bold: true, colspan: 2, align: "center" } },
-      { text: priorAbbrev, options: { fill: { color: "E9D5FF" }, color: "1F2937", bold: true, colspan: 2, align: "center" } },
-      { text: currAbbrev, options: { fill: { color: "DBEAFE" }, color: "1F2937", bold: true, colspan: 2, align: "center" } },
+      { text: priorPriorFull, options: { fill: { color: "EDE9FE" }, color: "1F2937", bold: true, colspan: 2, align: "center" } },
+      { text: priorFull, options: { fill: { color: "E9D5FF" }, color: "1F2937", bold: true, colspan: 2, align: "center" } },
+      { text: currFull, options: { fill: { color: "DBEAFE" }, color: "1F2937", bold: true, colspan: 2, align: "center" } },
     ],
     [
       { text: "Bucket", options: { fill: { color: "F3F4F6" }, bold: true, align: "center" } },
       { text: "Users", options: { fill: { color: "F5F3FF" }, bold: true, align: "center" } },
-      { text: "%", options: { fill: { color: "F5F3FF" }, bold: true, align: "center" } },
+      { text: "% Users", options: { fill: { color: "F5F3FF" }, bold: true, align: "center" } },
       { text: "Users", options: { fill: { color: "F3E8FF" }, bold: true, align: "center" } },
-      { text: "%", options: { fill: { color: "F3E8FF" }, bold: true, align: "center" } },
+      { text: "% Users", options: { fill: { color: "F3E8FF" }, bold: true, align: "center" } },
       { text: "Users", options: { fill: { color: "EFF6FF" }, bold: true, align: "center" } },
-      { text: "%", options: { fill: { color: "EFF6FF" }, bold: true, align: "center" } },
+      { text: "% Users", options: { fill: { color: "EFF6FF" }, bold: true, align: "center" } },
     ],
     ...loginTable.map(row => ([
       { text: row.bucket, options: { bold: true, align: "center" } },
@@ -6811,42 +6828,37 @@ function buildVirgilMyPerformanceSlide(pres, stats, loginBuckets, priorPriorMont
     ])),
   ];
   slide.addTable(tableRows, {
-    x: col2X + 0.05, y: chartY + 0.4, w: chartW - 0.1,
-    colW: [0.72, 0.45, 0.48, 0.45, 0.48, 0.45, 0.47],
-    fontSize: 8,
+    x: rightColX, y: chartTopY + 0.35, w: rightColW,
+    colW: [0.85, 0.78, 0.90, 0.78, 0.90, 0.78, 0.90],
+    rowH: 0.38,
+    fontSize: 10,
     color: virgilTheme.bodyText,
     border: { type: "solid", pt: 0.5, color: "D1D5DB" },
     autoPage: false,
   });
 
-  drawBarChart(col3X, "Acknowledge %", stats.orgPriorPrior.acknowledgePct || 0, stats.orgPrior.acknowledgePct || 0, stats.org.acknowledgePct || 0);
-
-  // Bottom row
-  const bottomY = 4.5;
-  const bottomH = 2.3;
-  const insW = 12.3;
-
-  // Insights — full-width bottom row
-  const insX = 0.5;
+  // Insights — right column, below the table
+  const insY = 4.25;
+  const insH = 2.6;
   slide.addShape("rect", {
-    x: insX, y: bottomY, w: insW, h: 0.4,
-    fill: { color: "1E3A8A" }, line: { color: "1E3A8A", width: 0 },
+    x: rightColX, y: insY, w: rightColW, h: 0.4,
+    fill: { color: "1E3A8A" }, line: { type: "none" },
   });
   slide.addText("Insights", {
-    x: insX, y: bottomY + 0.03, w: insW, h: 0.35,
+    x: rightColX, y: insY + 0.03, w: rightColW, h: 0.35,
     fontSize: 14, color: "FFFFFF", bold: true, align: "center",
   });
   const bullets = (insightsText || "").split(/\n+/).map(s => s.trim()).filter(Boolean);
   if (bullets.length === 0) {
     slide.addText("Provide insights in the export modal", {
-      x: insX + 0.2, y: bottomY + 0.55, w: insW - 0.4, h: bottomH - 0.6,
+      x: rightColX + 0.2, y: insY + 0.55, w: rightColW - 0.4, h: insH - 0.6,
       fontSize: 11, color: virgilTheme.subtle, italic: true, valign: "top",
     });
   } else {
     slide.addText(
       bullets.map(t => ({ text: t, options: { bullet: { code: "2022" } } })),
       {
-        x: insX + 0.2, y: bottomY + 0.55, w: insW - 0.4, h: bottomH - 0.6,
+        x: rightColX + 0.2, y: insY + 0.55, w: rightColW - 0.4, h: insH - 0.6,
         fontSize: 11, color: virgilTheme.bodyText, valign: "top", paraSpaceAfter: 4,
       }
     );
