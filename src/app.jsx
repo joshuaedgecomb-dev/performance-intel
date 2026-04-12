@@ -6499,6 +6499,16 @@ function getNextMonthLabel(label) {
   return `${monNames[nMon - 1]} '${String(nYear).padStart(2, "0")}`;
 }
 
+function endOfMonthDate(label) {
+  if (!label) return new Date();
+  const m = String(label).trim().match(/^([A-Za-z]{3,})\s*'?(\d{2,4})$/);
+  if (!m) return new Date();
+  const mon = m[1].slice(0, 3).toLowerCase();
+  const monIdx = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12 }[mon];
+  const yr = Number(m[2].length === 4 ? m[2] : `20${m[2]}`);
+  return new Date(yr, monIdx, 0);
+}
+
 // Returns { org: {coachingPct, acknowledgePct, totalSessions}, dr: {...}, bz: {...} }
 // Org values come from coachingDetails (authoritative monthly totals).
 // DR/BZ splits come from weekly rows joined to bpLookup.
@@ -7163,6 +7173,110 @@ function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
       fontSize: 11, color: virgilTheme.subtle, italic: true, align: "center",
     });
   }
+}
+
+function buildCorpQuartileSlide(pres, agentRaw, goalsRaw, newHiresRaw, reportingMonthLabel) {
+  const slide = pres.addSlide();
+  slide.background = { color: virgilTheme.slideBg };
+  virgilBrandBars(pres, slide);
+
+  slide.addText("OPERATIONAL PERFORMANCE", {
+    x: 0.5, y: 0.35, w: 6, h: 0.25,
+    fontSize: 10, color: virgilTheme.eyebrow, bold: true, charSpacing: 2,
+  });
+  slide.addText("Global Callcenter Solutions | Quartile Reporting", {
+    x: 0.5, y: 0.65, w: 12, h: 0.5,
+    fontSize: 24, color: virgilTheme.bodyText, bold: true,
+  });
+
+  const reporting = buildQuartileReport(agentRaw, goalsRaw, newHiresRaw,
+    makeMonthFilter(reportingMonthLabel), endOfMonthDate(reportingMonthLabel));
+  const mtdLabel = getNextMonthLabel(reportingMonthLabel);
+  const mtd = buildQuartileReport(agentRaw, goalsRaw, newHiresRaw,
+    makeMonthFilter(mtdLabel), new Date());
+
+  const colW = 6.25;
+  const col1X = 0.5;
+  const col2X = 6.9;
+
+  const drawQuartileColumn = (xBase, header, report) => {
+    slide.addText(header, {
+      x: xBase, y: 1.25, w: colW, h: 0.3,
+      fontSize: 13, color: virgilTheme.eyebrow, bold: true,
+    });
+    if (!report || !report.xm) {
+      slide.addText("No data", {
+        x: xBase, y: 1.6, w: colW, h: 0.3,
+        fontSize: 11, color: virgilTheme.subtle, italic: true,
+      });
+      return;
+    }
+    const drawSection = (y, label, section) => {
+      slide.addText(label, {
+        x: xBase, y, w: colW, h: 0.25,
+        fontSize: 11, color: virgilTheme.bodyText, bold: true,
+      });
+      if (!section || !section.quartileSummary || section.quartileSummary.length === 0) {
+        slide.addText("(no data)", {
+          x: xBase, y: y + 0.25, w: colW, h: 0.25,
+          fontSize: 9, color: virgilTheme.subtle, italic: true,
+        });
+        return;
+      }
+      const qColors = ["16A34A", "F59E0B", "F97316", "DC2626"];
+      const summaryRows = [
+        [{ text: "Q", options: { bold: true, align: "center", fill: { color: "F3F4F6" } } },
+         { text: "Units", options: { bold: true, align: "center", fill: { color: "F3F4F6" } } },
+         { text: "% to Goal", options: { bold: true, align: "center", fill: { color: "F3F4F6" } } }],
+        ...section.quartileSummary.map((q, i) => ([
+          { text: String(q.quartile), options: { align: "center", fill: { color: qColors[i] }, color: "FFFFFF", bold: true } },
+          { text: String(q.units), options: { align: "center" } },
+          { text: `${(q.pctToGoal * 100).toFixed(1)}%`, options: { align: "center" } },
+        ])),
+      ];
+      slide.addTable(summaryRows, {
+        x: xBase, y: y + 0.25, w: 2.6,
+        colW: [0.5, 1.0, 1.1],
+        rowH: 0.28,
+        fontSize: 9,
+        border: { type: "solid", pt: 0.5, color: "D1D5DB" },
+        autoPage: false,
+      });
+
+      const matrixRows = [
+        [
+          { text: "Tenure", options: { bold: true, align: "center", fill: { color: "F3F4F6" } } },
+          { text: "A", options: { bold: true, align: "center", fill: { color: "16A34A" }, color: "FFFFFF" } },
+          { text: "B", options: { bold: true, align: "center", fill: { color: "F59E0B" }, color: "FFFFFF" } },
+          { text: "C", options: { bold: true, align: "center", fill: { color: "F97316" }, color: "FFFFFF" } },
+          { text: "D", options: { bold: true, align: "center", fill: { color: "DC2626" }, color: "FFFFFF" } },
+          { text: "Part %", options: { bold: true, align: "center", fill: { color: "F3F4F6" } } },
+        ],
+        ...section.tenureMatrix.map(row => ([
+          { text: row.label, options: { bold: true, align: "center" } },
+          { text: String(row.A), options: { align: "center" } },
+          { text: String(row.B), options: { align: "center" } },
+          { text: String(row.C), options: { align: "center" } },
+          { text: String(row.D), options: { align: "center" } },
+          { text: `${(row.participation * 100).toFixed(1)}%`, options: { align: "center" } },
+        ])),
+      ];
+      slide.addTable(matrixRows, {
+        x: xBase + 2.7, y: y + 0.25, w: 3.5,
+        colW: [0.75, 0.45, 0.45, 0.45, 0.45, 0.95],
+        rowH: 0.24,
+        fontSize: 8,
+        border: { type: "solid", pt: 0.5, color: "D1D5DB" },
+        autoPage: false,
+      });
+    };
+
+    drawSection(1.65, "XM Participation (GLU)", report.xm);
+    drawSection(4.55, "XI Participation (GLN)", report.xi);
+  };
+
+  drawQuartileColumn(col1X, `Month Reporting On — ${reportingMonthLabel}`, reporting);
+  drawQuartileColumn(col2X, `MTD — ${mtdLabel}`, mtd);
 }
 
 // ═══════════════════════════════════════════════════════════════════
