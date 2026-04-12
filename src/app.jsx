@@ -4928,6 +4928,70 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
   );
 }
 
+// ── SiteDropdown — categorized program list for DR/BZ menus ─────────────────
+// currentProgram tri-state:
+//   string    → that specific program is the active page (highlight it)
+//   null      → Site Overview is the active page (highlight Site Overview)
+//   undefined → user is not on this site at all (no row is "current")
+function SiteDropdown({ site, programs, attainment, projAttainment, currentProgram, onSelect, accent }) {
+  // Group programs by MBR category, preserve sort-by-attainment within each
+  const categories = useMemo(() => {
+    const map = {};
+    programs.forEach(p => {
+      const cat = p.category || "Other";
+      if (!map[cat]) map[cat] = [];
+      map[cat].push(p);
+    });
+    // Stable category order matching MBR convention
+    const order = ["Acquisition", "Multi-Product Expansion", "Up Tier & Ancillary"];
+    return order.filter(c => map[c]).map(c => [c, map[c]])
+      .concat(Object.keys(map).filter(c => !order.includes(c)).map(c => [c, map[c]]));
+  }, [programs]);
+
+  const headerText = (() => {
+    const a = attainment != null ? `${Math.round(attainment)}% to goal` : "no plan";
+    const p = projAttainment != null ? ` | Proj ${Math.round(projAttainment)}%` : "";
+    return `${site} · ${a}${p}`;
+  })();
+
+  const fmtPct = v => v != null ? `${Math.round(v)}%` : "—";
+
+  return (
+    <div role="menu" aria-label={`${site} navigation`}
+      style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, minWidth: 280, background: "var(--bg-tertiary)", border: "1px solid var(--border)", borderRadius: "var(--radius-md, 10px)", boxShadow: "0 12px 32px rgba(0,0,0,0.35)", padding: "6px 0", zIndex: 250 }}>
+      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: accent, letterSpacing: "0.08em", textTransform: "uppercase", padding: "8px 14px 6px", fontWeight: 600 }}>
+        {headerText}
+      </div>
+      <button onClick={() => onSelect(null)} role="menuitem"
+        onMouseEnter={e => { if (currentProgram !== null) e.currentTarget.style.background = "var(--bg-secondary)"; }}
+        onMouseLeave={e => { if (currentProgram !== null) e.currentTarget.style.background = "transparent"; }}
+        style={{ display: "flex", justifyContent: "space-between", width: "100%", padding: "7px 14px", border: "none", background: currentProgram === null ? `${accent}18` : "transparent", color: currentProgram === null ? accent : "var(--text-primary)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", cursor: "pointer", textAlign: "left", fontWeight: currentProgram === null ? 600 : 400 }}>
+        <span>📊 Site Overview</span>
+      </button>
+      <div style={{ borderTop: "1px solid var(--border-muted)", margin: "4px 0" }} />
+      {categories.map(([cat, items]) => (
+        <Fragment key={cat}>
+          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.65rem", color: "var(--text-dim)", letterSpacing: "0.1em", textTransform: "uppercase", padding: "8px 14px 4px", fontWeight: 600 }}>
+            {cat}
+          </div>
+          {items.map(p => {
+            const isCurrent = p.jobType === currentProgram;
+            return (
+              <button key={p.jobType} onClick={() => onSelect(p.jobType)} role="menuitem"
+                onMouseEnter={e => { if (!isCurrent) e.currentTarget.style.background = "var(--bg-secondary)"; }}
+                onMouseLeave={e => { if (!isCurrent) e.currentTarget.style.background = "transparent"; }}
+                style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", padding: "6px 14px", border: "none", background: isCurrent ? `${accent}18` : "transparent", color: isCurrent ? accent : "var(--text-primary)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", cursor: "pointer", textAlign: "left", fontWeight: isCurrent ? 600 : 400 }}>
+                <span>{p.jobType}</span>
+                <span style={{ fontFamily: "var(--font-data, monospace)", fontSize: "0.72rem", color: isCurrent ? accent : "var(--text-dim)" }}>{fmtPct(p.attainment)}</span>
+              </button>
+            );
+          })}
+        </Fragment>
+      ))}
+    </div>
+  );
+}
+
 
 // ══════════════════════════════════════════════════════════════════════════════
 // SECTION 11.5 — MBR PPTX EXPORT
