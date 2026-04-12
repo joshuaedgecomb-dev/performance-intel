@@ -6761,12 +6761,6 @@ function VirgilMbrExportModal({ perf, coachingDetailsRaw, coachingWeeklyRaw, log
     } catch(e) {}
     return "";
   });
-  const [virgilLastName, setVirgilLastName] = useState(() => {
-    try { return localStorage.getItem("perf_intel_virgil_last_name") || ""; } catch(e) { return ""; }
-  });
-  useEffect(() => {
-    try { localStorage.setItem("perf_intel_virgil_last_name", virgilLastName || ""); } catch(e) {}
-  }, [virgilLastName]);
 
   const [useAiInsights, setUseAiInsights] = useState(() => {
     try { return localStorage.getItem("perf_intel_corp_ai_insights_v1") === "true"; } catch(e) { return false; }
@@ -6809,7 +6803,6 @@ Focus on what's notable: strengths, concerns, and momentum. Plain prose only. No
     }
     const pres = buildVirgilMbrPresentation(perf, {
       reportingMonthLabel: reportingMonth,
-      virgilLastName,
       coachingDetails,
       coachingWeekly,
       loginBuckets,
@@ -6817,7 +6810,7 @@ Focus on what's notable: strengths, concerns, and momentum. Plain prose only. No
     });
     const safeMonth = (reportingMonth || "Virgil").replace(/[^A-Za-z0-9 _-]+/g, "");
     await pres.writeFile({ fileName: `Corp MBR - ${safeMonth}.pptx` });
-  }, [perf, reportingMonth, virgilLastName, coachingDetails, coachingWeekly, loginBuckets, insights, useAiInsights, ollamaAvailable]);
+  }, [perf, reportingMonth, coachingDetails, coachingWeekly, loginBuckets, insights, useAiInsights, ollamaAvailable]);
 
   const StatusRow = ({ label, ok }) => (
     <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", fontSize: 13 }}>
@@ -6842,12 +6835,6 @@ Focus on what's notable: strengths, concerns, and momentum. Plain prose only. No
             placeholder="Mar '26"
             style={{ display: "block", marginTop: 4, width: "100%", padding: 8, border: "1px solid #d1d5db", borderRadius: 6 }} />
           <small style={{ color: "#6b7280" }}>Must match the "Fiscal Month" value in your Coaching Details CSV.</small>
-        </label>
-
-        <label style={{ display: "block", marginTop: 12, fontSize: 13, fontWeight: 600 }}>
-          Virgil's last name (optional)
-          <input type="text" value={virgilLastName} onChange={e => setVirgilLastName(e.target.value)}
-            style={{ display: "block", marginTop: 4, width: "100%", padding: 8, border: "1px solid #d1d5db", borderRadius: 6 }} />
         </label>
 
         <div style={{ marginTop: 16, padding: 12, background: "#f9fafb", borderRadius: 6 }}>
