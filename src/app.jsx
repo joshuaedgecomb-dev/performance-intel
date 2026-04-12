@@ -6637,6 +6637,132 @@ function buildVirgilMyPerformanceSlide(pres, stats, loginDist, reportingMonthLab
   });
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// VIRGIL MBR — Orchestrator
+// ═══════════════════════════════════════════════════════════════════
+
+// options: { reportingMonthLabel, virgilLastName, coachingDetails, coachingWeekly, loginBuckets, insights }
+function buildVirgilMbrPresentation(perf, options) {
+  const pres = new pptxgen();
+  pres.layout = "LAYOUT_WIDE"; // 13.333 x 7.5
+
+  const stats = buildCoachingStats(
+    options.coachingDetails || {},
+    options.coachingWeekly || [],
+    perf && perf.bpLookup,
+    options.reportingMonthLabel
+  );
+  const loginDist = buildLoginDistribution(options.loginBuckets || {}, options.reportingMonthLabel);
+
+  buildVirgilTitleSlide(pres, options.reportingMonthLabel, perf && perf.fiscalInfo, options.virgilLastName);
+  buildVirgilMyPerformanceSlide(pres, stats, loginDist, options.reportingMonthLabel, (options.insights && options.insights.slide2) || "");
+
+  return pres;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// VIRGIL MBR — Export Modal
+// ═══════════════════════════════════════════════════════════════════
+
+function VirgilMbrExportModal({ perf, coachingDetailsRaw, coachingWeeklyRaw, loginBucketsRaw, insights, setInsights, onClose }) {
+  const [reportingMonth, setReportingMonth] = useState(() => {
+    try {
+      const end = perf && perf.fiscalInfo && perf.fiscalInfo.fiscalEnd;
+      if (end) {
+        const dt = new Date(end);
+        const mo = dt.toLocaleDateString("en-US", { month: "short" });
+        const yr = String(dt.getFullYear()).slice(2);
+        return `${mo} '${yr}`;
+      }
+    } catch(e) {}
+    return "";
+  });
+  const [virgilLastName, setVirgilLastName] = useState(() => {
+    try { return localStorage.getItem("perf_intel_virgil_last_name") || ""; } catch(e) { return ""; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("perf_intel_virgil_last_name", virgilLastName || ""); } catch(e) {}
+  }, [virgilLastName]);
+
+  const coachingDetails = useMemo(() => parseCoachingDetails(coachingDetailsRaw), [coachingDetailsRaw]);
+  const coachingWeekly = useMemo(() => parseCoachingWeekly(coachingWeeklyRaw), [coachingWeeklyRaw]);
+  const loginBuckets = useMemo(() => parseLoginBuckets(loginBucketsRaw), [loginBucketsRaw]);
+
+  const hasCoachingDetails = !!(coachingDetailsRaw && coachingDetailsRaw.trim());
+  const hasCoachingWeekly = !!(coachingWeeklyRaw && coachingWeeklyRaw.trim());
+  const hasLoginBuckets = !!(loginBucketsRaw && loginBucketsRaw.trim());
+
+  const setSlide2Insight = useCallback((v) => {
+    setInsights({ ...(insights || {}), slide2: v });
+  }, [insights, setInsights]);
+
+  const handleDownload = useCallback(async () => {
+    const pres = buildVirgilMbrPresentation(perf, {
+      reportingMonthLabel: reportingMonth,
+      virgilLastName,
+      coachingDetails,
+      coachingWeekly,
+      loginBuckets,
+      insights,
+    });
+    const safeMonth = (reportingMonth || "Virgil").replace(/[^A-Za-z0-9 _-]+/g, "");
+    await pres.writeFile({ fileName: `Virgil MBR - ${safeMonth}.pptx` });
+  }, [perf, reportingMonth, virgilLastName, coachingDetails, coachingWeekly, loginBuckets, insights]);
+
+  const StatusRow = ({ label, ok }) => (
+    <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", fontSize: 13 }}>
+      <span>{label}</span>
+      <span style={{ color: ok ? "#16a34a" : "#d97706" }}>{ok ? "Loaded" : "Missing"}</span>
+    </div>
+  );
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 400, display: "flex", alignItems: "center", justifyContent: "center" }}
+         onClick={onClose}>
+      <div style={{ width: 560, maxHeight: "85vh", overflow: "auto", background: "#fff", borderRadius: 10, padding: 24 }}
+           onClick={e => e.stopPropagation()}>
+        <h2 style={{ margin: 0, fontSize: 20 }}>Export Virgil MBR</h2>
+        <p style={{ color: "#6b7280", fontSize: 13, marginTop: 4 }}>
+          Comcast-facing monthly deck. Phase 1: Title + My Performance / Quality.
+        </p>
+
+        <label style={{ display: "block", marginTop: 16, fontSize: 13, fontWeight: 600 }}>
+          Reporting Month Label
+          <input type="text" value={reportingMonth} onChange={e => setReportingMonth(e.target.value)}
+            placeholder="Mar '26"
+            style={{ display: "block", marginTop: 4, width: "100%", padding: 8, border: "1px solid #d1d5db", borderRadius: 6 }} />
+          <small style={{ color: "#6b7280" }}>Must match the "Fiscal Month" value in your Coaching Details CSV.</small>
+        </label>
+
+        <label style={{ display: "block", marginTop: 12, fontSize: 13, fontWeight: 600 }}>
+          Virgil's last name (optional)
+          <input type="text" value={virgilLastName} onChange={e => setVirgilLastName(e.target.value)}
+            style={{ display: "block", marginTop: 4, width: "100%", padding: 8, border: "1px solid #d1d5db", borderRadius: 6 }} />
+        </label>
+
+        <div style={{ marginTop: 16, padding: 12, background: "#f9fafb", borderRadius: 6 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 6 }}>Data Readiness</div>
+          <StatusRow label="Coaching Details CSV" ok={hasCoachingDetails} />
+          <StatusRow label="Weekly Breakdown CSV" ok={hasCoachingWeekly} />
+          <StatusRow label="Login Buckets CSV" ok={hasLoginBuckets} />
+        </div>
+
+        <label style={{ display: "block", marginTop: 16, fontSize: 13, fontWeight: 600 }}>
+          Slide 2 Insights
+          <textarea value={(insights && insights.slide2) || ""} onChange={e => setSlide2Insight(e.target.value)}
+            rows={4}
+            style={{ display: "block", marginTop: 4, width: "100%", padding: 8, border: "1px solid #d1d5db", borderRadius: 6, fontFamily: "inherit" }} />
+        </label>
+
+        <div style={{ display: "flex", gap: 8, marginTop: 20, justifyContent: "flex-end" }}>
+          <button onClick={onClose} style={{ padding: "8px 14px", border: "1px solid #d1d5db", background: "#fff", borderRadius: 6, cursor: "pointer" }}>Cancel</button>
+          <button onClick={handleDownload} style={{ padding: "8px 14px", border: "none", background: "#7C3AED", color: "#fff", borderRadius: 6, cursor: "pointer", fontWeight: 600 }}>Download .pptx</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MbrExportModal({ perf, onClose }) {
   const [state, setState] = useState("confirm");
   const [progress, setProgress] = useState("");
@@ -14376,6 +14502,17 @@ export default function App() {
   return (
     <div style={wrapStyle}>
       {showMbrModal && rawData && <MbrExportModal perf={perf} onClose={() => setShowMbrModal(false)} />}
+      {showVirgilMbrModal && (
+        <VirgilMbrExportModal
+          perf={perf}
+          coachingDetailsRaw={coachingDetailsRaw}
+          coachingWeeklyRaw={coachingWeeklyRaw}
+          loginBucketsRaw={loginBucketsRaw}
+          insights={virgilInsights}
+          setInsights={setVirgilInsights}
+          onClose={() => setShowVirgilMbrModal(false)}
+        />
+      )}
 
       {/* Settings panel — keep existing modal, just gate by showSettings */}
       {showSettings && (
