@@ -5035,6 +5035,46 @@ function SettingsMenu({ onExportMbr, onRefresh, onUploadGoals, onUploadRoster, o
   );
 }
 
+// ── Breadcrumb — secondary nav bar showing site › category › program ────────
+// Crumb / CRUMB_SEP hoisted to module scope, matching MenuSection/MenuRow pattern.
+function Crumb({ label, current, accent }) {
+  return (
+    <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: current ? accent : "var(--text-muted)", fontWeight: current ? 600 : 400 }}>
+      {label}
+    </span>
+  );
+}
+const CRUMB_SEP = (
+  <span style={{ color: "var(--text-dim)", opacity: 0.5, fontSize: "0.78rem" }}>›</span>
+);
+function Breadcrumb({ section, program, attainment }) {
+  // Only render for site-scoped pages
+  if (section !== "dr" && section !== "bz") return null;
+  const siteCode = section.toUpperCase();
+  const siteName = section === "dr" ? "Dom. Republic" : "Belize";
+  const accent = section === "dr" ? "#ed8936" : "#48bb78";
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.4rem 1.5rem", background: "var(--glass-bg-subtle)", borderBottom: "1px solid var(--glass-border)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" }}>
+      <Crumb label={`${siteCode} · ${siteName}`} current={false} accent={accent} />
+      {!program && (<>{CRUMB_SEP}<Crumb label="Site Overview" current accent={accent} /></>)}
+      {program && (
+        <>
+          {CRUMB_SEP}
+          <Crumb label={getMbrCategory(program)} current={false} accent={accent} />
+          {CRUMB_SEP}
+          <Crumb label={program} current accent={accent} />
+          {attainment != null && (
+            <span style={{ marginLeft: "auto", fontFamily: "var(--font-data, monospace)", fontSize: "0.72rem", color: "var(--text-dim)" }}>
+              {Math.round(attainment)}% to goal
+            </span>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 
 // ══════════════════════════════════════════════════════════════════════════════
 // SECTION 11.5 — MBR PPTX EXPORT
