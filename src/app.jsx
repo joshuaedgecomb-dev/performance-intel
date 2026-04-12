@@ -6612,61 +6612,78 @@ function buildVirgilTitleSlide(pres, reportingMonthLabel, fiscalInfo, virgilLast
   const w = pres.presLayout ? pres.presLayout.width : 13.333;
   const h = pres.presLayout ? pres.presLayout.height : 7.5;
 
-  const bgPurple = "6F5CFF";
+  // --- Gradient background (simulated via 12 vertical stripes) ---
+  const startHex = [0x37, 0x30, 0xA3]; // indigo
+  const endHex = [0xA7, 0x8B, 0xFA];   // lavender
+  const stripes = 12;
+  const stripeW = w / stripes;
+  for (let i = 0; i < stripes; i++) {
+    const t = i / (stripes - 1);
+    const r = Math.round(startHex[0] + (endHex[0] - startHex[0]) * t);
+    const g = Math.round(startHex[1] + (endHex[1] - startHex[1]) * t);
+    const b = Math.round(startHex[2] + (endHex[2] - startHex[2]) * t);
+    const hex = [r, g, b].map(v => v.toString(16).padStart(2, "0")).join("").toUpperCase();
+    slide.addShape("rect", {
+      x: i * stripeW, y: 0, w: stripeW + 0.01, h,
+      fill: { color: hex },
+      line: { color: hex, width: 0 },
+    });
+  }
 
-  // Solid purple background
-  slide.addShape("rect", {
-    x: 0, y: 0, w, h,
-    fill: { color: bgPurple },
-    line: { color: bgPurple, width: 0 },
-  });
-
-  // Translucent "X" watermark — two rotated white bars forming an X,
-  // centered slightly left of slide-center to give the title visual weight on top.
-  const xCenterX = w / 2 - 1.3;   // offset left
-  const xCenterY = h / 2;
-  const barW = 0.95;
-  const barH = 6.8;
+  // --- X watermark (two rotated white bars, left-of-center) ---
+  const xCenterX = 2.8;
+  const xCenterY = 3.75;
+  const barW = 0.85;
+  const barH = 5.5;
   const drawXBar = (angle) => {
     slide.addShape("rect", {
       x: xCenterX - barW / 2,
       y: xCenterY - barH / 2,
       w: barW,
       h: barH,
-      fill: { color: "FFFFFF", transparency: 75 },
+      fill: { color: "FFFFFF", transparency: 70 },
       line: { color: "FFFFFF", width: 0, transparency: 100 },
       rotate: angle,
     });
   };
-  drawXBar(30);
-  drawXBar(-30);
+  drawXBar(25);
+  drawXBar(-25);
 
-  // Title — centered
-  slide.addText("Outbound Fiscal Month MBR", {
-    x: 1.0, y: 3.05, w: w - 2.0, h: 0.7,
-    fontSize: 32, color: "FFFFFF", bold: true,
-    fontFace: "Calibri", align: "center",
+  // --- Title ---
+  slide.addText("OUTBOUND FISCAL MONTH MBR", {
+    x: 5.0, y: 3.0, w: 7.5, h: 0.55,
+    fontSize: 22, color: "FFFFFF", bold: true,
+    charSpacing: 3, align: "center",
   });
 
-  // Date (subtitle) — uppercase, letter-spaced
-  const dateText = expandMonthLabel(reportingMonthLabel).toUpperCase();
-  slide.addText(dateText || "DATE", {
-    x: 1.0, y: 3.85, w: w - 2.0, h: 0.4,
-    fontSize: 12, color: "FFFFFF", bold: true,
+  // --- Date (today's date, "APRIL 14TH, 2026" format) ---
+  const ord = (d) => {
+    const s = ["th", "st", "nd", "rd"];
+    const v = d % 100;
+    return s[(v - 20) % 10] || s[v] || s[0];
+  };
+  const today = new Date();
+  const monthFull = today.toLocaleDateString("en-US", { month: "long" }).toUpperCase();
+  const day = today.getDate();
+  const year = today.getFullYear();
+  const dateText = `${monthFull} ${day}${ord(day).toUpperCase()}, ${year}`;
+  slide.addText(dateText, {
+    x: 5.0, y: 3.7, w: 7.5, h: 0.35,
+    fontSize: 11, color: "FFFFFF", bold: true,
     charSpacing: 5, align: "center",
   });
 
-  // Presenters
+  // --- Presenters ---
   slide.addText("Presented by Joshua Edgecomb, Frank Daley, Jasmine Mendoza", {
-    x: 1.0, y: 4.35, w: w - 2.0, h: 0.35,
-    fontSize: 11, color: "FFFFFF", italic: true,
+    x: 5.0, y: 4.15, w: 7.5, h: 0.3,
+    fontSize: 10, color: "FFFFFF", italic: true,
     align: "center",
   });
 
-  // xfinity wordmark bottom-right
+  // --- xfinity wordmark ---
   slide.addText("xfinity", {
-    x: w - 1.5, y: h - 0.55, w: 1.2, h: 0.35,
-    fontSize: 14, color: "FFFFFF",
+    x: w - 1.3, y: h - 0.45, w: 1.1, h: 0.3,
+    fontSize: 12, color: "FFFFFF",
     align: "right",
   });
 }
