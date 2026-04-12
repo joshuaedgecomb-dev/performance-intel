@@ -460,6 +460,9 @@ const DEFAULT_NH_SHEET_URL    = "https://docs.google.com/spreadsheets/d/e/2PACX-
 const DEFAULT_PRIOR_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTZkBGVIxieyjBKftqL1oecSaUxRkao-gz2B9q4Z8zCY8hEtSy1M28S00RDCS8JVPgPFXJAv2LbsZru/pub?gid=667346347&single=true&output=csv";
 const DEFAULT_PRIOR_GOALS_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTZkBGVIxieyjBKftqL1oecSaUxRkao-gz2B9q4Z8zCY8hEtSy1M28S00RDCS8JVPgPFXJAv2LbsZru/pub?gid=1685208822&single=true&output=csv";
 const DEFAULT_TNPS_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRagC_XDSQ84y25onmWs6MUOZcEdWZNA6fVRRDFUzNWQp3ginYLtOIQsSrwmbAERkOJ-daTvbHqEtoy/pub?gid=2128252142&single=true&output=csv";
+const DEFAULT_CORP_COACHING_DETAILS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRagC_XDSQ84y25onmWs6MUOZcEdWZNA6fVRRDFUzNWQp3ginYLtOIQsSrwmbAERkOJ-daTvbHqEtoy/pub?gid=875297648&single=true&output=csv";
+const DEFAULT_CORP_COACHING_WEEKLY_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRagC_XDSQ84y25onmWs6MUOZcEdWZNA6fVRRDFUzNWQp3ginYLtOIQsSrwmbAERkOJ-daTvbHqEtoy/pub?gid=671384384&single=true&output=csv";
+const DEFAULT_CORP_LOGIN_BUCKETS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRagC_XDSQ84y25onmWs6MUOZcEdWZNA6fVRRDFUzNWQp3ginYLtOIQsSrwmbAERkOJ-daTvbHqEtoy/pub?gid=583266390&single=true&output=csv";
 const TNPS_STORAGE_KEY = "perf_intel_tnps_v1";
 
 
@@ -5022,13 +5025,14 @@ function MenuRow({ icon, label, hint, onClick }) {
     </button>
   );
 }
-function SettingsMenu({ onExportMbr, onExportVirgilMbr, onRefresh, onUploadGoals, onUploadRoster, onUploadPriorGoals, onUploadCoachingDetails, onUploadCoachingWeekly, onUploadLoginBuckets, onOpenSettings, ollamaAvailable, localAI, onToggleLocalAI }) {
+function SettingsMenu({ onExportMbr, onExportVirgilMbr, onOpenCorpDataSources, onRefresh, onUploadGoals, onUploadRoster, onUploadPriorGoals, onUploadCoachingDetails, onUploadCoachingWeekly, onUploadLoginBuckets, onOpenSettings, ollamaAvailable, localAI, onToggleLocalAI }) {
   return (
     <div role="menu" aria-label="Settings and actions"
       style={{ position: "absolute", top: "calc(100% + 4px)", right: 0, minWidth: 240, background: "var(--bg-tertiary)", border: "1px solid var(--border)", borderRadius: "var(--radius-md, 10px)", boxShadow: "0 12px 32px rgba(0,0,0,0.35)", padding: "6px 0", zIndex: 250 }}>
       <MenuSection label="Actions" />
       <MenuRow icon="📊" label="Export MBR" hint="monthly" onClick={onExportMbr} />
-      <MenuRow icon="🎯" label="Export Virgil MBR" hint="monthly" onClick={onExportVirgilMbr} />
+      <MenuRow icon="🎯" label="Export Corp MBR" hint="monthly" onClick={onExportVirgilMbr} />
+      <MenuRow icon="🔌" label="Corp MBR Data Sources" hint="URLs" onClick={onOpenCorpDataSources} />
       <MenuRow icon="🔄" label="Refresh from sheet" onClick={onRefresh} />
       <div style={{ borderTop: "1px solid var(--border-muted)", margin: "4px 0" }} />
       <MenuSection label="Data" />
@@ -5113,7 +5117,7 @@ function TopNav({
   programsBySite, siteAttainments, fiscalInfo, hasTnps,
   lightMode, setLightMode, showToday, setShowToday,
   ollamaAvailable, localAI, setLocalAI,
-  onExportMbr, onExportVirgilMbr, onRefresh, onUploadGoals, onUploadRoster, onUploadPriorGoals, onUploadCoachingDetails, onUploadCoachingWeekly, onUploadLoginBuckets, onOpenSettings,
+  onExportMbr, onExportVirgilMbr, onOpenCorpDataSources, onRefresh, onUploadGoals, onUploadRoster, onUploadPriorGoals, onUploadCoachingDetails, onUploadCoachingWeekly, onUploadLoginBuckets, onOpenSettings,
 }) {
   const navRef = useRef(null);
   const drRef = useRef(null);
@@ -5221,6 +5225,7 @@ function TopNav({
             <SettingsMenu
               onExportMbr={() => { onExportMbr(); setOpenMenu(null); }}
               onExportVirgilMbr={() => { onExportVirgilMbr(); setOpenMenu(null); }}
+              onOpenCorpDataSources={() => { onOpenCorpDataSources(); setOpenMenu(null); }}
               onRefresh={() => { onRefresh(); setOpenMenu(null); }}
               onUploadGoals={() => { onUploadGoals(); setOpenMenu(null); }}
               onUploadRoster={() => { onUploadRoster(); setOpenMenu(null); }}
@@ -6355,7 +6360,7 @@ async function generateMBR(perf, onProgress, { includeAI = true } = {}) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// VIRGIL MBR — Parsers
+// CORP MBR — Parsers
 // ═══════════════════════════════════════════════════════════════════
 
 function parseCoachingDetails(rawCsv) {
@@ -6455,7 +6460,7 @@ function parseLoginBuckets(rawCsv) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// VIRGIL MBR — Aggregators
+// CORP MBR — Aggregators
 // ═══════════════════════════════════════════════════════════════════
 
 // Converts a "Mar '26" / "Mar 26" style fiscal-month label to a canonical form.
@@ -6509,7 +6514,7 @@ function buildLoginDistribution(loginBuckets, reportingMonthLabel) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// VIRGIL MBR — Brand Helpers
+// CORP MBR — Brand Helpers
 // ═══════════════════════════════════════════════════════════════════
 
 const virgilTheme = {
@@ -6554,7 +6559,7 @@ function virgilBrandBars(pres, slide) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// VIRGIL MBR — Slide Builders
+// CORP MBR — Slide Builders
 // ═══════════════════════════════════════════════════════════════════
 
 function buildVirgilTitleSlide(pres, reportingMonthLabel, fiscalInfo, virgilLastName) {
@@ -6566,7 +6571,7 @@ function buildVirgilTitleSlide(pres, reportingMonthLabel, fiscalInfo, virgilLast
     x: 0.5, y: 1.5, w: 12, h: 0.3,
     fontSize: 11, color: virgilTheme.eyebrow, bold: true, charSpacing: 3,
   });
-  slide.addText(`VIRGIL MBR — ${reportingMonthLabel}`, {
+  slide.addText(`CORP MBR — ${reportingMonthLabel}`, {
     x: 0.5, y: 1.9, w: 12, h: 1.0,
     fontSize: 36, color: virgilTheme.bodyText, bold: true,
   });
@@ -6678,7 +6683,7 @@ function buildVirgilMyPerformanceSlide(pres, stats, loginDist, reportingMonthLab
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// VIRGIL MBR — Orchestrator
+// CORP MBR — Orchestrator
 // ═══════════════════════════════════════════════════════════════════
 
 // options: { reportingMonthLabel, virgilLastName, coachingDetails, coachingWeekly, loginBuckets, insights }
@@ -6701,8 +6706,47 @@ function buildVirgilMbrPresentation(perf, options) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// VIRGIL MBR — Export Modal
+// CORP MBR — Export Modal
 // ═══════════════════════════════════════════════════════════════════
+
+// CORP MBR — Data Sources Modal
+function CorpMbrDataSourcesModal({
+  coachingDetailsSheetUrl, setCoachingDetailsSheetUrl,
+  coachingWeeklySheetUrl, setCoachingWeeklySheetUrl,
+  loginBucketsSheetUrl, setLoginBucketsSheetUrl,
+  onClose
+}) {
+  const UrlRow = ({ label, value, setValue, hint }) => (
+    <label style={{ display: "block", marginTop: 14, fontSize: 13, fontWeight: 600 }}>
+      {label}
+      <input type="text" value={value || ""} onChange={e => setValue(e.target.value)}
+        placeholder="https://docs.google.com/spreadsheets/d/e/.../pub?gid=...&output=csv"
+        style={{ display: "block", marginTop: 4, width: "100%", padding: 8, border: "1px solid #d1d5db", borderRadius: 6, fontFamily: "monospace", fontSize: 12 }} />
+      {hint && <small style={{ color: "#6b7280" }}>{hint}</small>}
+    </label>
+  );
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 400, display: "flex", alignItems: "center", justifyContent: "center" }}
+         onClick={onClose}>
+      <div style={{ width: 640, maxHeight: "85vh", overflow: "auto", background: "#fff", borderRadius: 10, padding: 24 }}
+           onClick={e => e.stopPropagation()}>
+        <h2 style={{ margin: 0, fontSize: 20 }}>Corp MBR Data Sources</h2>
+        <p style={{ color: "#6b7280", fontSize: 13, marginTop: 4 }}>
+          Google Sheet URLs auto-fetched into localStorage and consumed by the Corp MBR export. Leave blank to fall back to the bundled defaults.
+        </p>
+        <UrlRow label="Coaching Details (org totals)" value={coachingDetailsSheetUrl} setValue={setCoachingDetailsSheetUrl}
+          hint="Monthly Acknowledged %, % Coached, Total Sessions, etc." />
+        <UrlRow label="Weekly Breakdown (per-agent coaching)" value={coachingWeeklySheetUrl} setValue={setCoachingWeeklySheetUrl}
+          hint="Enables DR/BZ split via NTID → bpLookup." />
+        <UrlRow label="Login Buckets (myPerformance login frequency)" value={loginBucketsSheetUrl} setValue={setLoginBucketsSheetUrl}
+          hint="Monthly distribution across 0-3 / 4-7 / 8-15 / 16-20+ login buckets." />
+        <div style={{ display: "flex", gap: 8, marginTop: 20, justifyContent: "flex-end" }}>
+          <button onClick={onClose} style={{ padding: "8px 14px", border: "none", background: "#7C3AED", color: "#fff", borderRadius: 6, cursor: "pointer", fontWeight: 600 }}>Close</button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function VirgilMbrExportModal({ perf, coachingDetailsRaw, coachingWeeklyRaw, loginBucketsRaw, insights, setInsights, onClose }) {
   const [reportingMonth, setReportingMonth] = useState(() => {
@@ -6746,7 +6790,7 @@ function VirgilMbrExportModal({ perf, coachingDetailsRaw, coachingWeeklyRaw, log
       insights,
     });
     const safeMonth = (reportingMonth || "Virgil").replace(/[^A-Za-z0-9 _-]+/g, "");
-    await pres.writeFile({ fileName: `Virgil MBR - ${safeMonth}.pptx` });
+    await pres.writeFile({ fileName: `Corp MBR - ${safeMonth}.pptx` });
   }, [perf, reportingMonth, virgilLastName, coachingDetails, coachingWeekly, loginBuckets, insights]);
 
   const StatusRow = ({ label, ok }) => (
@@ -6761,7 +6805,7 @@ function VirgilMbrExportModal({ perf, coachingDetailsRaw, coachingWeeklyRaw, log
          onClick={onClose}>
       <div style={{ width: 560, maxHeight: "85vh", overflow: "auto", background: "#fff", borderRadius: 10, padding: 24 }}
            onClick={e => e.stopPropagation()}>
-        <h2 style={{ margin: 0, fontSize: 20 }}>Export Virgil MBR</h2>
+        <h2 style={{ margin: 0, fontSize: 20 }}>Export Corp MBR</h2>
         <p style={{ color: "#6b7280", fontSize: 13, marginTop: 4 }}>
           Comcast-facing monthly deck. Phase 1: Title + My Performance / Quality.
         </p>
@@ -14057,6 +14101,7 @@ export default function App() {
   const [showMbrModal, setShowMbrModal] = useState(false);
 
   const [showVirgilMbrModal, setShowVirgilMbrModal] = useState(false);
+  const [showCorpDataSourcesModal, setShowCorpDataSourcesModal] = useState(false);
 
   const [coachingDetailsRaw, _setCoachingDetailsRaw] = useState(() => {
     try { return localStorage.getItem("perf_intel_coaching_details_v1") || ""; } catch(e) { return ""; }
@@ -14121,7 +14166,7 @@ export default function App() {
   }, []);
 
   const [coachingDetailsSheetUrl, _setCoachingDetailsSheetUrl] = useState(() => {
-    try { return localStorage.getItem("perf_intel_coaching_details_url_v1") || ""; } catch(e) { return ""; }
+    try { return localStorage.getItem("perf_intel_coaching_details_url_v1") || DEFAULT_CORP_COACHING_DETAILS_URL; } catch(e) { return DEFAULT_CORP_COACHING_DETAILS_URL; }
   });
   const setCoachingDetailsSheetUrl = useCallback(v => {
     _setCoachingDetailsSheetUrl(v);
@@ -14129,7 +14174,7 @@ export default function App() {
   }, []);
 
   const [coachingWeeklySheetUrl, _setCoachingWeeklySheetUrl] = useState(() => {
-    try { return localStorage.getItem("perf_intel_coaching_weekly_url_v1") || ""; } catch(e) { return ""; }
+    try { return localStorage.getItem("perf_intel_coaching_weekly_url_v1") || DEFAULT_CORP_COACHING_WEEKLY_URL; } catch(e) { return DEFAULT_CORP_COACHING_WEEKLY_URL; }
   });
   const setCoachingWeeklySheetUrl = useCallback(v => {
     _setCoachingWeeklySheetUrl(v);
@@ -14137,7 +14182,7 @@ export default function App() {
   }, []);
 
   const [loginBucketsSheetUrl, _setLoginBucketsSheetUrl] = useState(() => {
-    try { return localStorage.getItem("perf_intel_login_buckets_url_v1") || ""; } catch(e) { return ""; }
+    try { return localStorage.getItem("perf_intel_login_buckets_url_v1") || DEFAULT_CORP_LOGIN_BUCKETS_URL; } catch(e) { return DEFAULT_CORP_LOGIN_BUCKETS_URL; }
   });
   const setLoginBucketsSheetUrl = useCallback(v => {
     _setLoginBucketsSheetUrl(v);
@@ -14661,6 +14706,17 @@ export default function App() {
           onClose={() => setShowVirgilMbrModal(false)}
         />
       )}
+      {showCorpDataSourcesModal && (
+        <CorpMbrDataSourcesModal
+          coachingDetailsSheetUrl={coachingDetailsSheetUrl}
+          setCoachingDetailsSheetUrl={setCoachingDetailsSheetUrl}
+          coachingWeeklySheetUrl={coachingWeeklySheetUrl}
+          setCoachingWeeklySheetUrl={setCoachingWeeklySheetUrl}
+          loginBucketsSheetUrl={loginBucketsSheetUrl}
+          setLoginBucketsSheetUrl={setLoginBucketsSheetUrl}
+          onClose={() => setShowCorpDataSourcesModal(false)}
+        />
+      )}
 
       {/* Settings panel — keep existing modal, just gate by showSettings */}
       {showSettings && (
@@ -14685,25 +14741,6 @@ export default function App() {
                   style={{ width: "100%", padding: "0.5rem 0.75rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem", background: "var(--bg-secondary)", color: "var(--text-primary)", border: "1px solid var(--border)", borderRadius: "6px", boxSizing: "border-box" }} />
               </div>
             ))}
-            {/* Virgil MBR Sheet URLs */}
-            <div style={{ marginBottom: "1rem" }}>
-              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: "#6366f1", letterSpacing: "0.08em", marginBottom: "0.3rem" }}>Coaching Details CSV</div>
-              <input defaultValue={coachingDetailsSheetUrl} placeholder="Optional — paste Coaching Details CSV URL"
-                onBlur={e => setCoachingDetailsSheetUrl(e.target.value.trim())}
-                style={{ width: "100%", padding: "0.5rem 0.75rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem", background: "var(--bg-secondary)", color: "var(--text-primary)", border: "1px solid var(--border)", borderRadius: "6px", boxSizing: "border-box" }} />
-            </div>
-            <div style={{ marginBottom: "1rem" }}>
-              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: "#6366f1", letterSpacing: "0.08em", marginBottom: "0.3rem" }}>Weekly Breakdown CSV</div>
-              <input defaultValue={coachingWeeklySheetUrl} placeholder="Optional — paste Weekly Breakdown CSV URL"
-                onBlur={e => setCoachingWeeklySheetUrl(e.target.value.trim())}
-                style={{ width: "100%", padding: "0.5rem 0.75rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem", background: "var(--bg-secondary)", color: "var(--text-primary)", border: "1px solid var(--border)", borderRadius: "6px", boxSizing: "border-box" }} />
-            </div>
-            <div style={{ marginBottom: "1rem" }}>
-              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: "#6366f1", letterSpacing: "0.08em", marginBottom: "0.3rem" }}>Login Buckets CSV</div>
-              <input defaultValue={loginBucketsSheetUrl} placeholder="Optional — paste Login Buckets CSV URL"
-                onBlur={e => setLoginBucketsSheetUrl(e.target.value.trim())}
-                style={{ width: "100%", padding: "0.5rem 0.75rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem", background: "var(--bg-secondary)", color: "var(--text-primary)", border: "1px solid var(--border)", borderRadius: "6px", boxSizing: "border-box" }} />
-            </div>
             {/* Hours Threshold */}
             <div style={{ marginTop: "0.5rem", marginBottom: "1rem", padding: "1rem", background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-md, 10px)" }}>
               <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: "#d97706", letterSpacing: "0.08em", marginBottom: "0.5rem" }}>Qualified Hours Threshold</div>
@@ -14771,6 +14808,7 @@ export default function App() {
         setLocalAI={setLocalAI}
         onExportMbr={() => setShowMbrModal(true)}
         onExportVirgilMbr={() => setShowVirgilMbrModal(true)}
+        onOpenCorpDataSources={() => setShowCorpDataSourcesModal(true)}
         onRefresh={handleRefresh}
         onUploadGoals={() => goalsInputRef.current.click()}
         onUploadRoster={() => nhInputRef.current.click()}
