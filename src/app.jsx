@@ -10620,16 +10620,33 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
 
 // ── ProgramSiteCompareCard — DR vs BZ scorecard for shared programs ─────────
 // Renders only when both DR and BZ have agents in this program.
-function ProgramSiteCompareCard({ program, allAgents, newHireSet }) {
+function ProgramSiteCompareCard({ program, allAgents, newHireSet, goalLookup }) {
   const data = useMemo(() => {
     const allRegions = [...new Set(allAgents.map(a => a.region).filter(Boolean))];
     const drRegions = allRegions.filter(r => !r.toUpperCase().includes("XOTM"));
     const bzRegions = allRegions.filter(r => r.toUpperCase().includes("XOTM"));
     const programAgents = allAgents.filter(a => a.jobType === program.jobType);
+
+    // Re-derive the FULL cross-site goalEntries from goalLookup (program.goalEntries
+    // received here may already be site-filtered by the parent App's filteredProgram).
+    let fullEntries = [];
+    if (goalLookup) {
+      const agentRocs = [...new Set(programAgents.map(a => a.rocCode).filter(Boolean))];
+      if (agentRocs.length > 0) {
+        agentRocs.forEach(roc => {
+          const rocEntries = getGoalEntries(goalLookup, program.jobType, roc);
+          rocEntries.forEach(e => {
+            if (!fullEntries.some(x => x.targetAudience === e.targetAudience)) fullEntries.push(e);
+          });
+        });
+      }
+      if (fullEntries.length === 0) fullEntries = getGoalEntries(goalLookup, program.jobType);
+    }
+
     const buildSide = (regions, siteKey) => {
       const siteAgents = programAgents.filter(a => regions.includes(a.region));
       if (siteAgents.length === 0) return null;
-      const sub = buildProgram(siteAgents, program.jobType, filterGoalEntriesBySite(program.goalEntries, siteKey), newHireSet);
+      const sub = buildProgram(siteAgents, program.jobType, filterGoalEntriesBySite(fullEntries, siteKey), newHireSet);
       const cps = sub.totalGoals > 0 ? (sub.totalHours * MBR_BILLING_RATE) / sub.totalGoals : sub.totalHours * MBR_BILLING_RATE;
       return {
         attainment: sub.attainment,
@@ -10644,7 +10661,7 @@ function ProgramSiteCompareCard({ program, allAgents, newHireSet }) {
       };
     };
     return { dr: buildSide(drRegions, "DR"), bz: buildSide(bzRegions, "BZ") };
-  }, [program, allAgents, newHireSet]);
+  }, [program, allAgents, newHireSet, goalLookup]);
 
   if (!data.dr || !data.bz) return null;
 
@@ -10850,7 +10867,7 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, allAgents, localAI
           <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
             {/* Site comparison card — only renders when both DR and BZ dial this program */}
             {siteFilter && (
-              <ProgramSiteCompareCard program={program} allAgents={allAgents} newHireSet={newHireSet} />
+              <ProgramSiteCompareCard program={program} allAgents={allAgents} newHireSet={newHireSet} goalLookup={goalLookup} />
             )}
             {/* Stat cards */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "0.75rem" }}>
