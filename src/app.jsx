@@ -10681,8 +10681,8 @@ function ProgramSiteCompareCard({ program, allAgents, newHireSet, goalLookup }) 
   }
   const dHours = data.dr.hours - data.bz.hours;
   if (Math.abs(dHours) >= 1) (dHours > 0 ? drWins : bzWins).push(`hours ${fmtNum(Math.abs(dHours))}`);
-  const dQ1 = data.dr.q1Rate - data.bz.q1Rate;
-  if (Math.abs(dQ1) >= 0.5) (dQ1 > 0 ? drWins : bzWins).push(`Q1 rate ${fmtPts(Math.abs(dQ1))}`);
+  const dAboveGoal = data.dr.q1Count - data.bz.q1Count;
+  if (Math.abs(dAboveGoal) >= 1) (dAboveGoal > 0 ? drWins : bzWins).push(`above-goal agents ${fmtNum(Math.abs(dAboveGoal))}`);
   const dCps = data.dr.cps - data.bz.cps;
   if (Math.abs(dCps) >= 1) (dCps < 0 ? drWins : bzWins).push(`CPS ${fmtCps(-Math.abs(dCps))}`);
 
@@ -10706,7 +10706,7 @@ function ProgramSiteCompareCard({ program, allAgents, newHireSet, goalLookup }) 
           <Metric label="Goal"   value={d.attainment != null ? `${Math.round(d.attainment)}%` : "—"} sub={`${d.goals}${d.plan ? ` / ${d.plan}` : ""}`} valueColor={d.attainment != null ? attainColor(d.attainment) : null} />
           <Metric label="GPH"    value={fmt(d.gph, 2)} />
           <Metric label="Hours"  value={Math.round(d.hours).toLocaleString()} />
-          <Metric label="Q1 Rate" value={`${Math.round(d.q1Rate)}%`} sub={`${d.q1Count} of ${d.agents}`} />
+          <Metric label="Above Goal" value={`${d.q1Count}`} sub={`of ${d.agents} (${Math.round(d.q1Rate)}%)`} />
           <Metric label="CPS"    value={`$${Math.round(d.cps).toLocaleString()}`} />
         </div>
       </div>
