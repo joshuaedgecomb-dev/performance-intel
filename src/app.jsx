@@ -6593,36 +6593,83 @@ function virgilBrandBars(pres, slide) {
 // CORP MBR — Slide Builders
 // ═══════════════════════════════════════════════════════════════════
 
+// "Mar '26" / "Mar 26" / "March 2026" → "March 2026".
+function expandMonthLabel(label) {
+  if (!label) return "";
+  const s = String(label).trim();
+  const full = { jan:"January", feb:"February", mar:"March", apr:"April", may:"May", jun:"June", jul:"July", aug:"August", sep:"September", oct:"October", nov:"November", dec:"December" };
+  const m = s.match(/^([A-Za-z]{3,})\s*'?(\d{2,4})$/);
+  if (!m) return s;
+  const monKey = m[1].slice(0, 3).toLowerCase();
+  const monName = full[monKey] || m[1];
+  const yr = m[2];
+  const year = yr.length === 4 ? yr : (Number(yr) >= 50 ? `19${yr}` : `20${yr}`);
+  return `${monName} ${year}`;
+}
+
 function buildVirgilTitleSlide(pres, reportingMonthLabel, fiscalInfo, virgilLastName) {
   const slide = pres.addSlide();
-  slide.background = { color: virgilTheme.slideBg };
-  virgilBrandBars(pres, slide);
+  const w = pres.presLayout ? pres.presLayout.width : 13.333;
+  const h = pres.presLayout ? pres.presLayout.height : 7.5;
 
-  slide.addText("GLOBAL CALLCENTER SOLUTIONS", {
-    x: 0.5, y: 1.5, w: 12, h: 0.3,
-    fontSize: 11, color: virgilTheme.eyebrow, bold: true, charSpacing: 3,
+  const bgPurple = "5851FF";
+  const decorPurple = "4A43D9";
+  const accentOrange = "F59E0B";
+
+  // Solid purple background
+  slide.addShape("rect", {
+    x: 0, y: 0, w, h,
+    fill: { color: bgPurple },
+    line: { color: bgPurple, width: 0 },
   });
-  slide.addText(`CORP MBR — ${reportingMonthLabel}`, {
-    x: 0.5, y: 1.9, w: 12, h: 1.0,
-    fontSize: 36, color: virgilTheme.bodyText, bold: true,
+
+  // Upper-right decorative circle (large, partly off-canvas top-right)
+  slide.addShape("ellipse", {
+    x: w - 3.5, y: -2.0, w: 5.5, h: 5.5,
+    fill: { color: decorPurple },
+    line: { color: decorPurple, width: 0 },
   });
+
+  // Lower-left decorative circle (partly off-canvas bottom-left)
+  slide.addShape("ellipse", {
+    x: -2.2, y: h - 3.2, w: 5.0, h: 5.0,
+    fill: { color: decorPurple },
+    line: { color: decorPurple, width: 0 },
+  });
+
+  // Title — huge white bold
+  slide.addText("MONTHLY BUSINESS REVIEW", {
+    x: 0.7, y: 2.4, w: 10.5, h: 1.2,
+    fontSize: 44, color: "FFFFFF", bold: true,
+    fontFace: "Calibri",
+  });
+
+  // Orange subtitle
+  slide.addText("GLOBAL CALLCENTER SOLUTIONS (GCS)", {
+    x: 0.7, y: 3.7, w: 10.5, h: 0.45,
+    fontSize: 18, color: accentOrange, bold: false,
+    charSpacing: 2,
+  });
+
+  // Italic white date (expand "Mar '26" → "March 2026")
+  const niceDate = expandMonthLabel(reportingMonthLabel);
+  slide.addText(niceDate, {
+    x: 0.7, y: 4.3, w: 10.5, h: 0.45,
+    fontSize: 16, color: "FFFFFF", italic: true,
+  });
+
+  // Audience line (small, italic, subtle white)
   const audienceName = virgilLastName ? `Virgil ${virgilLastName}` : "Virgil";
   slide.addText(`Presented to ${audienceName}, Director of Vendor Management, Comcast`, {
-    x: 0.5, y: 3.0, w: 12, h: 0.4,
-    fontSize: 14, color: virgilTheme.subtle,
+    x: 0.7, y: 4.85, w: 10.5, h: 0.35,
+    fontSize: 12, color: "E5E7EB", italic: true,
   });
-  if (fiscalInfo && fiscalInfo.fiscalStart && fiscalInfo.fiscalEnd) {
-    const fmt = (d) => {
-      try {
-        const dt = new Date(d);
-        return dt.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-      } catch(e) { return String(d); }
-    };
-    slide.addText(`Fiscal Month: ${fmt(fiscalInfo.fiscalStart)} – ${fmt(fiscalInfo.fiscalEnd)}`, {
-      x: 0.5, y: 3.5, w: 12, h: 0.4,
-      fontSize: 12, color: virgilTheme.subtle, italic: true,
-    });
-  }
+
+  // Orange accent line near the bottom
+  slide.addShape("line", {
+    x: 0, y: h - 1.1, w, h: 0,
+    line: { color: accentOrange, width: 1.5 },
+  });
 }
 
 function buildVirgilMyPerformanceSlide(pres, stats, loginBuckets, priorMonthLabel, reportingMonthLabel, insightsText) {
