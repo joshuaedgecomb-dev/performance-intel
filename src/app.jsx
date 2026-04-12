@@ -13499,6 +13499,8 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
 // Owns state. Calls usePerformanceEngine. Passes data to pages. No computation.
 // ══════════════════════════════════════════════════════════════════════════════
 
+const CURRENT_PAGE_KEY = "perf-intel-current-page";
+
 const THEMES = {
   dark: {
     "--bg-primary":      "#06090d",
@@ -13554,6 +13556,15 @@ export default function App() {
   const [rawData,    setRawData]    = useState(null);
   const [lightMode,  setLightMode]  = useState(true);
   const [slideIndex, setSlideIndex] = useState(0);
+  const [currentPage, _setCurrentPage] = useState(() => {
+    try { const s = localStorage.getItem(CURRENT_PAGE_KEY); return s ? JSON.parse(s) : { section: "overview" }; }
+    catch(e) { return { section: "overview" }; }
+  });
+  const setCurrentPage = useCallback(page => {
+    _setCurrentPage(page);
+    try { localStorage.setItem(CURRENT_PAGE_KEY, JSON.stringify(page)); } catch(e) {}
+  }, []);
+  const [openMenu, setOpenMenu] = useState(null); // null | "dr" | "bz" | "settings"
   const [showToday,  setShowToday]  = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showMbrModal, setShowMbrModal] = useState(false);
@@ -13682,6 +13693,70 @@ export default function App() {
   // Prior month derived data (hoisted for app-wide access)
   const priorAgents = useMemo(() => normalizeAgents(priorMonthRaw || []), [priorMonthRaw]);
   const priorGoalLookup = useMemo(() => buildGoalLookup(priorMonthGoalsRaw), [priorMonthGoalsRaw]);
+
+  const siteRegionGroups = useMemo(() => {
+    if (!perf.agents || perf.agents.length === 0) return { dr: [], bz: [] };
+    const allRegions = [...new Set(perf.agents.map(a => a.region).filter(Boolean))];
+    return {
+      dr: allRegions.filter(r => !r.toUpperCase().includes("XOTM")),
+      bz: allRegions.filter(r => r.toUpperCase().includes("XOTM")),
+    };
+  }, [perf.agents]);
+
+  const programsBySite = useMemo(() => {
+    const result = { DR: [], BZ: [] };
+    if (!perf.programs || !perf.fiscalInfo) return result;
+    const { elapsedBDays, totalBDays } = perf.fiscalInfo;
+    [["DR", siteRegionGroups.dr], ["BZ", siteRegionGroups.bz]].forEach(([siteKey, regs]) => {
+      if (regs.length === 0) return;
+      perf.programs.forEach(prog => {
+        const siteAgents = prog.agents.filter(a => regs.includes(a.region));
+        if (siteAgents.length === 0) return;
+        const sub = buildProgram(siteAgents, prog.jobType, prog.goalEntries, newHireSet);
+        const pacing = sub.attainment != null && sub.planGoals
+          ? calcPacing(sub.actGoals, sub.planGoals, elapsedBDays, totalBDays) : null;
+        result[siteKey].push({
+          jobType: prog.jobType,
+          attainment: sub.attainment,
+          projAttainment: pacing ? pacing.projectedPct : null,
+          category: getMbrCategory(prog.jobType),
+          actGoals: sub.actGoals,
+          planGoals: sub.planGoals,
+        });
+      });
+      result[siteKey].sort((a, b) => (b.attainment ?? -1) - (a.attainment ?? -1));
+    });
+    return result;
+  }, [perf.programs, perf.fiscalInfo, siteRegionGroups, newHireSet]);
+
+  const siteAttainments = useMemo(() => {
+    const result = { DR: { attainment: null, projAttainment: null }, BZ: { attainment: null, projAttainment: null } };
+    if (!perf.fiscalInfo) return result;
+    const { elapsedBDays, totalBDays } = perf.fiscalInfo;
+    ["DR", "BZ"].forEach(siteKey => {
+      const list = programsBySite[siteKey];
+      if (!list || list.length === 0) return;
+      const actGoals = list.reduce((s, p) => s + (p.actGoals || 0), 0);
+      const planGoals = list.reduce((s, p) => s + (p.planGoals || 0), 0);
+      if (planGoals > 0) {
+        const attainment = (actGoals / planGoals) * 100;
+        const pacing = calcPacing(actGoals, planGoals, elapsedBDays, totalBDays);
+        result[siteKey] = { attainment, projAttainment: pacing ? pacing.projectedPct : null };
+      }
+    });
+    return result;
+  }, [programsBySite, perf.fiscalInfo]);
+
+  const filteredProgram = useMemo(() => {
+    if (!currentPage.program) return null;
+    if (currentPage.section !== "dr" && currentPage.section !== "bz") return null;
+    const baseProgram = perf.programMap[currentPage.program];
+    if (!baseProgram) return null;
+    const regs = currentPage.section === "dr" ? siteRegionGroups.dr : siteRegionGroups.bz;
+    const siteAgents = baseProgram.agents.filter(a => regs.includes(a.region));
+    if (siteAgents.length === 0) return null;
+    return buildProgram(siteAgents, baseProgram.jobType, baseProgram.goalEntries, newHireSet);
+  }, [currentPage, perf.programMap, siteRegionGroups, newHireSet]);
 
   // AI prefetch counter — triggers re-renders as cache fills
   const [aiPrefetchDone, setAiPrefetchDone] = useState(0);
