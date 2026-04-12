@@ -10609,7 +10609,7 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
   );
 }
 
-function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total, onNav, allAgents, localAI, priorAgents, tnpsByAgent, siteFilter = null }) {
+function Slide({ program, newHireSet, goalLookup, fiscalInfo, allAgents, localAI, priorAgents, tnpsByAgent, siteFilter = null }) {
   const [tab, setTab] = useState("overview");
   const [rocFilter, setRocFilter] = useState(null); // null = all, or a specific ROC code
   const [rankSort, setRankSort] = useState({ key: "pctToGoal", dir: -1 });
@@ -10691,9 +10691,7 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
       <div style={{ background: `var(--glass-bg)`, backdropFilter: "blur(12px) saturate(150%)", WebkitBackdropFilter: "blur(12px) saturate(150%)", borderBottom: "1px solid var(--glass-border)", padding: "1rem 2.5rem", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem", flexShrink: 0 }}>
         <div>
           <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.68rem", color: `var(--text-muted)`, letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 500 }}>
-            {siteFilter
-              ? `${siteFilter} · ${getMbrCategory(jobType)}`
-              : <>Program {slideIndex} of {total - 1} <span style={{ display: "inline-block", width: "0.6em" }} /> {totalRowCount} records</>}
+            {siteFilter ? `${siteFilter} · ${getMbrCategory(jobType)}` : `${totalRowCount} records`}
           </div>
           <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.75rem", color: `var(--text-warm)`, fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1.15, marginTop: "0.15rem" }}>
             {jobType}
@@ -11259,22 +11257,6 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
       </div>
 
       {/* Sticky nav — always visible, never scrolls away */}
-      <div style={{ flexShrink: 0, borderTop: "1px solid var(--border)", padding: "0.75rem 2.5rem", display: "flex", alignItems: "center", justifyContent: "space-between", background: `var(--bg-row-alt)` }}>
-        <button onClick={() => onNav(-1)} disabled={slideIndex === 0}
-          style={{ padding: "0.5rem 1.25rem", background: slideIndex===0?"transparent":"var(--bg-tertiary)", border: `1px solid ${slideIndex===0?`var(--border)`:`var(--text-faint)`}`, borderRadius: "6px", color: slideIndex===0?`var(--border)`:`var(--text-secondary)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", cursor: slideIndex===0?"not-allowed":"pointer", letterSpacing: "0.05em" }}>
-          ← PREV
-        </button>
-        <div style={{ display: "flex", gap: "0.35rem", alignItems: "center" }}>
-          {Array.from({ length: total }).map((_, i) => (
-            <div key={i} onClick={() => onNav(i - slideIndex)}
-              style={{ width: i===slideIndex?"22px":"8px", height: "8px", borderRadius: "4px", background: i===slideIndex?"#d97706":"transparent", border: i===slideIndex?"none":`2px solid var(--text-faint)`, cursor: "pointer", transition: "all 0.2s" }} />
-          ))}
-        </div>
-        <button onClick={() => onNav(1)} disabled={slideIndex === total - 1}
-          style={{ padding: "0.5rem 1.25rem", background: slideIndex===total-1?"transparent":"var(--bg-tertiary)", border: `1px solid ${slideIndex===total-1?`var(--border)`:`var(--text-faint)`}`, borderRadius: "6px", color: slideIndex===total-1?`var(--border)`:`var(--text-secondary)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", cursor: slideIndex===total-1?"not-allowed":"pointer", letterSpacing: "0.05em" }}>
-          NEXT →
-        </button>
-      </div>
     </div>
   );
 }
@@ -13459,7 +13441,6 @@ const THEMES = {
 export default function App() {
   const [rawData,    setRawData]    = useState(null);
   const [lightMode,  setLightMode]  = useState(true);
-  const [slideIndex, setSlideIndex] = useState(0);
   const [currentPage, _setCurrentPage] = useState(() => {
     try { const s = localStorage.getItem(CURRENT_PAGE_KEY); return s ? JSON.parse(s) : { section: "overview" }; }
     catch(e) { return { section: "overview" }; }
@@ -14020,7 +14001,6 @@ export default function App() {
             newHireSet={newHireSet}
             goalLookup={perf.goalLookup}
             fiscalInfo={perf.fiscalInfo}
-            slideIndex={0} total={1} onNav={() => {}}
             allAgents={perf.agents}
             localAI={localAI}
             priorAgents={priorAgents}
