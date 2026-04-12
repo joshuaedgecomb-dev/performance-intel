@@ -7557,10 +7557,10 @@ function buildCorpCampaignHoursSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
       fontSize: 9, color: virgilTheme.bodyText, valign: "top",
     });
   };
-  drawFundingCol(0.5, 3.0, "Growth", curr.campaigns);
-  drawFundingCol(4.0, 2.9, "HQ", curr.campaigns);
-  drawFundingCol(7.0, 2.9, "Marketing", curr.campaigns);
-  drawFundingCol(10.0, 2.8, "National", curr.campaigns);
+  drawFundingCol(0.5, 3.0, "Growth", reporting.campaigns);
+  drawFundingCol(4.0, 2.9, "HQ", reporting.campaigns);
+  drawFundingCol(7.0, 2.9, "Marketing", reporting.campaigns);
+  drawFundingCol(10.0, 2.8, "National", reporting.campaigns);
 }
 
 // ═══════════════════════════════════════════════════════════════════
