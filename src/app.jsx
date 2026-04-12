@@ -6612,9 +6612,7 @@ function buildVirgilTitleSlide(pres, reportingMonthLabel, fiscalInfo, virgilLast
   const w = pres.presLayout ? pres.presLayout.width : 13.333;
   const h = pres.presLayout ? pres.presLayout.height : 7.5;
 
-  const bgPurple = "5851FF";
-  const decorPurple = "4A43D9";
-  const accentOrange = "F59E0B";
+  const bgPurple = "6F5CFF";
 
   // Solid purple background
   slide.addShape("rect", {
@@ -6623,52 +6621,46 @@ function buildVirgilTitleSlide(pres, reportingMonthLabel, fiscalInfo, virgilLast
     line: { color: bgPurple, width: 0 },
   });
 
-  // Upper-right decorative circle (large, partly off-canvas top-right)
-  slide.addShape("ellipse", {
-    x: w - 3.5, y: -2.0, w: 5.5, h: 5.5,
-    fill: { color: decorPurple },
-    line: { color: decorPurple, width: 0 },
+  // Translucent "X" watermark — two rotated white bars forming an X,
+  // centered slightly left of slide-center to give the title visual weight on top.
+  const xCenterX = w / 2 - 1.3;   // offset left
+  const xCenterY = h / 2;
+  const barW = 0.95;
+  const barH = 6.8;
+  const drawXBar = (angle) => {
+    slide.addShape("rect", {
+      x: xCenterX - barW / 2,
+      y: xCenterY - barH / 2,
+      w: barW,
+      h: barH,
+      fill: { color: "FFFFFF", transparency: 75 },
+      line: { color: "FFFFFF", width: 0, transparency: 100 },
+      rotate: angle,
+    });
+  };
+  drawXBar(30);
+  drawXBar(-30);
+
+  // Title — centered
+  slide.addText("Outbound Fiscal Month MBR", {
+    x: 1.0, y: 3.05, w: w - 2.0, h: 0.7,
+    fontSize: 32, color: "FFFFFF", bold: true,
+    fontFace: "Calibri", align: "center",
   });
 
-  // Lower-left decorative circle (partly off-canvas bottom-left)
-  slide.addShape("ellipse", {
-    x: -2.2, y: h - 3.2, w: 5.0, h: 5.0,
-    fill: { color: decorPurple },
-    line: { color: decorPurple, width: 0 },
+  // Date (subtitle) — uppercase, letter-spaced
+  const dateText = expandMonthLabel(reportingMonthLabel).toUpperCase();
+  slide.addText(dateText || "DATE", {
+    x: 1.0, y: 3.85, w: w - 2.0, h: 0.4,
+    fontSize: 12, color: "FFFFFF", bold: true,
+    charSpacing: 5, align: "center",
   });
 
-  // Title — huge white bold
-  slide.addText("MONTHLY BUSINESS REVIEW", {
-    x: 0.7, y: 2.4, w: 10.5, h: 1.2,
-    fontSize: 44, color: "FFFFFF", bold: true,
-    fontFace: "Calibri",
-  });
-
-  // Orange subtitle
-  slide.addText("GLOBAL CALLCENTER SOLUTIONS (GCS)", {
-    x: 0.7, y: 3.7, w: 10.5, h: 0.45,
-    fontSize: 18, color: accentOrange, bold: false,
-    charSpacing: 2,
-  });
-
-  // Italic white date (expand "Mar '26" → "March 2026")
-  const niceDate = expandMonthLabel(reportingMonthLabel);
-  slide.addText(niceDate, {
-    x: 0.7, y: 4.3, w: 10.5, h: 0.45,
-    fontSize: 16, color: "FFFFFF", italic: true,
-  });
-
-  // Audience line (small, italic, subtle white)
-  const audienceName = virgilLastName ? `Virgil ${virgilLastName}` : "Virgil";
-  slide.addText(`Presented to ${audienceName}, Director of Vendor Management, Comcast`, {
-    x: 0.7, y: 4.85, w: 10.5, h: 0.35,
-    fontSize: 12, color: "E5E7EB", italic: true,
-  });
-
-  // Orange accent line near the bottom
-  slide.addShape("line", {
-    x: 0, y: h - 1.1, w, h: 0,
-    line: { color: accentOrange, width: 1.5 },
+  // xfinity wordmark bottom-right
+  slide.addText("xfinity", {
+    x: w - 1.5, y: h - 0.55, w: 1.2, h: 0.35,
+    fontSize: 14, color: "FFFFFF",
+    align: "right",
   });
 }
 
