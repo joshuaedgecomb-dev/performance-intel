@@ -6609,21 +6609,11 @@ function expandMonthLabel(label) {
 
 function buildVirgilTitleSlide(pres, reportingMonthLabel, fiscalInfo, virgilLastName) {
   const slide = pres.addSlide();
-  const w = pres.presLayout ? pres.presLayout.width : 13.333;
-  const h = pres.presLayout ? pres.presLayout.height : 7.5;
+  const w = 13.333;
+  const h = 7.5;
 
-  // --- Background: solid left + 2 stepped right panels to approximate a left-to-right gradient ---
-  slide.background = { color: "3730A3" };
-  slide.addShape("rect", {
-    x: w * 0.45, y: 0, w: w * 0.55, h,
-    fill: { color: "7C68E8" },
-    line: { type: "none" },
-  });
-  slide.addShape("rect", {
-    x: w * 0.65, y: 0, w: w * 0.35, h,
-    fill: { color: "A78BFA" },
-    line: { type: "none" },
-  });
+  // --- Background: single solid indigo ---
+  slide.background = { color: "4F46E5" };
 
   // --- X watermark (two rotated white bars, left-of-center) ---
   const xCenterX = 2.8;
@@ -6636,7 +6626,7 @@ function buildVirgilTitleSlide(pres, reportingMonthLabel, fiscalInfo, virgilLast
       y: xCenterY - barH / 2,
       w: barW,
       h: barH,
-      fill: { color: "FFFFFF", transparency: 70 },
+      fill: { color: "FFFFFF", transparency: 82 },
       line: { type: "none" },
       rotate: angle,
     });
