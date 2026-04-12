@@ -6908,6 +6908,8 @@ function CorpMbrDataSourcesModal({
   coachingDetailsSheetUrl, setCoachingDetailsSheetUrl,
   coachingWeeklySheetUrl, setCoachingWeeklySheetUrl,
   loginBucketsSheetUrl, setLoginBucketsSheetUrl,
+  priorQuarterAgentUrl, setPriorQuarterAgentUrl,
+  priorQuarterGoalsUrl, setPriorQuarterGoalsUrl,
   onClose
 }) {
   const UrlRow = ({ label, value, setValue, hint }) => (
@@ -6934,6 +6936,10 @@ function CorpMbrDataSourcesModal({
           hint="Enables DR/BZ split via NTID → bpLookup." />
         <UrlRow label="Login Buckets (myPerformance login frequency)" value={loginBucketsSheetUrl} setValue={setLoginBucketsSheetUrl}
           hint="Monthly distribution across 0-3 / 4-7 / 8-15 / 16-20+ login buckets." />
+        <UrlRow label="Prior Quarter — Agent Data" value={priorQuarterAgentUrl} setValue={setPriorQuarterAgentUrl}
+          hint="Q4 2025 agent-level stats. Used by Slide 3 comparison table." />
+        <UrlRow label="Prior Quarter — Goals" value={priorQuarterGoalsUrl} setValue={setPriorQuarterGoalsUrl}
+          hint="Q4 2025 goals CSV. Needed to compute Q4 attainment." />
         <div style={{ display: "flex", gap: 8, marginTop: 20, justifyContent: "flex-end" }}>
           <button onClick={onClose} style={{ padding: "8px 14px", border: "none", background: "#7C3AED", color: "#fff", borderRadius: 6, cursor: "pointer", fontWeight: 600 }}>Close</button>
         </div>
@@ -14798,6 +14804,46 @@ export default function App() {
     })();
   }, [loginBucketsSheetUrl]);
 
+  useEffect(() => {
+    if (!priorQuarterAgentUrl) return;
+    (async () => {
+      try {
+        const res = await fetch(priorQuarterAgentUrl);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const text = await res.text();
+        setPriorQuarterAgentRaw(text);
+      } catch(e) {
+        try {
+          const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(priorQuarterAgentUrl)}`);
+          if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
+          setPriorQuarterAgentRaw(await res.text());
+        } catch(e2) {
+          console.error("Prior Quarter Agent sheet fetch failed:", e2);
+        }
+      }
+    })();
+  }, [priorQuarterAgentUrl]);
+
+  useEffect(() => {
+    if (!priorQuarterGoalsUrl) return;
+    (async () => {
+      try {
+        const res = await fetch(priorQuarterGoalsUrl);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const text = await res.text();
+        setPriorQuarterGoalsRaw(text);
+      } catch(e) {
+        try {
+          const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(priorQuarterGoalsUrl)}`);
+          if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
+          setPriorQuarterGoalsRaw(await res.text());
+        } catch(e2) {
+          console.error("Prior Quarter Goals sheet fetch failed:", e2);
+        }
+      }
+    })();
+  }, [priorQuarterGoalsUrl]);
+
   // Auto-load prior month data from Google Sheet (after main data loads, non-blocking)
   const [priorSheetLoading, setPriorSheetLoading] = useState(false);
   useEffect(() => {
@@ -14916,10 +14962,24 @@ export default function App() {
             if (res.ok) { const t = await res.text(); if (t.trim()) setLoginBucketsRaw(t); }
           } catch(e) {}
         })() : null,
+        priorQuarterAgentUrl ? (async () => {
+          try {
+            let res; try { res = await fetch(priorQuarterAgentUrl); } catch(e) { res = null; }
+            if (!res || !res.ok) res = await fetch(proxy(priorQuarterAgentUrl));
+            if (res.ok) { const t = await res.text(); if (t.trim()) setPriorQuarterAgentRaw(t); }
+          } catch(e) {}
+        })() : null,
+        priorQuarterGoalsUrl ? (async () => {
+          try {
+            let res; try { res = await fetch(priorQuarterGoalsUrl); } catch(e) { res = null; }
+            if (!res || !res.ok) res = await fetch(proxy(priorQuarterGoalsUrl));
+            if (res.ok) { const t = await res.text(); if (t.trim()) setPriorQuarterGoalsRaw(t); }
+          } catch(e) {}
+        })() : null,
       ].filter(Boolean));
     } catch(e) { alert("Could not refresh: " + e.message); }
     finally { setSheetLoading(false); }
-  }, [agentSheetUrl, goalsSheetUrl, nhSheetUrl, priorSheetUrl, priorGoalsSheetUrl, tnpsSheetUrl, coachingDetailsSheetUrl, coachingWeeklySheetUrl, loginBucketsSheetUrl]);
+  }, [agentSheetUrl, goalsSheetUrl, nhSheetUrl, priorSheetUrl, priorGoalsSheetUrl, tnpsSheetUrl, coachingDetailsSheetUrl, coachingWeeklySheetUrl, loginBucketsSheetUrl, priorQuarterAgentUrl, priorQuarterGoalsUrl]);
 
   // Legacy navigation adapter — translates old slideIndex semantics from
   // BusinessOverview/CampaignComparisonPanel into currentPage navigation.
@@ -14970,6 +15030,10 @@ export default function App() {
           setCoachingWeeklySheetUrl={setCoachingWeeklySheetUrl}
           loginBucketsSheetUrl={loginBucketsSheetUrl}
           setLoginBucketsSheetUrl={setLoginBucketsSheetUrl}
+          priorQuarterAgentUrl={priorQuarterAgentUrl}
+          setPriorQuarterAgentUrl={setPriorQuarterAgentUrl}
+          priorQuarterGoalsUrl={priorQuarterGoalsUrl}
+          setPriorQuarterGoalsUrl={setPriorQuarterGoalsUrl}
           onClose={() => setShowCorpDataSourcesModal(false)}
         />
       )}
