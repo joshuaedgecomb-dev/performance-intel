@@ -5032,7 +5032,6 @@ function SettingsMenu({ onExportMbr, onExportVirgilMbr, onOpenCorpDataSources, o
       <MenuSection label="Actions" />
       <MenuRow icon="📊" label="Export MBR" hint="monthly" onClick={onExportMbr} />
       <MenuRow icon="🎯" label="Export Corp MBR" hint="monthly" onClick={onExportVirgilMbr} />
-      <MenuRow icon="🔌" label="Corp MBR Data Sources" hint="URLs" onClick={onOpenCorpDataSources} />
       <MenuRow icon="🔄" label="Refresh from sheet" onClick={onRefresh} />
       <div style={{ borderTop: "1px solid var(--border-muted)", margin: "4px 0" }} />
       <MenuSection label="Data" />
@@ -5042,6 +5041,7 @@ function SettingsMenu({ onExportMbr, onExportVirgilMbr, onOpenCorpDataSources, o
       <MenuRow icon="📘" label="Upload Coaching Details" hint="CSV" onClick={() => document.getElementById("virgil-coaching-details-input").click()} />
       <MenuRow icon="📗" label="Upload Weekly Breakdown" hint="CSV" onClick={() => document.getElementById("virgil-coaching-weekly-input").click()} />
       <MenuRow icon="📕" label="Upload Login Buckets" hint="CSV" onClick={() => document.getElementById("virgil-login-buckets-input").click()} />
+      <MenuRow icon="🔌" label="Corp MBR Data Sources" hint="URLs" onClick={onOpenCorpDataSources} />
       <div style={{ borderTop: "1px solid var(--border-muted)", margin: "4px 0" }} />
       <MenuSection label="Settings" />
       <MenuRow icon="⚙" label="Data sources" onClick={onOpenSettings} />
