@@ -6618,14 +6618,7 @@ function buildVirgilTitleSlide(pres, reportingMonthLabel, fiscalInfo, virgilLast
     x: 0, y: 0, w, h,
   });
 
-  // --- Mask the baked-in "APRIL 14TH, 2026" date on the image ---
-  slide.addShape("rect", {
-    x: 3.3, y: 3.28, w: 2.7, h: 0.35,
-    fill: { color: "4F3FCF" },
-    line: { type: "none" },
-  });
-
-  // --- Dynamic date overlay (today's presentation date) ---
+  // --- Dynamic date (below the baked-in title) ---
   const ord = (d) => {
     const s = ["th", "st", "nd", "rd"];
     const v = d % 100;
@@ -6637,14 +6630,14 @@ function buildVirgilTitleSlide(pres, reportingMonthLabel, fiscalInfo, virgilLast
   const year = today.getFullYear();
   const dateText = `${monthFull} ${day}${ord(day).toUpperCase()}, ${year}`;
   slide.addText(dateText, {
-    x: 3.3, y: 3.28, w: 2.7, h: 0.35,
+    x: 1.0, y: 3.55, w: 5.5, h: 0.35,
     fontSize: 11, color: "FFFFFF", bold: true,
     charSpacing: 5, align: "center",
   });
 
-  // --- Presenters (below the baked-in date area) ---
+  // --- Presenters (below the date, still centered under the title area) ---
   slide.addText("Presented by Joshua Edgecomb, Frank Daley, Jasmine Mendoza", {
-    x: 0.8, y: 3.85, w: 5.8, h: 0.3,
+    x: 1.0, y: 4.0, w: 5.5, h: 0.3,
     fontSize: 10, color: "FFFFFF", italic: true,
     align: "center",
   });
