@@ -6636,6 +6636,120 @@ function computeCorpAttainment(agentRaw, goalsRaw, dateFilter) {
   };
 }
 
+// Groups qualified agents by campaign type (ROC prefix GLU = XM, GLN = XI),
+// sorts each group by % to Goal and splits into 4 equal-sized quartiles,
+// then cross-tabs by tenure bucket. Participation % = agents with ≥1 unit sold / total in bucket.
+// Returns { xm: { quartileSummary, tenureMatrix } | null, xi: { quartileSummary, tenureMatrix } | null }.
+function buildQuartileReport(agentRaw, goalsRaw, newHiresRaw, dateFilter, referenceDate) {
+  if (!agentRaw || !agentRaw.trim()) return { xm: null, xi: null };
+  const agentRows = parseCSV(agentRaw);
+  const goalsRows = goalsRaw && goalsRaw.trim() ? parseCSV(goalsRaw) : [];
+  const newHireRows = newHiresRaw && newHiresRaw.trim() ? parseCSV(newHiresRaw) : [];
+
+  // Hire-date lookup by agent name (case-insensitive)
+  const hireByName = {};
+  for (const r of newHireRows) {
+    const first = (r["First Name"] || "").trim();
+    const last = (r["Last Name"] || "").trim();
+    const name = `${first} ${last}`.toLowerCase();
+    const hd = (r["Hire Date"] || "").trim();
+    if (name && hd) hireByName[name] = hd;
+  }
+
+  // Per-campaign goals lookup by ROC
+  const goalByRoc = {};
+  for (const r of goalsRows) {
+    const rocList = (r["ROC Numbers"] || "").split(",").map(s => s.trim()).filter(Boolean);
+    for (const roc of rocList) {
+      goalByRoc[roc] = r;
+    }
+  }
+
+  // Aggregate per-agent for the filtered period, split by XM/XI group
+  const byAgent = {};
+  for (const r of agentRows) {
+    if (dateFilter && !dateFilter((r["Date"] || "").trim())) continue;
+    const name = (r["AgentName"] || "").trim();
+    if (!name) continue;
+    const roc = (r["Job"] || "").trim();
+    const isGLU = roc.startsWith("GLU");
+    const isGLN = roc.startsWith("GLN");
+    if (!isGLU && !isGLN) continue;
+    const key = `${name}|${isGLU ? "XM" : "XI"}`;
+    if (!byAgent[key]) {
+      byAgent[key] = { name, group: isGLU ? "XM" : "XI", hours: 0, sales: 0, xi: 0, xm: 0, roc };
+    }
+    const a = byAgent[key];
+    a.hours += Number(r["Hours"]) || 0;
+    a.sales += Number(r["Goals"]) || 0;
+    a.xi += Number(r["New XI"]) || 0;
+    a.xm += Number(r["XM Lines"]) || 0;
+  }
+
+  const refDate = referenceDate ? new Date(referenceDate) : new Date();
+  const tenureBuckets = [
+    [0, 30], [31, 60], [61, 90], [91, 120], [121, 150], [151, 180], [181, 360], [361, Infinity]
+  ];
+  const bucketLabel = (lo, hi) => hi === Infinity ? "361+" : `${lo}-${hi}`;
+
+  const buildSection = (group) => {
+    const agents = Object.values(byAgent).filter(a => a.group === group);
+    const withMetrics = agents.map(a => {
+      const goal = goalByRoc[a.roc];
+      let unitGoal = 0;
+      if (goal) {
+        if (group === "XM") unitGoal = Number(goal["XM GOAL"] || goal["XM Sell In Goal"]) || 0;
+        else unitGoal = Number(goal["HSD GOAL"] || goal["HSD Sell In Goal"]) || 0;
+      }
+      const unitsMade = group === "XM" ? a.xm : a.xi;
+      const pctToGoal = unitGoal > 0 ? unitsMade / unitGoal : 0;
+      const hireStr = hireByName[a.name.toLowerCase()] || "";
+      let tenureDays = 0;
+      if (hireStr) {
+        try {
+          const hd = new Date(hireStr);
+          tenureDays = Math.floor((refDate - hd) / (1000 * 60 * 60 * 24));
+        } catch(e) {}
+      }
+      return { ...a, unitsMade, unitGoal, pctToGoal, tenureDays };
+    });
+
+    withMetrics.sort((x, y) => y.pctToGoal - x.pctToGoal);
+    const n = withMetrics.length;
+    if (n === 0) return { quartileSummary: [], tenureMatrix: [] };
+    const qSize = Math.ceil(n / 4);
+    const quartiles = [[], [], [], []];
+    for (let i = 0; i < n; i++) {
+      const q = Math.min(3, Math.floor(i / qSize));
+      quartiles[q].push(withMetrics[i]);
+    }
+
+    const quartileSummary = quartiles.map((qAgents, i) => {
+      const unitsTotal = qAgents.reduce((s, a) => s + a.unitsMade, 0);
+      const goalTotal = qAgents.reduce((s, a) => s + a.unitGoal, 0);
+      const qPct = goalTotal > 0 ? unitsTotal / goalTotal : 0;
+      return { quartile: i + 1, units: unitsTotal, pctToGoal: qPct, agentCount: qAgents.length };
+    });
+
+    const tenureMatrix = tenureBuckets.map(([lo, hi]) => {
+      const inBucket = withMetrics.filter(a => a.tenureDays >= lo && a.tenureDays <= hi);
+      const counts = [0, 0, 0, 0];
+      inBucket.forEach(a => {
+        const q = quartiles.findIndex(qa => qa.includes(a));
+        if (q >= 0) counts[q] += 1;
+      });
+      const anySale = inBucket.filter(a => a.unitsMade >= 1).length;
+      const total = inBucket.length;
+      const participation = total ? anySale / total : 0;
+      return { label: bucketLabel(lo, hi), A: counts[0], B: counts[1], C: counts[2], D: counts[3], participation, total };
+    });
+
+    return { quartileSummary, tenureMatrix };
+  };
+
+  return { xm: buildSection("XM"), xi: buildSection("XI") };
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // CORP MBR — Brand Helpers
 // ═══════════════════════════════════════════════════════════════════
