@@ -3785,7 +3785,7 @@ function GoalsRollup({ agents, goalEntries, goalLookup, fiscalInfo }) {
 // SECTION 11 — DROP ZONE  (pages/DropZone.jsx)
 // ══════════════════════════════════════════════════════════════════════════════
 
-function DropZone({ onData, goalsRaw, onGoalsLoad, newHiresRaw, onNewHiresLoad }) {
+function DropZone({ onData, onAgentText, goalsRaw, onGoalsLoad, onGoalsText, newHiresRaw, onNewHiresLoad, onNHText }) {
   const [draggingAgent, setDraggingAgent] = useState(false);
   const [draggingGoals, setDraggingGoals] = useState(false);
   const [draggingNH,    setDraggingNH]    = useState(false);
@@ -3796,14 +3796,14 @@ function DropZone({ onData, goalsRaw, onGoalsLoad, newHiresRaw, onNewHiresLoad }
   const goalsRef = useRef();
   const nhRef    = useRef();
 
-  const readFile = (f, cb) => { const r = new FileReader(); r.onload = e => cb(parseCSV(e.target.result)); r.readAsText(f); };
+  const readFile = (f, cb, textCb) => { const r = new FileReader(); r.onload = e => { const t = e.target.result; if (textCb) textCb(t); cb(parseCSV(t)); }; r.readAsText(f); };
   const handlePasteSubmit = () => {
     if (!pasteText.trim()) return;
     const rows = parseCSV(pasteText);
     if (rows.length === 0) return;
-    if (pasteTarget === "agent") onData(rows);
-    else if (pasteTarget === "goals") onGoalsLoad(rows);
-    else if (pasteTarget === "nh") onNewHiresLoad(rows);
+    if (pasteTarget === "agent") { if (onAgentText) onAgentText(pasteText); onData(rows); }
+    else if (pasteTarget === "goals") { if (onGoalsText) onGoalsText(pasteText); onGoalsLoad(rows); }
+    else if (pasteTarget === "nh") { if (onNHText) onNHText(pasteText); onNewHiresLoad(rows); }
     setPasteMode(false); setPasteText(""); setPasteTarget(null);
   };
 
@@ -3846,7 +3846,7 @@ function DropZone({ onData, goalsRaw, onGoalsLoad, newHiresRaw, onNewHiresLoad }
         <div
           onDragOver={e => { e.preventDefault(); setDraggingAgent(true); }}
           onDragLeave={() => setDraggingAgent(false)}
-          onDrop={e => { e.preventDefault(); setDraggingAgent(false); readFile(e.dataTransfer.files[0], onData); }}
+          onDrop={e => { e.preventDefault(); setDraggingAgent(false); readFile(e.dataTransfer.files[0], onData, onAgentText); }}
           onClick={() => agentRef.current.click()}
           style={{ border: `2px dashed ${draggingAgent ? "#d97706" : `var(--border-muted)`}`, borderRadius: "var(--radius-lg, 16px)", padding: "2.5rem 2rem", textAlign: "center", cursor: "pointer", background: draggingAgent ? "#d9770608" : `var(--glass-bg)`, backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)", transition: "all 250ms cubic-bezier(0.4,0,0.2,1)", boxShadow: draggingAgent ? "0 0 24px rgba(217,119,6,0.15)" : "var(--card-glow)" }}>
           <div style={{ width: "48px", height: "48px", borderRadius: "var(--radius-lg, 16px)", background: "#d9770612", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1rem", border: "1px solid #d9770620" }}>
@@ -3854,7 +3854,7 @@ function DropZone({ onData, goalsRaw, onGoalsLoad, newHiresRaw, onNewHiresLoad }
           </div>
           <div style={{ color: `var(--text-secondary)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", fontWeight: 400 }}>Drop your agent CSV here, or <span style={{ color: "#d97706", fontWeight: 600 }}>click to browse</span></div>
           <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "0.75rem", color: `var(--text-faint)`, marginTop: "0.5rem", letterSpacing: "0.02em" }}>Job Type · Region · AgentName · Hours · Goals · GPH · % to Goal</div>
-          <input ref={agentRef} type="file" accept=".csv" style={{ display: "none" }} onChange={e => readFile(e.target.files[0], onData)} />
+          <input ref={agentRef} type="file" accept=".csv" style={{ display: "none" }} onChange={e => readFile(e.target.files[0], onData, onAgentText)} />
         </div>
       </div>
 
@@ -3864,10 +3864,10 @@ function DropZone({ onData, goalsRaw, onGoalsLoad, newHiresRaw, onNewHiresLoad }
           dragging={draggingGoals}
           onDragOver={e => { e.preventDefault(); setDraggingGoals(true); }}
           onDragLeave={() => setDraggingGoals(false)}
-          onDrop={e => { e.preventDefault(); setDraggingGoals(false); readFile(e.dataTransfer.files[0], onGoalsLoad); }}
+          onDrop={e => { e.preventDefault(); setDraggingGoals(false); readFile(e.dataTransfer.files[0], onGoalsLoad, onGoalsText); }}
           onClick={() => goalsRef.current.click()}
           inputRef={goalsRef}
-          onChange={e => readFile(e.target.files[0], onGoalsLoad)}
+          onChange={e => readFile(e.target.files[0], onGoalsLoad, onGoalsText)}
           loaded={!!goalsRaw}
           loadedLabel={`${goalsRaw?.length || 0} rows · saved locally · click to replace`}
           hint="Unlocks Goals tab per program"
@@ -3877,10 +3877,10 @@ function DropZone({ onData, goalsRaw, onGoalsLoad, newHiresRaw, onNewHiresLoad }
           dragging={draggingNH}
           onDragOver={e => { e.preventDefault(); setDraggingNH(true); }}
           onDragLeave={() => setDraggingNH(false)}
-          onDrop={e => { e.preventDefault(); setDraggingNH(false); readFile(e.dataTransfer.files[0], onNewHiresLoad); }}
+          onDrop={e => { e.preventDefault(); setDraggingNH(false); readFile(e.dataTransfer.files[0], onNewHiresLoad, onNHText); }}
           onClick={() => nhRef.current.click()}
           inputRef={nhRef}
-          onChange={e => readFile(e.target.files[0], onNewHiresLoad)}
+          onChange={e => readFile(e.target.files[0], onNewHiresLoad, onNHText)}
           loaded={!!newHiresRaw}
           loadedLabel={`${newHiresRaw?.length || 0} rows · roster saved`}
           hint="Columns: First Name, Last Name, Hire Date, End Date"
@@ -7470,6 +7470,24 @@ function buildVirgilMbrPresentation(perf, options) {
     (options.insights && options.insights.slide2) || ""
   );
 
+  // Slide 3 — All-in Attainment + Scorecard
+  buildCorpOpPerformanceSlide(pres,
+    options.agentRaw || "", options.goalsRaw || "",
+    options.priorAgentRaw || "", options.priorGoalsRaw || "",
+    options.priorQuarterAgentRaw || "", options.priorQuarterGoalsRaw || "",
+    options.reportingMonthLabel, options.scorecardDataUrl || "");
+
+  // Slide 4 — Quartile Reporting
+  buildCorpQuartileSlide(pres,
+    options.agentRaw || "", options.goalsRaw || "",
+    options.newHiresRaw || "", options.reportingMonthLabel);
+
+  // Slide 5 — Campaign Hours Info
+  buildCorpCampaignHoursSlide(pres,
+    options.agentRaw || "", options.goalsRaw || "",
+    options.priorAgentRaw || "", options.priorGoalsRaw || "",
+    options.reportingMonthLabel);
+
   return pres;
 }
 
@@ -7522,7 +7540,13 @@ function CorpMbrDataSourcesModal({
   );
 }
 
-function VirgilMbrExportModal({ perf, coachingDetailsRaw, coachingWeeklyRaw, loginBucketsRaw, insights, setInsights, ollamaAvailable, onClose }) {
+function VirgilMbrExportModal({
+  perf,
+  coachingDetailsRaw, coachingWeeklyRaw, loginBucketsRaw,
+  rawAgentCsv, goalsRaw, priorMonthRaw, priorMonthGoalsRaw, newHiresRaw,
+  priorQuarterAgentRaw, priorQuarterGoalsRaw,
+  insights, setInsights, ollamaAvailable, onClose
+}) {
   const [reportingMonth, setReportingMonth] = useState(() => {
     try {
       const end = perf && perf.fiscalInfo && perf.fiscalInfo.fiscalEnd;
@@ -7594,12 +7618,19 @@ Write bullet-point style insights focused on movement vs prior, gaps vs 75% goal
       coachingDetails,
       coachingWeekly,
       loginBuckets,
+      agentRaw: rawAgentCsv || "",
+      goalsRaw: goalsRaw || "",
+      priorAgentRaw: priorMonthRaw || "",
+      priorGoalsRaw: priorMonthGoalsRaw || "",
+      newHiresRaw: newHiresRaw || "",
+      priorQuarterAgentRaw: priorQuarterAgentRaw || "",
+      priorQuarterGoalsRaw: priorQuarterGoalsRaw || "",
       scorecardDataUrl,
       insights: { ...(insights || {}), slide2: slide2Insights },
     });
     const safeMonth = (reportingMonth || "Virgil").replace(/[^A-Za-z0-9 _-]+/g, "");
     await pres.writeFile({ fileName: `Corp MBR - ${safeMonth}.pptx` });
-  }, [perf, reportingMonth, coachingDetails, coachingWeekly, loginBuckets, scorecardDataUrl, insights, useAiInsights, ollamaAvailable]);
+  }, [perf, reportingMonth, coachingDetails, coachingWeekly, loginBuckets, rawAgentCsv, goalsRaw, priorMonthRaw, priorMonthGoalsRaw, newHiresRaw, priorQuarterAgentRaw, priorQuarterGoalsRaw, scorecardDataUrl, insights, useAiInsights, ollamaAvailable]);
 
   const StatusRow = ({ label, ok }) => (
     <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", fontSize: 13 }}>
@@ -15142,6 +15173,47 @@ export default function App() {
     try { if (data) localStorage.setItem(PRIOR_MONTH_STORAGE_KEY + "_goals", JSON.stringify(data)); else localStorage.removeItem(PRIOR_MONTH_STORAGE_KEY + "_goals"); } catch(e) {}
   }, []);
 
+  // Raw CSV text slots — parallel to the parsed-row slots above; used by Corp MBR slide builders
+  const [rawAgentCsv, _setRawAgentCsv] = useState(() => {
+    try { return localStorage.getItem("perf_intel_raw_agent_csv_v1") || ""; } catch(e) { return ""; }
+  });
+  const setRawAgentCsv = useCallback(v => {
+    _setRawAgentCsv(v);
+    try { localStorage.setItem("perf_intel_raw_agent_csv_v1", v || ""); } catch(e) {}
+  }, []);
+
+  const [goalsRawCsv, _setGoalsRawCsv] = useState(() => {
+    try { return localStorage.getItem("perf_intel_goals_raw_csv_v1") || ""; } catch(e) { return ""; }
+  });
+  const setGoalsRawCsv = useCallback(v => {
+    _setGoalsRawCsv(v);
+    try { localStorage.setItem("perf_intel_goals_raw_csv_v1", v || ""); } catch(e) {}
+  }, []);
+
+  const [newHiresRawCsv, _setNewHiresRawCsv] = useState(() => {
+    try { return localStorage.getItem("perf_intel_nh_raw_csv_v1") || ""; } catch(e) { return ""; }
+  });
+  const setNewHiresRawCsv = useCallback(v => {
+    _setNewHiresRawCsv(v);
+    try { localStorage.setItem("perf_intel_nh_raw_csv_v1", v || ""); } catch(e) {}
+  }, []);
+
+  const [priorMonthRawCsv, _setPriorMonthRawCsv] = useState(() => {
+    try { return localStorage.getItem("perf_intel_prior_month_raw_csv_v1") || ""; } catch(e) { return ""; }
+  });
+  const setPriorMonthRawCsv = useCallback(v => {
+    _setPriorMonthRawCsv(v);
+    try { localStorage.setItem("perf_intel_prior_month_raw_csv_v1", v || ""); } catch(e) {}
+  }, []);
+
+  const [priorMonthGoalsRawCsv, _setPriorMonthGoalsRawCsv] = useState(() => {
+    try { return localStorage.getItem("perf_intel_prior_month_goals_raw_csv_v1") || ""; } catch(e) { return ""; }
+  });
+  const setPriorMonthGoalsRawCsv = useCallback(v => {
+    _setPriorMonthGoalsRawCsv(v);
+    try { localStorage.setItem("perf_intel_prior_month_goals_raw_csv_v1", v || ""); } catch(e) {}
+  }, []);
+
   // tNPS survey data — persisted to localStorage
   const [tnpsRaw, _setTnpsRaw] = useState(() => {
     try { const s = localStorage.getItem(TNPS_STORAGE_KEY); return s ? JSON.parse(s) : null; }
@@ -15297,6 +15369,7 @@ export default function App() {
         const text = await res.text();
         const rows = parseCSV(text);
         if (!cancelled && rows.length > 0) {
+          setRawAgentCsv(text);
           setRawData(rows);
           setCurrentPage({ section: "overview" });
         }
@@ -15307,7 +15380,7 @@ export default function App() {
             let gRes;
             try { gRes = await fetch(goalsSheetUrl); } catch(e) { gRes = null; }
             if (!gRes || !gRes.ok) gRes = await fetch(proxyG(goalsSheetUrl));
-            if (gRes.ok) { const gRows = parseCSV(await gRes.text()); if (gRows.length > 0) setGoalsRaw(gRows); }
+            if (gRes.ok) { const gText = await gRes.text(); const gRows = parseCSV(gText); if (gRows.length > 0) { setGoalsRawCsv(gText); setGoalsRaw(gRows); } }
           } catch(e) {}
         }
         // Auto-load roster sheet if URL configured
@@ -15317,7 +15390,7 @@ export default function App() {
             let nRes;
             try { nRes = await fetch(nhSheetUrl); } catch(e) { nRes = null; }
             if (!nRes || !nRes.ok) nRes = await fetch(proxyN(nhSheetUrl));
-            if (nRes.ok) { const nRows = parseCSV(await nRes.text()); if (nRows.length > 0) setNHRaw(nRows); }
+            if (nRes.ok) { const nText = await nRes.text(); const nRows = parseCSV(nText); if (nRows.length > 0) { setNewHiresRawCsv(nText); setNHRaw(nRows); } }
           } catch(e) {}
         }
         // tNPS loads separately after main data (see deferred useEffect below)
@@ -15463,7 +15536,7 @@ export default function App() {
         if (!res || !res.ok) res = await fetch(proxyP(priorSheetUrl));
         const text = await res.text();
         const rows = parseCSV(text);
-        if (!cancelled && rows.length > 0) setPriorMonthRaw(rows);
+        if (!cancelled && rows.length > 0) { setPriorMonthRawCsv(text); setPriorMonthRaw(rows); }
       } catch(e) { /* silent */ }
       finally { if (!cancelled) setPriorSheetLoading(false); }
     })();
@@ -15482,7 +15555,7 @@ export default function App() {
         if (!res || !res.ok) res = await fetch(proxyP(priorGoalsSheetUrl));
         const text = await res.text();
         const rows = parseCSV(text);
-        if (!cancelled && rows.length > 0) setPriorMonthGoalsRaw(rows);
+        if (!cancelled && rows.length > 0) { setPriorMonthGoalsRawCsv(text); setPriorMonthGoalsRaw(rows); }
       } catch(e) { /* silent */ }
     })();
     return () => { cancelled = true; };
@@ -15517,34 +15590,45 @@ export default function App() {
     return map;
   }, [perf.agents]);
 
-  const loadFile = (f, setter) => {
+  const loadFile = (f, setter, textSetter) => {
     const r = new FileReader();
-    r.onload = e => setter(parseCSV(e.target.result));
+    r.onload = e => {
+      const text = e.target.result;
+      if (textSetter) textSetter(text);
+      setter(parseCSV(text));
+    };
     r.readAsText(f);
   };
 
   const handleRefresh = useCallback(async () => {
     const proxy = url => `https://corsproxy.io/?${encodeURIComponent(url)}`;
-    const fetchSheet = async url => {
+    // Returns { rows, text } — text preserved so Corp MBR slide builders can consume raw CSV
+    const fetchSheetWithText = async url => {
       try {
         let res;
         try { res = await fetch(url); } catch(e) { res = null; }
         if (!res || !res.ok) res = await fetch(proxy(url));
         if (!res.ok) return null;
-        const rows = parseCSV(await res.text());
-        return rows.length > 0 ? rows : null;
+        const text = await res.text();
+        const rows = parseCSV(text);
+        return rows.length > 0 ? { rows, text } : null;
       } catch(e) { return null; }
+    };
+    // Legacy helper that returns only rows (for callers that don't need text)
+    const fetchSheet = async url => {
+      const r = await fetchSheetWithText(url);
+      return r ? r.rows : null;
     };
     try {
       setSheetLoading(true);
-      const agentRows = await fetchSheet(agentSheetUrl);
-      if (agentRows) setRawData(agentRows);
+      const agentResult = await fetchSheetWithText(agentSheetUrl);
+      if (agentResult) { setRawAgentCsv(agentResult.text); setRawData(agentResult.rows); }
       // Refresh secondary sheets in parallel
       await Promise.all([
-        goalsSheetUrl ? fetchSheet(goalsSheetUrl).then(r => { if (r) setGoalsRaw(r); }) : null,
-        nhSheetUrl ? fetchSheet(nhSheetUrl).then(r => { if (r) setNHRaw(r); }) : null,
-        priorSheetUrl ? fetchSheet(priorSheetUrl).then(r => { if (r) setPriorMonthRaw(r); }) : null,
-        priorGoalsSheetUrl ? fetchSheet(priorGoalsSheetUrl).then(r => { if (r) setPriorMonthGoalsRaw(r); }) : null,
+        goalsSheetUrl ? fetchSheetWithText(goalsSheetUrl).then(r => { if (r) { setGoalsRawCsv(r.text); setGoalsRaw(r.rows); } }) : null,
+        nhSheetUrl ? fetchSheetWithText(nhSheetUrl).then(r => { if (r) { setNewHiresRawCsv(r.text); setNHRaw(r.rows); } }) : null,
+        priorSheetUrl ? fetchSheetWithText(priorSheetUrl).then(r => { if (r) { setPriorMonthRawCsv(r.text); setPriorMonthRaw(r.rows); } }) : null,
+        priorGoalsSheetUrl ? fetchSheetWithText(priorGoalsSheetUrl).then(r => { if (r) { setPriorMonthGoalsRawCsv(r.text); setPriorMonthGoalsRaw(r.rows); } }) : null,
         tnpsSheetUrl ? fetchSheet(tnpsSheetUrl).then(r => { if (r) setTnpsRaw(r); }) : null,
         coachingDetailsSheetUrl ? (async () => {
           try {
@@ -15621,6 +15705,13 @@ export default function App() {
           coachingDetailsRaw={coachingDetailsRaw}
           coachingWeeklyRaw={coachingWeeklyRaw}
           loginBucketsRaw={loginBucketsRaw}
+          rawAgentCsv={rawAgentCsv}
+          goalsRaw={goalsRawCsv}
+          priorMonthRaw={priorMonthRawCsv}
+          priorMonthGoalsRaw={priorMonthGoalsRawCsv}
+          newHiresRaw={newHiresRawCsv}
+          priorQuarterAgentRaw={priorQuarterAgentRaw}
+          priorQuarterGoalsRaw={priorQuarterGoalsRaw}
           insights={virgilInsights}
           setInsights={setVirgilInsights}
           ollamaAvailable={ollamaAvailable}
@@ -15710,9 +15801,9 @@ export default function App() {
       )}
 
       {/* Hidden file inputs */}
-      <input ref={goalsInputRef} type="file" accept=".csv" style={{ display: "none" }} onChange={e => loadFile(e.target.files[0], setGoalsRaw)} />
-      <input ref={nhInputRef} type="file" accept=".csv" style={{ display: "none" }} onChange={e => loadFile(e.target.files[0], setNHRaw)} />
-      <input ref={priorGoalsInputRef} type="file" accept=".csv" style={{ display: "none" }} onChange={e => loadFile(e.target.files[0], setPriorMonthGoalsRaw)} />
+      <input ref={goalsInputRef} type="file" accept=".csv" style={{ display: "none" }} onChange={e => loadFile(e.target.files[0], setGoalsRaw, setGoalsRawCsv)} />
+      <input ref={nhInputRef} type="file" accept=".csv" style={{ display: "none" }} onChange={e => loadFile(e.target.files[0], setNHRaw, setNewHiresRawCsv)} />
+      <input ref={priorGoalsInputRef} type="file" accept=".csv" style={{ display: "none" }} onChange={e => loadFile(e.target.files[0], setPriorMonthGoalsRaw, setPriorMonthGoalsRawCsv)} />
 
       <TopNav
         rawData={rawData}
@@ -15762,10 +15853,13 @@ export default function App() {
         ) : !rawData ? (
           <DropZone
             onData={d => { setRawData(d); setCurrentPage({ section: "overview" }); }}
+            onAgentText={setRawAgentCsv}
             goalsRaw={goalsRaw}
             onGoalsLoad={setGoalsRaw}
+            onGoalsText={setGoalsRawCsv}
             newHiresRaw={newHiresRaw}
             onNewHiresLoad={setNHRaw}
+            onNHText={setNewHiresRawCsv}
           />
         ) : programs.length === 0 ? (
           <div style={{ minHeight: "90vh", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-faint)", fontFamily: "var(--font-ui, Inter, sans-serif)" }}>
