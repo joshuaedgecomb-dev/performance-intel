@@ -5075,6 +5075,155 @@ function Breadcrumb({ section, program, attainment }) {
   );
 }
 
+// ── TopNav — permanent top navigation bar ───────────────────────────────────
+// topNavLinkStyle hoisted to module scope (matches MenuSection/MenuRow/Crumb pattern)
+// and parameterized by accent color so DR (#ed8936) and BZ (#48bb78) share it.
+function topNavLinkStyle(active, accent = "#ed8936") {
+  return {
+    padding: "0.4rem 0.75rem", borderRadius: "var(--radius-sm, 6px)",
+    border: active ? `1px solid ${accent}50` : "1px solid transparent",
+    background: active ? `${accent}18` : "transparent",
+    color: active ? accent : "var(--text-primary)",
+    fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem",
+    cursor: "pointer", fontWeight: active ? 600 : 400, position: "relative",
+    transition: "all 200ms cubic-bezier(0.4,0,0.2,1)",
+  };
+}
+function TopNav({
+  rawData, currentPage, setCurrentPage, openMenu, setOpenMenu,
+  programsBySite, siteAttainments, fiscalInfo, hasTnps,
+  lightMode, setLightMode, showToday, setShowToday,
+  ollamaAvailable, localAI, setLocalAI,
+  onExportMbr, onRefresh, onUploadGoals, onUploadRoster, onUploadPriorGoals, onOpenSettings,
+}) {
+  const navRef = useRef(null);
+  const drRef = useRef(null);
+  const bzRef = useRef(null);
+  const settingsRef = useRef(null);
+
+  // Close menus on outside click — explicit map prevents silent fall-through
+  // if a future contributor adds a new openMenu key.
+  useEffect(() => {
+    if (!openMenu) return;
+    const refMap = { dr: drRef, bz: bzRef, settings: settingsRef };
+    const handler = e => {
+      const ref = refMap[openMenu];
+      if (ref?.current && !ref.current.contains(e.target)) setOpenMenu(null);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [openMenu, setOpenMenu]);
+
+  // Close menus on Escape
+  useEffect(() => {
+    if (!openMenu) return;
+    const handler = e => { if (e.key === "Escape") setOpenMenu(null); };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [openMenu, setOpenMenu]);
+
+  const navigate = (section, program) => {
+    setCurrentPage(program ? { section, program } : { section });
+    setOpenMenu(null);
+  };
+
+  const isActive = section => currentPage.section === section;
+
+  // Don't render when in TODAY view (TodayView has its own header)
+  if (showToday) return null;
+
+  const drCount = programsBySite.DR ? programsBySite.DR.length : 0;
+  const bzCount = programsBySite.BZ ? programsBySite.BZ.length : 0;
+
+  return (
+    <div ref={navRef} style={{ display: "flex", alignItems: "center", gap: "0.35rem", padding: "0.5rem 1.5rem", background: "var(--nav-bg)", backdropFilter: "blur(16px) saturate(180%)", WebkitBackdropFilter: "blur(16px) saturate(180%)", borderBottom: "1px solid var(--glass-border)", position: "fixed", top: 0, left: 0, right: 0, zIndex: 200 }}>
+      <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "var(--text-muted)", letterSpacing: "0.08em", fontWeight: 600, marginRight: "0.5rem" }}>PERF INTEL</span>
+
+      {rawData && (
+        <>
+          <button onClick={() => navigate("overview")} style={topNavLinkStyle(isActive("overview"))}>Overview</button>
+
+          {drCount > 0 && (
+            <div ref={drRef} style={{ position: "relative" }}>
+              <button onClick={() => setOpenMenu(openMenu === "dr" ? null : "dr")}
+                style={topNavLinkStyle(isActive("dr"))}>
+                DR <span style={{ fontSize: "0.6rem", opacity: 0.6, marginLeft: "0.15rem" }}>▼</span>
+              </button>
+              {openMenu === "dr" && (
+                <SiteDropdown site="DR" programs={programsBySite.DR}
+                  attainment={siteAttainments.DR.attainment} projAttainment={siteAttainments.DR.projAttainment}
+                  currentProgram={isActive("dr") ? (currentPage.program || null) : undefined}
+                  onSelect={prog => navigate("dr", prog)} accent="#ed8936" />
+              )}
+            </div>
+          )}
+
+          {bzCount > 0 && (
+            <div ref={bzRef} style={{ position: "relative" }}>
+              <button onClick={() => setOpenMenu(openMenu === "bz" ? null : "bz")}
+                style={topNavLinkStyle(isActive("bz"), "#48bb78")}>
+                BZ <span style={{ fontSize: "0.6rem", opacity: 0.6, marginLeft: "0.15rem" }}>▼</span>
+              </button>
+              {openMenu === "bz" && (
+                <SiteDropdown site="BZ" programs={programsBySite.BZ}
+                  attainment={siteAttainments.BZ.attainment} projAttainment={siteAttainments.BZ.projAttainment}
+                  currentProgram={isActive("bz") ? (currentPage.program || null) : undefined}
+                  onSelect={prog => navigate("bz", prog)} accent="#48bb78" />
+              )}
+            </div>
+          )}
+
+          <button onClick={() => navigate("mom")} style={topNavLinkStyle(isActive("mom"))}>MoM</button>
+          {hasTnps && <button onClick={() => navigate("tnps")} style={topNavLinkStyle(isActive("tnps"))}>tNPS</button>}
+        </>
+      )}
+
+      <div style={{ flex: 1 }} />
+
+      {rawData && fiscalInfo && (
+        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.3rem 0.65rem", borderRadius: "var(--radius-sm, 6px)", background: "rgba(22,163,74,0.12)", border: "1px solid rgba(22,163,74,0.3)" }}>
+          <span style={{ width: 6, height: 6, borderRadius: 3, background: "#16a34a", boxShadow: "0 0 6px #16a34a80" }} />
+          <span style={{ fontFamily: "var(--font-data, monospace)", fontSize: "0.72rem", color: "#16a34a", fontWeight: 500 }}>
+            Day {fiscalInfo.elapsedBDays} of {fiscalInfo.totalBDays}
+          </span>
+        </div>
+      )}
+
+      <button onClick={() => setLightMode(v => !v)} title="Toggle theme"
+        style={{ width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "var(--radius-sm, 6px)", border: "1px solid var(--border-muted)", background: "transparent", color: "var(--text-muted)", cursor: "pointer", fontSize: "0.95rem" }}>
+        {lightMode ? "\u2600" : "\u263E"}
+      </button>
+
+      {rawData && (
+        <div ref={settingsRef} style={{ position: "relative" }}>
+          <button onClick={() => setOpenMenu(openMenu === "settings" ? null : "settings")} title="Settings & Actions"
+            style={{ width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "var(--radius-sm, 6px)", border: "1px solid var(--border-muted)", background: openMenu === "settings" ? "var(--bg-tertiary)" : "transparent", color: "var(--text-muted)", cursor: "pointer", fontSize: "0.95rem" }}>
+            ⚙
+          </button>
+          {openMenu === "settings" && (
+            <SettingsMenu
+              onExportMbr={() => { onExportMbr(); setOpenMenu(null); }}
+              onRefresh={() => { onRefresh(); setOpenMenu(null); }}
+              onUploadGoals={() => { onUploadGoals(); setOpenMenu(null); }}
+              onUploadRoster={() => { onUploadRoster(); setOpenMenu(null); }}
+              onUploadPriorGoals={() => { onUploadPriorGoals(); setOpenMenu(null); }}
+              onOpenSettings={() => { onOpenSettings(); setOpenMenu(null); }}
+              ollamaAvailable={ollamaAvailable}
+              localAI={localAI}
+              onToggleLocalAI={() => { setLocalAI(v => !v); setOpenMenu(null); }}
+            />
+          )}
+        </div>
+      )}
+
+      <button onClick={() => setShowToday(v => !v)}
+        style={{ padding: "0.4rem 0.85rem", borderRadius: "var(--radius-sm, 6px)", border: "1px solid #16a34a", background: "#16a34a", color: "white", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", cursor: "pointer", fontWeight: 600, letterSpacing: "0.04em" }}>
+        ⚡ TODAY
+      </button>
+    </div>
+  );
+}
+
 
 // ══════════════════════════════════════════════════════════════════════════════
 // SECTION 11.5 — MBR PPTX EXPORT
