@@ -6388,7 +6388,7 @@ function parseCoachingWeekly(rawCsv) {
       ntid,
       fiscalMonth: (r["Fiscal Month"] || "").trim(),
       fiscalWeek: (r["new calc"] || "").trim(),
-      sessions: Number(r["Coaching Sessions  (copy)"]) || 0,
+      sessions: Number(r["Coaching Sessions  (copy)"] ?? r["Coaching Sessions (copy)"] ?? r["Coaching Sessions"]) || 0,
       colorWb: (r["Color WB"] || "").trim(),
       manager: (r["Manager"] || "").trim(),
       supervisor: (r["Supervisor."] || "").trim(),
@@ -6396,13 +6396,53 @@ function parseCoachingWeekly(rawCsv) {
   });
 }
 
+// Sheets can mis-coerce "4-7" → "7-Apr" and "8-15" → "15-Aug". Map them back.
+// "0-3" and "16-20+" are safe because they aren't valid dates.
+function normalizeLoginBucket(raw) {
+  if (!raw) return "";
+  const s = String(raw).trim();
+  if (/^\d+-\d+\+?$/.test(s)) return s; // already canonical
+  // Match patterns like "7-Apr" (DD-MMM), "4/7/2026", or ISO dates
+  // Reconstruct D-M (swapped) as "M-D" string
+  const mmm = s.match(/^(\d+)-([A-Za-z]{3,})$/);
+  if (mmm) {
+    const day = Number(mmm[1]);
+    const mon = mmm[2].slice(0, 3).toLowerCase();
+    const monthIndex = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12 }[mon];
+    if (monthIndex) return `${monthIndex}-${day}`;
+  }
+  const slash = s.match(/^(\d+)\/(\d+)(?:\/\d+)?$/);
+  if (slash) return `${Number(slash[1])}-${Number(slash[2])}`;
+  // Try parsing as a Date
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) return `${d.getMonth() + 1}-${d.getDate()}`;
+  return s;
+}
+
+// "25-Oct" (from Sheets date-coercion) → "Oct 25"; "Oct 25" passes through.
+function normalizeLoginMonth(raw) {
+  if (!raw) return "";
+  const s = String(raw).trim();
+  // Canonical "Oct 25" / "Oct '25"
+  if (/^[A-Za-z]{3,} ?'?\d{2}$/.test(s)) return s;
+  // "25-Oct" / "25-October"
+  const m = s.match(/^(\d{1,4})-([A-Za-z]{3,})$/);
+  if (m) {
+    const yr = m[1].length === 4 ? m[1].slice(2) : m[1];
+    const mon = m[2].slice(0, 3);
+    const cap = mon.charAt(0).toUpperCase() + mon.slice(1).toLowerCase();
+    return `${cap} ${yr}`;
+  }
+  return s;
+}
+
 function parseLoginBuckets(rawCsv) {
   if (!rawCsv || !rawCsv.trim()) return {};
   const rows = parseCSV(rawCsv);
   const byMonth = {};
   for (const r of rows) {
-    const bucket = (r["User Login Bucket (Alternative)"] || "").trim();
-    const month = (r["Month vs Week View Label"] || "").trim();
+    const bucket = normalizeLoginBucket((r["User Login Bucket (Alternative)"] || "").trim());
+    const month = normalizeLoginMonth((r["Month vs Week View Label"] || "").trim());
     const measure = (r["Measure Names"] || "").trim();
     const value = Number(r["Measure Values"]);
     if (!bucket || !month || !measure) continue;
@@ -14080,6 +14120,30 @@ export default function App() {
     try { localStorage.setItem("perf_intel_virgil_insights_v1", JSON.stringify(v || {})); } catch(e) {}
   }, []);
 
+  const [coachingDetailsSheetUrl, _setCoachingDetailsSheetUrl] = useState(() => {
+    try { return localStorage.getItem("perf_intel_coaching_details_url_v1") || ""; } catch(e) { return ""; }
+  });
+  const setCoachingDetailsSheetUrl = useCallback(v => {
+    _setCoachingDetailsSheetUrl(v);
+    try { localStorage.setItem("perf_intel_coaching_details_url_v1", v || ""); } catch(e) {}
+  }, []);
+
+  const [coachingWeeklySheetUrl, _setCoachingWeeklySheetUrl] = useState(() => {
+    try { return localStorage.getItem("perf_intel_coaching_weekly_url_v1") || ""; } catch(e) { return ""; }
+  });
+  const setCoachingWeeklySheetUrl = useCallback(v => {
+    _setCoachingWeeklySheetUrl(v);
+    try { localStorage.setItem("perf_intel_coaching_weekly_url_v1", v || ""); } catch(e) {}
+  }, []);
+
+  const [loginBucketsSheetUrl, _setLoginBucketsSheetUrl] = useState(() => {
+    try { return localStorage.getItem("perf_intel_login_buckets_url_v1") || ""; } catch(e) { return ""; }
+  });
+  const setLoginBucketsSheetUrl = useCallback(v => {
+    _setLoginBucketsSheetUrl(v);
+    try { localStorage.setItem("perf_intel_login_buckets_url_v1", v || ""); } catch(e) {}
+  }, []);
+
   const [localAI, setLocalAI]      = useState(false);
   const [ollamaAvailable, setOllamaAvailable] = useState(null); // null=checking, true/false
   const [hoursThreshold, _setHoursThreshold] = useState(_hoursThreshold);
@@ -14371,6 +14435,69 @@ export default function App() {
     return () => { cancelled = true; };
   }, [rawData, tnpsSheetUrl, tnpsRaw]);
 
+  // Auto-load Virgil Coaching Details from Google Sheet URL
+  useEffect(() => {
+    if (!coachingDetailsSheetUrl) return;
+    (async () => {
+      try {
+        const res = await fetch(coachingDetailsSheetUrl);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const text = await res.text();
+        setCoachingDetailsRaw(text);
+      } catch(e) {
+        try {
+          const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(coachingDetailsSheetUrl)}`);
+          if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
+          setCoachingDetailsRaw(await res.text());
+        } catch(e2) {
+          console.error("Coaching Details sheet fetch failed:", e2);
+        }
+      }
+    })();
+  }, [coachingDetailsSheetUrl]);
+
+  // Auto-load Virgil Weekly Breakdown from Google Sheet URL
+  useEffect(() => {
+    if (!coachingWeeklySheetUrl) return;
+    (async () => {
+      try {
+        const res = await fetch(coachingWeeklySheetUrl);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const text = await res.text();
+        setCoachingWeeklyRaw(text);
+      } catch(e) {
+        try {
+          const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(coachingWeeklySheetUrl)}`);
+          if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
+          setCoachingWeeklyRaw(await res.text());
+        } catch(e2) {
+          console.error("Weekly Breakdown sheet fetch failed:", e2);
+        }
+      }
+    })();
+  }, [coachingWeeklySheetUrl]);
+
+  // Auto-load Virgil Login Buckets from Google Sheet URL
+  useEffect(() => {
+    if (!loginBucketsSheetUrl) return;
+    (async () => {
+      try {
+        const res = await fetch(loginBucketsSheetUrl);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const text = await res.text();
+        setLoginBucketsRaw(text);
+      } catch(e) {
+        try {
+          const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(loginBucketsSheetUrl)}`);
+          if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
+          setLoginBucketsRaw(await res.text());
+        } catch(e2) {
+          console.error("Login Buckets sheet fetch failed:", e2);
+        }
+      }
+    })();
+  }, [loginBucketsSheetUrl]);
+
   // Auto-load prior month data from Google Sheet (after main data loads, non-blocking)
   const [priorSheetLoading, setPriorSheetLoading] = useState(false);
   useEffect(() => {
@@ -14468,10 +14595,31 @@ export default function App() {
         priorSheetUrl ? fetchSheet(priorSheetUrl).then(r => { if (r) setPriorMonthRaw(r); }) : null,
         priorGoalsSheetUrl ? fetchSheet(priorGoalsSheetUrl).then(r => { if (r) setPriorMonthGoalsRaw(r); }) : null,
         tnpsSheetUrl ? fetchSheet(tnpsSheetUrl).then(r => { if (r) setTnpsRaw(r); }) : null,
+        coachingDetailsSheetUrl ? (async () => {
+          try {
+            let res; try { res = await fetch(coachingDetailsSheetUrl); } catch(e) { res = null; }
+            if (!res || !res.ok) res = await fetch(proxy(coachingDetailsSheetUrl));
+            if (res.ok) { const t = await res.text(); if (t.trim()) setCoachingDetailsRaw(t); }
+          } catch(e) {}
+        })() : null,
+        coachingWeeklySheetUrl ? (async () => {
+          try {
+            let res; try { res = await fetch(coachingWeeklySheetUrl); } catch(e) { res = null; }
+            if (!res || !res.ok) res = await fetch(proxy(coachingWeeklySheetUrl));
+            if (res.ok) { const t = await res.text(); if (t.trim()) setCoachingWeeklyRaw(t); }
+          } catch(e) {}
+        })() : null,
+        loginBucketsSheetUrl ? (async () => {
+          try {
+            let res; try { res = await fetch(loginBucketsSheetUrl); } catch(e) { res = null; }
+            if (!res || !res.ok) res = await fetch(proxy(loginBucketsSheetUrl));
+            if (res.ok) { const t = await res.text(); if (t.trim()) setLoginBucketsRaw(t); }
+          } catch(e) {}
+        })() : null,
       ].filter(Boolean));
     } catch(e) { alert("Could not refresh: " + e.message); }
     finally { setSheetLoading(false); }
-  }, [agentSheetUrl, goalsSheetUrl, nhSheetUrl, priorSheetUrl, priorGoalsSheetUrl, tnpsSheetUrl]);
+  }, [agentSheetUrl, goalsSheetUrl, nhSheetUrl, priorSheetUrl, priorGoalsSheetUrl, tnpsSheetUrl, coachingDetailsSheetUrl, coachingWeeklySheetUrl, loginBucketsSheetUrl]);
 
   // Legacy navigation adapter — translates old slideIndex semantics from
   // BusinessOverview/CampaignComparisonPanel into currentPage navigation.
@@ -14537,6 +14685,25 @@ export default function App() {
                   style={{ width: "100%", padding: "0.5rem 0.75rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem", background: "var(--bg-secondary)", color: "var(--text-primary)", border: "1px solid var(--border)", borderRadius: "6px", boxSizing: "border-box" }} />
               </div>
             ))}
+            {/* Virgil MBR Sheet URLs */}
+            <div style={{ marginBottom: "1rem" }}>
+              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: "#6366f1", letterSpacing: "0.08em", marginBottom: "0.3rem" }}>Coaching Details CSV</div>
+              <input defaultValue={coachingDetailsSheetUrl} placeholder="Optional — paste Coaching Details CSV URL"
+                onBlur={e => setCoachingDetailsSheetUrl(e.target.value.trim())}
+                style={{ width: "100%", padding: "0.5rem 0.75rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem", background: "var(--bg-secondary)", color: "var(--text-primary)", border: "1px solid var(--border)", borderRadius: "6px", boxSizing: "border-box" }} />
+            </div>
+            <div style={{ marginBottom: "1rem" }}>
+              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: "#6366f1", letterSpacing: "0.08em", marginBottom: "0.3rem" }}>Weekly Breakdown CSV</div>
+              <input defaultValue={coachingWeeklySheetUrl} placeholder="Optional — paste Weekly Breakdown CSV URL"
+                onBlur={e => setCoachingWeeklySheetUrl(e.target.value.trim())}
+                style={{ width: "100%", padding: "0.5rem 0.75rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem", background: "var(--bg-secondary)", color: "var(--text-primary)", border: "1px solid var(--border)", borderRadius: "6px", boxSizing: "border-box" }} />
+            </div>
+            <div style={{ marginBottom: "1rem" }}>
+              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: "#6366f1", letterSpacing: "0.08em", marginBottom: "0.3rem" }}>Login Buckets CSV</div>
+              <input defaultValue={loginBucketsSheetUrl} placeholder="Optional — paste Login Buckets CSV URL"
+                onBlur={e => setLoginBucketsSheetUrl(e.target.value.trim())}
+                style={{ width: "100%", padding: "0.5rem 0.75rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem", background: "var(--bg-secondary)", color: "var(--text-primary)", border: "1px solid var(--border)", borderRadius: "6px", boxSizing: "border-box" }} />
+            </div>
             {/* Hours Threshold */}
             <div style={{ marginTop: "0.5rem", marginBottom: "1rem", padding: "1rem", background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-md, 10px)" }}>
               <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: "#d97706", letterSpacing: "0.08em", marginBottom: "0.5rem" }}>Qualified Hours Threshold</div>
