@@ -6612,23 +6612,18 @@ function buildVirgilTitleSlide(pres, reportingMonthLabel, fiscalInfo, virgilLast
   const w = pres.presLayout ? pres.presLayout.width : 13.333;
   const h = pres.presLayout ? pres.presLayout.height : 7.5;
 
-  // --- Gradient background (simulated via 12 vertical stripes) ---
-  const startHex = [0x37, 0x30, 0xA3]; // indigo
-  const endHex = [0xA7, 0x8B, 0xFA];   // lavender
-  const stripes = 12;
-  const stripeW = w / stripes;
-  for (let i = 0; i < stripes; i++) {
-    const t = i / (stripes - 1);
-    const r = Math.round(startHex[0] + (endHex[0] - startHex[0]) * t);
-    const g = Math.round(startHex[1] + (endHex[1] - startHex[1]) * t);
-    const b = Math.round(startHex[2] + (endHex[2] - startHex[2]) * t);
-    const hex = [r, g, b].map(v => v.toString(16).padStart(2, "0")).join("").toUpperCase();
-    slide.addShape("rect", {
-      x: i * stripeW, y: 0, w: stripeW + 0.01, h,
-      fill: { color: hex },
-      line: { color: hex, width: 0 },
-    });
-  }
+  // --- Background: solid left + 2 stepped right panels to approximate a left-to-right gradient ---
+  slide.background = { color: "3730A3" };
+  slide.addShape("rect", {
+    x: w * 0.45, y: 0, w: w * 0.55, h,
+    fill: { color: "7C68E8" },
+    line: { type: "none" },
+  });
+  slide.addShape("rect", {
+    x: w * 0.65, y: 0, w: w * 0.35, h,
+    fill: { color: "A78BFA" },
+    line: { type: "none" },
+  });
 
   // --- X watermark (two rotated white bars, left-of-center) ---
   const xCenterX = 2.8;
@@ -6642,7 +6637,7 @@ function buildVirgilTitleSlide(pres, reportingMonthLabel, fiscalInfo, virgilLast
       w: barW,
       h: barH,
       fill: { color: "FFFFFF", transparency: 70 },
-      line: { color: "FFFFFF", width: 0, transparency: 100 },
+      line: { type: "none" },
       rotate: angle,
     });
   };
