@@ -13619,6 +13619,36 @@ export default function App() {
     try { localStorage.setItem("perf_intel_login_buckets_v1", v || ""); } catch(e) {}
   }, []);
 
+  const handleCoachingDetailsUpload = useCallback(async (file) => {
+    if (!file) return;
+    try {
+      const text = await file.text();
+      setCoachingDetailsRaw(text);
+    } catch(e) {
+      console.error("Coaching Details upload failed:", e);
+    }
+  }, [setCoachingDetailsRaw]);
+
+  const handleCoachingWeeklyUpload = useCallback(async (file) => {
+    if (!file) return;
+    try {
+      const text = await file.text();
+      setCoachingWeeklyRaw(text);
+    } catch(e) {
+      console.error("Weekly Breakdown upload failed:", e);
+    }
+  }, [setCoachingWeeklyRaw]);
+
+  const handleLoginBucketsUpload = useCallback(async (file) => {
+    if (!file) return;
+    try {
+      const text = await file.text();
+      setLoginBucketsRaw(text);
+    } catch(e) {
+      console.error("Login Buckets upload failed:", e);
+    }
+  }, [setLoginBucketsRaw]);
+
   const [virgilInsights, _setVirgilInsights] = useState(() => {
     try { return JSON.parse(localStorage.getItem("perf_intel_virgil_insights_v1") || "{}"); } catch(e) { return {}; }
   });
