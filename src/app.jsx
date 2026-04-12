@@ -465,6 +465,8 @@ const DEFAULT_CORP_COACHING_WEEKLY_URL = "https://docs.google.com/spreadsheets/d
 const DEFAULT_CORP_LOGIN_BUCKETS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRagC_XDSQ84y25onmWs6MUOZcEdWZNA6fVRRDFUzNWQp3ginYLtOIQsSrwmbAERkOJ-daTvbHqEtoy/pub?gid=583266390&single=true&output=csv";
 const DEFAULT_CORP_PRIOR_QUARTER_AGENT_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTq4wsNJmMf82DO5PWH0reYQE3I_8-NW8YAuav1z5zbs753xJSATuCesxDif_ZVFTj4YjQL_k77y_Sf/pub?gid=31959038&single=true&output=csv";
 const DEFAULT_CORP_PRIOR_QUARTER_GOALS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTq4wsNJmMf82DO5PWH0reYQE3I_8-NW8YAuav1z5zbs753xJSATuCesxDif_ZVFTj4YjQL_k77y_Sf/pub?gid=1361915394&single=true&output=csv";
+const DEFAULT_CORP_PRIOR_MONTH_AGENT_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQRwJCdrvxQZPM78VX1jKEXjnn5C1yUGQ-dMPXXZ6KYotmkU7W_IZZi1i8IZ_CHBV4MdkYqH_KCptul/pub?gid=667346347&single=true&output=csv";
+const DEFAULT_CORP_PRIOR_MONTH_GOALS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQRwJCdrvxQZPM78VX1jKEXjnn5C1yUGQ-dMPXXZ6KYotmkU7W_IZZi1i8IZ_CHBV4MdkYqH_KCptul/pub?gid=112805420&single=true&output=csv";
 const TNPS_STORAGE_KEY = "perf_intel_tnps_v1";
 
 
@@ -7148,7 +7150,7 @@ function buildVirgilMyPerformanceSlide(pres, stats, loginBuckets, priorPriorMont
   }
 }
 
-function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, priorGoalsRaw, priorQuarterAgentRaw, priorQuarterGoalsRaw, reportingMonthLabel, scorecardDataUrl, vendorScores) {
+function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, priorGoalsRaw, priorQuarterAgentRaw, priorQuarterGoalsRaw, reportingMonthLabel, scorecardDataUrl, vendorScores, corpPriorMonthAgentRaw, corpPriorMonthGoalsRaw) {
   const slide = pres.addSlide();
   slide.background = { color: virgilTheme.slideBg };
   virgilBrandBars(pres, slide);
@@ -7172,7 +7174,7 @@ function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
   // Compute all 4 periods
   const q4 = computeCorpAttainment(priorQuarterAgentRaw, priorQuarterGoalsRaw,
     makeQuarterFilter(reportYear - 1, 4), makeGoalsQuarterFilter("Q4"));
-  const colP2 = computeCorpAttainment(priorAgentRaw, priorGoalsRaw,
+  const colP2 = computeCorpAttainment(corpPriorMonthAgentRaw, corpPriorMonthGoalsRaw,
     makeMonthFilter(prior2), makeGoalsMonthFilter(prior2));
   const colP1 = computeCorpAttainment(priorAgentRaw, priorGoalsRaw,
     makeMonthFilter(prior1), makeGoalsMonthFilter(prior1));
@@ -7449,7 +7451,7 @@ function buildCorpQuartileSlide(pres, agentRaw, goalsRaw, newHiresRaw, reporting
   drawQuartileColumn(col2X, `MTD — ${mtdLabel}`, mtd);
 }
 
-function buildCorpCampaignHoursSlide(pres, agentRaw, goalsRaw, priorAgentRaw, priorGoalsRaw, reportingMonthLabel) {
+function buildCorpCampaignHoursSlide(pres, agentRaw, goalsRaw, priorAgentRaw, priorGoalsRaw, reportingMonthLabel, corpPriorMonthAgentRaw, corpPriorMonthGoalsRaw) {
   const slide = pres.addSlide();
   slide.background = { color: virgilTheme.slideBg };
   virgilBrandBars(pres, slide);
@@ -7466,7 +7468,7 @@ function buildCorpCampaignHoursSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
   const reportingPeriodLabel = getPriorMonthLabel(reportingMonthLabel);  // input-1
   const previousMonthLabel = getPriorMonthLabel(reportingPeriodLabel);   // input-2
   const mtdLabel = reportingMonthLabel;                                   // input
-  const prior = buildCampaignHoursByFunding(priorAgentRaw, priorGoalsRaw, makeMonthFilter(previousMonthLabel));
+  const prior = buildCampaignHoursByFunding(corpPriorMonthAgentRaw, corpPriorMonthGoalsRaw, makeMonthFilter(previousMonthLabel));
   const reporting = buildCampaignHoursByFunding(priorAgentRaw, priorGoalsRaw, makeMonthFilter(reportingPeriodLabel));
   const mtd = buildCampaignHoursByFunding(agentRaw, goalsRaw, makeMonthFilter(mtdLabel));
 
@@ -7596,7 +7598,8 @@ function buildVirgilMbrPresentation(perf, options) {
     options.priorAgentRaw || "", options.priorGoalsRaw || "",
     options.priorQuarterAgentRaw || "", options.priorQuarterGoalsRaw || "",
     options.reportingMonthLabel, options.scorecardDataUrl || "",
-    options.vendorScores || {});
+    options.vendorScores || {},
+    options.corpPriorMonthAgentRaw || "", options.corpPriorMonthGoalsRaw || "");
 
   // Slide 4 — Quartile Reporting
   buildCorpQuartileSlide(pres,
@@ -7607,7 +7610,8 @@ function buildVirgilMbrPresentation(perf, options) {
   buildCorpCampaignHoursSlide(pres,
     options.agentRaw || "", options.goalsRaw || "",
     options.priorAgentRaw || "", options.priorGoalsRaw || "",
-    options.reportingMonthLabel);
+    options.reportingMonthLabel,
+    options.corpPriorMonthAgentRaw || "", options.corpPriorMonthGoalsRaw || "");
 
   return pres;
 }
@@ -7621,6 +7625,8 @@ function CorpMbrDataSourcesModal({
   coachingDetailsSheetUrl, setCoachingDetailsSheetUrl,
   coachingWeeklySheetUrl, setCoachingWeeklySheetUrl,
   loginBucketsSheetUrl, setLoginBucketsSheetUrl,
+  corpPriorMonthAgentUrl, setCorpPriorMonthAgentUrl,
+  corpPriorMonthGoalsUrl, setCorpPriorMonthGoalsUrl,
   priorQuarterAgentUrl, setPriorQuarterAgentUrl,
   priorQuarterGoalsUrl, setPriorQuarterGoalsUrl,
   onClose
@@ -7649,6 +7655,10 @@ function CorpMbrDataSourcesModal({
           hint="Enables DR/BZ split via NTID → bpLookup." />
         <UrlRow label="Login Buckets (myPerformance login frequency)" value={loginBucketsSheetUrl} setValue={setLoginBucketsSheetUrl}
           hint="Monthly distribution across 0-3 / 4-7 / 8-15 / 16-20+ login buckets." />
+        <UrlRow label="Prior Month — Agent Stats" value={corpPriorMonthAgentUrl} setValue={setCorpPriorMonthAgentUrl}
+          hint="Current fiscal month − 2 agent stats. For Slide 3 col 2 + Slide 5 first bar group." />
+        <UrlRow label="Prior Month — Goals" value={corpPriorMonthGoalsUrl} setValue={setCorpPriorMonthGoalsUrl}
+          hint="Current fiscal month − 2 goals. Paired with Prior Month agent stats." />
         <UrlRow label="Prior Quarter — Agent Data" value={priorQuarterAgentUrl} setValue={setPriorQuarterAgentUrl}
           hint="Q4 2025 agent-level stats. Used by Slide 3 comparison table." />
         <UrlRow label="Prior Quarter — Goals" value={priorQuarterGoalsUrl} setValue={setPriorQuarterGoalsUrl}
@@ -7666,6 +7676,7 @@ function VirgilMbrExportModal({
   coachingDetailsRaw, coachingWeeklyRaw, loginBucketsRaw,
   rawAgentCsv, goalsRaw, priorMonthRaw, priorMonthGoalsRaw, newHiresRaw,
   priorQuarterAgentRaw, priorQuarterGoalsRaw,
+  corpPriorMonthAgentRaw, corpPriorMonthGoalsRaw,
   insights, setInsights, ollamaAvailable, onClose
 }) {
   const [reportingMonth, setReportingMonth] = useState(() => {
@@ -7747,13 +7758,15 @@ Write bullet-point style insights focused on movement vs prior, gaps vs 75% goal
       newHiresRaw: newHiresRaw || "",
       priorQuarterAgentRaw: priorQuarterAgentRaw || "",
       priorQuarterGoalsRaw: priorQuarterGoalsRaw || "",
+      corpPriorMonthAgentRaw: corpPriorMonthAgentRaw || "",
+      corpPriorMonthGoalsRaw: corpPriorMonthGoalsRaw || "",
       scorecardDataUrl,
       vendorScores,
       insights: { ...(insights || {}), slide2: slide2Insights },
     });
     const safeMonth = (reportingMonth || "Virgil").replace(/[^A-Za-z0-9 _-]+/g, "");
     await pres.writeFile({ fileName: `Corp MBR - ${safeMonth}.pptx` });
-  }, [perf, reportingMonth, coachingDetails, coachingWeekly, loginBuckets, rawAgentCsv, goalsRaw, priorMonthRaw, priorMonthGoalsRaw, newHiresRaw, priorQuarterAgentRaw, priorQuarterGoalsRaw, scorecardDataUrl, vendorScores, insights, useAiInsights, ollamaAvailable]);
+  }, [perf, reportingMonth, coachingDetails, coachingWeekly, loginBuckets, rawAgentCsv, goalsRaw, priorMonthRaw, priorMonthGoalsRaw, newHiresRaw, priorQuarterAgentRaw, priorQuarterGoalsRaw, corpPriorMonthAgentRaw, corpPriorMonthGoalsRaw, scorecardDataUrl, vendorScores, insights, useAiInsights, ollamaAvailable]);
 
   const StatusRow = ({ label, ok }) => (
     <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", fontSize: 13 }}>
@@ -7785,6 +7798,8 @@ Write bullet-point style insights focused on movement vs prior, gaps vs 75% goal
           <StatusRow label="Coaching Details CSV" ok={hasCoachingDetails} />
           <StatusRow label="Weekly Breakdown CSV" ok={hasCoachingWeekly} />
           <StatusRow label="Login Buckets CSV" ok={hasLoginBuckets} />
+          <StatusRow label="Prior Month Agent (Current − 2)" ok={!!(corpPriorMonthAgentRaw && corpPriorMonthAgentRaw.trim())} />
+          <StatusRow label="Prior Month Goals (Current − 2)" ok={!!(corpPriorMonthGoalsRaw && corpPriorMonthGoalsRaw.trim())} />
           <StatusRow label="Prior Quarter Agent (Q4 2025)" ok={!!(priorQuarterAgentRaw && priorQuarterAgentRaw.trim())} />
           <StatusRow label="Prior Quarter Goals (Q4 2025)" ok={!!(priorQuarterGoalsRaw && priorQuarterGoalsRaw.trim())} />
           <StatusRow label="Scorecard PNG (Slide 3)" ok={!!scorecardDataUrl} />
@@ -15230,6 +15245,38 @@ export default function App() {
     try { localStorage.setItem("perf_intel_prior_quarter_goals_v1", v || ""); } catch(e) {}
   }, []);
 
+  const [corpPriorMonthAgentUrl, _setCorpPriorMonthAgentUrl] = useState(() => {
+    try { return localStorage.getItem("perf_intel_corp_prior_month_agent_url_v1") || DEFAULT_CORP_PRIOR_MONTH_AGENT_URL; } catch(e) { return DEFAULT_CORP_PRIOR_MONTH_AGENT_URL; }
+  });
+  const setCorpPriorMonthAgentUrl = useCallback(v => {
+    _setCorpPriorMonthAgentUrl(v);
+    try { localStorage.setItem("perf_intel_corp_prior_month_agent_url_v1", v || ""); } catch(e) {}
+  }, []);
+
+  const [corpPriorMonthGoalsUrl, _setCorpPriorMonthGoalsUrl] = useState(() => {
+    try { return localStorage.getItem("perf_intel_corp_prior_month_goals_url_v1") || DEFAULT_CORP_PRIOR_MONTH_GOALS_URL; } catch(e) { return DEFAULT_CORP_PRIOR_MONTH_GOALS_URL; }
+  });
+  const setCorpPriorMonthGoalsUrl = useCallback(v => {
+    _setCorpPriorMonthGoalsUrl(v);
+    try { localStorage.setItem("perf_intel_corp_prior_month_goals_url_v1", v || ""); } catch(e) {}
+  }, []);
+
+  const [corpPriorMonthAgentRaw, _setCorpPriorMonthAgentRaw] = useState(() => {
+    try { return localStorage.getItem("perf_intel_corp_prior_month_agent_v1") || ""; } catch(e) { return ""; }
+  });
+  const setCorpPriorMonthAgentRaw = useCallback(v => {
+    _setCorpPriorMonthAgentRaw(v);
+    try { localStorage.setItem("perf_intel_corp_prior_month_agent_v1", v || ""); } catch(e) {}
+  }, []);
+
+  const [corpPriorMonthGoalsRaw, _setCorpPriorMonthGoalsRaw] = useState(() => {
+    try { return localStorage.getItem("perf_intel_corp_prior_month_goals_v1") || ""; } catch(e) { return ""; }
+  });
+  const setCorpPriorMonthGoalsRaw = useCallback(v => {
+    _setCorpPriorMonthGoalsRaw(v);
+    try { localStorage.setItem("perf_intel_corp_prior_month_goals_v1", v || ""); } catch(e) {}
+  }, []);
+
   const [localAI, setLocalAI]      = useState(false);
   const [ollamaAvailable, setOllamaAvailable] = useState(null); // null=checking, true/false
   const [hoursThreshold, _setHoursThreshold] = useState(_hoursThreshold);
@@ -15666,6 +15713,46 @@ export default function App() {
     })();
   }, [priorQuarterGoalsUrl]);
 
+  useEffect(() => {
+    if (!corpPriorMonthAgentUrl) return;
+    (async () => {
+      try {
+        const res = await fetch(corpPriorMonthAgentUrl);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const text = await res.text();
+        setCorpPriorMonthAgentRaw(text);
+      } catch(e) {
+        try {
+          const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(corpPriorMonthAgentUrl)}`);
+          if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
+          setCorpPriorMonthAgentRaw(await res.text());
+        } catch(e2) {
+          console.error("Corp Prior Month Agent sheet fetch failed:", e2);
+        }
+      }
+    })();
+  }, [corpPriorMonthAgentUrl]);
+
+  useEffect(() => {
+    if (!corpPriorMonthGoalsUrl) return;
+    (async () => {
+      try {
+        const res = await fetch(corpPriorMonthGoalsUrl);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const text = await res.text();
+        setCorpPriorMonthGoalsRaw(text);
+      } catch(e) {
+        try {
+          const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(corpPriorMonthGoalsUrl)}`);
+          if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
+          setCorpPriorMonthGoalsRaw(await res.text());
+        } catch(e2) {
+          console.error("Corp Prior Month Goals sheet fetch failed:", e2);
+        }
+      }
+    })();
+  }, [corpPriorMonthGoalsUrl]);
+
   // Auto-load prior month data from Google Sheet (after main data loads, non-blocking)
   const [priorSheetLoading, setPriorSheetLoading] = useState(false);
   useEffect(() => {
@@ -15809,10 +15896,24 @@ export default function App() {
             if (res.ok) { const t = await res.text(); if (t.trim()) setPriorQuarterGoalsRaw(t); }
           } catch(e) {}
         })() : null,
+        corpPriorMonthAgentUrl ? (async () => {
+          try {
+            let res; try { res = await fetch(corpPriorMonthAgentUrl); } catch(e) { res = null; }
+            if (!res || !res.ok) res = await fetch(proxy(corpPriorMonthAgentUrl));
+            if (res.ok) { const t = await res.text(); if (t.trim()) setCorpPriorMonthAgentRaw(t); }
+          } catch(e) {}
+        })() : null,
+        corpPriorMonthGoalsUrl ? (async () => {
+          try {
+            let res; try { res = await fetch(corpPriorMonthGoalsUrl); } catch(e) { res = null; }
+            if (!res || !res.ok) res = await fetch(proxy(corpPriorMonthGoalsUrl));
+            if (res.ok) { const t = await res.text(); if (t.trim()) setCorpPriorMonthGoalsRaw(t); }
+          } catch(e) {}
+        })() : null,
       ].filter(Boolean));
     } catch(e) { alert("Could not refresh: " + e.message); }
     finally { setSheetLoading(false); }
-  }, [agentSheetUrl, goalsSheetUrl, nhSheetUrl, priorSheetUrl, priorGoalsSheetUrl, tnpsSheetUrl, coachingDetailsSheetUrl, coachingWeeklySheetUrl, loginBucketsSheetUrl, priorQuarterAgentUrl, priorQuarterGoalsUrl]);
+  }, [agentSheetUrl, goalsSheetUrl, nhSheetUrl, priorSheetUrl, priorGoalsSheetUrl, tnpsSheetUrl, coachingDetailsSheetUrl, coachingWeeklySheetUrl, loginBucketsSheetUrl, priorQuarterAgentUrl, priorQuarterGoalsUrl, corpPriorMonthAgentUrl, corpPriorMonthGoalsUrl]);
 
   // Legacy navigation adapter — translates old slideIndex semantics from
   // BusinessOverview/CampaignComparisonPanel into currentPage navigation.
@@ -15856,6 +15957,8 @@ export default function App() {
           newHiresRaw={newHiresRawCsv}
           priorQuarterAgentRaw={priorQuarterAgentRaw}
           priorQuarterGoalsRaw={priorQuarterGoalsRaw}
+          corpPriorMonthAgentRaw={corpPriorMonthAgentRaw}
+          corpPriorMonthGoalsRaw={corpPriorMonthGoalsRaw}
           insights={virgilInsights}
           setInsights={setVirgilInsights}
           ollamaAvailable={ollamaAvailable}
@@ -15870,6 +15973,10 @@ export default function App() {
           setCoachingWeeklySheetUrl={setCoachingWeeklySheetUrl}
           loginBucketsSheetUrl={loginBucketsSheetUrl}
           setLoginBucketsSheetUrl={setLoginBucketsSheetUrl}
+          corpPriorMonthAgentUrl={corpPriorMonthAgentUrl}
+          setCorpPriorMonthAgentUrl={setCorpPriorMonthAgentUrl}
+          corpPriorMonthGoalsUrl={corpPriorMonthGoalsUrl}
+          setCorpPriorMonthGoalsUrl={setCorpPriorMonthGoalsUrl}
           priorQuarterAgentUrl={priorQuarterAgentUrl}
           setPriorQuarterAgentUrl={setPriorQuarterAgentUrl}
           priorQuarterGoalsUrl={priorQuarterGoalsUrl}
