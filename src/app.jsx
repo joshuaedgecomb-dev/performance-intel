@@ -6625,10 +6625,19 @@ function buildVirgilTitleSlide(pres, reportingMonthLabel, fiscalInfo, virgilLast
   }
 }
 
-function buildVirgilMyPerformanceSlide(pres, stats, loginPriorPct, loginCurrPct, reportingMonthLabel, insightsText) {
+function buildVirgilMyPerformanceSlide(pres, stats, loginBuckets, priorMonthLabel, reportingMonthLabel, insightsText) {
   const slide = pres.addSlide();
   slide.background = { color: virgilTheme.slideBg };
   virgilBrandBars(pres, slide);
+
+  // Month abbreviation helpers
+  const monAbbrev = (label) => {
+    if (!label) return "";
+    const m = String(label).trim().match(/^([A-Za-z]{3,})/);
+    return m ? m[1].slice(0, 3) : label;
+  };
+  const priorAbbrev = monAbbrev(priorMonthLabel) || "Prior";
+  const currAbbrev = monAbbrev(reportingMonthLabel) || "Current";
 
   // Eyebrow + title
   slide.addText("OPERATIONAL PERFORMANCE", {
@@ -6643,9 +6652,9 @@ function buildVirgilMyPerformanceSlide(pres, stats, loginPriorPct, loginCurrPct,
   // Legend (top right)
   const legendY = 0.7;
   slide.addShape("rect", { x: 9.4, y: legendY, w: 0.25, h: 0.18, fill: { color: "7C3AED" }, line: { color: "7C3AED", width: 0 } });
-  slide.addText("Month Prior", { x: 9.7, y: legendY - 0.03, w: 1.2, h: 0.25, fontSize: 10, color: virgilTheme.bodyText });
+  slide.addText(priorAbbrev, { x: 9.7, y: legendY - 0.03, w: 1.2, h: 0.25, fontSize: 10, color: virgilTheme.bodyText });
   slide.addShape("rect", { x: 10.9, y: legendY, w: 0.25, h: 0.18, fill: { color: "1E3A8A" }, line: { color: "1E3A8A", width: 0 } });
-  slide.addText("EOM Discussion", { x: 11.2, y: legendY - 0.03, w: 1.5, h: 0.25, fontSize: 10, color: virgilTheme.bodyText });
+  slide.addText(currAbbrev, { x: 11.2, y: legendY - 0.03, w: 1.5, h: 0.25, fontSize: 10, color: virgilTheme.bodyText });
   slide.addText("---  Goal (75%)", { x: 9.4, y: legendY + 0.22, w: 3.2, h: 0.2, fontSize: 9, color: virgilTheme.subtle, italic: true });
 
   // Top row — 3 bar charts
@@ -6669,6 +6678,19 @@ function buildVirgilMyPerformanceSlide(pres, stats, loginPriorPct, loginCurrPct,
       x: axisX, y: axisY, w: axisW, h: axisH,
       fill: { color: "FAFAFA" },
       line: { color: "E5E7EB", width: 0.5 },
+    });
+    // Y-axis gridlines with % labels
+    const ticks = [0, 0.25, 0.5, 0.75, 1.0];
+    ticks.forEach(t => {
+      const ty = axisY + axisH * (1 - t);
+      slide.addShape("line", {
+        x: axisX, y: ty, w: axisW, h: 0,
+        line: { color: "E5E7EB", width: 0.5 },
+      });
+      slide.addText(`${(t * 100).toFixed(0)}%`, {
+        x: x + 0.02, y: ty - 0.1, w: 0.38, h: 0.2,
+        fontSize: 7, color: virgilTheme.subtle, align: "right",
+      });
     });
     // 75% goal line (dashed, rendered as a thin gray rect)
     const goalY = axisY + axisH * (1 - 0.75);
@@ -6700,11 +6722,11 @@ function buildVirgilMyPerformanceSlide(pres, stats, loginPriorPct, loginCurrPct,
       fontSize: 10, color: "FFFFFF", bold: true, align: "center",
     });
     // X-axis labels
-    slide.addText("Month Prior", {
+    slide.addText(priorAbbrev, {
       x: bar1X - 0.3, y: axisY + axisH + 0.05, w: barW + 0.6, h: 0.22,
       fontSize: 9, color: virgilTheme.subtle, align: "center",
     });
-    slide.addText("EOM Discussion", {
+    slide.addText(currAbbrev, {
       x: bar2X - 0.4, y: axisY + axisH + 0.05, w: barW + 0.8, h: 0.22,
       fontSize: 9, color: virgilTheme.subtle, align: "center",
     });
@@ -6715,7 +6737,48 @@ function buildVirgilMyPerformanceSlide(pres, stats, loginPriorPct, loginCurrPct,
   const col3X = col2X + chartW + gap;
 
   drawBarChart(col1X, "Coaching Standard Attainment", stats.orgPrior.coachingPct || 0, stats.org.coachingPct || 0);
-  drawBarChart(col2X, "myPerformance Login Activity", loginPriorPct || 0, loginCurrPct || 0);
+
+  // Login Activity table (replaces bar chart in col2)
+  const bucketOrder = ["16-20+", "8-15", "4-7", "0-3"];
+  const loginTable = bucketOrder.map(b => {
+    const priorCell = (loginBuckets[priorMonthLabel] && loginBuckets[priorMonthLabel][b]) || { users: 0, pct: 0 };
+    const currCell = (loginBuckets[reportingMonthLabel] && loginBuckets[reportingMonthLabel][b]) || { users: 0, pct: 0 };
+    return { bucket: b, priorUsers: priorCell.users, priorPct: priorCell.pct, currUsers: currCell.users, currPct: currCell.pct };
+  });
+  slide.addText("myPerformance Login Activity", {
+    x: col2X, y: chartY, w: chartW, h: 0.3,
+    fontSize: 13, color: virgilTheme.bodyText, bold: true, align: "center",
+  });
+  const tableRows = [
+    [
+      { text: "", options: { fill: { color: "F3F4F6" } } },
+      { text: priorAbbrev, options: { fill: { color: "E9D5FF" }, color: "1F2937", bold: true, colspan: 2, align: "center" } },
+      { text: currAbbrev, options: { fill: { color: "DBEAFE" }, color: "1F2937", bold: true, colspan: 2, align: "center" } },
+    ],
+    [
+      { text: "Bucket", options: { fill: { color: "F3F4F6" }, bold: true, align: "center" } },
+      { text: "Users", options: { fill: { color: "F3E8FF" }, bold: true, align: "center" } },
+      { text: "%", options: { fill: { color: "F3E8FF" }, bold: true, align: "center" } },
+      { text: "Users", options: { fill: { color: "EFF6FF" }, bold: true, align: "center" } },
+      { text: "%", options: { fill: { color: "EFF6FF" }, bold: true, align: "center" } },
+    ],
+    ...loginTable.map(row => ([
+      { text: row.bucket, options: { bold: true, align: "center" } },
+      { text: String(row.priorUsers), options: { align: "center" } },
+      { text: `${(row.priorPct * 100).toFixed(1)}%`, options: { align: "center" } },
+      { text: String(row.currUsers), options: { align: "center" } },
+      { text: `${(row.currPct * 100).toFixed(1)}%`, options: { align: "center" } },
+    ])),
+  ];
+  slide.addTable(tableRows, {
+    x: col2X + 0.1, y: chartY + 0.4, w: chartW - 0.2,
+    colW: [0.9, 0.65, 0.7, 0.65, 0.7],
+    fontSize: 9,
+    color: virgilTheme.bodyText,
+    border: { type: "solid", pt: 0.5, color: "D1D5DB" },
+    autoPage: false,
+  });
+
   drawBarChart(col3X, "Acknowledge %", stats.orgPrior.acknowledgePct || 0, stats.org.acknowledgePct || 0);
 
   // Bottom row
@@ -6766,11 +6829,16 @@ function buildVirgilMbrPresentation(perf, options) {
     options.reportingMonthLabel
   );
   const priorMonthKey = getPriorMonthLabel(options.reportingMonthLabel);
-  const loginPriorPct = buildLoginActivitySingle(options.loginBuckets || {}, priorMonthKey);
-  const loginCurrPct = buildLoginActivitySingle(options.loginBuckets || {}, options.reportingMonthLabel);
 
   buildVirgilTitleSlide(pres, options.reportingMonthLabel, perf && perf.fiscalInfo, options.virgilLastName);
-  buildVirgilMyPerformanceSlide(pres, stats, loginPriorPct, loginCurrPct, options.reportingMonthLabel, (options.insights && options.insights.slide2) || "");
+  buildVirgilMyPerformanceSlide(
+    pres,
+    stats,
+    options.loginBuckets || {},
+    priorMonthKey,
+    options.reportingMonthLabel,
+    (options.insights && options.insights.slide2) || ""
+  );
 
   return pres;
 }
