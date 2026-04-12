@@ -5022,24 +5022,34 @@ function MenuRow({ icon, label, hint, onClick }) {
     </button>
   );
 }
-function SettingsMenu({ onExportMbr, onRefresh, onUploadGoals, onUploadRoster, onUploadPriorGoals, onOpenSettings, ollamaAvailable, localAI, onToggleLocalAI }) {
+function SettingsMenu({ onExportMbr, onExportVirgilMbr, onRefresh, onUploadGoals, onUploadRoster, onUploadPriorGoals, onUploadCoachingDetails, onUploadCoachingWeekly, onUploadLoginBuckets, onOpenSettings, ollamaAvailable, localAI, onToggleLocalAI }) {
   return (
     <div role="menu" aria-label="Settings and actions"
       style={{ position: "absolute", top: "calc(100% + 4px)", right: 0, minWidth: 240, background: "var(--bg-tertiary)", border: "1px solid var(--border)", borderRadius: "var(--radius-md, 10px)", boxShadow: "0 12px 32px rgba(0,0,0,0.35)", padding: "6px 0", zIndex: 250 }}>
       <MenuSection label="Actions" />
       <MenuRow icon="📊" label="Export MBR" hint="monthly" onClick={onExportMbr} />
+      <MenuRow icon="🎯" label="Export Virgil MBR" hint="monthly" onClick={onExportVirgilMbr} />
       <MenuRow icon="🔄" label="Refresh from sheet" onClick={onRefresh} />
       <div style={{ borderTop: "1px solid var(--border-muted)", margin: "4px 0" }} />
       <MenuSection label="Data" />
       <MenuRow icon="📁" label="Upload Goals CSV" onClick={onUploadGoals} />
       <MenuRow icon="📁" label="Upload Roster CSV" onClick={onUploadRoster} />
       <MenuRow icon="📁" label="Upload Prior Goals" onClick={onUploadPriorGoals} />
+      <MenuRow icon="📘" label="Upload Coaching Details" hint="CSV" onClick={() => document.getElementById("virgil-coaching-details-input").click()} />
+      <MenuRow icon="📗" label="Upload Weekly Breakdown" hint="CSV" onClick={() => document.getElementById("virgil-coaching-weekly-input").click()} />
+      <MenuRow icon="📕" label="Upload Login Buckets" hint="CSV" onClick={() => document.getElementById("virgil-login-buckets-input").click()} />
       <div style={{ borderTop: "1px solid var(--border-muted)", margin: "4px 0" }} />
       <MenuSection label="Settings" />
       <MenuRow icon="⚙" label="Data sources" onClick={onOpenSettings} />
       {ollamaAvailable && (
         <MenuRow icon="🤖" label="Local AI" hint={localAI ? "on" : "off"} onClick={onToggleLocalAI} />
       )}
+      <input id="virgil-coaching-details-input" type="file" accept=".csv" style={{ display: "none" }}
+        onChange={e => { if (e.target.files[0]) onUploadCoachingDetails(e.target.files[0]); e.target.value = ""; }} />
+      <input id="virgil-coaching-weekly-input" type="file" accept=".csv" style={{ display: "none" }}
+        onChange={e => { if (e.target.files[0]) onUploadCoachingWeekly(e.target.files[0]); e.target.value = ""; }} />
+      <input id="virgil-login-buckets-input" type="file" accept=".csv" style={{ display: "none" }}
+        onChange={e => { if (e.target.files[0]) onUploadLoginBuckets(e.target.files[0]); e.target.value = ""; }} />
     </div>
   );
 }
@@ -5103,7 +5113,7 @@ function TopNav({
   programsBySite, siteAttainments, fiscalInfo, hasTnps,
   lightMode, setLightMode, showToday, setShowToday,
   ollamaAvailable, localAI, setLocalAI,
-  onExportMbr, onRefresh, onUploadGoals, onUploadRoster, onUploadPriorGoals, onOpenSettings,
+  onExportMbr, onExportVirgilMbr, onRefresh, onUploadGoals, onUploadRoster, onUploadPriorGoals, onUploadCoachingDetails, onUploadCoachingWeekly, onUploadLoginBuckets, onOpenSettings,
 }) {
   const navRef = useRef(null);
   const drRef = useRef(null);
@@ -5210,10 +5220,14 @@ function TopNav({
           {openMenu === "settings" && (
             <SettingsMenu
               onExportMbr={() => { onExportMbr(); setOpenMenu(null); }}
+              onExportVirgilMbr={() => { onExportVirgilMbr(); setOpenMenu(null); }}
               onRefresh={() => { onRefresh(); setOpenMenu(null); }}
               onUploadGoals={() => { onUploadGoals(); setOpenMenu(null); }}
               onUploadRoster={() => { onUploadRoster(); setOpenMenu(null); }}
               onUploadPriorGoals={() => { onUploadPriorGoals(); setOpenMenu(null); }}
+              onUploadCoachingDetails={onUploadCoachingDetails}
+              onUploadCoachingWeekly={onUploadCoachingWeekly}
+              onUploadLoginBuckets={onUploadLoginBuckets}
               onOpenSettings={() => { onOpenSettings(); setOpenMenu(null); }}
               ollamaAvailable={ollamaAvailable}
               localAI={localAI}
@@ -14169,10 +14183,14 @@ export default function App() {
         localAI={localAI}
         setLocalAI={setLocalAI}
         onExportMbr={() => setShowMbrModal(true)}
+        onExportVirgilMbr={() => setShowVirgilMbrModal(true)}
         onRefresh={handleRefresh}
         onUploadGoals={() => goalsInputRef.current.click()}
         onUploadRoster={() => nhInputRef.current.click()}
         onUploadPriorGoals={() => priorGoalsInputRef.current.click()}
+        onUploadCoachingDetails={handleCoachingDetailsUpload}
+        onUploadCoachingWeekly={handleCoachingWeeklyUpload}
+        onUploadLoginBuckets={handleLoginBucketsUpload}
         onOpenSettings={() => setShowSettings(true)}
       />
 
