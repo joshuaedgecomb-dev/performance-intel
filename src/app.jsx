@@ -10669,64 +10669,59 @@ function ProgramSiteCompareCard({ program, allAgents, newHireSet }) {
   const dCps = data.dr.cps - data.bz.cps;
   if (Math.abs(dCps) >= 1) (dCps < 0 ? drWins : bzWins).push(`CPS ${fmtCps(-Math.abs(dCps))}`);
 
+  const Metric = ({ label, value, sub, valueColor }) => (
+    <div>
+      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: "var(--text-muted)", letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 600 }}>{label}</div>
+      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "1.65rem", color: valueColor || "var(--text-warm)", fontWeight: 800, marginTop: "0.2rem", lineHeight: 1, letterSpacing: "-0.02em" }}>{value}</div>
+      {sub && <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "0.35rem", letterSpacing: "0.02em" }}>{sub}</div>}
+    </div>
+  );
   const Site = ({ side, accent, label }) => {
     const d = data[side];
     return (
-      <div style={{ flex: 1, padding: "12px 16px", minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.5rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: accent, letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 600 }}>
-          <span style={{ width: 6, height: 6, borderRadius: 3, background: accent }} />
-          {label}
+      <div style={{ flex: 1, padding: "1.1rem 1.35rem", minWidth: 0, position: "relative" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.85rem" }}>
+          <span style={{ width: 8, height: 8, borderRadius: 4, background: accent, boxShadow: `0 0 8px ${accent}80` }} />
+          <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: accent, letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 700 }}>{label}</span>
+          <span style={{ fontFamily: "var(--font-data, monospace)", fontSize: "0.7rem", color: "var(--text-dim)" }}>· {d.agents} agents</span>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "0.5rem" }}>
-          <div>
-            <div style={{ fontSize: "0.62rem", color: "var(--text-dim)", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 600, marginBottom: 2 }}>Goal</div>
-            <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "1.05rem", color: d.attainment != null ? attainColor(d.attainment) : "var(--text-primary)", fontWeight: 700 }}>{d.attainment != null ? `${Math.round(d.attainment)}%` : "—"}</div>
-            <div style={{ fontSize: "0.62rem", color: "var(--text-faint)", fontFamily: "var(--font-data, monospace)" }}>{d.goals}{d.plan ? `/${d.plan}` : ""}</div>
-          </div>
-          <div>
-            <div style={{ fontSize: "0.62rem", color: "var(--text-dim)", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 600, marginBottom: 2 }}>GPH</div>
-            <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "1.05rem", color: "var(--text-primary)", fontWeight: 700 }}>{fmt(d.gph, 2)}</div>
-          </div>
-          <div>
-            <div style={{ fontSize: "0.62rem", color: "var(--text-dim)", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 600, marginBottom: 2 }}>Hours</div>
-            <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "1.05rem", color: "var(--text-primary)", fontWeight: 700 }}>{Math.round(d.hours)}</div>
-            <div style={{ fontSize: "0.62rem", color: "var(--text-faint)", fontFamily: "var(--font-data, monospace)" }}>{d.agents} ag</div>
-          </div>
-          <div>
-            <div style={{ fontSize: "0.62rem", color: "var(--text-dim)", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 600, marginBottom: 2 }}>Q1 rate</div>
-            <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "1.05rem", color: "var(--text-primary)", fontWeight: 700 }}>{Math.round(d.q1Rate)}%</div>
-            <div style={{ fontSize: "0.62rem", color: "var(--text-faint)", fontFamily: "var(--font-data, monospace)" }}>{d.q1Count} of {d.agents}</div>
-          </div>
-          <div>
-            <div style={{ fontSize: "0.62rem", color: "var(--text-dim)", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 600, marginBottom: 2 }}>CPS</div>
-            <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "1.05rem", color: "var(--text-primary)", fontWeight: 700 }}>${Math.round(d.cps)}</div>
-          </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "0.85rem" }}>
+          <Metric label="Goal"   value={d.attainment != null ? `${Math.round(d.attainment)}%` : "—"} sub={`${d.goals}${d.plan ? ` / ${d.plan}` : ""}`} valueColor={d.attainment != null ? attainColor(d.attainment) : null} />
+          <Metric label="GPH"    value={fmt(d.gph, 2)} />
+          <Metric label="Hours"  value={Math.round(d.hours).toLocaleString()} />
+          <Metric label="Q1 Rate" value={`${Math.round(d.q1Rate)}%`} sub={`${d.q1Count} of ${d.agents}`} />
+          <Metric label="CPS"    value={`$${Math.round(d.cps).toLocaleString()}`} />
         </div>
       </div>
     );
   };
 
+  // Top accent: half DR orange, half BZ green
+  const accentBorder = "linear-gradient(to right, #ed8936 0%, #ed8936 50%, #48bb78 50%, #48bb78 100%)";
+
   return (
-    <div style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-md, 10px)", overflow: "hidden" }}>
-      <div style={{ padding: "10px 16px 8px", borderBottom: "1px solid var(--border-muted)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: "var(--text-muted)", letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 600 }}>
-          DR vs BZ — {program.jobType}
+    <div style={{ background: "var(--glass-bg)", backdropFilter: "blur(12px) saturate(150%)", WebkitBackdropFilter: "blur(12px) saturate(150%)", border: "1px solid var(--glass-border)", borderRadius: "var(--radius-lg, 16px)", overflow: "hidden", boxShadow: "var(--card-glow)", position: "relative" }}>
+      {/* Top accent stripe — half DR orange, half BZ green */}
+      <div style={{ height: 3, background: accentBorder }} />
+      <div style={{ padding: "0.85rem 1.5rem 0.6rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "var(--text-muted)", letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 600 }}>
+          Site Comparison · {program.jobType}
         </div>
-        <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "0.65rem", color: "var(--text-dim)" }}>both sites dialing</div>
+        <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "0.7rem", color: "var(--text-dim)" }}>both sites dialing</div>
       </div>
-      <div style={{ display: "flex" }}>
+      <div style={{ display: "flex", borderTop: "1px solid var(--glass-border)" }}>
         <Site side="dr" accent="#ed8936" label="DR" />
-        <div style={{ width: 1, background: "var(--border-muted)" }} />
+        <div style={{ width: 1, background: "var(--glass-border)" }} />
         <Site side="bz" accent="#48bb78" label="BZ" />
       </div>
       {(drWins.length > 0 || bzWins.length > 0) && (
-        <div style={{ padding: "10px 16px", background: "var(--bg-row-alt)", borderTop: "1px solid var(--border-muted)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: "var(--text-secondary)", lineHeight: 1.6 }}>
+        <div style={{ padding: "0.75rem 1.5rem", background: "var(--accent-surface)", borderTop: "1px solid var(--glass-border)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "var(--text-secondary)", lineHeight: 1.6 }}>
           {drWins.length > 0 && (
-            <span><span style={{ color: "#ed8936", fontWeight: 600 }}>DR</span> leads {drWins.join(", ")}.</span>
+            <span><span style={{ color: "#ed8936", fontWeight: 700 }}>DR</span> leads {drWins.join(", ")}.</span>
           )}
-          {drWins.length > 0 && bzWins.length > 0 && <span> </span>}
+          {drWins.length > 0 && bzWins.length > 0 && <span>{" "}</span>}
           {bzWins.length > 0 && (
-            <span><span style={{ color: "#48bb78", fontWeight: 600 }}>BZ</span> leads {bzWins.join(", ")}.</span>
+            <span><span style={{ color: "#48bb78", fontWeight: 700 }}>BZ</span> leads {bzWins.join(", ")}.</span>
           )}
         </div>
       )}
