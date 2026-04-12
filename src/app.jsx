@@ -13818,18 +13818,47 @@ export default function App() {
   };
 
   const handleRefresh = useCallback(async () => {
+    const proxy = url => `https://corsproxy.io/?${encodeURIComponent(url)}`;
+    const fetchSheet = async url => {
+      try {
+        let res;
+        try { res = await fetch(url); } catch(e) { res = null; }
+        if (!res || !res.ok) res = await fetch(proxy(url));
+        if (!res.ok) return null;
+        const rows = parseCSV(await res.text());
+        return rows.length > 0 ? rows : null;
+      } catch(e) { return null; }
+    };
     try {
       setSheetLoading(true);
-      const res = await fetch(agentSheetUrl);
-      const text = await res.text();
-      const rows = parseCSV(text);
-      if (rows.length > 0) {
-        setRawData(rows);
-        setCurrentPage({ section: "overview" });
-      }
-    } catch(e) { alert("Could not fetch sheet: " + e.message); }
+      const agentRows = await fetchSheet(agentSheetUrl);
+      if (agentRows) setRawData(agentRows);
+      // Refresh secondary sheets in parallel
+      await Promise.all([
+        goalsSheetUrl ? fetchSheet(goalsSheetUrl).then(r => { if (r) setGoalsRaw(r); }) : null,
+        nhSheetUrl ? fetchSheet(nhSheetUrl).then(r => { if (r) setNHRaw(r); }) : null,
+        priorSheetUrl ? fetchSheet(priorSheetUrl).then(r => { if (r) setPriorMonthRaw(r); }) : null,
+        priorGoalsSheetUrl ? fetchSheet(priorGoalsSheetUrl).then(r => { if (r) setPriorMonthGoalsRaw(r); }) : null,
+        tnpsSheetUrl ? fetchSheet(tnpsSheetUrl).then(r => { if (r) setTnpsRaw(r); }) : null,
+      ].filter(Boolean));
+    } catch(e) { alert("Could not refresh: " + e.message); }
     finally { setSheetLoading(false); }
-  }, [agentSheetUrl]);
+  }, [agentSheetUrl, goalsSheetUrl, nhSheetUrl, priorSheetUrl, priorGoalsSheetUrl, tnpsSheetUrl]);
+
+  // Legacy navigation adapter — translates old slideIndex semantics from
+  // BusinessOverview/CampaignComparisonPanel into currentPage navigation.
+  // BusinessOverview always called these from the "overview" page (slideIndex 0),
+  // so navTo(N) and goToSlide(N) both equal "go to slide N" in absolute terms.
+  const legacyGoToSlide = useCallback(idx => {
+    if (idx === 0) { setCurrentPage({ section: "overview" }); return; }
+    if (hasTnps && idx === programs.length + 2) { setCurrentPage({ section: "tnps" }); return; }
+    if (idx === programs.length + 1) { setCurrentPage({ section: "mom" }); return; }
+    if (idx > 0 && idx <= programs.length) {
+      const program = programs[idx - 1];
+      const drHas = program.agents.some(a => siteRegionGroups.dr.includes(a.region));
+      setCurrentPage({ section: drHas ? "dr" : "bz", program: program.jobType });
+    }
+  }, [hasTnps, programs, siteRegionGroups]);
 
   useEffect(() => {
     const vars = lightMode ? THEMES.light : THEMES.dark;
@@ -13970,13 +13999,13 @@ export default function App() {
             No "Job Type" column found in your data.
           </div>
         ) : currentPage.section === "overview" ? (
-          <BusinessOverview perf={perf} onNav={() => {}} goToSlide={() => {}} tnpsSlideIdx={-1} localAI={localAI} priorAgents={priorAgents} priorGoalLookup={priorGoalLookup} lightMode={lightMode} />
+          <BusinessOverview perf={perf} onNav={legacyGoToSlide} goToSlide={legacyGoToSlide} tnpsSlideIdx={hasTnps ? programs.length + 2 : -1} localAI={localAI} priorAgents={priorAgents} priorGoalLookup={priorGoalLookup} lightMode={lightMode} />
         ) : currentPage.section === "tnps" && hasTnps ? (
           <TNPSSlide perf={perf} onNav={() => {}} lightMode={lightMode} />
         ) : currentPage.section === "mom" ? (
           <CampaignComparisonPanel
             currentAgents={perf.agents}
-            onNav={() => {}}
+            onNav={() => setCurrentPage({ section: "overview" })}
             localAI={localAI}
             priorAgents={priorAgents}
             priorGoalLookup={priorGoalLookup}
