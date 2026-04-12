@@ -6485,6 +6485,20 @@ function getPriorMonthLabel(label) {
   return `${monNames[pMon - 1]} '${String(pYear).padStart(2, "0")}`;
 }
 
+function getNextMonthLabel(label) {
+  if (!label) return "";
+  const m = String(label).trim().match(/^([A-Za-z]{3,})\s*'?(\d{2,4})$/);
+  if (!m) return "";
+  const mon = m[1].slice(0, 3).toLowerCase();
+  const monIdx = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12 }[mon];
+  if (!monIdx) return "";
+  const year = Number(m[2].length === 4 ? m[2].slice(2) : m[2]);
+  let nMon = monIdx + 1, nYear = year;
+  if (nMon === 13) { nMon = 1; nYear = year + 1; }
+  const monNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  return `${monNames[nMon - 1]} '${String(nYear).padStart(2, "0")}`;
+}
+
 // Returns { org: {coachingPct, acknowledgePct, totalSessions}, dr: {...}, bz: {...} }
 // Org values come from coachingDetails (authoritative monthly totals).
 // DR/BZ splits come from weekly rows joined to bpLookup.
@@ -6933,6 +6947,107 @@ function buildVirgilMyPerformanceSlide(pres, stats, loginBuckets, priorPriorMont
         fontSize: 11, color: virgilTheme.bodyText, valign: "top", paraSpaceAfter: 4,
       }
     );
+  }
+}
+
+function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, priorGoalsRaw, priorQuarterAgentRaw, priorQuarterGoalsRaw, reportingMonthLabel, scorecardDataUrl) {
+  const slide = pres.addSlide();
+  slide.background = { color: virgilTheme.slideBg };
+  virgilBrandBars(pres, slide);
+
+  // Eyebrow + title
+  slide.addText("OPERATIONAL PERFORMANCE", {
+    x: 0.5, y: 0.35, w: 6, h: 0.25,
+    fontSize: 10, color: virgilTheme.eyebrow, bold: true, charSpacing: 2,
+  });
+  slide.addText("Global Callcenter Solutions | All-in Attainment", {
+    x: 0.5, y: 0.65, w: 12, h: 0.5,
+    fontSize: 24, color: virgilTheme.bodyText, bold: true,
+  });
+
+  // Time period labels
+  const priorKey = getPriorMonthLabel(reportingMonthLabel);
+  const monthParts = String(reportingMonthLabel || "").trim().match(/^([A-Za-z]{3,})\s*'?(\d{2,4})$/);
+  const year = monthParts ? Number(monthParts[2].length === 4 ? monthParts[2] : `20${monthParts[2]}`) : new Date().getFullYear();
+  const q4Label = `Q4 ${year - 1}`;
+  const mtdLabel = getNextMonthLabel(reportingMonthLabel);
+
+  // Compute values
+  const q4 = computeCorpAttainment(priorQuarterAgentRaw, priorQuarterGoalsRaw, makeQuarterFilter(year - 1, 4));
+  const prior = computeCorpAttainment(priorAgentRaw, priorGoalsRaw, makeMonthFilter(priorKey));
+  const curr = computeCorpAttainment(agentRaw, goalsRaw, makeMonthFilter(reportingMonthLabel));
+  const mtd = computeCorpAttainment(agentRaw, goalsRaw, makeMonthFilter(mtdLabel));
+
+  // 4-column comparison table
+  const tableRows = [
+    [
+      { text: "", options: { fill: { color: "F3F4F6" }, bold: true } },
+      { text: q4Label, options: { fill: { color: "EDE9FE" }, bold: true, align: "center" } },
+      { text: priorKey, options: { fill: { color: "E9D5FF" }, bold: true, align: "center" } },
+      { text: reportingMonthLabel, options: { fill: { color: "DBEAFE" }, bold: true, align: "center" } },
+      { text: `${mtdLabel} MTD`, options: { fill: { color: "FEF3C7" }, bold: true, align: "center" } },
+    ],
+    [
+      { text: "XI Attainment", options: { bold: true } },
+      { text: q4.xiPlan ? `${(q4.xiPct * 100).toFixed(1)}%` : "—", options: { align: "center" } },
+      { text: prior.xiPlan ? `${(prior.xiPct * 100).toFixed(1)}%` : "—", options: { align: "center" } },
+      { text: curr.xiPlan ? `${(curr.xiPct * 100).toFixed(1)}%` : "—", options: { align: "center" } },
+      { text: mtd.xiPlan ? `${(mtd.xiPct * 100).toFixed(1)}%` : "—", options: { align: "center" } },
+    ],
+    [
+      { text: "XM Attainment", options: { bold: true } },
+      { text: q4.xmPlan ? `${(q4.xmPct * 100).toFixed(1)}%` : "—", options: { align: "center" } },
+      { text: prior.xmPlan ? `${(prior.xmPct * 100).toFixed(1)}%` : "—", options: { align: "center" } },
+      { text: curr.xmPlan ? `${(curr.xmPct * 100).toFixed(1)}%` : "—", options: { align: "center" } },
+      { text: mtd.xmPlan ? `${(mtd.xmPct * 100).toFixed(1)}%` : "—", options: { align: "center" } },
+    ],
+    [
+      { text: "SPH", options: { bold: true } },
+      { text: q4.hours ? q4.sph.toFixed(3) : "—", options: { align: "center" } },
+      { text: prior.hours ? prior.sph.toFixed(3) : "—", options: { align: "center" } },
+      { text: curr.hours ? curr.sph.toFixed(3) : "—", options: { align: "center" } },
+      { text: mtd.hours ? mtd.sph.toFixed(3) : "—", options: { align: "center" } },
+    ],
+    [
+      { text: "CPS", options: { bold: true } },
+      { text: q4.hours ? `$${q4.cps.toFixed(2)}` : "—", options: { align: "center" } },
+      { text: prior.hours ? `$${prior.cps.toFixed(2)}` : "—", options: { align: "center" } },
+      { text: curr.hours ? `$${curr.cps.toFixed(2)}` : "—", options: { align: "center" } },
+      { text: mtd.hours ? `$${mtd.cps.toFixed(2)}` : "—", options: { align: "center" } },
+    ],
+  ];
+
+  slide.addTable(tableRows, {
+    x: 0.5, y: 1.3, w: 12.3,
+    colW: [2.8, 2.4, 2.4, 2.4, 2.3],
+    rowH: 0.4,
+    fontSize: 11,
+    color: virgilTheme.bodyText,
+    border: { type: "solid", pt: 0.5, color: "D1D5DB" },
+    autoPage: false,
+  });
+
+  // Scorecard section (bottom half)
+  slide.addText("Scorecard BP Comparison — Comcast provided", {
+    x: 0.5, y: 3.6, w: 12, h: 0.3,
+    fontSize: 12, color: virgilTheme.eyebrow, bold: true,
+  });
+  if (scorecardDataUrl) {
+    slide.addImage({
+      data: scorecardDataUrl,
+      x: 0.5, y: 3.95, w: 12.3, h: 3.0,
+      sizing: { type: "contain", w: 12.3, h: 3.0 },
+    });
+  } else {
+    slide.addShape("rect", {
+      x: 0.5, y: 3.95, w: 12.3, h: 3.0,
+      fill: { color: "FAFAFA" },
+      line: { color: "E5E7EB", width: 0.5, dashType: "dash" },
+    });
+    slide.addText("Scorecard not uploaded — add the Comcast scorecard PNG in the export modal", {
+      x: 0.5, y: 5.25, w: 12.3, h: 0.4,
+      fontSize: 11, color: virgilTheme.subtle, italic: true, align: "center",
+    });
   }
 }
 
