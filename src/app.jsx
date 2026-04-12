@@ -6969,6 +6969,15 @@ function VirgilMbrExportModal({ perf, coachingDetailsRaw, coachingWeeklyRaw, log
     try { localStorage.setItem("perf_intel_corp_ai_insights_v1", useAiInsights ? "true" : "false"); } catch(e) {}
   }, [useAiInsights]);
 
+  const [scorecardDataUrl, setScorecardDataUrl] = useState("");
+  const scorecardInputRef = useRef(null);
+  const handleScorecardUpload = useCallback((file) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => setScorecardDataUrl(String(e.target?.result || ""));
+    reader.readAsDataURL(file);
+  }, []);
+
   const coachingDetails = useMemo(() => parseCoachingDetails(coachingDetailsRaw), [coachingDetailsRaw]);
   const coachingWeekly = useMemo(() => parseCoachingWeekly(coachingWeeklyRaw), [coachingWeeklyRaw]);
   const loginBuckets = useMemo(() => parseLoginBuckets(loginBucketsRaw), [loginBucketsRaw]);
@@ -7011,11 +7020,12 @@ Write bullet-point style insights focused on movement vs prior, gaps vs 75% goal
       coachingDetails,
       coachingWeekly,
       loginBuckets,
+      scorecardDataUrl,
       insights: { ...(insights || {}), slide2: slide2Insights },
     });
     const safeMonth = (reportingMonth || "Virgil").replace(/[^A-Za-z0-9 _-]+/g, "");
     await pres.writeFile({ fileName: `Corp MBR - ${safeMonth}.pptx` });
-  }, [perf, reportingMonth, coachingDetails, coachingWeekly, loginBuckets, insights, useAiInsights, ollamaAvailable]);
+  }, [perf, reportingMonth, coachingDetails, coachingWeekly, loginBuckets, scorecardDataUrl, insights, useAiInsights, ollamaAvailable]);
 
   const StatusRow = ({ label, ok }) => (
     <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", fontSize: 13 }}>
@@ -7047,6 +7057,27 @@ Write bullet-point style insights focused on movement vs prior, gaps vs 75% goal
           <StatusRow label="Coaching Details CSV" ok={hasCoachingDetails} />
           <StatusRow label="Weekly Breakdown CSV" ok={hasCoachingWeekly} />
           <StatusRow label="Login Buckets CSV" ok={hasLoginBuckets} />
+        </div>
+
+        <div style={{ marginTop: 16, padding: 12, background: "#fafafa", borderRadius: 6, border: "1px solid #d1d5db" }}>
+          <div style={{ fontSize: 13, fontWeight: 600 }}>Scorecard PNG (Slide 3)</div>
+          <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>
+            {scorecardDataUrl ? "Loaded — will embed into Slide 3." : "Optional. Upload the Comcast scorecard screenshot for the reporting month."}
+          </div>
+          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+            <button onClick={() => scorecardInputRef.current?.click()}
+              style={{ padding: "6px 12px", border: "1px solid #d1d5db", background: "#fff", borderRadius: 6, cursor: "pointer", fontSize: 12 }}>
+              {scorecardDataUrl ? "Replace" : "Upload PNG"}
+            </button>
+            {scorecardDataUrl && (
+              <button onClick={() => setScorecardDataUrl("")}
+                style={{ padding: "6px 12px", border: "1px solid #d1d5db", background: "#fff", borderRadius: 6, cursor: "pointer", fontSize: 12 }}>
+                Remove
+              </button>
+            )}
+          </div>
+          <input ref={scorecardInputRef} type="file" accept=".png,.jpg,.jpeg" style={{ display: "none" }}
+            onChange={e => { if (e.target.files[0]) handleScorecardUpload(e.target.files[0]); e.target.value = ""; }} />
         </div>
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 16, padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 6, background: "#fafafa" }}>
