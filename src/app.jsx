@@ -5134,6 +5134,7 @@ function TopNav({
   const navigate = (section, program) => {
     setCurrentPage(program ? { section, program } : { section });
     setOpenMenu(null);
+    if (showToday) setShowToday(false); // navigating from Today exits Today
   };
 
   const isActive = section => currentPage.section === section;
