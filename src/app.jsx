@@ -6721,44 +6721,29 @@ function buildVirgilMyPerformanceSlide(pres, stats, loginPriorPct, loginCurrPct,
   // Bottom row
   const bottomY = 4.5;
   const bottomH = 2.3;
-  const bottomColW = 6.3;
+  const insW = 12.3;
 
-  // Outbound Coaching Attainment (left) — placeholder
-  slide.addText("Outbound Coaching Attainment", {
-    x: 0.5, y: bottomY, w: bottomColW, h: 0.3,
-    fontSize: 13, color: virgilTheme.bodyText, bold: true, align: "center",
-  });
+  // Insights — full-width bottom row
+  const insX = 0.5;
   slide.addShape("rect", {
-    x: 0.5, y: bottomY + 0.35, w: bottomColW, h: bottomH - 0.35,
-    fill: { color: "FAFAFA" },
-    line: { color: "E5E7EB", width: 0.5, dashType: "dash" },
-  });
-  slide.addText("Vendor comparison data not yet wired\n(Results / Avantive / GCS / GTS)", {
-    x: 0.5, y: bottomY + 0.9, w: bottomColW, h: 0.8,
-    fontSize: 12, color: virgilTheme.subtle, italic: true, align: "center",
-  });
-
-  // Insights (right)
-  const insX = 0.5 + bottomColW + gap;
-  slide.addShape("rect", {
-    x: insX, y: bottomY, w: bottomColW, h: 0.4,
+    x: insX, y: bottomY, w: insW, h: 0.4,
     fill: { color: "1E3A8A" }, line: { color: "1E3A8A", width: 0 },
   });
   slide.addText("Insights", {
-    x: insX, y: bottomY + 0.03, w: bottomColW, h: 0.35,
+    x: insX, y: bottomY + 0.03, w: insW, h: 0.35,
     fontSize: 14, color: "FFFFFF", bold: true, align: "center",
   });
   const bullets = (insightsText || "").split(/\n+/).map(s => s.trim()).filter(Boolean);
   if (bullets.length === 0) {
     slide.addText("Provide insights in the export modal", {
-      x: insX + 0.2, y: bottomY + 0.55, w: bottomColW - 0.4, h: bottomH - 0.6,
+      x: insX + 0.2, y: bottomY + 0.55, w: insW - 0.4, h: bottomH - 0.6,
       fontSize: 11, color: virgilTheme.subtle, italic: true, valign: "top",
     });
   } else {
     slide.addText(
       bullets.map(t => ({ text: t, options: { bullet: { code: "2022" } } })),
       {
-        x: insX + 0.2, y: bottomY + 0.55, w: bottomColW - 0.4, h: bottomH - 0.6,
+        x: insX + 0.2, y: bottomY + 0.55, w: insW - 0.4, h: bottomH - 0.6,
         fontSize: 11, color: virgilTheme.bodyText, valign: "top", paraSpaceAfter: 4,
       }
     );
