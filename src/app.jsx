@@ -10977,7 +10977,7 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
   );
 }
 
-function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total, onNav, allAgents, localAI, priorAgents, tnpsByAgent }) {
+function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total, onNav, allAgents, localAI, priorAgents, tnpsByAgent, siteFilter = null }) {
   const [tab, setTab] = useState("overview");
   const [rocFilter, setRocFilter] = useState(null); // null = all, or a specific ROC code
   const [rankSort, setRankSort] = useState({ key: "pctToGoal", dir: -1 });
@@ -11061,7 +11061,9 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
       <div style={{ background: `var(--glass-bg)`, backdropFilter: "blur(12px) saturate(150%)", WebkitBackdropFilter: "blur(12px) saturate(150%)", borderBottom: "1px solid var(--glass-border)", padding: "1rem 2.5rem", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem", flexShrink: 0 }}>
         <div>
           <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.68rem", color: `var(--text-muted)`, letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 500 }}>
-            Program {slideIndex} of {total - 1} <span style={{ display: "inline-block", width: "0.6em" }} /> {totalRowCount} records
+            {siteFilter
+              ? `${siteFilter} · ${getMbrCategory(jobType)}`
+              : <>Program {slideIndex} of {total - 1} <span style={{ display: "inline-block", width: "0.6em" }} /> {totalRowCount} records</>}
           </div>
           <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.75rem", color: `var(--text-warm)`, fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1.15, marginTop: "0.15rem" }}>
             {jobType}
