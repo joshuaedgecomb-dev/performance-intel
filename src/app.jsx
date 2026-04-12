@@ -6553,6 +6553,75 @@ function buildLoginActivitySingle(loginBuckets, monthLabel) {
   return nonZero / total;
 }
 
+// Returns a predicate accepting a YYYY-MM-DD (or M/D/Y, etc.) date string.
+// monthLabel like "Mar '26" / "Mar 26" / "March 2026" → matches year 2026, month 3.
+function makeMonthFilter(monthLabel) {
+  const m = String(monthLabel || "").trim().match(/^([A-Za-z]{3,})\s*'?(\d{2,4})$/);
+  if (!m) return () => true;
+  const mon = m[1].slice(0, 3).toLowerCase();
+  const monIdx = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12 }[mon];
+  if (!monIdx) return () => false;
+  const yr = Number(m[2].length === 4 ? m[2] : `20${m[2]}`);
+  return (dateStr) => {
+    if (!dateStr) return false;
+    const parts = String(dateStr).trim().split(/[-\/]/);
+    if (parts.length < 3) return false;
+    let y, mo;
+    if (parts[0].length === 4) { y = Number(parts[0]); mo = Number(parts[1]); }
+    else { y = Number(parts[2].length === 4 ? parts[2] : `20${parts[2]}`); mo = Number(parts[0]); }
+    return y === yr && mo === monIdx;
+  };
+}
+
+// Predicate for a fiscal-year quarter. year = 2025, qNum = 4 → Oct–Dec 2025.
+function makeQuarterFilter(year, qNum) {
+  const startMon = (qNum - 1) * 3 + 1;
+  return (dateStr) => {
+    if (!dateStr) return false;
+    const parts = String(dateStr).trim().split(/[-\/]/);
+    if (parts.length < 3) return false;
+    let y, mo;
+    if (parts[0].length === 4) { y = Number(parts[0]); mo = Number(parts[1]); }
+    else { y = Number(parts[2].length === 4 ? parts[2] : `20${parts[2]}`); mo = Number(parts[0]); }
+    return y === year && mo >= startMon && mo <= startMon + 2;
+  };
+}
+
+// Compute org-wide XI attainment %, XM attainment %, SPH, CPS for a filtered agent dataset.
+// agentRaw / goalsRaw are the full CSVs; dateFilter(dateStr) → boolean tells which rows to include.
+// Returns numeric metrics (fractions for % fields, e.g. 0.943 = 94.3%).
+function computeCorpAttainment(agentRaw, goalsRaw, dateFilter) {
+  if (!agentRaw || !agentRaw.trim()) {
+    return { xiPct: 0, xmPct: 0, sph: 0, cps: 0, sales: 0, hours: 0, xiPlan: 0, xmPlan: 0, hoursPlan: 0 };
+  }
+  const agentRows = parseCSV(agentRaw);
+  const goalsRows = goalsRaw && goalsRaw.trim() ? parseCSV(goalsRaw) : [];
+  let hours = 0, sales = 0, xi = 0, xm = 0;
+  for (const r of agentRows) {
+    const d = (r["Date"] || "").trim();
+    if (dateFilter && !dateFilter(d)) continue;
+    hours += Number(r["Hours"]) || 0;
+    sales += Number(r["Goals"]) || 0;
+    xi += Number(r["New XI"]) || 0;
+    xm += Number(r["XM Lines"]) || 0;
+  }
+  let xiPlan = 0, xmPlan = 0, hoursPlan = 0;
+  for (const r of goalsRows) {
+    hoursPlan += Number(r["Hours Goal"]) || 0;
+    xiPlan += Number(r["HSD GOAL"] || r["HSD Sell In Goal"]) || 0;
+    xmPlan += Number(r["XM GOAL"] || r["XM Sell In Goal"]) || 0;
+  }
+  const sph = hours ? sales / hours : 0;
+  const cps = sales ? (hours * 19.77) / sales : (hours * 19.77);
+  return {
+    xiPct: xiPlan ? xi / xiPlan : 0,
+    xmPct: xmPlan ? xm / xmPlan : 0,
+    sph,
+    cps,
+    sales, hours, xi, xm, xiPlan, xmPlan, hoursPlan,
+  };
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // CORP MBR — Brand Helpers
 // ═══════════════════════════════════════════════════════════════════
