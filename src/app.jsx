@@ -10983,7 +10983,6 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
 
   const hasSupervisors = agents.some(a => a.supervisor);
   const hasWeeklyData  = agents.some(a => a.weekNum);
-  const hasMultipleSites = regions.length > 1;
 
   // ROC/funding drilldown options
   const rocOptions = useMemo(() => {
@@ -10998,7 +10997,6 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
   }, [goalEntry]);
   const tabs = [
     "overview",
-    ...(hasMultipleSites ? ["bysite"] : []),
     "agents",
     ...(hasSupervisors || hasWeeklyData ? ["teams"] : []),
     ...(goalLookup ? ["goals"] : []),
@@ -11041,7 +11039,7 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
           {tabs.map(t => (
             <button key={t} onClick={() => setTab(t)}
               style={{ padding: "0.4rem 0.8rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${tab===t?"#d9770650":"var(--text-faint)"}`, background: tab===t?"#d9770612":"transparent", color: tab===t?"#d97706":`var(--text-muted)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", cursor: "pointer", textTransform: "capitalize", fontWeight: tab===t ? 600 : 400, transition: "all 200ms cubic-bezier(0.4,0,0.2,1)" }}>
-              {t === "overview" ? "Overview" : t === "bysite" ? "By Site" : t === "agents" ? "All Agents" : t === "teams" ? "Teams" : t === "goals" ? "Ranking" : t === "daily" ? "Daily" : t}
+              {t === "overview" ? "Overview" : t === "agents" ? "All Agents" : t === "teams" ? "Teams" : t === "goals" ? "Ranking" : t === "daily" ? "Daily" : t}
             </button>
           ))}
         </div>
@@ -11393,30 +11391,6 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
             </div>
           </div>
         )}
-
-        {/* ── BY SITE TAB (program-level) ── */}
-        {tab === "bysite" && hasMultipleSites && (() => {
-          // Group regions into site buckets: XOTM = BZ, everything else = DR
-          const bzRegs = regions.filter(r => r.name.toUpperCase().includes("XOTM")).map(r => r.name);
-          const drRegs = regions.filter(r => !r.name.toUpperCase().includes("XOTM")).map(r => r.name);
-          const siteBuckets = [];
-          if (drRegs.length > 0) siteBuckets.push({ label: drRegs.length === 1 ? drRegs[0] : "DR", regions: drRegs });
-          if (bzRegs.length > 0) siteBuckets.push({ label: "BZ", regions: bzRegs });
-
-          return (
-            <ProgramBySiteTab
-              agents={agents}
-              regions={regions}
-              siteBuckets={siteBuckets}
-              jobType={jobType}
-              goalEntry={goalEntry}
-              goalLookup={goalLookup}
-              fiscalInfo={fiscalInfo}
-              newHireSet={newHireSet}
-              localAI={localAI}
-            />
-          );
-        })()}
 
         {/* ── REGIONS TAB ── */}
         {/* ── AGENTS TAB ── */}
