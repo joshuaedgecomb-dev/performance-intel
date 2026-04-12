@@ -6611,10 +6611,32 @@ function makeQuarterFilter(year, qNum) {
   };
 }
 
+// Returns a predicate for filtering goals-CSV rows by their "Month" column.
+// monthLabel like "Mar '26" / "March 2026" → matches rows where Month starts with "Mar".
+function makeGoalsMonthFilter(monthLabel) {
+  const m = String(monthLabel || "").trim().match(/^([A-Za-z]{3,})/);
+  if (!m) return () => true;
+  const mon3 = m[1].slice(0, 3).toLowerCase();
+  return (row) => {
+    const rowMon = String(row["Month"] || "").trim().slice(0, 3).toLowerCase();
+    return rowMon === mon3;
+  };
+}
+
+// Returns a predicate for filtering goals-CSV rows by Quarter column (Q1-Q4).
+function makeGoalsQuarterFilter(qStr) {
+  const q = String(qStr || "").toUpperCase();
+  return (row) => {
+    const rowQ = String(row["Quarter"] || "").toUpperCase().trim();
+    return rowQ === q;
+  };
+}
+
 // Compute org-wide XI attainment %, XM attainment %, SPH, CPS for a filtered agent dataset.
 // agentRaw / goalsRaw are the full CSVs; dateFilter(dateStr) → boolean tells which rows to include.
+// goalsMonthFilter(row) → boolean filters goals rows by month (prevents multi-month over-counting).
 // Returns numeric metrics (fractions for % fields, e.g. 0.943 = 94.3%).
-function computeCorpAttainment(agentRaw, goalsRaw, dateFilter) {
+function computeCorpAttainment(agentRaw, goalsRaw, dateFilter, goalsMonthFilter) {
   if (!agentRaw || !agentRaw.trim()) {
     return { xiPct: 0, xmPct: 0, sph: 0, cps: 0, sales: 0, hours: 0, xiPlan: 0, xmPlan: 0, hoursPlan: 0 };
   }
@@ -6631,6 +6653,8 @@ function computeCorpAttainment(agentRaw, goalsRaw, dateFilter) {
   }
   let xiPlan = 0, xmPlan = 0, hoursPlan = 0;
   for (const r of goalsRows) {
+    // Apply goals month filter if provided — goals CSV has a "Month" column like "March"/"April"
+    if (goalsMonthFilter && !goalsMonthFilter(r)) continue;
     hoursPlan += Number(r["Hours Goal"]) || 0;
     xiPlan += Number(r["HSD GOAL"] || r["HSD Sell In Goal"]) || 0;
     xmPlan += Number(r["XM GOAL"] || r["XM Sell In Goal"]) || 0;
@@ -7124,105 +7148,200 @@ function buildVirgilMyPerformanceSlide(pres, stats, loginBuckets, priorPriorMont
   }
 }
 
-function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, priorGoalsRaw, priorQuarterAgentRaw, priorQuarterGoalsRaw, reportingMonthLabel, scorecardDataUrl) {
+function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, priorGoalsRaw, priorQuarterAgentRaw, priorQuarterGoalsRaw, reportingMonthLabel, scorecardDataUrl, vendorScores) {
   const slide = pres.addSlide();
   slide.background = { color: virgilTheme.slideBg };
   virgilBrandBars(pres, slide);
 
-  // Eyebrow + title
   slide.addText("OPERATIONAL PERFORMANCE", {
     x: 0.5, y: 0.35, w: 6, h: 0.25,
     fontSize: 10, color: virgilTheme.eyebrow, bold: true, charSpacing: 2,
   });
-  slide.addText("Global Callcenter Solutions | All-in Attainment", {
+  slide.addText(`Global Callcenter Solutions | All-in Attainment — ${reportingMonthLabel}`, {
     x: 0.5, y: 0.65, w: 12, h: 0.5,
-    fontSize: 24, color: virgilTheme.bodyText, bold: true,
+    fontSize: 22, color: virgilTheme.bodyText, bold: true,
   });
 
-  // Time period labels
-  const priorKey = getPriorMonthLabel(reportingMonthLabel);
-  const monthParts = String(reportingMonthLabel || "").trim().match(/^([A-Za-z]{3,})\s*'?(\d{2,4})$/);
-  const year = monthParts ? Number(monthParts[2].length === 4 ? monthParts[2] : `20${monthParts[2]}`) : new Date().getFullYear();
-  const q4Label = `Q4 ${year - 1}`;
-  const mtdLabel = getNextMonthLabel(reportingMonthLabel);
+  // Time periods: Q4 / (R-2) / (R-1) / R as MTD
+  const prior1 = getPriorMonthLabel(reportingMonthLabel);   // R-1
+  const prior2 = getPriorMonthLabel(prior1);                 // R-2
+  const yrMatch = String(reportingMonthLabel || "").trim().match(/^([A-Za-z]{3,})\s*'?(\d{2,4})$/);
+  const reportYear = yrMatch ? Number(yrMatch[2].length === 4 ? yrMatch[2] : `20${yrMatch[2]}`) : new Date().getFullYear();
+  const q4Label = `Q4 ${reportYear - 1}`;
 
-  // Compute values
-  const q4 = computeCorpAttainment(priorQuarterAgentRaw, priorQuarterGoalsRaw, makeQuarterFilter(year - 1, 4));
-  const prior = computeCorpAttainment(priorAgentRaw, priorGoalsRaw, makeMonthFilter(priorKey));
-  const curr = computeCorpAttainment(agentRaw, goalsRaw, makeMonthFilter(reportingMonthLabel));
-  const mtd = computeCorpAttainment(agentRaw, goalsRaw, makeMonthFilter(mtdLabel));
+  // Compute all 4 periods
+  const q4 = computeCorpAttainment(priorQuarterAgentRaw, priorQuarterGoalsRaw,
+    makeQuarterFilter(reportYear - 1, 4), makeGoalsQuarterFilter("Q4"));
+  const colP2 = computeCorpAttainment(priorAgentRaw, priorGoalsRaw,
+    makeMonthFilter(prior2), makeGoalsMonthFilter(prior2));
+  const colP1 = computeCorpAttainment(priorAgentRaw, priorGoalsRaw,
+    makeMonthFilter(prior1), makeGoalsMonthFilter(prior1));
+  const colMtd = computeCorpAttainment(agentRaw, goalsRaw,
+    makeMonthFilter(reportingMonthLabel), makeGoalsMonthFilter(reportingMonthLabel));
 
-  // 4-column comparison table
-  const tableRows = [
-    [
-      { text: "", options: { fill: { color: "F3F4F6" }, bold: true } },
-      { text: q4Label, options: { fill: { color: "EDE9FE" }, bold: true, align: "center" } },
-      { text: priorKey, options: { fill: { color: "E9D5FF" }, bold: true, align: "center" } },
-      { text: reportingMonthLabel, options: { fill: { color: "DBEAFE" }, bold: true, align: "center" } },
-      { text: `${mtdLabel} MTD`, options: { fill: { color: "FEF3C7" }, bold: true, align: "center" } },
-    ],
-    [
-      { text: "XI Attainment", options: { bold: true } },
-      { text: q4.xiPlan ? `${(q4.xiPct * 100).toFixed(1)}%` : "—", options: { align: "center" } },
-      { text: prior.xiPlan ? `${(prior.xiPct * 100).toFixed(1)}%` : "—", options: { align: "center" } },
-      { text: curr.xiPlan ? `${(curr.xiPct * 100).toFixed(1)}%` : "—", options: { align: "center" } },
-      { text: mtd.xiPlan ? `${(mtd.xiPct * 100).toFixed(1)}%` : "—", options: { align: "center" } },
-    ],
-    [
-      { text: "XM Attainment", options: { bold: true } },
-      { text: q4.xmPlan ? `${(q4.xmPct * 100).toFixed(1)}%` : "—", options: { align: "center" } },
-      { text: prior.xmPlan ? `${(prior.xmPct * 100).toFixed(1)}%` : "—", options: { align: "center" } },
-      { text: curr.xmPlan ? `${(curr.xmPct * 100).toFixed(1)}%` : "—", options: { align: "center" } },
-      { text: mtd.xmPlan ? `${(mtd.xmPct * 100).toFixed(1)}%` : "—", options: { align: "center" } },
-    ],
-    [
-      { text: "SPH", options: { bold: true } },
-      { text: q4.hours ? q4.sph.toFixed(3) : "—", options: { align: "center" } },
-      { text: prior.hours ? prior.sph.toFixed(3) : "—", options: { align: "center" } },
-      { text: curr.hours ? curr.sph.toFixed(3) : "—", options: { align: "center" } },
-      { text: mtd.hours ? mtd.sph.toFixed(3) : "—", options: { align: "center" } },
-    ],
-    [
-      { text: "CPS", options: { bold: true } },
-      { text: q4.hours ? `$${q4.cps.toFixed(2)}` : "—", options: { align: "center" } },
-      { text: prior.hours ? `$${prior.cps.toFixed(2)}` : "—", options: { align: "center" } },
-      { text: curr.hours ? `$${curr.cps.toFixed(2)}` : "—", options: { align: "center" } },
-      { text: mtd.hours ? `$${mtd.cps.toFixed(2)}` : "—", options: { align: "center" } },
-    ],
-  ];
+  // Colors
+  const barCol = "1E3A8A";       // navy for first 3
+  const barColMtd = "7C3AED";    // purple for MTD
+  const goalCol = "16A34A";      // green goal line
+  const plotBg = "FAFAFA";
+  const plotBorder = "E5E7EB";
+  const labels = [q4Label, prior2, prior1, `${reportingMonthLabel} MTD`];
 
-  slide.addTable(tableRows, {
-    x: 0.5, y: 1.3, w: 12.3,
-    colW: [2.8, 2.4, 2.4, 2.4, 2.3],
-    rowH: 0.4,
-    fontSize: 11,
-    color: virgilTheme.bodyText,
-    border: { type: "solid", pt: 0.5, color: "D1D5DB" },
-    autoPage: false,
-  });
-
-  // Scorecard section (bottom half)
-  slide.addText("Scorecard BP Comparison — Comcast provided", {
-    x: 0.5, y: 3.6, w: 12, h: 0.3,
-    fontSize: 12, color: virgilTheme.eyebrow, bold: true,
-  });
-  if (scorecardDataUrl) {
-    slide.addImage({
-      data: scorecardDataUrl,
-      x: 0.5, y: 3.95, w: 12.3, h: 3.0,
-      sizing: { type: "contain", w: 12.3, h: 3.0 },
+  // Chart-drawing helper
+  const drawChart = (x, y, w, h, title, values, format, goalVal) => {
+    // Title
+    slide.addText(title, {
+      x, y, w, h: 0.3,
+      fontSize: 12, color: virgilTheme.bodyText, bold: true, align: "center",
     });
-  } else {
+    // Plot area
+    const axisX = x + 0.35;
+    const axisY = y + 0.35;
+    const axisW = w - 0.5;
+    const axisH = h - 0.8;
     slide.addShape("rect", {
-      x: 0.5, y: 3.95, w: 12.3, h: 3.0,
-      fill: { color: "FAFAFA" },
-      line: { color: "E5E7EB", width: 0.5, dashType: "dash" },
+      x: axisX, y: axisY, w: axisW, h: axisH,
+      fill: { color: plotBg }, line: { color: plotBorder, width: 0.5 },
     });
-    slide.addText("Scorecard not uploaded — add the Comcast scorecard PNG in the export modal", {
-      x: 0.5, y: 5.25, w: 12.3, h: 0.4,
-      fontSize: 11, color: virgilTheme.subtle, italic: true, align: "center",
+    // Scale: find the max value across present values + goal for y-axis fit
+    const present = values.filter(v => v !== null && v !== undefined && !isNaN(v));
+    const effMax = Math.max(...present, goalVal != null ? goalVal : 0, 0.001);
+    const scaleMax = effMax * 1.15; // headroom
+    const valToY = (v) => axisY + axisH - (Math.max(0, v) / scaleMax) * axisH;
+    // Goal line (green dashed) if provided
+    if (goalVal != null) {
+      const gy = valToY(goalVal);
+      slide.addShape("line", {
+        x: axisX, y: gy, w: axisW, h: 0,
+        line: { color: goalCol, width: 1.5, dashType: "dash" },
+      });
+    }
+    // Bars
+    const barW = axisW * 0.16;
+    const slotW = axisW / values.length;
+    values.forEach((v, i) => {
+      if (v === null || v === undefined || isNaN(v)) return;
+      const barX = axisX + slotW * i + (slotW - barW) / 2;
+      const barY = valToY(v);
+      const barH = axisY + axisH - barY;
+      const color = i === values.length - 1 ? barColMtd : barCol;
+      slide.addShape("rect", {
+        x: barX, y: barY, w: barW, h: barH,
+        fill: { color }, line: { type: "none" },
+      });
+      slide.addText(format(v), {
+        x: barX - 0.1, y: barY + 0.05, w: barW + 0.2, h: 0.25,
+        fontSize: 9, color: "FFFFFF", bold: true, align: "center",
+      });
+    });
+    // X-axis labels
+    labels.forEach((lbl, i) => {
+      const lblX = axisX + slotW * i;
+      slide.addText(lbl, {
+        x: lblX, y: axisY + axisH + 0.05, w: slotW, h: 0.22,
+        fontSize: 8, color: virgilTheme.subtle, align: "center",
+      });
+    });
+  };
+
+  // Top row — 3 charts
+  const topY = 1.35;
+  const chartH = 2.4;
+  const chartW = 4.1;
+  const col1X = 0.5;
+  const col2X = 4.7;
+  const col3X = 8.9;
+
+  drawChart(col1X, topY, chartW, chartH, "XI Attainment",
+    [q4.xiPct, colP2.xiPct, colP1.xiPct, colMtd.xiPct].map(v => v || 0),
+    v => `${(v * 100).toFixed(0)}%`, 1.0);
+  drawChart(col2X, topY, chartW, chartH, "XM Attainment",
+    [q4.xmPct, colP2.xmPct, colP1.xmPct, colMtd.xmPct].map(v => v || 0),
+    v => `${(v * 100).toFixed(0)}%`, 1.0);
+  drawChart(col3X, topY, chartW, chartH, "SPH Attainment",
+    [q4.sph, colP2.sph, colP1.sph, colMtd.sph],
+    v => v.toFixed(2), null);
+
+  // Bottom row — 3 panels (CPS, Scorecard, Insights)
+  const botY = 4.0;
+  const botH = 2.4;
+
+  drawChart(col1X, botY, chartW, botH, "CPS Attainment",
+    [q4.cps, colP2.cps, colP1.cps, colMtd.cps],
+    v => `$${v.toFixed(0)}`, null);
+
+  // Scorecard by BP (4-bar chart from manual vendor scores)
+  const vendors = ["Results", "GTCX", "GCS", "Avantive"];
+  const vendorVals = vendors.map(v => {
+    const n = Number((vendorScores || {})[v]);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  });
+  {
+    const x = col2X, y = botY, w = chartW, h = botH;
+    const title = "Scorecard by BP";
+    slide.addText(title, {
+      x, y, w, h: 0.3,
+      fontSize: 12, color: virgilTheme.bodyText, bold: true, align: "center",
+    });
+    const axisX = x + 0.35;
+    const axisY = y + 0.35;
+    const axisW = w - 0.5;
+    const axisH = h - 0.8;
+    slide.addShape("rect", {
+      x: axisX, y: axisY, w: axisW, h: axisH,
+      fill: { color: plotBg }, line: { color: plotBorder, width: 0.5 },
+    });
+    const present = vendorVals.filter(v => v > 0);
+    const effMax = Math.max(...present, 0.001);
+    const scaleMax = effMax * 1.15;
+    const barW = axisW * 0.16;
+    const slotW = axisW / vendorVals.length;
+    vendorVals.forEach((v, i) => {
+      if (!v) return;
+      const barX = axisX + slotW * i + (slotW - barW) / 2;
+      const barY = axisY + axisH - (v / scaleMax) * axisH;
+      const h2 = axisY + axisH - barY;
+      const color = vendors[i] === "GCS" ? barColMtd : barCol;
+      slide.addShape("rect", {
+        x: barX, y: barY, w: barW, h: h2,
+        fill: { color }, line: { type: "none" },
+      });
+      slide.addText(v.toFixed(3), {
+        x: barX - 0.1, y: barY + 0.05, w: barW + 0.2, h: 0.25,
+        fontSize: 9, color: "FFFFFF", bold: true, align: "center",
+      });
+    });
+    vendors.forEach((lbl, i) => {
+      const lblX = axisX + slotW * i;
+      slide.addText(lbl, {
+        x: lblX, y: axisY + axisH + 0.05, w: slotW, h: 0.22,
+        fontSize: 8, color: virgilTheme.subtle, align: "center",
+      });
     });
   }
+
+  // Insights panel (right)
+  const insX = col3X;
+  slide.addShape("rect", {
+    x: insX, y: botY, w: chartW, h: 0.4,
+    fill: { color: "1E3A8A" }, line: { type: "none" },
+  });
+  slide.addText("Insights", {
+    x: insX, y: botY + 0.03, w: chartW, h: 0.35,
+    fontSize: 14, color: "FFFFFF", bold: true, align: "center",
+  });
+  slide.addText("Provide insights in the export modal", {
+    x: insX + 0.2, y: botY + 0.5, w: chartW - 0.4, h: botH - 0.55,
+    fontSize: 11, color: virgilTheme.subtle, italic: true, valign: "top",
+  });
+
+  // Footer legend
+  const legY = 6.55;
+  slide.addShape("rect", { x: 4.2, y: legY + 0.05, w: 0.25, h: 0.15, fill: { color: barCol }, line: { type: "none" } });
+  slide.addText("Company", { x: 4.5, y: legY, w: 1.0, h: 0.25, fontSize: 10, color: virgilTheme.bodyText });
+  slide.addText("---  Goal", { x: 5.6, y: legY, w: 1.0, h: 0.25, fontSize: 10, color: goalCol, italic: true });
+  slide.addShape("rect", { x: 6.7, y: legY + 0.05, w: 0.25, h: 0.15, fill: { color: barColMtd }, line: { type: "none" } });
+  slide.addText("MTD", { x: 7.0, y: legY, w: 1.0, h: 0.25, fontSize: 10, color: virgilTheme.bodyText });
 }
 
 function buildCorpQuartileSlide(pres, agentRaw, goalsRaw, newHiresRaw, reportingMonthLabel) {
@@ -7475,7 +7594,8 @@ function buildVirgilMbrPresentation(perf, options) {
     options.agentRaw || "", options.goalsRaw || "",
     options.priorAgentRaw || "", options.priorGoalsRaw || "",
     options.priorQuarterAgentRaw || "", options.priorQuarterGoalsRaw || "",
-    options.reportingMonthLabel, options.scorecardDataUrl || "");
+    options.reportingMonthLabel, options.scorecardDataUrl || "",
+    options.vendorScores || {});
 
   // Slide 4 — Quartile Reporting
   buildCorpQuartileSlide(pres,
@@ -7568,6 +7688,7 @@ function VirgilMbrExportModal({
   }, [useAiInsights]);
 
   const [scorecardDataUrl, setScorecardDataUrl] = useState("");
+  const [vendorScores, setVendorScores] = useState({ Results: "", GTCX: "", GCS: "", Avantive: "" });
   const scorecardInputRef = useRef(null);
   const handleScorecardUpload = useCallback((file) => {
     if (!file) return;
@@ -7626,11 +7747,12 @@ Write bullet-point style insights focused on movement vs prior, gaps vs 75% goal
       priorQuarterAgentRaw: priorQuarterAgentRaw || "",
       priorQuarterGoalsRaw: priorQuarterGoalsRaw || "",
       scorecardDataUrl,
+      vendorScores,
       insights: { ...(insights || {}), slide2: slide2Insights },
     });
     const safeMonth = (reportingMonth || "Virgil").replace(/[^A-Za-z0-9 _-]+/g, "");
     await pres.writeFile({ fileName: `Corp MBR - ${safeMonth}.pptx` });
-  }, [perf, reportingMonth, coachingDetails, coachingWeekly, loginBuckets, rawAgentCsv, goalsRaw, priorMonthRaw, priorMonthGoalsRaw, newHiresRaw, priorQuarterAgentRaw, priorQuarterGoalsRaw, scorecardDataUrl, insights, useAiInsights, ollamaAvailable]);
+  }, [perf, reportingMonth, coachingDetails, coachingWeekly, loginBuckets, rawAgentCsv, goalsRaw, priorMonthRaw, priorMonthGoalsRaw, newHiresRaw, priorQuarterAgentRaw, priorQuarterGoalsRaw, scorecardDataUrl, vendorScores, insights, useAiInsights, ollamaAvailable]);
 
   const StatusRow = ({ label, ok }) => (
     <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", fontSize: 13 }}>
@@ -7686,6 +7808,24 @@ Write bullet-point style insights focused on movement vs prior, gaps vs 75% goal
           </div>
           <input ref={scorecardInputRef} type="file" accept=".png,.jpg,.jpeg" style={{ display: "none" }}
             onChange={e => { if (e.target.files[0]) handleScorecardUpload(e.target.files[0]); e.target.value = ""; }} />
+        </div>
+
+        <div style={{ marginTop: 12, padding: 12, background: "#fafafa", borderRadius: 6, border: "1px solid #d1d5db" }}>
+          <div style={{ fontSize: 13, fontWeight: 600 }}>BP Scorecard Totals (Slide 3 chart)</div>
+          <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>
+            Type each vendor's TTL SCR from the Comcast scorecard. Empty = no bar rendered.
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, marginTop: 8 }}>
+            {["Results", "GTCX", "GCS", "Avantive"].map(v => (
+              <label key={v} style={{ fontSize: 11, color: "#374151" }}>
+                {v}
+                <input type="number" step="0.001"
+                  value={vendorScores[v]}
+                  onChange={e => setVendorScores({ ...vendorScores, [v]: e.target.value })}
+                  style={{ display: "block", width: "100%", padding: 6, border: "1px solid #d1d5db", borderRadius: 4, marginTop: 2, fontSize: 12 }} />
+              </label>
+            ))}
+          </div>
         </div>
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 16, padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 6, background: "#fafafa" }}>
