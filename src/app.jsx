@@ -4992,6 +4992,49 @@ function SiteDropdown({ site, programs, attainment, projAttainment, currentProgr
   );
 }
 
+// ── SettingsMenu — overflow menu with actions, data, settings ───────────────
+// MenuSection / MenuRow hoisted to module scope so they aren't recreated on
+// every SettingsMenu render (would cause unmount/remount of the subtree).
+function MenuSection({ label }) {
+  return (
+    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.65rem", color: "var(--text-dim)", letterSpacing: "0.1em", textTransform: "uppercase", padding: "8px 14px 4px", fontWeight: 600 }}>
+      {label}
+    </div>
+  );
+}
+function MenuRow({ icon, label, hint, onClick }) {
+  return (
+    <button onClick={onClick} role="menuitem"
+      onMouseEnter={e => { e.currentTarget.style.background = "var(--bg-secondary)"; }}
+      onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+      style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", padding: "7px 14px", border: "none", background: "transparent", color: "var(--text-primary)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", cursor: "pointer", textAlign: "left" }}>
+      <span>{icon} {label}</span>
+      {hint && <span style={{ fontFamily: "var(--font-data, monospace)", fontSize: "0.7rem", color: "var(--text-dim)" }}>{hint}</span>}
+    </button>
+  );
+}
+function SettingsMenu({ onExportMbr, onRefresh, onUploadGoals, onUploadRoster, onUploadPriorGoals, onOpenSettings, ollamaAvailable, localAI, onToggleLocalAI }) {
+  return (
+    <div role="menu" aria-label="Settings and actions"
+      style={{ position: "absolute", top: "calc(100% + 4px)", right: 0, minWidth: 240, background: "var(--bg-tertiary)", border: "1px solid var(--border)", borderRadius: "var(--radius-md, 10px)", boxShadow: "0 12px 32px rgba(0,0,0,0.35)", padding: "6px 0", zIndex: 250 }}>
+      <MenuSection label="Actions" />
+      <MenuRow icon="📊" label="Export MBR" hint="monthly" onClick={onExportMbr} />
+      <MenuRow icon="🔄" label="Refresh from sheet" onClick={onRefresh} />
+      <div style={{ borderTop: "1px solid var(--border-muted)", margin: "4px 0" }} />
+      <MenuSection label="Data" />
+      <MenuRow icon="📁" label="Upload Goals CSV" onClick={onUploadGoals} />
+      <MenuRow icon="📁" label="Upload Roster CSV" onClick={onUploadRoster} />
+      <MenuRow icon="📁" label="Upload Prior Goals" onClick={onUploadPriorGoals} />
+      <div style={{ borderTop: "1px solid var(--border-muted)", margin: "4px 0" }} />
+      <MenuSection label="Settings" />
+      <MenuRow icon="⚙" label="Data sources" onClick={onOpenSettings} />
+      {ollamaAvailable && (
+        <MenuRow icon="🤖" label="Local AI" hint={localAI ? "on" : "off"} onClick={onToggleLocalAI} />
+      )}
+    </div>
+  );
+}
+
 
 // ══════════════════════════════════════════════════════════════════════════════
 // SECTION 11.5 — MBR PPTX EXPORT
