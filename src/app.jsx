@@ -14121,7 +14121,7 @@ export default function App() {
           <TodayView recentAgentNames={recentAgentNames} historicalAgentMap={historicalAgentMap} goalLookup={perf.goalLookup} />
         ) : sheetLoading && !rawData ? (
           <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "var(--bg-primary)", animation: "fadeIn 0.4s ease" }}>
-            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "var(--text-muted)", letterSpacing: "0.1em", marginBottom: "1.25rem", fontWeight: 500 }}>LOADING FROM GOOGLE SHEETS</div>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "var(--text-muted)", letterSpacing: "0.1em", marginBottom: "1.25rem", fontWeight: 500 }}>LOADING</div>
             <div style={{ width: "180px", height: "2px", background: "var(--border)", borderRadius: "2px", overflow: "hidden" }}>
               <div style={{ width: "40%", height: "100%", background: "linear-gradient(90deg, #d97706, #f59e0b)", borderRadius: "2px", animation: "shimmer 1.5s ease-in-out infinite" }} />
             </div>
