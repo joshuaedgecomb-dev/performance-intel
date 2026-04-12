@@ -6354,6 +6354,120 @@ async function generateMBR(perf, onProgress, { includeAI = true } = {}) {
   return filename;
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// VIRGIL MBR — Parsers
+// ═══════════════════════════════════════════════════════════════════
+
+function parseCoachingDetails(rawCsv) {
+  if (!rawCsv || !rawCsv.trim()) return {};
+  const rows = parseCSV(rawCsv);
+  const byMonth = {};
+  for (const r of rows) {
+    const measure = (r["Measure Names"] || "").trim();
+    const month = (r["Fiscal Month"] || "").trim();
+    const rawVal = r["Measure Values"];
+    if (!measure || !month) continue;
+    const n = Number(rawVal);
+    if (!byMonth[month]) byMonth[month] = {};
+    byMonth[month][measure] = Number.isFinite(n) ? n : rawVal;
+  }
+  return byMonth;
+}
+
+function parseCoachingWeekly(rawCsv) {
+  if (!rawCsv || !rawCsv.trim()) return [];
+  const rows = parseCSV(rawCsv);
+  return rows.map(r => {
+    const nameField = (r["Name or NT"] || "").trim();
+    const pipeIdx = nameField.lastIndexOf("|");
+    const displayName = pipeIdx >= 0 ? nameField.slice(0, pipeIdx).trim() : nameField;
+    const bpRaw = pipeIdx >= 0 ? nameField.slice(pipeIdx + 1).trim() : "";
+    const ntid = bpRaw.replace(/^BP-/i, "").trim();
+    return {
+      displayName,
+      ntid,
+      fiscalMonth: (r["Fiscal Month"] || "").trim(),
+      fiscalWeek: (r["new calc"] || "").trim(),
+      sessions: Number(r["Coaching Sessions  (copy)"]) || 0,
+      colorWb: (r["Color WB"] || "").trim(),
+      manager: (r["Manager"] || "").trim(),
+      supervisor: (r["Supervisor."] || "").trim(),
+    };
+  });
+}
+
+function parseLoginBuckets(rawCsv) {
+  if (!rawCsv || !rawCsv.trim()) return {};
+  const rows = parseCSV(rawCsv);
+  const byMonth = {};
+  for (const r of rows) {
+    const bucket = (r["User Login Bucket (Alternative)"] || "").trim();
+    const month = (r["Month vs Week View Label"] || "").trim();
+    const measure = (r["Measure Names"] || "").trim();
+    const value = Number(r["Measure Values"]);
+    if (!bucket || !month || !measure) continue;
+    if (!byMonth[month]) byMonth[month] = {};
+    if (!byMonth[month][bucket]) byMonth[month][bucket] = { pct: 0, users: 0 };
+    if (measure === "% of Total") byMonth[month][bucket].pct = value;
+    else if (measure === "Total Users") byMonth[month][bucket].users = value;
+  }
+  return byMonth;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// VIRGIL MBR — Aggregators
+// ═══════════════════════════════════════════════════════════════════
+
+// Converts a "Mar '26" / "Mar 26" style fiscal-month label to a canonical form.
+function normalizeVirgilMonthKey(s) {
+  if (!s) return "";
+  return s.replace(/['"`]/g, "").replace(/\s+/g, " ").trim();
+}
+
+// Returns { org: {coachingPct, acknowledgePct, totalSessions}, dr: {...}, bz: {...} }
+// Org values come from coachingDetails (authoritative monthly totals).
+// DR/BZ splits come from weekly rows joined to bpLookup.
+function buildCoachingStats(coachingDetails, coachingWeekly, bpLookup, reportingMonthLabel) {
+  const key = normalizeVirgilMonthKey(reportingMonthLabel);
+  const monthBucket = coachingDetails[reportingMonthLabel] || coachingDetails[key] || {};
+  const org = {
+    coachingPct: Number(monthBucket["% Coached"]) || 0,
+    acknowledgePct: Number(monthBucket["Acknowledged %"] || monthBucket["Acknowledged % "]) || 0,
+    totalSessions: Number(monthBucket["Total Sessions"]) || 0,
+  };
+  const dr = { eligible: 0, attained: 0, sessions: 0 };
+  const bz = { eligible: 0, attained: 0, sessions: 0 };
+  for (const row of coachingWeekly || []) {
+    if (normalizeVirgilMonthKey(row.fiscalMonth) !== key) continue;
+    if (row.colorWb === "No Coaching Required") continue;
+    const bp = bpLookup && row.ntid ? bpLookup[row.ntid] : null;
+    const region = bp ? (bp.region || "").toUpperCase() : "";
+    const site = region.includes("XOTM") ? "BZ" : (region ? "DR" : null);
+    if (!site) continue;
+    const target = site === "DR" ? dr : bz;
+    target.eligible += 1;
+    if (row.sessions >= 1) target.attained += 1;
+    target.sessions += row.sessions;
+  }
+  const siteSummary = (s) => ({
+    coachingPct: s.eligible ? s.attained / s.eligible : 0,
+    acknowledgePct: 0, // weekly CSV has no acknowledgement signal — blank for site split
+    totalSessions: s.sessions,
+  });
+  return { org, dr: siteSummary(dr), bz: siteSummary(bz) };
+}
+
+// Returns an array of { bucket, pct, users } for the reporting month, in canonical bucket order.
+function buildLoginDistribution(loginBuckets, reportingMonthLabel) {
+  const order = ["0-3", "4-7", "8-15", "16-20+"];
+  const monthBucket = loginBuckets[reportingMonthLabel] || {};
+  return order.map(b => ({
+    bucket: b,
+    pct: (monthBucket[b] && monthBucket[b].pct) || 0,
+    users: (monthBucket[b] && monthBucket[b].users) || 0,
+  }));
+}
+
 function MbrExportModal({ perf, onClose }) {
   const [state, setState] = useState("confirm");
   const [progress, setProgress] = useState("");
