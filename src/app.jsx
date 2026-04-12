@@ -6428,8 +6428,8 @@ function normalizeLoginBucket(raw) {
 function normalizeLoginMonth(raw) {
   if (!raw) return "";
   const s = String(raw).trim();
-  // Canonical "Oct 25" / "Oct '25"
-  if (/^[A-Za-z]{3,} ?'?\d{2}$/.test(s)) return s;
+  // Canonical "Oct 25" / "Oct '25" — always strip apostrophe for consistent keys
+  if (/^[A-Za-z]{3,} ?'?\d{2}$/.test(s)) return s.replace(/'/g, "");
   // "25-Oct" / "25-October"
   const m = s.match(/^(\d{1,4})-([A-Za-z]{3,})$/);
   if (m) {
@@ -6526,7 +6526,7 @@ function buildCoachingStats(coachingDetails, coachingWeekly, bpLookup, reporting
 // Returns an array of { bucket, pct, users } for the reporting month, in canonical bucket order.
 function buildLoginDistribution(loginBuckets, reportingMonthLabel) {
   const order = ["0-3", "4-7", "8-15", "16-20+"];
-  const monthBucket = loginBuckets[reportingMonthLabel] || {};
+  const monthBucket = loginBuckets[normalizeVirgilMonthKey(reportingMonthLabel)] || loginBuckets[reportingMonthLabel] || {};
   return order.map(b => ({
     bucket: b,
     pct: (monthBucket[b] && monthBucket[b].pct) || 0,
@@ -6537,7 +6537,7 @@ function buildLoginDistribution(loginBuckets, reportingMonthLabel) {
 // Approximates "% of users with 1+ login" by treating the "0-3" bucket as mostly zero-loggers.
 // Caveat: true 1+ login rate would be finer — this is the closest we can get from the 4-bucket CSV.
 function buildLoginActivitySingle(loginBuckets, monthLabel) {
-  const bucket = loginBuckets[monthLabel] || {};
+  const bucket = loginBuckets[normalizeVirgilMonthKey(monthLabel)] || loginBuckets[monthLabel] || {};
   const total = (bucket["0-3"]?.users || 0) + (bucket["4-7"]?.users || 0) + (bucket["8-15"]?.users || 0) + (bucket["16-20+"]?.users || 0);
   if (!total) return 0;
   const nonZero = (bucket["4-7"]?.users || 0) + (bucket["8-15"]?.users || 0) + (bucket["16-20+"]?.users || 0);
@@ -6788,8 +6788,10 @@ function buildVirgilMyPerformanceSlide(pres, stats, loginBuckets, priorMonthLabe
   // Login Activity table (replaces bar chart in col2)
   const bucketOrder = ["16-20+", "8-15", "4-7", "0-3"];
   const loginTable = bucketOrder.map(b => {
-    const priorCell = (loginBuckets[priorMonthLabel] && loginBuckets[priorMonthLabel][b]) || { users: 0, pct: 0 };
-    const currCell = (loginBuckets[reportingMonthLabel] && loginBuckets[reportingMonthLabel][b]) || { users: 0, pct: 0 };
+    const priorMonth = loginBuckets[normalizeVirgilMonthKey(priorMonthLabel)] || loginBuckets[priorMonthLabel] || {};
+    const currMonth = loginBuckets[normalizeVirgilMonthKey(reportingMonthLabel)] || loginBuckets[reportingMonthLabel] || {};
+    const priorCell = priorMonth[b] || { users: 0, pct: 0 };
+    const currCell = currMonth[b] || { users: 0, pct: 0 };
     return { bucket: b, priorUsers: priorCell.users, priorPct: priorCell.pct, currUsers: currCell.users, currPct: currCell.pct };
   });
   slide.addText("myPerformance Login Activity", {
