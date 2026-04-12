@@ -2,3 +2,14 @@ node_modules
 dist
 .DS_Store
 .superpowers/
+.claude/
+
+# Local data exports / scratch files (sensitive)
+roster_raw.csv
+tnps_raw.csv
+*.pptx
+
+# Internal scratch folders
+Project/
+MBR Deck/
+performance-intel-training.md
