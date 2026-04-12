@@ -6490,7 +6490,7 @@ function buildCoachingStats(coachingDetails, coachingWeekly, bpLookup, reporting
   const key = normalizeVirgilMonthKey(reportingMonthLabel);
   const monthBucket = coachingDetails[reportingMonthLabel] || coachingDetails[key] || {};
   const org = {
-    coachingPct: Number(monthBucket["% Coached"]) || 0,
+    coachingPct: Number(monthBucket["Completed %"]) || (Number(monthBucket["Coaching Sessions"]) && Number(monthBucket["Coachings Due"]) ? Number(monthBucket["Coaching Sessions"]) / Number(monthBucket["Coachings Due"]) : 0),
     acknowledgePct: Number(monthBucket["Acknowledged %"] || monthBucket["Acknowledged % "]) || 0,
     totalSessions: Number(monthBucket["Total Sessions"]) || 0,
   };
@@ -6516,7 +6516,7 @@ function buildCoachingStats(coachingDetails, coachingWeekly, bpLookup, reporting
   const priorKey = getPriorMonthLabel(reportingMonthLabel);
   const priorBucket = (coachingDetails[priorKey] || coachingDetails[normalizeVirgilMonthKey(priorKey)]) || {};
   const orgPrior = {
-    coachingPct: Number(priorBucket["% Coached"]) || 0,
+    coachingPct: Number(priorBucket["Completed %"]) || (Number(priorBucket["Coaching Sessions"]) && Number(priorBucket["Coachings Due"]) ? Number(priorBucket["Coaching Sessions"]) / Number(priorBucket["Coachings Due"]) : 0),
     acknowledgePct: Number(priorBucket["Acknowledged %"] || priorBucket["Acknowledged % "]) || 0,
     totalSessions: Number(priorBucket["Total Sessions"]) || 0,
   };
