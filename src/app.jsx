@@ -6748,7 +6748,7 @@ function CorpMbrDataSourcesModal({
   );
 }
 
-function VirgilMbrExportModal({ perf, coachingDetailsRaw, coachingWeeklyRaw, loginBucketsRaw, insights, setInsights, onClose }) {
+function VirgilMbrExportModal({ perf, coachingDetailsRaw, coachingWeeklyRaw, loginBucketsRaw, insights, setInsights, ollamaAvailable, onClose }) {
   const [reportingMonth, setReportingMonth] = useState(() => {
     try {
       const end = perf && perf.fiscalInfo && perf.fiscalInfo.fiscalEnd;
@@ -6768,6 +6768,13 @@ function VirgilMbrExportModal({ perf, coachingDetailsRaw, coachingWeeklyRaw, log
     try { localStorage.setItem("perf_intel_virgil_last_name", virgilLastName || ""); } catch(e) {}
   }, [virgilLastName]);
 
+  const [useAiInsights, setUseAiInsights] = useState(() => {
+    try { return localStorage.getItem("perf_intel_corp_ai_insights_v1") === "true"; } catch(e) { return false; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("perf_intel_corp_ai_insights_v1", useAiInsights ? "true" : "false"); } catch(e) {}
+  }, [useAiInsights]);
+
   const coachingDetails = useMemo(() => parseCoachingDetails(coachingDetailsRaw), [coachingDetailsRaw]);
   const coachingWeekly = useMemo(() => parseCoachingWeekly(coachingWeeklyRaw), [coachingWeeklyRaw]);
   const loginBuckets = useMemo(() => parseLoginBuckets(loginBucketsRaw), [loginBucketsRaw]);
@@ -6781,17 +6788,36 @@ function VirgilMbrExportModal({ perf, coachingDetailsRaw, coachingWeeklyRaw, log
   }, [insights, setInsights]);
 
   const handleDownload = useCallback(async () => {
+    let slide2Insights = "";
+    if (useAiInsights && ollamaAvailable) {
+      try {
+        const stats = buildCoachingStats(coachingDetails, coachingWeekly, perf && perf.bpLookup, reportingMonth);
+        const dist = buildLoginDistribution(loginBuckets, reportingMonth);
+        const prompt = `Write a 2-3 sentence performance summary for a monthly business review slide.
+
+Reporting Month: ${reportingMonth}
+Coaching Standard Attainment (org): ${(stats.org.coachingPct * 100).toFixed(1)}% (DR ${(stats.dr.coachingPct * 100).toFixed(1)}% / BZ ${(stats.bz.coachingPct * 100).toFixed(1)}%)
+Acknowledgement % (org): ${(stats.org.acknowledgePct * 100).toFixed(1)}%
+Total Coaching Sessions: ${stats.org.totalSessions}
+Login Distribution: ${dist.map(d => `${d.bucket}: ${(d.pct*100).toFixed(0)}% (${d.users} users)`).join(", ")}
+
+Focus on what's notable: strengths, concerns, and momentum. Plain prose only. No bullet points.`;
+        slide2Insights = await ollamaGenerate(prompt) || "";
+      } catch(e) {
+        console.error("AI insights generation failed:", e);
+      }
+    }
     const pres = buildVirgilMbrPresentation(perf, {
       reportingMonthLabel: reportingMonth,
       virgilLastName,
       coachingDetails,
       coachingWeekly,
       loginBuckets,
-      insights,
+      insights: { ...(insights || {}), slide2: slide2Insights },
     });
     const safeMonth = (reportingMonth || "Virgil").replace(/[^A-Za-z0-9 _-]+/g, "");
     await pres.writeFile({ fileName: `Corp MBR - ${safeMonth}.pptx` });
-  }, [perf, reportingMonth, virgilLastName, coachingDetails, coachingWeekly, loginBuckets, insights]);
+  }, [perf, reportingMonth, virgilLastName, coachingDetails, coachingWeekly, loginBuckets, insights, useAiInsights, ollamaAvailable]);
 
   const StatusRow = ({ label, ok }) => (
     <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", fontSize: 13 }}>
@@ -6831,12 +6857,23 @@ function VirgilMbrExportModal({ perf, coachingDetailsRaw, coachingWeeklyRaw, log
           <StatusRow label="Login Buckets CSV" ok={hasLoginBuckets} />
         </div>
 
-        <label style={{ display: "block", marginTop: 16, fontSize: 13, fontWeight: 600 }}>
-          Slide 2 Insights
-          <textarea value={(insights && insights.slide2) || ""} onChange={e => setSlide2Insight(e.target.value)}
-            rows={4}
-            style={{ display: "block", marginTop: 4, width: "100%", padding: 8, border: "1px solid #d1d5db", borderRadius: 6, fontFamily: "inherit" }} />
-        </label>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 16, padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 6, background: "#fafafa" }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>AI Insights (Slide 2)</div>
+            <div style={{ fontSize: 12, color: "#6b7280" }}>
+              {ollamaAvailable
+                ? "On — AI will generate a 2–3 sentence summary at download time."
+                : "AI is unavailable (Ollama not detected). Slide will render with an empty insights section."}
+            </div>
+          </div>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: ollamaAvailable ? "pointer" : "not-allowed", opacity: ollamaAvailable ? 1 : 0.5 }}>
+            <input type="checkbox"
+              checked={useAiInsights}
+              disabled={!ollamaAvailable}
+              onChange={e => setUseAiInsights(e.target.checked)} />
+            <span style={{ fontSize: 13 }}>{useAiInsights ? "On" : "Off"}</span>
+          </label>
+        </div>
 
         <div style={{ display: "flex", gap: 8, marginTop: 20, justifyContent: "flex-end" }}>
           <button onClick={onClose} style={{ padding: "8px 14px", border: "1px solid #d1d5db", background: "#fff", borderRadius: 6, cursor: "pointer" }}>Cancel</button>
@@ -14703,6 +14740,7 @@ export default function App() {
           loginBucketsRaw={loginBucketsRaw}
           insights={virgilInsights}
           setInsights={setVirgilInsights}
+          ollamaAvailable={ollamaAvailable}
           onClose={() => setShowVirgilMbrModal(false)}
         />
       )}
