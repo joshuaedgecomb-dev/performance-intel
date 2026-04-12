@@ -7662,6 +7662,9 @@ Write bullet-point style insights focused on movement vs prior, gaps vs 75% goal
           <StatusRow label="Coaching Details CSV" ok={hasCoachingDetails} />
           <StatusRow label="Weekly Breakdown CSV" ok={hasCoachingWeekly} />
           <StatusRow label="Login Buckets CSV" ok={hasLoginBuckets} />
+          <StatusRow label="Prior Quarter Agent (Q4 2025)" ok={!!(priorQuarterAgentRaw && priorQuarterAgentRaw.trim())} />
+          <StatusRow label="Prior Quarter Goals (Q4 2025)" ok={!!(priorQuarterGoalsRaw && priorQuarterGoalsRaw.trim())} />
+          <StatusRow label="Scorecard PNG (Slide 3)" ok={!!scorecardDataUrl} />
         </div>
 
         <div style={{ marginTop: 16, padding: 12, background: "#fafafa", borderRadius: 6, border: "1px solid #d1d5db" }}>
