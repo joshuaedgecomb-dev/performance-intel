@@ -6468,6 +6468,87 @@ function buildLoginDistribution(loginBuckets, reportingMonthLabel) {
   }));
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// VIRGIL MBR — Brand Helpers
+// ═══════════════════════════════════════════════════════════════════
+
+const virgilTheme = {
+  gradientLeft: "0B5F7A",   // teal
+  gradientMid: "3B3F8F",    // deep blue
+  gradientRight: "7C3AED",  // purple
+  bodyText: "1F2937",
+  subtle: "6B7280",
+  eyebrow: "4F46E5",
+  footerText: "9CA3AF",
+  slideBg: "FFFFFF",
+};
+
+const virgilFundingColors = {
+  Growth: "0E7490",     // teal
+  National: "1E293B",   // near-black navy
+  Marketing: "8B5CF6",  // violet
+  HQ: "374151",         // slate
+  Total: "7C3AED",      // purple
+};
+
+// Adds the top and bottom teal→purple brand bars + footer text to a slide.
+// pres is the pptxgenjs instance; slide is the slide object.
+function virgilBrandBars(pres, slide) {
+  const w = pres.presLayout ? pres.presLayout.width : 13.333;
+  slide.addShape("rect", {
+    x: 0, y: 0, w, h: 0.22,
+    fill: { color: virgilTheme.gradientLeft },
+    line: { color: virgilTheme.gradientLeft, width: 0 },
+  });
+  slide.addShape("rect", {
+    x: 0, y: 7.28, w, h: 0.22,
+    fill: { color: virgilTheme.gradientRight },
+    line: { color: virgilTheme.gradientRight, width: 0 },
+  });
+  slide.addText("GLOBAL CALLCENTER SOLUTIONS", {
+    x: 0.3, y: 7.05, w: 5, h: 0.2, fontSize: 8, color: virgilTheme.footerText, bold: true,
+  });
+  slide.addText("xfinity", {
+    x: w - 1.0, y: 7.05, w: 0.9, h: 0.2, fontSize: 10, color: virgilTheme.footerText, align: "right",
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// VIRGIL MBR — Slide Builders
+// ═══════════════════════════════════════════════════════════════════
+
+function buildVirgilTitleSlide(pres, reportingMonthLabel, fiscalInfo, virgilLastName) {
+  const slide = pres.addSlide();
+  slide.background = { color: virgilTheme.slideBg };
+  virgilBrandBars(pres, slide);
+
+  slide.addText("GLOBAL CALLCENTER SOLUTIONS", {
+    x: 0.5, y: 1.5, w: 12, h: 0.3,
+    fontSize: 11, color: virgilTheme.eyebrow, bold: true, charSpacing: 3,
+  });
+  slide.addText(`VIRGIL MBR — ${reportingMonthLabel}`, {
+    x: 0.5, y: 1.9, w: 12, h: 1.0,
+    fontSize: 36, color: virgilTheme.bodyText, bold: true,
+  });
+  const audienceName = virgilLastName ? `Virgil ${virgilLastName}` : "Virgil";
+  slide.addText(`Presented to ${audienceName}, Director of Vendor Management, Comcast`, {
+    x: 0.5, y: 3.0, w: 12, h: 0.4,
+    fontSize: 14, color: virgilTheme.subtle,
+  });
+  if (fiscalInfo && fiscalInfo.fiscalStart && fiscalInfo.fiscalEnd) {
+    const fmt = (d) => {
+      try {
+        const dt = new Date(d);
+        return dt.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      } catch(e) { return String(d); }
+    };
+    slide.addText(`Fiscal Month: ${fmt(fiscalInfo.fiscalStart)} – ${fmt(fiscalInfo.fiscalEnd)}`, {
+      x: 0.5, y: 3.5, w: 12, h: 0.4,
+      fontSize: 12, color: virgilTheme.subtle, italic: true,
+    });
+  }
+}
+
 function MbrExportModal({ perf, onClose }) {
   const [state, setState] = useState("confirm");
   const [progress, setProgress] = useState("");
