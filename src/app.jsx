@@ -5145,7 +5145,7 @@ function TopNav({
     <div ref={navRef} style={{ display: "flex", alignItems: "center", gap: "0.35rem", padding: "0.5rem 1.5rem", background: "var(--nav-bg)", backdropFilter: "blur(16px) saturate(180%)", WebkitBackdropFilter: "blur(16px) saturate(180%)", borderBottom: "1px solid var(--glass-border)", position: "fixed", top: 0, left: 0, right: 0, zIndex: 200 }}>
       <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "var(--text-muted)", letterSpacing: "0.08em", fontWeight: 600, marginRight: "0.5rem" }}>PERF INTEL</span>
 
-      {rawData && !showToday && (
+      {rawData && (
         <>
           <button onClick={() => navigate("overview")} style={topNavLinkStyle(isActive("overview"))}>Overview</button>
 
@@ -5186,7 +5186,7 @@ function TopNav({
 
       <div style={{ flex: 1 }} />
 
-      {rawData && fiscalInfo && !showToday && (
+      {rawData && fiscalInfo && (
         <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.3rem 0.65rem", borderRadius: "var(--radius-sm, 6px)", background: "rgba(22,163,74,0.12)", border: "1px solid rgba(22,163,74,0.3)" }}>
           <span style={{ width: 6, height: 6, borderRadius: 3, background: "#16a34a", boxShadow: "0 0 6px #16a34a80" }} />
           <span style={{ fontFamily: "var(--font-data, monospace)", fontSize: "0.72rem", color: "#16a34a", fontWeight: 500 }}>
@@ -5195,14 +5195,12 @@ function TopNav({
         </div>
       )}
 
-      {!showToday && (
-        <button onClick={() => setLightMode(v => !v)} title="Toggle theme"
-          style={{ width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "var(--radius-sm, 6px)", border: "1px solid var(--border-muted)", background: "transparent", color: "var(--text-muted)", cursor: "pointer", fontSize: "0.95rem" }}>
-          {lightMode ? "\u2600" : "\u263E"}
-        </button>
-      )}
+      <button onClick={() => setLightMode(v => !v)} title="Toggle theme"
+        style={{ width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "var(--radius-sm, 6px)", border: "1px solid var(--border-muted)", background: "transparent", color: "var(--text-muted)", cursor: "pointer", fontSize: "0.95rem" }}>
+        {lightMode ? "\u2600" : "\u263E"}
+      </button>
 
-      {rawData && !showToday && (
+      {rawData && (
         <div ref={settingsRef} style={{ position: "relative" }}>
           <button onClick={() => setOpenMenu(openMenu === "settings" ? null : "settings")} title="Settings & Actions"
             style={{ width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "var(--radius-sm, 6px)", border: "1px solid var(--border-muted)", background: openMenu === "settings" ? "var(--bg-tertiary)" : "transparent", color: "var(--text-muted)", cursor: "pointer", fontSize: "0.95rem" }}>
