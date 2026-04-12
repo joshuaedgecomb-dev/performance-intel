@@ -6760,6 +6760,56 @@ function buildQuartileReport(agentRaw, goalsRaw, newHiresRaw, dateFilter, refere
   return { xm: buildSection("XM"), xi: buildSection("XI") };
 }
 
+// Roll hours up per funding type for a given month-filtered agent dataset.
+// Returns { byFunding: {Growth,National,Marketing,HQ}: {plan, actual}, totalPlan, totalActual, campaigns: [{name, funding, hoursGoal, hoursActual, par, roc}] }
+function buildCampaignHoursByFunding(agentRaw, goalsRaw, monthFilter) {
+  const goalsRows = goalsRaw && goalsRaw.trim() ? parseCSV(goalsRaw) : [];
+  const agentRows = agentRaw && agentRaw.trim() ? parseCSV(agentRaw) : [];
+
+  const rocMeta = {};
+  for (const r of goalsRows) {
+    const funding = (r["Funding"] || "").trim();
+    const name = (r["Target Audience"] || r["Target"] || "").trim();
+    const rocList = (r["ROC Numbers"] || "").split(",").map(s => s.trim()).filter(Boolean);
+    const par = (r["PAR?"] || "").trim().toUpperCase() === "Y";
+    const hoursGoal = Number(r["Hours Goal"]) || 0;
+    for (const roc of rocList) {
+      rocMeta[roc] = { funding, name, hoursGoal, par };
+    }
+  }
+
+  const actualByRoc = {};
+  for (const r of agentRows) {
+    if (monthFilter && !monthFilter((r["Date"] || "").trim())) continue;
+    const roc = (r["Job"] || "").trim();
+    if (!roc) continue;
+    actualByRoc[roc] = (actualByRoc[roc] || 0) + (Number(r["Hours"]) || 0);
+  }
+
+  const byFunding = {
+    Growth: { plan: 0, actual: 0 },
+    National: { plan: 0, actual: 0 },
+    Marketing: { plan: 0, actual: 0 },
+    HQ: { plan: 0, actual: 0 },
+  };
+  const campaigns = [];
+  let totalPlan = 0, totalActual = 0;
+  for (const roc in rocMeta) {
+    const meta = rocMeta[roc];
+    const act = actualByRoc[roc] || 0;
+    if (byFunding[meta.funding]) {
+      byFunding[meta.funding].plan += meta.hoursGoal;
+      byFunding[meta.funding].actual += act;
+    }
+    totalPlan += meta.hoursGoal;
+    totalActual += act;
+    if (meta.name) {
+      campaigns.push({ name: meta.name, funding: meta.funding, hoursGoal: meta.hoursGoal, hoursActual: act, par: meta.par, roc });
+    }
+  }
+  return { byFunding, totalPlan, totalActual, campaigns };
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // CORP MBR — Brand Helpers
 // ═══════════════════════════════════════════════════════════════════
@@ -7277,6 +7327,118 @@ function buildCorpQuartileSlide(pres, agentRaw, goalsRaw, newHiresRaw, reporting
 
   drawQuartileColumn(col1X, `Month Reporting On — ${reportingMonthLabel}`, reporting);
   drawQuartileColumn(col2X, `MTD — ${mtdLabel}`, mtd);
+}
+
+function buildCorpCampaignHoursSlide(pres, agentRaw, goalsRaw, priorAgentRaw, priorGoalsRaw, reportingMonthLabel) {
+  const slide = pres.addSlide();
+  slide.background = { color: virgilTheme.slideBg };
+  virgilBrandBars(pres, slide);
+
+  slide.addText("OPERATIONAL PERFORMANCE", {
+    x: 0.5, y: 0.35, w: 6, h: 0.25,
+    fontSize: 10, color: virgilTheme.eyebrow, bold: true, charSpacing: 2,
+  });
+  slide.addText("Global Callcenter Solutions | Campaign Info", {
+    x: 0.5, y: 0.65, w: 12, h: 0.5,
+    fontSize: 24, color: virgilTheme.bodyText, bold: true,
+  });
+
+  const priorKey = getPriorMonthLabel(reportingMonthLabel);
+  const mtdLabel = getNextMonthLabel(reportingMonthLabel);
+
+  const prior = buildCampaignHoursByFunding(priorAgentRaw, priorGoalsRaw, makeMonthFilter(priorKey));
+  const curr = buildCampaignHoursByFunding(agentRaw, goalsRaw, makeMonthFilter(reportingMonthLabel));
+  const mtd = buildCampaignHoursByFunding(agentRaw, goalsRaw, makeMonthFilter(mtdLabel));
+
+  const fundingOrder = ["Growth", "National", "Marketing", "HQ"];
+  const fundingColors = { Growth: "0E7490", National: "1E293B", Marketing: "8B5CF6", HQ: "374151" };
+
+  const drawBarGroup = (y, label, data) => {
+    slide.addText(`Total ${label} Monthly Budgeted Hours = ${Math.round(data.totalPlan).toLocaleString()}`, {
+      x: 0.5, y, w: 12.3, h: 0.25,
+      fontSize: 11, color: virgilTheme.bodyText, bold: true, align: "center",
+    });
+    const rowY1 = y + 0.35;
+    const rowY2 = y + 0.95;
+    slide.addText("% to Hours Goal", {
+      x: 0.3, y: rowY1, w: 1.3, h: 0.3,
+      fontSize: 8, color: virgilTheme.subtle, align: "right",
+    });
+    slide.addText("Hours Actual", {
+      x: 0.3, y: rowY2, w: 1.3, h: 0.3,
+      fontSize: 8, color: virgilTheme.subtle, align: "right",
+    });
+    const totalPlan = data.totalPlan || 1;
+    const totalActual = data.totalActual || 1;
+    const barW = 10.8;
+    let xStart = 1.7;
+    fundingOrder.forEach(f => {
+      const seg = data.byFunding[f];
+      const pctW = seg.plan > 0 ? (seg.plan / totalPlan) * barW : 0;
+      const actW = totalActual > 0 ? (seg.actual / totalActual) * barW : 0;
+      const segW = Math.max(pctW, actW);
+      if (pctW > 0) {
+        slide.addShape("rect", {
+          x: xStart, y: rowY1, w: pctW, h: 0.4,
+          fill: { color: fundingColors[f] }, line: { type: "none" },
+        });
+        const pctVal = seg.plan > 0 ? (seg.actual / seg.plan) * 100 : 0;
+        slide.addText(`${pctVal.toFixed(0)}%`, {
+          x: xStart, y: rowY1 + 0.05, w: pctW, h: 0.3,
+          fontSize: 9, color: "FFFFFF", bold: true, align: "center",
+        });
+      }
+      if (actW > 0) {
+        slide.addShape("rect", {
+          x: xStart, y: rowY2, w: actW, h: 0.4,
+          fill: { color: fundingColors[f] }, line: { type: "none" },
+        });
+        slide.addText(Math.round(seg.actual).toLocaleString(), {
+          x: xStart, y: rowY2 + 0.05, w: actW, h: 0.3,
+          fontSize: 9, color: "FFFFFF", bold: true, align: "center",
+        });
+      }
+      xStart += segW;
+    });
+  };
+
+  drawBarGroup(1.25, priorKey, prior);
+  drawBarGroup(2.65, reportingMonthLabel, curr);
+  drawBarGroup(4.05, `${mtdLabel} MTD`, mtd);
+
+  // Bottom half: Campaign Outlook (Growth) | Base Management (HQ, Marketing, National)
+  const breakoutY = 5.5;
+  slide.addText("Campaign Outlook", {
+    x: 0.5, y: breakoutY, w: 3.0, h: 0.25,
+    fontSize: 11, color: virgilTheme.eyebrow, bold: true,
+  });
+  slide.addText("Base Management", {
+    x: 4.0, y: breakoutY, w: 9.0, h: 0.25,
+    fontSize: 11, color: virgilTheme.eyebrow, bold: true,
+  });
+
+  const drawFundingCol = (x, w, funding, allCampaigns) => {
+    const rows = allCampaigns
+      .filter(c => c.funding === funding)
+      .sort((a, b) => b.hoursActual - a.hoursActual);
+    slide.addShape("rect", {
+      x, y: breakoutY + 0.3, w, h: 0.35,
+      fill: { color: fundingColors[funding] }, line: { type: "none" },
+    });
+    slide.addText(`${funding} Funded`, {
+      x, y: breakoutY + 0.3, w, h: 0.35,
+      fontSize: 11, color: "FFFFFF", bold: true, align: "center",
+    });
+    const items = rows.slice(0, 5).map(r => `${r.name} — ${Math.round(r.hoursActual).toLocaleString()} hours`);
+    slide.addText(items.length ? items.join("\n") : "(none)", {
+      x, y: breakoutY + 0.7, w, h: 1.2,
+      fontSize: 9, color: virgilTheme.bodyText, valign: "top",
+    });
+  };
+  drawFundingCol(0.5, 3.0, "Growth", curr.campaigns);
+  drawFundingCol(4.0, 2.9, "HQ", curr.campaigns);
+  drawFundingCol(7.0, 2.9, "Marketing", curr.campaigns);
+  drawFundingCol(10.0, 2.8, "National", curr.campaigns);
 }
 
 // ═══════════════════════════════════════════════════════════════════
