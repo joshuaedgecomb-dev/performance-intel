@@ -35,17 +35,17 @@ Clicking opens `VirgilMbrExportModal`.
  - Coaching CSV: loaded / not uploaded
  - Weekly Breakdown CSV: loaded / not uploaded
  - Login Buckets CSV: loaded / not uploaded
- - Extended Agent Stats CSV: loaded / not uploaded (required for Slide 6)
+ - Extended Agent Stats metrics: auto-derived from primary Agent CSV (no separate upload)
  - Prior Quarter sheet URL: configured / missing
  - Scorecard PNG (Slide 3): uploaded / missing
  - Virgil Agent CSV schema additions: `Actual Leads` column detected / not detected
 
-3. **Insight textareas** (modal-persisted across sessions via `perf_intel_virgil_insights_v1`):
+3. **Insight textareas** (modal-persisted across sessions via `perf_intel_corp_insights_v1`):
  - Slide 2 — My Performance insights
  - Slide 4 — Quartile Reporting: two textareas (Reporting Month / MTD)
  - Slide 7 — tNPS insights
  - Slide 8 — "How can we support you?" and "Current incentives"
- - Slide 6 — per-campaign Performance Notes: 2 textareas per campaign (Feb / March)
+ - Slide 6 — per-campaign Performance Notes: 2 textareas per campaign (reporting / MTD)
 
  Each textarea has a button: **✨ AI generate** (uses existing Ollama integration if available; falls back to leaving the field empty). Blank submission is allowed; empty sections render as empty panels in the `.pptx`.
 
@@ -56,7 +56,7 @@ Clicking opens `VirgilMbrExportModal`.
 ## 4. Data Sources
 
 ### 4.1 Reused (zero changes)
-- Agent CSV (`rawData`) — current Performance Intel source
+- Agent CSV (`rawData`) — current Performance Intel source. Carries Dials/Contacts/Finals for Slide 6 Extended Agent metrics (no separate CSV required).
 - Goals CSV (`goalsRaw`) — now extended with `Actual Leads` last column
 - Prior-Month data (`priorMonthRaw`, `priorMonthGoalsRaw`)
 - Roster CSV (`newHiresRaw`) — supplies Hire Date + End Date for Slide 8
@@ -70,7 +70,8 @@ Clicking opens `VirgilMbrExportModal`.
 | Coaching Details (Slide 2 org totals: Acknowledged %, % Coached, etc.) | `perf_intel_coaching_details_v1` | Settings → Upload Coaching Details CSV | Long format: `Measure Names`, `Fiscal Month`, `FM/FW Swap to Month`, `Measure Values` |
 | Weekly Breakdown (Slide 2 DR/BZ split) | `perf_intel_coaching_weekly_v1` | Settings → Upload Weekly Breakdown CSV | Per-agent-week: `Name or NT`, `Fiscal Month`, `new calc` (FW end), `Coaching Sessions (copy)`, `Color WB`, `Manager`, `Supervisor.` |
 | Login Buckets (Slide 2 login activity) | `perf_intel_login_buckets_v1` | Settings → Upload Login Buckets CSV | `User Login Bucket (Alternative)`, `Month vs Week View Label`, `Measure Names`, `Measure Values` |
-| Extended Agent Stats (Slide 6 Dials/Contacts/Finals) | `perf_intel_extended_agent_v1` | Settings → Upload Extended Agent Stats CSV | Per-agent-per-day, matching `April Daily Stats 2026 - Agent Stats.csv` shape (columns: `Job, Date, Location, AgentTSR, AgentName, SupTSR, SupName, Dials, Goals, Contacts, Finals, NonFinals, Hours, AHTSec, CloseRate, GPH, CPH, DPH, CPS, WifiPassSales, xFiSales, NewVideo, UpgradeVideo, NewData, UpgradeData, NewVoice, UpgradeVoice, NewSecurity, UpgradeSecurity, XMSales, XMLines, NewXM, SavedXM, AddedXM, XMUpgrade, DeviceUpgrade, XMPP, Region, StormReadySales, Week Number, SPH Goal, Goals number, Job Type`) |
+
+**Note (Rework 2026-04-13):** The "Extended Agent Stats" upload originally described here was dropped. The primary agent CSV (`rawData` / `rawAgentCsv`) already carries the Dials, Contacts, and Finals columns that Slide 6 needs, so Extended Agent metrics are derived from the same CSV via `parseExtendedAgentStats` → `buildExtendedAgentLookup` with a per-month filter.
 
 ### 4.3 New — Google Sheet URL
 
@@ -219,7 +220,7 @@ Campaigns within each column sorted by **SPH performance highest → lowest** (p
 
 Title: `Actual to Goal – <Campaign Name>` (eyebrow: `OPERATIONAL PERFORMANCE`)
 
-**Two side-by-side tables**: `PREVIOUS MONTH` (Feb) | `MONTH OF DISCUSSION` (March)
+**Two side-by-side tables**: `MONTH OF DISCUSSION` (reporting month, e.g. March) | `MTD` (reporting+1, e.g. April)
 
 **Columns**: `GOALS` | `BUDGET` | `ACTUAL` | `VARIANCE` | `% GOAL`
 
@@ -255,9 +256,9 @@ Title: `Actual to Goal – <Campaign Name>` (eyebrow: `OPERATIONAL PERFORMANCE`)
 | Contact Rate | Sum(`Contacts` from Extended Agent CSV) ÷ `Actual Leads` × 100 |
 | Lead Penetration | Sum(`Finals` from Extended Agent CSV) ÷ `Actual Leads` × 100 |
 
-If Extended Agent CSV isn't uploaded, Contact Rate and Lead Penetration render `—`.
+If the primary Agent CSV lacks Dials/Contacts/Finals columns, Contact Rate and Lead Penetration render `—`.
 
-**Performance Notes**: two textareas per campaign slide (Feb / March), modal-entered, AI-optional, blank allowed.
+**Performance Notes**: two textareas per campaign slide (reporting / MTD), modal-entered, AI-optional, blank allowed. Stored under `insights.slide6Notes[campaignName].reporting` / `.mtd`.
 
 **Slide generation order**: alphabetical by campaign name (stable, review-friendly).
 
@@ -313,10 +314,9 @@ Blank textareas are permitted — corresponding panels render empty in the `.ppt
 | `perf_intel_coaching_details_v1` | raw CSV string | Coaching Details upload (org totals) |
 | `perf_intel_coaching_weekly_v1` | raw CSV string | Weekly Breakdown upload (DR/BZ split) |
 | `perf_intel_login_buckets_v1` | raw CSV string | Login Buckets upload |
-| `perf_intel_extended_agent_v1` | raw CSV string | Extended Agent Stats upload |
 | `perf_intel_prior_quarter_v1` | raw CSV string | Prior-quarter Google Sheet cache |
 | `perf_intel_prior_quarter_url_v1` | URL string | User-configured sheet URL |
-| `perf_intel_virgil_insights_v1` | `{ slideKey: textContent }` JSON | Modal textarea persistence across sessions |
+| `perf_intel_corp_insights_v1` | `{ slideKey: textContent }` JSON | Modal textarea persistence across sessions |
 
 All follow the existing private/public setter pattern (`_setFoo` / `setFoo` with try/catch localStorage).
 
@@ -334,7 +334,7 @@ New code sections, in source order (after existing `§11.6 MBR PPTX Export`):
 
 App-level additions:
 - Settings menu: new `MenuRow` for "Export Virgil MBR"
-- Settings menu: new upload rows (Coaching Details, Weekly Breakdown, Login Buckets, Extended Agent Stats)
+- Settings menu: new upload rows (Coaching Details, Weekly Breakdown, Login Buckets)
 - Data Sources modal: new URL input for Prior Quarter sheet
 - App state: `showVirgilMbrModal`, plus the new localStorage-backed states
 - `handleRefresh`: extended to also fetch the prior-quarter sheet
@@ -345,7 +345,7 @@ Must be resolved before the **Content** passes of v1 ships (can be implementatio
 
 1. **Prior Quarter Google Sheet URL** — user provides. Blocks Slide 3 Q4 2025 column only.
 2. **Scorecard PNG** — user uploads at export time each month. Blocks Slide 3 bottom half only.
-3. **Extended Agent Stats data availability** — user commits to providing monthly. Blocks Slide 6 Contact Rate + Lead Penetration rows only.
+3. **Extended Agent Stats columns in primary CSV** — Contact Rate and Lead Penetration auto-populate if Dials/Contacts/Finals columns are present in the primary Agent CSV. Renders `—` if absent (no separate upload required).
 4. **Virgil's last name** — for Slide 1 audience line.
 
 None of these block the modal/UI/code skeleton. Each missing input degrades gracefully to `—` or empty panel with a labeled warning in the modal's data-readiness rows.

@@ -13,6 +13,12 @@
 - Phase 1 plan: `docs/superpowers/plans/2026-04-12-virgil-mbr-phase-1.md`
 - Phase 2 plan: `docs/superpowers/plans/2026-04-12-virgil-mbr-phase-2.md`
 
+---
+
+> ⚠ **Rework 2026-04-13 (post-execution):** Tasks 1 and 4 have been effectively reverted — the separate Extended Agent Stats URL / fetch / modal row / env var were dropped. Extended Agent data is now derived from the existing `rawAgentCsv` via `parseExtendedAgentStats` (Task 2 still applies). Task 5's readiness row was removed. Task 10's orchestrator pairs `reportingFilter` / `mtdFilter` on the same `rawAgentCsv`+`goalsRaw` instead of `priorAgentRaw`+`agentRaw`. Slide 6 columns are now **reporting (March) / MTD (April)**, not Feb / March. Notes keys are `.reporting` / `.mtd`, not `.feb` / `.march`. See commits `0c2c604` and `92e9d6d` for the diffs. The task bodies below reflect the ORIGINAL design — read them for context but trust the HEAD-of-main code for current state.
+
+---
+
 **Conventions (locked in by Phase 2):**
 - Section header comments are `// CORP MBR — <Section>`
 - New Phase 3 slide-builder functions are named `buildCorp<SlideName>Slide` (e.g. `buildCorpCampaignDetailSlide`, `buildCorpTnpsSlide`, `buildCorpPartnerExperienceSlide`)
