@@ -7176,8 +7176,9 @@ function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
   const q4Label = `Q4 ${reportYear - 1}`;
 
   // Compute all 4 periods
-  const q4 = computeCorpAttainment(priorQuarterAgentRaw, priorQuarterGoalsRaw,
-    makeQuarterFilter(reportYear - 1, 4), makeGoalsQuarterFilter("Q4"));
+  // Q4 file is already quarter-scoped (fiscal months, Sep 22 - Dec 21).
+  // Pass null filters to include every row without date restriction.
+  const q4 = computeCorpAttainment(priorQuarterAgentRaw, priorQuarterGoalsRaw, null, null);
   const colP2 = computeCorpAttainment(corpPriorMonthAgentRaw, corpPriorMonthGoalsRaw,
     makeMonthFilter(prior2), makeGoalsMonthFilter(prior2));
   const colP1 = computeCorpAttainment(priorAgentRaw, priorGoalsRaw,
