@@ -7128,6 +7128,20 @@ function buildCampaignMonthTotals(agentRaw, goalsRaw, monthFilter) {
   return { sumActualLeads, sumHoursActual };
 }
 
+// Filter tNPS survey rows to a picker-driven reporting month ("Mar '26" / "Mar 26").
+// tNPS rows carry a `.month` field like "2026-03" — convert label → YYYY-MM and string-compare.
+function filterTnpsToMonth(surveys, monthLabel) {
+  if (!Array.isArray(surveys) || surveys.length === 0) return [];
+  const m = String(monthLabel || "").trim().match(/^([A-Za-z]{3,})\s*'?(\d{2,4})$/);
+  if (!m) return surveys;
+  const monMap = { jan:"01", feb:"02", mar:"03", apr:"04", may:"05", jun:"06", jul:"07", aug:"08", sep:"09", oct:"10", nov:"11", dec:"12" };
+  const monKey = monMap[m[1].slice(0, 3).toLowerCase()];
+  if (!monKey) return surveys;
+  const yr = m[2].length === 4 ? m[2] : `20${m[2]}`;
+  const targetKey = `${yr}-${monKey}`;
+  return surveys.filter(s => s.month === targetKey);
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // CORP MBR — Brand Helpers
 // ═══════════════════════════════════════════════════════════════════
@@ -8275,6 +8289,226 @@ function buildCorpCampaignDetailSlide(pres, campaign, detailPrior, detailCurrent
   };
   drawNotePanel(0.5, `${priorMonthLabel.toUpperCase()} — PERFORMANCE NOTES`, (notes && notes.feb) || "");
   drawNotePanel(6.8, `${reportingMonthLabel.toUpperCase()} — PERFORMANCE NOTES`, (notes && notes.march) || "");
+}
+
+function buildCorpTnpsSlide(pres, perf, reportingMonthLabel, insightText) {
+  if (!perf || !perf.tnpsData || perf.tnpsData.length === 0) {
+    // Render an empty placeholder so the slide count is predictable
+    const slide = pres.addSlide();
+    slide.background = { color: virgilTheme.slideBg };
+    virgilBrandBars(pres, slide);
+    slide.addText("CUSTOMER EXPERIENCE", {
+      x: 0.5, y: 0.35, w: 12, h: 0.25,
+      fontSize: 10, color: virgilTheme.eyebrow, bold: true, charSpacing: 2,
+    });
+    slide.addText(`tNPS — ${reportingMonthLabel}`, {
+      x: 0.5, y: 0.65, w: 12, h: 0.55,
+      fontSize: 22, color: virgilTheme.bodyText, bold: true,
+    });
+    slide.addText("No tNPS data loaded.", {
+      x: 0.5, y: 3.5, w: 12, h: 0.4,
+      fontSize: 14, color: virgilTheme.subtle, italic: true, align: "center",
+    });
+    return;
+  }
+  const slide = pres.addSlide();
+  slide.background = { color: virgilTheme.slideBg };
+  virgilBrandBars(pres, slide);
+
+  // Eyebrow + title
+  slide.addText("CUSTOMER EXPERIENCE", {
+    x: 0.5, y: 0.35, w: 12, h: 0.25,
+    fontSize: 10, color: virgilTheme.eyebrow, bold: true, charSpacing: 2,
+  });
+  slide.addText(`tNPS — ${reportingMonthLabel}`, {
+    x: 0.5, y: 0.65, w: 12, h: 0.55,
+    fontSize: 22, color: virgilTheme.bodyText, bold: true,
+  });
+
+  // Filter ALL data sources to the picker-driven month.
+  const monthSurveysAll = filterTnpsToMonth(perf.tnpsData, reportingMonthLabel);
+  const monthSurveysGcs = filterTnpsToMonth(perf.tnpsGCS || [], reportingMonthLabel);
+  if (monthSurveysGcs.length === 0) {
+    slide.addText(`No GCS tNPS surveys recorded for ${reportingMonthLabel}.`, {
+      x: 0.5, y: 1.5, w: 12, h: 0.4,
+      fontSize: 14, color: virgilTheme.subtle, italic: true, align: "center",
+    });
+    return;
+  }
+  const monthOverall = calcTnpsScore(monthSurveysGcs);
+
+  // KPI cards (GCS tNPS, Promoter%, Passive%, Detractor%)
+  const kpiY = 1.25;
+  const kpiW = 2.95;
+  const kpiCards = [
+    { label: `GCS tNPS (${monthOverall.total} surveys)`, value: `${monthOverall.score > 0 ? "+" : ""}${monthOverall.score}`, color: monthOverall.score >= 50 ? corpPalette.green : monthOverall.score >= 20 ? corpPalette.q2 : corpPalette.q4 },
+    { label: "PROMOTER", value: `${Math.round(monthOverall.promoterPct)}%`, color: corpPalette.green },
+    { label: "PASSIVE", value: `${Math.round(monthOverall.passivePct)}%`, color: corpPalette.q2 },
+    { label: "DETRACTOR", value: `${Math.round(monthOverall.detractorPct)}%`, color: corpPalette.q4 },
+  ];
+  kpiCards.forEach((k, i) => {
+    const kx = 0.5 + i * (kpiW + 0.15);
+    slide.addShape("roundRect", { x: kx, y: kpiY, w: kpiW, h: 0.85, fill: { color: corpPalette.muted }, line: { color: corpPalette.cardBorder, width: 0.5 }, rectRadius: 0.06 });
+    slide.addShape("rect", { x: kx, y: kpiY, w: kpiW, h: 0.06, fill: { color: k.color }, line: { color: k.color, width: 0 } });
+    slide.addText(k.label, { x: kx, y: kpiY + 0.12, w: kpiW, h: 0.2, fontSize: 9, color: virgilTheme.subtle, align: "center" });
+    slide.addText(k.value, { x: kx, y: kpiY + 0.34, w: kpiW, h: 0.45, fontSize: 24, color: k.color, bold: true, align: "center" });
+  });
+
+  // Partner Ranking table (left 60%)
+  const tableY = 2.5;
+  const leftTableW = 7.0;
+  slide.addText("PARTNER RANKING", { x: 0.5, y: tableY - 0.25, w: leftTableW, h: 0.2, fontSize: 9, color: virgilTheme.eyebrow, bold: true, charSpacing: 1.5 });
+
+  const siteGroupsAll = {};
+  monthSurveysAll.forEach(s => {
+    if (!siteGroupsAll[s.siteLabel]) siteGroupsAll[s.siteLabel] = [];
+    siteGroupsAll[s.siteLabel].push(s);
+  });
+  const fiscalBySite = Object.entries(siteGroupsAll).map(([label, surveys]) => ({
+    label, isGCS: surveys[0].isGCS, ...calcTnpsScore(surveys),
+  })).sort((a, b) => (b.score ?? -999) - (a.score ?? -999));
+  const knownVendors = ["GCS", "Avantive", "Global Telesourcing", "Results"];
+  const gcsAgg = { label: "GCS (All Sites)", isGCS: true, isAgg: true, ...monthOverall };
+  const partnerSites = fiscalBySite.filter(s => !s.isGCS && knownVendors.includes(s.label));
+  const gcsSites = fiscalBySite.filter(s => s.isGCS);
+  const ranked = [gcsAgg, ...partnerSites].sort((a, b) => (b.score ?? -999) - (a.score ?? -999));
+  const aggIdx = ranked.findIndex(s => s.isAgg);
+  const allRanked = [...ranked.slice(0, aggIdx + 1), ...gcsSites, ...ranked.slice(aggIdx + 1)];
+
+  const hdrBase = { fill: { color: corpPalette.purple }, color: "FFFFFF", bold: true, align: "center", fontSize: 9 };
+  const rankHdr = [
+    { text: "#", options: { ...hdrBase, align: "center" } },
+    { text: "Site / Partner", options: { ...hdrBase, align: "left" } },
+    { text: "tNPS", options: hdrBase },
+    { text: "Surveys", options: hdrBase },
+    { text: "Prom%", options: hdrBase },
+    { text: "Det%", options: hdrBase },
+  ];
+  let rank = 0;
+  const rankRows = allRanked.map((s, i) => {
+    const isSub = s.isGCS && !s.isAgg;
+    if (!isSub) rank++;
+    const rowBg = s.isGCS ? "FFFBEB" : (i % 2 === 0 ? "FFFFFF" : "F5F5FA");
+    const base = { fontSize: 8, color: corpPalette.ink, valign: "middle", fill: { color: rowBg } };
+    const scoreColor = (s.score ?? 0) >= 50 ? corpPalette.green : (s.score ?? 0) >= 20 ? corpPalette.q2 : corpPalette.q4;
+    return [
+      { text: isSub ? "" : String(rank), options: { ...base, align: "center", color: virgilTheme.subtle } },
+      { text: isSub ? `  ${s.label}` : s.label, options: { ...base, align: "left", bold: s.isAgg, color: isSub ? virgilTheme.subtle : corpPalette.ink, fontSize: isSub ? 7.5 : 8.5 } },
+      { text: `${(s.score ?? 0) > 0 ? "+" : ""}${s.score ?? 0}`, options: { ...base, align: "center", bold: true, color: scoreColor, fontSize: 9 } },
+      { text: String(s.total || 0), options: { ...base, align: "center", color: virgilTheme.subtle } },
+      { text: `${Math.round(s.promoterPct || 0)}%`, options: { ...base, align: "center", color: corpPalette.green } },
+      { text: `${Math.round(s.detractorPct || 0)}%`, options: { ...base, align: "center", color: corpPalette.q4 } },
+    ];
+  });
+  slide.addTable([rankHdr, ...rankRows], {
+    x: 0.5, y: tableY, w: leftTableW,
+    colW: [0.4, 3.0, 0.8, 0.9, 0.7, 0.7],
+    rowH: 0.3,
+    border: { type: "solid", pt: 0.5, color: corpPalette.cardBorder },
+    autoPage: false,
+  });
+
+  // tNPS by Campaign — GCS (right side)
+  const rightX = 7.85;
+  const rightW = 4.95;
+  slide.addText("tNPS BY CAMPAIGN — GCS", { x: rightX, y: tableY - 0.25, w: rightW, h: 0.2, fontSize: 9, color: virgilTheme.eyebrow, bold: true, charSpacing: 1.5 });
+  const campGroups = {};
+  monthSurveysGcs.forEach(s => {
+    const key = s.campaign || "(unspecified)";
+    if (!campGroups[key]) campGroups[key] = { campaign: key, program: s.program, surveys: [] };
+    campGroups[key].surveys.push(s);
+  });
+  const camps = Object.values(campGroups).map(g => ({ ...g, ...calcTnpsScore(g.surveys) })).sort((a, b) => (b.score ?? -999) - (a.score ?? -999));
+  const campHdr = [
+    { text: "Campaign", options: { ...hdrBase, align: "left" } },
+    { text: "Program", options: { ...hdrBase, align: "left" } },
+    { text: "tNPS", options: hdrBase },
+    { text: "Surveys", options: hdrBase },
+    { text: "Prom%", options: hdrBase },
+    { text: "Det%", options: hdrBase },
+  ];
+  const campRows = camps.map((c, i) => {
+    const rowBg = i % 2 === 0 ? "FFFFFF" : "F5F5FA";
+    const base = { fontSize: 8, color: corpPalette.ink, valign: "middle", fill: { color: rowBg } };
+    const scoreColor = (c.score ?? 0) >= 50 ? corpPalette.green : (c.score ?? 0) >= 20 ? corpPalette.q2 : corpPalette.q4;
+    return [
+      { text: c.campaign, options: { ...base, align: "left" } },
+      { text: c.program || "", options: { ...base, align: "left", color: corpPalette.q2, bold: !!c.program } },
+      { text: `${(c.score ?? 0) > 0 ? "+" : ""}${c.score ?? 0}`, options: { ...base, align: "center", bold: true, color: scoreColor } },
+      { text: String(c.total || 0), options: { ...base, align: "center", color: virgilTheme.subtle } },
+      { text: `${Math.round(c.promoterPct || 0)}%`, options: { ...base, align: "center", color: corpPalette.green } },
+      { text: `${Math.round(c.detractorPct || 0)}%`, options: { ...base, align: "center", color: corpPalette.q4 } },
+    ];
+  });
+  slide.addTable([campHdr, ...campRows], {
+    x: rightX, y: tableY, w: rightW,
+    colW: [1.6, 0.85, 0.65, 0.75, 0.6, 0.5],
+    rowH: 0.26,
+    border: { type: "solid", pt: 0.5, color: corpPalette.cardBorder },
+    autoPage: false,
+  });
+
+  // Monthly Vendor Ranking trend — 4-month trailing across GCS / Avantive / Global Telesourcing / Results
+  const trendY = 5.45;
+  slide.addText("MONTHLY VENDOR RANKING", { x: 0.5, y: trendY - 0.25, w: 12.3, h: 0.2, fontSize: 9, color: virgilTheme.eyebrow, bold: true, charSpacing: 1.5 });
+  const vendorColors = { "GCS": corpPalette.q2, "Avantive": corpPalette.navy, "Global Telesourcing": corpPalette.fundHQ, "Results": corpPalette.purple };
+  const vendorNames = ["GCS", "Avantive", "Global Telesourcing", "Results"];
+  const months = [...new Set((perf.tnpsData || []).filter(s => s.month).map(s => s.month))].sort().slice(-4);
+  const vendorMap = {};
+  (perf.tnpsData || []).forEach(s => {
+    if (!s.month) return;
+    if (!months.includes(s.month)) return;
+    const vendor = s.isGCS ? "GCS" : s.siteLabel;
+    if (!vendorNames.includes(vendor)) return;
+    if (!vendorMap[s.month]) vendorMap[s.month] = {};
+    if (!vendorMap[s.month][vendor]) vendorMap[s.month][vendor] = [];
+    vendorMap[s.month][vendor].push(s);
+  });
+  vendorNames.forEach((v, i) => {
+    slide.addShape("rect", { x: 0.5 + i * 1.8, y: trendY + 0.0, w: 0.15, h: 0.12, fill: { color: vendorColors[v] }, line: { color: vendorColors[v], width: 0 } });
+    slide.addText(v, { x: 0.75 + i * 1.8, y: trendY - 0.03, w: 1.55, h: 0.18, fontSize: 7, color: virgilTheme.subtle });
+  });
+  const trendHdr = [
+    { text: "", options: hdrBase },
+    ...months.map(m => {
+      const [y, mo] = m.split("-").map(Number);
+      return { text: new Date(y, mo - 1, 1).toLocaleString("en-US", { month: "short", year: "2-digit" }), options: hdrBase };
+    })
+  ];
+  const trendRows = vendorNames.map(v => {
+    const cells = [{ text: v, options: { fontSize: 8, bold: true, color: vendorColors[v], align: "left" } }];
+    for (const m of months) {
+      const surveys = (vendorMap[m] && vendorMap[m][v]) || [];
+      const score = calcTnpsScore(surveys);
+      cells.push({ text: surveys.length ? `${score.score > 0 ? "+" : ""}${score.score} (${surveys.length})` : "—", options: { fontSize: 8, align: "center", color: corpPalette.ink } });
+    }
+    return cells;
+  });
+  slide.addTable([trendHdr, ...trendRows], {
+    x: 0.5, y: trendY + 0.2, w: 12.3,
+    colW: [2.3, ...months.map(() => (12.3 - 2.3) / Math.max(1, months.length))],
+    rowH: 0.26,
+    border: { type: "solid", pt: 0.5, color: corpPalette.cardBorder },
+    autoPage: false,
+  });
+
+  // Insights text panel (bottom)
+  const insightY = 6.7;
+  slide.addShape("roundRect", {
+    x: 0.5, y: insightY, w: 12.3, h: 0.5,
+    fill: { color: corpPalette.muted },
+    line: { color: corpPalette.cardBorder, width: 0.5 },
+    rectRadius: 0.06,
+  });
+  slide.addText("INSIGHTS", {
+    x: 0.6, y: insightY + 0.04, w: 12, h: 0.18,
+    fontSize: 8, color: virgilTheme.eyebrow, bold: true, charSpacing: 1.5,
+  });
+  slide.addText(insightText || "(no insights entered)", {
+    x: 0.6, y: insightY + 0.22, w: 12, h: 0.26,
+    fontSize: 9, color: insightText ? virgilTheme.bodyText : virgilTheme.subtle,
+    italic: !insightText, valign: "top",
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════════
