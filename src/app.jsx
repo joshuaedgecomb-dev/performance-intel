@@ -7242,7 +7242,7 @@ function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
   const fmtPctCapped = v => `${Math.min(125, Math.round(v * 100))}%`;
 
   // Chart-drawing helper
-  const drawChart = (x, y, w, h, title, values, format, goals, yFormat) => {
+  const drawChart = (x, y, w, h, title, values, format, goals, yFormat, fixedNiceMax) => {
     // Title
     slide.addText(title, {
       x, y, w, h: 0.3,
@@ -7262,8 +7262,8 @@ function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
     const presentVals = values.filter(v => v !== null && v !== undefined && !isNaN(v));
     const presentGoals = (goals || []).filter(v => v !== null && v !== undefined && !isNaN(v));
     const effMax = Math.max(...presentVals, ...presentGoals, 0.001);
-    // Round up to a "clean" scale max
-    const niceMax = (() => {
+    // Round up to a "clean" scale max, OR use a fixed cap if caller provided one
+    const niceMax = fixedNiceMax != null ? fixedNiceMax : (() => {
       if (effMax <= 0.12) return Math.ceil(effMax / 0.02) * 0.02;
       if (effMax <= 1.0) return Math.ceil(effMax / 0.1) * 0.1;
       if (effMax <= 10) return Math.ceil(effMax / 1) * 1;
@@ -7271,8 +7271,10 @@ function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
       if (effMax <= 500) return Math.ceil(effMax / 50) * 50;
       return Math.ceil(effMax / 100) * 100;
     })();
-    const scaleMax = niceMax * 1.15;
-    const valToY = (v) => axisY + axisH - (Math.max(0, v) / scaleMax) * axisH;
+    const scaleMax = fixedNiceMax != null ? niceMax : niceMax * 1.15;
+    // Clamp values to scaleMax so bars don't overflow the plot area
+    const clampToScale = (v) => Math.min(v, scaleMax);
+    const valToY = (v) => axisY + axisH - (Math.max(0, clampToScale(v)) / scaleMax) * axisH;
     // Y-axis tick labels + gridlines
     const numTicks = 7;
     for (let i = 0; i <= numTicks; i++) {
@@ -7382,14 +7384,16 @@ function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
     [q4.xiPct, colP2.xiPct, colP1.xiPct, colMtd.xiPct].map(v => v || 0),
     fmtPctCapped,
     [1.0, 1.0, 1.0, 1.0],
-    v => `${(v * 100).toFixed(0)}%`);
+    v => `${(v * 100).toFixed(0)}%`,
+    1.2);
 
   // XM
   drawChart(col2X, topY, chartW, chartH, "XM Attainment",
     [q4.xmPct, colP2.xmPct, colP1.xmPct, colMtd.xmPct].map(v => v || 0),
     fmtPctCapped,
     [1.0, 1.0, 1.0, 1.0],
-    v => `${(v * 100).toFixed(0)}%`);
+    v => `${(v * 100).toFixed(0)}%`,
+    1.2);
   // SPH — per-period plan SPH goal line (excluding GLB)
   drawChart(col3X, topY, chartW, chartH, "SPH Attainment",
     [q4Sph.sph, p2Sph.sph, p1Sph.sph, mtdSph.sph],
