@@ -7241,11 +7241,11 @@ function buildVirgilMyPerformanceSlide(pres, stats, loginBuckets, priorPriorMont
   const insH = 2.6;
   drawCorpCard(slide, rightColX, insY, rightColW, insH);
   slide.addShape("rect", {
-    x: rightColX, y: insY, w: rightColW, h: 0.4,
+    x: rightColX, y: insY + 0.05, w: rightColW, h: 0.4,
     fill: { color: corpPalette.navy },
   });
   slide.addText("Insights", {
-    x: rightColX, y: insY + 0.03, w: rightColW, h: 0.35,
+    x: rightColX, y: insY + 0.08, w: rightColW, h: 0.35,
     fontSize: 14, color: "FFFFFF", bold: true, align: "center",
   });
   const bullets = (insightsText || "").split(/\n+/).map(s => s.trim()).filter(Boolean);
@@ -7323,15 +7323,15 @@ function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
   const drawChart = (x, y, w, h, title, values, format, goals, yFormat, fixedNiceMax) => {
     // Title
     slide.addText(title, {
-      x, y, w, h: 0.3,
+      x, y: y + 0.08, w, h: 0.3,
       fontSize: 12, color: virgilTheme.bodyText, bold: true, align: "center",
     });
     // Plot area (now has room on the left for Y-axis labels)
     const yAxisW = 0.55;
     const axisX = x + 0.4 + yAxisW;
-    const axisY = y + 0.35;
-    const axisW = w - 0.5 - yAxisW;
-    const axisH = h - 0.8;
+    const axisY = y + 0.4;
+    const axisW = w - 0.55 - yAxisW;
+    const axisH = h - 0.9;
     // Scale
     const presentVals = values.filter(v => v !== null && v !== undefined && !isNaN(v));
     const presentGoals = (goals || []).filter(v => v !== null && v !== undefined && !isNaN(v));
@@ -7500,13 +7500,13 @@ function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
     const title = "Scorecard by BP";
     drawCorpCard(slide, x, y, w, h);
     slide.addText(title, {
-      x, y, w, h: 0.3,
+      x, y: y + 0.08, w, h: 0.3,
       fontSize: 12, color: virgilTheme.bodyText, bold: true, align: "center",
     });
     const axisX = x + 0.35;
-    const axisY = y + 0.35;
+    const axisY = y + 0.4;
     const axisW = w - 0.5;
-    const axisH = h - 0.8;
+    const axisH = h - 0.9;
     const present = vendorVals.filter(v => v > 0);
     const effMax = Math.max(...present, 0.001);
     const scaleMax = effMax * 1.15;
@@ -7540,15 +7540,15 @@ function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
   const insX = col3X;
   drawCorpCard(slide, insX, botY, chartW, botH);
   slide.addShape("rect", {
-    x: insX, y: botY, w: chartW, h: 0.4,
+    x: insX, y: botY + 0.05, w: chartW, h: 0.4,
     fill: { color: corpPalette.navy },
   });
   slide.addText("Insights", {
-    x: insX, y: botY + 0.03, w: chartW, h: 0.35,
+    x: insX, y: botY + 0.08, w: chartW, h: 0.35,
     fontSize: 14, color: "FFFFFF", bold: true, align: "center",
   });
   slide.addText("Provide insights in the export modal", {
-    x: insX + 0.2, y: botY + 0.5, w: chartW - 0.4, h: botH - 0.55,
+    x: insX + 0.2, y: botY + 0.55, w: chartW - 0.4, h: botH - 0.6,
     fontSize: 11, color: virgilTheme.subtle, italic: true, valign: "top",
   });
 
@@ -7600,6 +7600,7 @@ function buildCorpQuartileSlide(pres, agentRaw, goalsRaw, priorAgentRaw, priorGo
       return;
     }
     const drawSection = (y, label, section) => {
+      drawCorpCard(slide, xBase - 0.02, y - 0.1, colW + 0.04, 2.75);
       slide.addText(label, {
         x: xBase, y, w: colW, h: 0.25,
         fontSize: 11, color: virgilTheme.bodyText, bold: true,
@@ -7666,9 +7667,7 @@ function buildCorpQuartileSlide(pres, agentRaw, goalsRaw, priorAgentRaw, priorGo
     drawSection(4.55, "XI Participation (GLN)", report.xi);
   };
 
-  drawCorpCard(slide, col1X, 1.5, colW, 5.55);
   drawQuartileColumn(col1X, `Month Reporting On — ${reportingPeriodLabel}`, reporting);
-  drawCorpCard(slide, col2X, 1.5, colW, 5.55);
   drawQuartileColumn(col2X, `MTD — ${mtdLabel}`, mtd);
 }
 
@@ -7726,24 +7725,23 @@ function buildCorpCampaignHoursSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
     // Legend
     const legendY = yTop + 0.4;
     const buckets = [...fundingOrder, "Total"];
-    const legendItemW = 2.1;
-    const legendStartX = containerX + (containerW - legendItemW * buckets.length) / 2;
+    const barsStartX = containerX + 1.3;
+    const barsTotalW = containerW - 1.5;
+    const barSlotW = barsTotalW / buckets.length;
     buckets.forEach((f, i) => {
-      const lx = legendStartX + i * legendItemW;
+      const slotX = barsStartX + i * barSlotW;
       slide.addShape("rect", {
-        x: lx, y: legendY, w: 0.2, h: 0.18,
+        x: slotX + 0.1, y: legendY, w: 0.2, h: 0.18,
         fill: { color: fundingColors[f] },
       });
       slide.addText(f === "Total" ? "Total" : `${f} Funding`, {
-        x: lx + 0.25, y: legendY - 0.03, w: legendItemW - 0.3, h: 0.25,
-        fontSize: 10, color: virgilTheme.bodyText,
+        x: slotX + 0.35, y: legendY - 0.03, w: barSlotW - 0.4, h: 0.25,
+        fontSize: 10, color: corpPalette.ink,
       });
     });
     // Bars section
     const barsLabelX = containerX + 0.1;
     const barsLabelW = 1.1;
-    const barsStartX = containerX + 1.3;
-    const barsTotalW = containerW - 1.5;
     const barW = barsTotalW / buckets.length;
     const barGap = 0.05;
     // Row 1: % to Hours Goal
