@@ -6672,7 +6672,7 @@ function makeGoalsQuarterFilter(qStr) {
 // agentRaw / goalsRaw are the full CSVs; dateFilter(dateStr) → boolean tells which rows to include.
 // goalsMonthFilter(row) → boolean filters goals rows by month (prevents multi-month over-counting).
 // Returns numeric metrics (fractions for % fields, e.g. 0.943 = 94.3%).
-function computeCorpAttainment(agentRaw, goalsRaw, dateFilter, goalsMonthFilter) {
+function computeCorpAttainment(agentRaw, goalsRaw, dateFilter, goalsMonthFilter, agentRocFilter) {
   if (!agentRaw || !agentRaw.trim()) {
     return { xiPct: 0, xmPct: 0, sph: 0, cps: 0, planSph: 0, planCps: 0, sales: 0, hours: 0, xiPlan: 0, xmPlan: 0, hoursPlan: 0, homesPlan: 0 };
   }
@@ -6682,6 +6682,8 @@ function computeCorpAttainment(agentRaw, goalsRaw, dateFilter, goalsMonthFilter)
   for (const r of agentRows) {
     const d = (r["Date"] || "").trim();
     if (dateFilter && !dateFilter(d)) continue;
+    const roc = (r["Job"] || "").trim();
+    if (agentRocFilter && !agentRocFilter(roc)) continue;
     hours += Number(r["Hours"]) || 0;
     sales += Number(r["Goals"]) || 0;
     xi += Number(r["New XI"] || r["NewData"] || r["HSD RGUs"]) || 0;
@@ -7223,6 +7225,13 @@ function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
   const colMtd = computeCorpAttainment(agentRaw, goalsRaw,
     makeMonthFilter(reportingMonthLabel), makeGoalsMonthFilter(reportingMonthLabel));
 
+  // SPH-only computations excluding GLB-prefix ROCs (Add XMC campaigns)
+  const excludeGLB = (roc) => !String(roc || "").toUpperCase().startsWith("GLB");
+  const q4Sph = computeCorpAttainment(priorQuarterAgentRaw, priorQuarterGoalsRaw, null, null, excludeGLB);
+  const p2Sph = computeCorpAttainment(corpPriorMonthAgentRaw, corpPriorMonthGoalsRaw, makeMonthFilter(prior2), makeGoalsMonthFilter(prior2), excludeGLB);
+  const p1Sph = computeCorpAttainment(priorAgentRaw, priorGoalsRaw, makeMonthFilter(prior1), makeGoalsMonthFilter(prior1), excludeGLB);
+  const mtdSph = computeCorpAttainment(agentRaw, goalsRaw, makeMonthFilter(reportingMonthLabel), makeGoalsMonthFilter(reportingMonthLabel), excludeGLB);
+
   // Colors
   const barCol = "1E3A8A";       // navy for first 3
   const barColMtd = "7C3AED";    // purple for MTD
@@ -7230,6 +7239,7 @@ function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
   const plotBg = "FAFAFA";
   const plotBorder = "E5E7EB";
   const labels = [q4Label, prior2, prior1, `${reportingMonthLabel} MTD`];
+  const fmtPctCapped = v => `${Math.min(125, Math.round(v * 100))}%`;
 
   // Chart-drawing helper
   const drawChart = (x, y, w, h, title, values, format, goals, yFormat) => {
@@ -7279,20 +7289,6 @@ function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
         fontSize: 7, color: virgilTheme.subtle, align: "right",
       });
     }
-    // Goal line (per-period dashed green, connect points)
-    if (goals && goals.length === values.length) {
-      const slotW = axisW / values.length;
-      goals.forEach((g, i) => {
-        if (g === null || g === undefined || isNaN(g)) return;
-        const gy = valToY(g);
-        const segX = axisX + slotW * i;
-        const segW = slotW;
-        slide.addShape("line", {
-          x: segX, y: gy, w: segW, h: 0,
-          line: { color: goalCol, width: 1.5, dashType: "dash" },
-        });
-      });
-    }
     // Bars
     const barW = axisW * 0.16;
     const slotW = axisW / values.length;
@@ -7319,6 +7315,47 @@ function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
         fontSize: 8, color: virgilTheme.subtle, align: "center",
       });
     });
+    // Goal line — draw AFTER bars so it sits on top.
+    // Connect goal points at bar centers with straight segments between consecutive periods.
+    if (goals && goals.length === values.length) {
+      const goalSlotW = axisW / values.length;
+      const points = goals.map((g, i) => {
+        if (g === null || g === undefined || isNaN(g)) return null;
+        return { x: axisX + goalSlotW * i + goalSlotW / 2, y: valToY(g) };
+      });
+      // Connect consecutive non-null points with dashed segments
+      for (let i = 0; i < points.length - 1; i++) {
+        const p1 = points[i];
+        const p2 = points[i + 1];
+        if (!p1 || !p2) continue;
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        if (dx <= 0) continue;
+        // pptxgenjs addShape("line") needs x/y/w/h; negative h is allowed for upward slope
+        slide.addShape("line", {
+          x: p1.x, y: p1.y, w: dx, h: dy,
+          line: { color: goalCol, width: 1.5, dashType: "dash" },
+        });
+      }
+      // Also draw small leading/trailing horizontal tails so the line extends over the outer bar centers
+      const firstIdx = points.findIndex(p => p !== null);
+      const lastIdx = points.length - 1 - [...points].reverse().findIndex(p => p !== null);
+      if (firstIdx >= 0 && points[firstIdx]) {
+        const p = points[firstIdx];
+        // Tail to left edge of first bar's slot
+        slide.addShape("line", {
+          x: axisX + goalSlotW * firstIdx, y: p.y, w: goalSlotW / 2, h: 0,
+          line: { color: goalCol, width: 1.5, dashType: "dash" },
+        });
+      }
+      if (lastIdx >= 0 && points[lastIdx]) {
+        const p = points[lastIdx];
+        slide.addShape("line", {
+          x: p.x, y: p.y, w: goalSlotW / 2, h: 0,
+          line: { color: goalCol, width: 1.5, dashType: "dash" },
+        });
+      }
+    }
   };
 
   // Top row — 3 charts
@@ -7329,20 +7366,24 @@ function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
   const col2X = 4.7;
   const col3X = 8.9;
 
+  // XI
   drawChart(col1X, topY, chartW, chartH, "XI Attainment",
     [q4.xiPct, colP2.xiPct, colP1.xiPct, colMtd.xiPct].map(v => v || 0),
-    v => `${(v * 100).toFixed(0)}%`,
+    fmtPctCapped,
     [1.0, 1.0, 1.0, 1.0],
     v => `${(v * 100).toFixed(0)}%`);
+
+  // XM
   drawChart(col2X, topY, chartW, chartH, "XM Attainment",
     [q4.xmPct, colP2.xmPct, colP1.xmPct, colMtd.xmPct].map(v => v || 0),
-    v => `${(v * 100).toFixed(0)}%`,
+    fmtPctCapped,
     [1.0, 1.0, 1.0, 1.0],
     v => `${(v * 100).toFixed(0)}%`);
+  // SPH — per-period plan SPH goal line (excluding GLB)
   drawChart(col3X, topY, chartW, chartH, "SPH Attainment",
-    [q4.sph, colP2.sph, colP1.sph, colMtd.sph],
+    [q4Sph.sph, p2Sph.sph, p1Sph.sph, mtdSph.sph],
     v => v.toFixed(2),
-    [q4.planSph, colP2.planSph, colP1.planSph, colMtd.planSph],
+    [q4Sph.planSph, p2Sph.planSph, p1Sph.planSph, mtdSph.planSph],
     v => v.toFixed(2));
 
   // Bottom row — 3 panels (CPS, Scorecard, Insights)
@@ -15697,7 +15738,7 @@ export default function App() {
   const [sheetLoading, setSheetLoading] = useState(false);
   const [sheetError, setSheetError] = useState(null);
   useEffect(() => {
-    if (rawData) return; // already have data
+    if (rawData && rawAgentCsv) return; // already have data AND text cache
     let cancelled = false;
     (async () => {
       try {
@@ -15712,7 +15753,7 @@ export default function App() {
           setCurrentPage({ section: "overview" });
         }
         // Auto-load goals sheet if URL configured
-        if (!cancelled && goalsSheetUrl && !goalsRaw) {
+        if (!cancelled && goalsSheetUrl && (!goalsRaw || !goalsRawCsv)) {
           try {
             const proxyG = url => `https://corsproxy.io/?${encodeURIComponent(url)}`;
             let gRes;
