@@ -6404,6 +6404,33 @@ async function generateMBR(perf, onProgress, { includeAI = true } = {}) {
 // CORP MBR — Parsers
 // ═══════════════════════════════════════════════════════════════════
 
+// Slide 6 campaign grouping — consolidates similar Job Types into one slide.
+// Returns the group name (used as campaign.name in the per-slide aggregation), or null to exclude.
+function getCorpMbrCampaignGroup(jobType) {
+  const jt = (jobType || "").trim();
+  if (!jt) return null;
+  const upper = jt.toUpperCase();
+  // Localizers — own slide (subset of GLN / Acquisition)
+  if (/LOCALIZ/i.test(upper)) return "Localizers";
+  // Onboarding — own slide (subset of GLU / Multi-Product Expansion)
+  if (/ONBOARD/i.test(upper)) return "Onboarding";
+  // GLN non-Localizers → consolidated Acquisition slide
+  if (/^GLN/i.test(jt) || /\b(NONSUB|NON.?SUB|BAU|WR\s*NS)\b/i.test(upper)) return "Acquisition (Non-Localizers)";
+  // GLU non-Onboarding → consolidated XM Expansion slide (XM, XM Likely, Add A Line, etc.)
+  if (/^GLU/i.test(jt) || /\b(XM\s*UP|ADD.?A.?LINE|LIKELY)\b/i.test(upper) || /^XM$/i.test(upper) || /^XM\s/i.test(upper)) return "XM Expansion";
+  // GLB → Up Tier & Ancillary (XMC, Attach, etc.)
+  if (/^GLB/i.test(jt) || /\b(XMC|ATTACH|UP.?TIER|ANCILLARY)\b/i.test(upper)) return "Up Tier & Ancillary";
+  return null;
+}
+
+const CORP_MBR_GROUP_CATEGORIES = {
+  "Localizers": "Acquisition",
+  "Acquisition (Non-Localizers)": "Acquisition",
+  "Onboarding": "Multi-Product Expansion",
+  "XM Expansion": "Multi-Product Expansion",
+  "Up Tier & Ancillary": "Up Tier & Ancillary",
+};
+
 // Tolerant buildGoalLookup wrapper — fills in a default "ALL" Site for rows missing Site.
 // The existing `buildGoalLookup` skips any row without both Target Audience AND Site.
 // Corp MBR's prior-month goals sheet can arrive with an empty Site column — we still want
@@ -7016,51 +7043,48 @@ function buildCampaignUniverse(priorAgentRaw, priorGoalsRaw, agentRaw, goalsRaw,
   const priorFilter = makeMonthFilter(priorMonthLabel);
   const reportingFilter = makeMonthFilter(reportingMonthLabel);
 
-  // Gather Job Types from both agent CSVs
-  const byJobType = {};
-  const keep = (name) => {
-    const jt = (name || "").trim();
-    if (!jt || jt === "Job Type" || jt === "Not Found" || jt === "Unknown") return null;
-    const category = getMbrCategory(jt);
-    if (category === jt) return null; // Not a recognized GL category
-    return category;
+  // Group Job Types into consolidated Slide 6 buckets
+  const byGroup = {};
+  const ensure = (group) => {
+    if (!byGroup[group]) {
+      byGroup[group] = {
+        name: group,
+        category: CORP_MBR_GROUP_CATEGORIES[group] || group,
+        hoursPrior: 0, hoursReporting: 0, goalPrior: 0, goalReporting: 0,
+      };
+    }
+    return byGroup[group];
   };
+
   const accumulate = (rows, filter, hoursField) => {
     for (const r of rows) {
       const jobType = (r["Job Type"] || "").trim();
-      const category = keep(jobType);
-      if (!category) continue;
+      const group = getCorpMbrCampaignGroup(jobType);
+      if (!group) continue;
       if (filter && !filter((r["Date"] || "").trim())) continue;
-      const hours = Number(r["Hours"]) || 0;
-      if (!byJobType[jobType]) {
-        byJobType[jobType] = { name: jobType, category, hoursPrior: 0, hoursReporting: 0, goalPrior: 0, goalReporting: 0 };
-      }
-      byJobType[jobType][hoursField] += hours;
+      ensure(group)[hoursField] += Number(r["Hours"]) || 0;
     }
   };
   accumulate(agentsPrior, priorFilter, "hoursPrior");
   accumulate(agentsCurr, reportingFilter, "hoursReporting");
 
-  // Goal hours from each month's goals CSV
+  // Goal hours from each month's goals CSV — sum across all Target Audiences in the same group
   const accumulateGoals = (goalsRawStr, key) => {
     if (!goalsRawStr || !goalsRawStr.trim()) return;
     const goalsRows = parseCSV(goalsRawStr);
     const lookup = buildGoalLookupTolerant(goalsRows);
     if (!lookup) return;
     Object.keys(lookup.byTA || {}).forEach(ta => {
-      const category = keep(ta);
-      if (!category) return;
-      if (!byJobType[ta]) {
-        byJobType[ta] = { name: ta, category, hoursPrior: 0, hoursReporting: 0, goalPrior: 0, goalReporting: 0 };
-      }
+      const group = getCorpMbrCampaignGroup(ta);
+      if (!group) return;
       const hoursGoal = getPlanForKey(lookup.byTA[ta], "Hours Goal") || 0;
-      byJobType[ta][key] += hoursGoal;
+      ensure(group)[key] += hoursGoal;
     });
   };
   accumulateGoals(priorGoalsRaw, "goalPrior");
   accumulateGoals(goalsRaw, "goalReporting");
 
-  return Object.values(byJobType)
+  return Object.values(byGroup)
     .filter(c => c.hoursPrior > 0 || c.hoursReporting > 0 || c.goalPrior > 0 || c.goalReporting > 0)
     .sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -7089,12 +7113,12 @@ function buildCampaignMonthDetail(campaign, agentRaw, goalsRaw, monthFilter, ext
   };
   if (!agentRaw || !agentRaw.trim()) return result;
 
-  const targetJobType = campaign.name;
+  const targetGroup = campaign.name;
   const agentRows = parseCSV(agentRaw);
   for (const r of agentRows) {
     if (monthFilter && !monthFilter((r["Date"] || "").trim())) continue;
     const jobType = (r["Job Type"] || "").trim();
-    if (jobType !== targetJobType) continue;
+    if (getCorpMbrCampaignGroup(jobType) !== targetGroup) continue;
     result.hoursActual += Number(r["Hours"]) || 0;
     result.salesActual += Number(r["Goals"]) || 0;
     result.xiActual += Number(r["New XI"]) || 0;
@@ -7109,10 +7133,11 @@ function buildCampaignMonthDetail(campaign, agentRaw, goalsRaw, monthFilter, ext
     const goalRows = parseCSV(goalsRaw);
     const goalLookup = buildGoalLookupTolerant(goalRows);
     if (goalLookup) {
-      const entries = getGoalEntries(goalLookup, campaign.name, null);
-      // Collapse all matched entries into one combined siteMap
+      // Merge ALL Target Audiences whose group matches this campaign's group
+      // (e.g. campaign.name = "XM Expansion" merges "XM Likely" + "Add A Line" + "XM Up" + ...)
       const combinedSiteMap = {};
-      entries.forEach(({ siteMap }) => {
+      Object.entries(goalLookup.byTA || {}).forEach(([ta, siteMap]) => {
+        if (getCorpMbrCampaignGroup(ta) !== campaign.name) return;
         Object.entries(siteMap).forEach(([site, rows]) => {
           if (!combinedSiteMap[site]) combinedSiteMap[site] = [];
           combinedSiteMap[site].push(...rows);
