@@ -6650,8 +6650,8 @@ function computeCorpAttainment(agentRaw, goalsRaw, dateFilter, goalsMonthFilter)
     if (dateFilter && !dateFilter(d)) continue;
     hours += Number(r["Hours"]) || 0;
     sales += Number(r["Goals"]) || 0;
-    xi += Number(r["New XI"]) || 0;
-    xm += Number(r["XM Lines"]) || 0;
+    xi += Number(r["New XI"] || r["NewData"] || r["HSD RGUs"]) || 0;
+    xm += Number(r["XM Lines"] || r["XMLines"] || r["NewXM"]) || 0;
   }
   let xiPlan = 0, xmPlan = 0, hoursPlan = 0;
   for (const r of goalsRows) {
@@ -6718,8 +6718,8 @@ function buildQuartileReport(agentRaw, goalsRaw, newHiresRaw, dateFilter, refere
     const a = byAgent[key];
     a.hours += Number(r["Hours"]) || 0;
     a.sales += Number(r["Goals"]) || 0;
-    a.xi += Number(r["New XI"]) || 0;
-    a.xm += Number(r["XM Lines"]) || 0;
+    a.xi += Number(r["New XI"] || r["NewData"] || r["HSD RGUs"]) || 0;
+    a.xm += Number(r["XM Lines"] || r["XMLines"] || r["NewXM"]) || 0;
   }
 
   const refDate = referenceDate ? new Date(referenceDate) : new Date();
