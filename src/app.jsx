@@ -8575,6 +8575,134 @@ function buildCorpTnpsSlide(pres, perf, reportingMonthLabel, insightText) {
   });
 }
 
+function buildCorpPartnerExperienceSlide(pres, stats, reportingMonthLabel, supportText, incentivesText) {
+  const slide = pres.addSlide();
+  slide.background = { color: virgilTheme.slideBg };
+  virgilBrandBars(pres, slide);
+
+  // Eyebrow + title
+  slide.addText("PEOPLE & OPERATIONS", {
+    x: 0.5, y: 0.35, w: 12, h: 0.25,
+    fontSize: 10, color: virgilTheme.eyebrow, bold: true, charSpacing: 2,
+  });
+  slide.addText(`Partner Experience — ${reportingMonthLabel}`, {
+    x: 0.5, y: 0.65, w: 12, h: 0.55,
+    fontSize: 22, color: virgilTheme.bodyText, bold: true,
+  });
+
+  // Top row — two text panels with purple gradient headers
+  const topY = 1.4;
+  const panelH = 2.2;
+  const drawTextPanel = (x, w, title, body, bullets) => {
+    slide.addShape("roundRect", {
+      x, y: topY, w, h: panelH,
+      fill: { color: corpPalette.surface },
+      line: { color: corpPalette.cardBorder, width: 0.75 },
+      rectRadius: 0.1,
+    });
+    // Purple gradient header bar (approximation via solid)
+    slide.addShape("rect", {
+      x, y: topY, w, h: 0.4,
+      fill: { color: corpPalette.purple },
+      line: { color: corpPalette.purple, width: 0 },
+    });
+    slide.addText(title, {
+      x: x + 0.15, y: topY + 0.06, w: w - 0.3, h: 0.28,
+      fontSize: 11, color: "FFFFFF", bold: true, charSpacing: 1,
+    });
+    let contentText;
+    if (bullets) {
+      const items = String(body || "")
+        .split(/\r?\n/)
+        .map(s => s.trim())
+        .filter(Boolean);
+      contentText = items.length ? items.map(s => `• ${s}`).join("\n") : "(no entries)";
+    } else {
+      contentText = body || "(no text entered)";
+    }
+    slide.addText(contentText, {
+      x: x + 0.15, y: topY + 0.5, w: w - 0.3, h: panelH - 0.6,
+      fontSize: 10, color: (body ? virgilTheme.bodyText : virgilTheme.subtle),
+      italic: !body, valign: "top",
+    });
+  };
+  drawTextPanel(0.5, 6.1, "HOW CAN WE SUPPORT YOU?", supportText, false);
+  drawTextPanel(6.75, 6.1, "CURRENT INCENTIVES", incentivesText, true);
+
+  // Bottom row — two KPI panels (hires + attrition)
+  const kpiY = 3.9;
+  const kpiH = 3.1;
+  const drawKpiPanel = (x, w, title, bigCount, bigLabel, items, extraSubline) => {
+    slide.addShape("roundRect", {
+      x, y: kpiY, w, h: kpiH,
+      fill: { color: corpPalette.surface },
+      line: { color: corpPalette.cardBorder, width: 0.75 },
+      rectRadius: 0.1,
+    });
+    slide.addText(title, {
+      x: x + 0.2, y: kpiY + 0.12, w: w - 0.4, h: 0.25,
+      fontSize: 10, color: virgilTheme.eyebrow, bold: true, charSpacing: 1.5,
+    });
+    slide.addText(String(bigCount), {
+      x: x + 0.2, y: kpiY + 0.4, w: w - 0.4, h: 0.8,
+      fontSize: 48, color: corpPalette.navy, bold: true, align: "left",
+    });
+    slide.addText(bigLabel, {
+      x: x + 0.2, y: kpiY + 1.2, w: w - 0.4, h: 0.2,
+      fontSize: 9, color: virgilTheme.subtle,
+    });
+
+    // Site split bar (DR orange, BZ green, Unknown gray)
+    const drCount = items.filter(it => it.site === "DR" || it.site === "Dominican Republic").length;
+    const bzCount = items.filter(it => it.site === "BZ" || it.site === "Belize" || /Belize|Ignaco/.test(it.site || "")).length;
+    const otherCount = Math.max(0, items.length - drCount - bzCount);
+    const barY = kpiY + 1.45;
+    const barW = w - 0.4;
+    const barH = 0.22;
+    let xCursor = x + 0.2;
+    const drW = items.length ? (drCount / items.length) * barW : 0;
+    const bzW = items.length ? (bzCount / items.length) * barW : 0;
+    const otherW = items.length ? (otherCount / items.length) * barW : 0;
+    if (drW > 0) {
+      slide.addShape("rect", { x: xCursor, y: barY, w: drW, h: barH, fill: { color: corpPalette.q3 }, line: { color: corpPalette.q3, width: 0 } });
+      slide.addText(`DR ${drCount}`, { x: xCursor, y: barY, w: drW, h: barH, fontSize: 9, color: "FFFFFF", bold: true, align: "center", valign: "middle" });
+      xCursor += drW;
+    }
+    if (bzW > 0) {
+      slide.addShape("rect", { x: xCursor, y: barY, w: bzW, h: barH, fill: { color: corpPalette.green }, line: { color: corpPalette.green, width: 0 } });
+      slide.addText(`BZ ${bzCount}`, { x: xCursor, y: barY, w: bzW, h: barH, fontSize: 9, color: "FFFFFF", bold: true, align: "center", valign: "middle" });
+      xCursor += bzW;
+    }
+    if (otherW > 0) {
+      slide.addShape("rect", { x: xCursor, y: barY, w: otherW, h: barH, fill: { color: corpPalette.inkSubtle }, line: { color: corpPalette.inkSubtle, width: 0 } });
+      slide.addText(`Other ${otherCount}`, { x: xCursor, y: barY, w: otherW, h: barH, fontSize: 9, color: "FFFFFF", bold: true, align: "center", valign: "middle" });
+    }
+
+    // Up to 5 rows
+    const preview = items.slice(0, 5);
+    const listY = kpiY + 1.8;
+    if (preview.length === 0) {
+      slide.addText("(none)", { x: x + 0.2, y: listY, w: w - 0.4, h: 0.3, fontSize: 10, color: virgilTheme.subtle, italic: true });
+    } else {
+      const listText = preview.map(it => `${it.name} — ${it.hireDate || it.endDate} — ${it.site}`).join("\n");
+      slide.addText(listText, {
+        x: x + 0.2, y: listY, w: w - 0.4, h: kpiH - 1.9,
+        fontSize: 9, color: corpPalette.ink, valign: "top",
+      });
+    }
+
+    if (extraSubline) {
+      slide.addText(extraSubline, {
+        x: x + 0.2, y: kpiY + kpiH - 0.3, w: w - 0.4, h: 0.22,
+        fontSize: 9, color: virgilTheme.eyebrow, bold: true,
+      });
+    }
+  };
+  drawKpiPanel(0.5, 6.1, "NEW HIRES & TRAINING", stats.hires.length, `Hires in ${reportingMonthLabel}`, stats.hires, null);
+  const retentionLabel = stats.retentionRate === null ? "Retention: —" : `Retention: ${stats.retentionRate.toFixed(1)}%`;
+  drawKpiPanel(6.75, 6.1, "ATTRITION", stats.departures.length, `Departures in ${reportingMonthLabel}`, stats.departures, retentionLabel);
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // CORP MBR — Orchestrator
 // ═══════════════════════════════════════════════════════════════════
