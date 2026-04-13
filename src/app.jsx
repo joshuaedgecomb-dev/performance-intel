@@ -6410,25 +6410,25 @@ function getCorpMbrCampaignGroup(jobType) {
   const jt = (jobType || "").trim();
   if (!jt) return null;
   const upper = jt.toUpperCase();
-  // Localizers — own slide (subset of GLN / Acquisition)
-  if (/LOCALIZ/i.test(upper)) return "Localizers";
-  // Onboarding — own slide (subset of GLU / Multi-Product Expansion)
-  if (/ONBOARD/i.test(upper)) return "Onboarding";
-  // GLN non-Localizers → consolidated Acquisition slide
-  if (/^GLN/i.test(jt) || /\b(NONSUB|NON.?SUB|BAU|WR\s*NS)\b/i.test(upper)) return "Acquisition (Non-Localizers)";
-  // GLU non-Onboarding → consolidated XM Expansion slide (XM, XM Likely, Add A Line, etc.)
-  if (/^GLU/i.test(jt) || /\b(XM\s*UP|ADD.?A.?LINE|LIKELY)\b/i.test(upper) || /^XM$/i.test(upper) || /^XM\s/i.test(upper)) return "XM Expansion";
-  // GLB → Up Tier & Ancillary (XMC, Attach, etc.)
-  if (/^GLB/i.test(jt) || /\b(XMC|ATTACH|UP.?TIER|ANCILLARY)\b/i.test(upper)) return "Up Tier & Ancillary";
+  // Nonsub Localizers — own slide (subset of GLN / Acquisition)
+  if (/LOCALIZ/i.test(upper)) return "Nonsub Localizers";
+  // XM Onboarding — own slide (subset of GLU / Multi-Product Expansion)
+  if (/ONBOARD/i.test(upper)) return "XM Onboarding";
+  // GLN non-Localizers → consolidated Nonsub Acquisition slide
+  if (/^GLN/i.test(jt) || /\b(NONSUB|NON.?SUB|BAU|WR\s*NS)\b/i.test(upper)) return "Nonsub Acquisition";
+  // GLU non-Onboarding → consolidated XM Likely slide (XM, XM Likely, Add A Line, etc.)
+  if (/^GLU/i.test(jt) || /\b(XM\s*UP|ADD.?A.?LINE|LIKELY)\b/i.test(upper) || /^XM$/i.test(upper) || /^XM\s/i.test(upper)) return "XM Likely";
+  // GLB → XMC (Attach, Up-Tier, Ancillary, etc.)
+  if (/^GLB/i.test(jt) || /\b(XMC|ATTACH|UP.?TIER|ANCILLARY)\b/i.test(upper)) return "XMC";
   return null;
 }
 
 const CORP_MBR_GROUP_CATEGORIES = {
-  "Localizers": "Acquisition",
-  "Acquisition (Non-Localizers)": "Acquisition",
-  "Onboarding": "Multi-Product Expansion",
-  "XM Expansion": "Multi-Product Expansion",
-  "Up Tier & Ancillary": "Up Tier & Ancillary",
+  "Nonsub Localizers": "Acquisition",
+  "Nonsub Acquisition": "Acquisition",
+  "XM Onboarding": "Multi-Product Expansion",
+  "XM Likely": "Multi-Product Expansion",
+  "XMC": "Up Tier & Ancillary",
 };
 
 // Tolerant buildGoalLookup wrapper — fills in a default "ALL" Site for rows missing Site.
