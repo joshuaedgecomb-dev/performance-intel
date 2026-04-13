@@ -6404,6 +6404,22 @@ async function generateMBR(perf, onProgress, { includeAI = true } = {}) {
 // CORP MBR — Parsers
 // ═══════════════════════════════════════════════════════════════════
 
+// Tolerant finder for the "Actual Leads" column in a Goals CSV row.
+// Tries exact names via findCol, then falls back to a regex scan of the row's own keys
+// so we match any header containing "actual" + "lead" (e.g. "Actual Leads ", "Actual Lead Count", "ActualLeads").
+function findAnyLeadsColumn(row) {
+  const direct = findCol(row, "Actual Leads", "Leads Actual", "Leads", "Actual Lead Count", "ActualLeads");
+  if (direct !== undefined && direct !== "") return direct;
+  if (!row) return undefined;
+  for (const key of Object.keys(row)) {
+    if (/actual.*lead|lead.*actual/i.test(key)) {
+      const v = row[key];
+      if (v !== undefined && v !== "") return v;
+    }
+  }
+  return undefined;
+}
+
 function parseCoachingDetails(rawCsv) {
   if (!rawCsv || !rawCsv.trim()) return {};
   const rows = parseCSV(rawCsv);
@@ -7088,7 +7104,7 @@ function buildCampaignMonthDetail(campaign, agentRaw, goalsRaw, monthFilter, ext
       const uniqueRows = [];
       Object.values(combinedSiteMap).forEach(rows => uniqueRows.push(...rows));
       for (const r of uniqueRows) {
-        const leadsVal = findCol(r, "Actual Leads", "Leads Actual", "Leads", "Actual Lead Count");
+        const leadsVal = findAnyLeadsColumn(r);
         result.actualLeads += Number(leadsVal) || 0;
       }
     }
@@ -7136,7 +7152,7 @@ function buildCampaignMonthTotals(agentRaw, goalsRaw, monthFilter) {
   if (goalsRaw && goalsRaw.trim()) {
     const rows = parseCSV(goalsRaw);
     for (const g of rows) {
-      const leadsVal = findCol(g, "Actual Leads", "Leads Actual", "Leads", "Actual Lead Count");
+      const leadsVal = findAnyLeadsColumn(g);
       sumActualLeads += Number(leadsVal) || 0;
     }
   }
@@ -8294,7 +8310,7 @@ function buildCorpCampaignDetailSlide(pres, campaign, detailPrior, detailReporti
 function renderCorpCampaignColumn(slide, x, y, detail, columnLabel) {
   const tableW = 6.0;
   const colW = [1.55, 0.89, 0.89, 0.89, 0.89, 0.89]; // 6 cols: Label | Goals | Budget | Actual | Variance | % Goal
-  const rowH = 0.2;
+  const rowH = 0.17;
 
   const hdrBase = { fill: { color: corpPalette.purple }, color: "FFFFFF", bold: true, align: "center", fontSize: 9 };
   const labelBase = { bold: true, color: corpPalette.ink, fontSize: 8, align: "left" };
