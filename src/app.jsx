@@ -6420,6 +6420,16 @@ function findAnyLeadsColumn(row) {
   return undefined;
 }
 
+// Parse a possibly formatted numeric cell — strips $, commas, whitespace.
+// "1,234" → 1234, "$5,000.50" → 5000.5, "" → 0, undefined → 0.
+function parseLeadsNumber(v) {
+  if (v === null || v === undefined) return 0;
+  const cleaned = String(v).replace(/[$,\s]/g, "");
+  if (!cleaned) return 0;
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : 0;
+}
+
 function parseCoachingDetails(rawCsv) {
   if (!rawCsv || !rawCsv.trim()) return {};
   const rows = parseCSV(rawCsv);
@@ -7105,7 +7115,7 @@ function buildCampaignMonthDetail(campaign, agentRaw, goalsRaw, monthFilter, ext
       Object.values(combinedSiteMap).forEach(rows => uniqueRows.push(...rows));
       for (const r of uniqueRows) {
         const leadsVal = findAnyLeadsColumn(r);
-        result.actualLeads += Number(leadsVal) || 0;
+        result.actualLeads += parseLeadsNumber(leadsVal);
       }
     }
   }
@@ -7153,7 +7163,7 @@ function buildCampaignMonthTotals(agentRaw, goalsRaw, monthFilter) {
     const rows = parseCSV(goalsRaw);
     for (const g of rows) {
       const leadsVal = findAnyLeadsColumn(g);
-      sumActualLeads += Number(leadsVal) || 0;
+      sumActualLeads += parseLeadsNumber(leadsVal);
     }
   }
   return { sumActualLeads, sumHoursActual };
