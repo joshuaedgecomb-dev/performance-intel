@@ -8554,21 +8554,24 @@ function renderCorpCampaignColumn(slide, x, y, detail, columnLabel) {
   pushLead(4, "Contact Rate", detail.contactRate === null ? "—" : `${detail.contactRate.toFixed(1)}%`);
   pushLead(5, "Lead Penetration", detail.leadPenetration === null ? "—" : `${detail.leadPenetration.toFixed(1)}%`);
 
+  // Side-by-side: narrow Leads table on left, Comments box on right
+  const leadsW = 2.1;
+  const commentsX = x + leadsW + 0.15;
+  const commentsW = tableW - leadsW - 0.15;
+  const sectionH = 1.65;
   slide.addTable([leadsHdr, ...leadsRows], {
-    x, y: cy, w: tableW, colW: leadsColW, rowH: 0.17,
+    x, y: cy, w: leadsW, colW: [1.3, 0.8], rowH: 0.235,
     border: { type: "solid", pt: 0.5, color: corpPalette.cardBorder },
     autoPage: false,
   });
-  cy += 0.17 * (leadsRows.length + 1) + 0.08;
-  // --- Comment box (manual edit in PowerPoint) ---
   slide.addShape("rect", {
-    x, y: cy, w: tableW, h: 0.45,
+    x: commentsX, y: cy, w: commentsW, h: sectionH,
     fill: { color: corpPalette.muted },
     line: { color: corpPalette.cardBorder, width: 0.5 },
   });
   slide.addText("Comments", {
-    x: x + 0.08, y: cy + 0.02, w: tableW - 0.16, h: 0.18,
-    fontSize: 8, fontFace: "Segoe UI", color: virgilTheme.eyebrow, bold: true, charSpacing: 1.5,
+    x: commentsX + 0.08, y: cy + 0.04, w: commentsW - 0.16, h: 0.2,
+    fontSize: 9, fontFace: "Segoe UI", color: virgilTheme.eyebrow, bold: true, charSpacing: 1.5,
   });
 }
 
