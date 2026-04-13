@@ -7411,9 +7411,14 @@ function virgilSlideFrame(pres, slide, options) {
     fill: { color: virgilTheme.gradientRight },
     line: { color: virgilTheme.gradientRight, width: 0 },
   });
-  const reviewLabel = opts.reportingMonthLabel
-    ? `${String(opts.reportingMonthLabel).split(" ")[0].toUpperCase()} REVIEW`
-    : "REVIEW";
+  const reviewLabel = (() => {
+    if (!opts.reportingMonthLabel) return "REVIEW";
+    const MONTH_FULL = { jan:"JANUARY", feb:"FEBRUARY", mar:"MARCH", apr:"APRIL", may:"MAY", jun:"JUNE", jul:"JULY", aug:"AUGUST", sep:"SEPTEMBER", oct:"OCTOBER", nov:"NOVEMBER", dec:"DECEMBER" };
+    const first = String(opts.reportingMonthLabel).trim().split(/\s+/)[0];
+    const key = first.slice(0, 3).toLowerCase();
+    const full = MONTH_FULL[key] || first.toUpperCase();
+    return `${full} REVIEW`;
+  })();
   slide.addText(reviewLabel, {
     x: 0.4, y: footerY + 0.12, w: 3, h: 0.25,
     fontSize: 10, fontFace: "Segoe UI", color: "FFFFFF", bold: true, charSpacing: 2,
