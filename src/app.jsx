@@ -7669,6 +7669,24 @@ function buildCorpQuartileSlide(pres, agentRaw, goalsRaw, priorAgentRaw, priorGo
 
   drawQuartileColumn(col1X, `Month Reporting On — ${reportingPeriodLabel}`, reporting);
   drawQuartileColumn(col2X, `MTD — ${mtdLabel}`, mtd);
+
+  // Dividers — vertical between columns, horizontal between XM and XI within each column
+  const dividerColor = corpPalette.navy;
+  // Vertical divider (between the two columns)
+  slide.addShape("line", {
+    x: (col1X + colW + col2X) / 2, y: 1.4, w: 0, h: 5.85,
+    line: { color: dividerColor, width: 1 },
+  });
+  // Horizontal divider in left column (between XM and XI sections)
+  slide.addShape("line", {
+    x: col1X, y: 4.375, w: colW, h: 0,
+    line: { color: dividerColor, width: 1 },
+  });
+  // Horizontal divider in right column
+  slide.addShape("line", {
+    x: col2X, y: 4.375, w: colW, h: 0,
+    line: { color: dividerColor, width: 1 },
+  });
 }
 
 function buildCorpCampaignHoursSlide(pres, agentRaw, goalsRaw, priorAgentRaw, priorGoalsRaw, reportingMonthLabel, corpPriorMonthAgentRaw, corpPriorMonthGoalsRaw) {
