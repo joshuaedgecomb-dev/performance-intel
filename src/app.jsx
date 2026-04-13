@@ -8879,7 +8879,8 @@ function VirgilMbrExportModal({
         const dt = new Date(end);
         const mo = dt.toLocaleDateString("en-US", { month: "short" });
         const yr = String(dt.getFullYear()).slice(2);
-        return `${mo} '${yr}`;
+        // Default to the LAST COMPLETE fiscal month (current in-progress − 1)
+        return getPriorMonthLabel(`${mo} '${yr}`);
       }
     } catch(e) {}
     return "";
@@ -9042,11 +9043,11 @@ Write bullet-point style insights focused on movement vs prior, gaps vs 75% goal
         </p>
 
         <label style={{ display: "block", marginTop: 16, fontSize: 13, fontWeight: 600 }}>
-          Current Fiscal Month Label
+          Reporting Month (Month of Discussion)
           <input type="text" value={reportingMonth} onChange={e => setReportingMonth(e.target.value)}
             placeholder="Mar '26"
             style={{ display: "block", marginTop: 4, width: "100%", padding: 8, border: "1px solid #d1d5db", borderRadius: 6 }} />
-          <small style={{ color: "#6b7280" }}>The current in-progress fiscal month (MTD). Must match format like "Apr '26". Reporting month auto-derives as (this − 1).</small>
+          <small style={{ color: "#6b7280" }}>The last complete fiscal month. Must match format like "Mar '26". Previous month auto-derives as (this − 1), MTD as (this + 1).</small>
         </label>
 
         <div style={{ marginTop: 16, padding: 12, background: "#f9fafb", borderRadius: 6 }}>
