@@ -7024,7 +7024,8 @@ function buildExtendedAgentLookup(extendedRows, monthFilter) {
   const out = {};
   for (const r of extendedRows) {
     if (monthFilter && !monthFilter(r.date)) continue;
-    const key = r.jobType || "";
+    // Key by Slide 6 campaign group so multiple Job Types within a group merge.
+    const key = getCorpMbrCampaignGroup(r.jobType);
     if (!key) continue;
     if (!out[key]) out[key] = { dials: 0, contacts: 0, finals: 0 };
     out[key].dials += r.dials;
@@ -8922,9 +8923,12 @@ function buildVirgilMbrPresentation(perf, options) {
   );
   const prevTotals = buildCampaignMonthTotals(prevAgent, prevGoals, prevFilter);
   const discussionTotals = buildCampaignMonthTotals(discussionAgent, discussionGoals, discussionFilter);
-  const extendedRows = Array.isArray(options.corpExtendedAgent) ? options.corpExtendedAgent : [];
-  const extPrevLookup = buildExtendedAgentLookup(extendedRows, prevFilter);
-  const extDiscussionLookup = buildExtendedAgentLookup(extendedRows, discussionFilter);
+  // Extended Agent stats per month — Feb from corpPriorMonthAgentRaw, Mar from priorAgentRaw.
+  // Both CSVs include Dials/Contacts/Finals columns; parse each independently.
+  const extPrevRows = parseExtendedAgentStats(prevAgent);
+  const extDiscussionRows = parseExtendedAgentStats(discussionAgent);
+  const extPrevLookup = buildExtendedAgentLookup(extPrevRows, prevFilter);
+  const extDiscussionLookup = buildExtendedAgentLookup(extDiscussionRows, discussionFilter);
   const perCampaignNotes = (options.insights && options.insights.slide6Notes) || {};
   for (const campaign of campaignUniverse) {
     const detailPrior = buildCampaignMonthDetail(campaign, prevAgent, prevGoals, prevFilter, extPrevLookup, prevTotals);
