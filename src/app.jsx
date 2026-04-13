@@ -7399,8 +7399,8 @@ function virgilSlideFrame(pres, slide, options) {
   }
 
   // --- BOTTOM: dark gradient footer bar with review label / title / xfinity ---
-  const footerY = 7.1;
-  const footerH = 0.4;
+  const footerY = 7.2;
+  const footerH = 0.3;
   slide.addShape("rect", {
     x: 0, y: footerY, w: w * 0.5, h: footerH,
     fill: { color: virgilTheme.gradientLeft },
@@ -7420,21 +7420,21 @@ function virgilSlideFrame(pres, slide, options) {
     return `${full} REVIEW`;
   })();
   slide.addText(reviewLabel, {
-    x: 0.4, y: footerY + 0.08, w: 3, h: 0.25,
+    x: 0.4, y: footerY + 0.04, w: 3, h: 0.25,
     fontSize: 10, fontFace: "Segoe UI", color: "FFFFFF", bold: true, charSpacing: 2,
   });
   slide.addText("GLOBAL CALLCENTER SOLUTIONS", {
-    x: 4.5, y: footerY + 0.08, w: 4.5, h: 0.25,
+    x: 4.5, y: footerY + 0.04, w: 4.5, h: 0.25,
     fontSize: 10, fontFace: "Segoe UI", color: "FFFFFF", bold: true, align: "center", charSpacing: 2,
   });
   if (opts.pageNumber !== undefined) {
     slide.addText(`xfinity  |  ${opts.pageNumber}`, {
-      x: 11.0, y: footerY + 0.08, w: 2.0, h: 0.25,
+      x: 11.0, y: footerY + 0.04, w: 2.0, h: 0.25,
       fontSize: 10, fontFace: "Segoe UI", color: "FFFFFF", align: "right",
     });
   } else {
     slide.addText("xfinity", {
-      x: 11.0, y: footerY + 0.08, w: 2.0, h: 0.25,
+      x: 11.0, y: footerY + 0.04, w: 2.0, h: 0.25,
       fontSize: 10, fontFace: "Segoe UI", color: "FFFFFF", align: "right",
     });
   }
