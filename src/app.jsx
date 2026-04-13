@@ -6775,13 +6775,15 @@ function buildQuartileReport(agentRaw, goalsRaw, newHiresRaw, dateFilter, refere
     const agents = Object.values(byAgent).filter(a => a.group === group);
     const withMetrics = agents.map(a => {
       const goal = goalByRoc[a.roc];
-      let unitGoal = 0;
+      let unitGoal = 0, planSph = 0;
       if (goal) {
-        if (group === "XM") unitGoal = Number(goal["XM GOAL"] || goal["XM Sell In Goal"]) || 0;
-        else unitGoal = Number(goal["HSD GOAL"] || goal["HSD Sell In Goal"]) || 0;
+        if (group === "XM") unitGoal = Number(goal["XM GOAL"] || goal["XM Sell In Goal"] || goal["XM Unit Goal"]) || 0;
+        else unitGoal = Number(goal["HSD GOAL"] || goal["HSD Sell In Goal"] || goal["HSD Unit Goal"]) || 0;
+        planSph = Number(String(goal["SPH GOAL"] || goal["SPH Goal"] || "").replace(/,/g, "").replace(/%/g, "")) || 0;
       }
       const unitsMade = group === "XM" ? a.xm : a.xi;
-      const pctToGoal = unitGoal > 0 ? unitsMade / unitGoal : 0;
+      const sph = a.hours > 0 ? a.sales / a.hours : 0;
+      const sphExpected = planSph * a.hours;
       const hireStr = hireByName[a.name.toLowerCase()] || "";
       let tenureDays = 0;
       if (hireStr) {
@@ -6790,10 +6792,11 @@ function buildQuartileReport(agentRaw, goalsRaw, newHiresRaw, dateFilter, refere
           tenureDays = Math.floor((refDate - hd) / (1000 * 60 * 60 * 24));
         } catch(e) {}
       }
-      return { ...a, unitsMade, unitGoal, pctToGoal, tenureDays };
+      return { ...a, unitsMade, unitGoal, sph, planSph, sphExpected, tenureDays };
     });
 
-    withMetrics.sort((x, y) => y.pctToGoal - x.pctToGoal);
+    // Sort by SPH descending, split into 4 equal quartiles
+    withMetrics.sort((x, y) => y.sph - x.sph);
     const n = withMetrics.length;
     if (n === 0) return { quartileSummary: [], tenureMatrix: [] };
     const qSize = Math.ceil(n / 4);
@@ -6805,8 +6808,9 @@ function buildQuartileReport(agentRaw, goalsRaw, newHiresRaw, dateFilter, refere
 
     const quartileSummary = quartiles.map((qAgents, i) => {
       const unitsTotal = qAgents.reduce((s, a) => s + a.unitsMade, 0);
-      const goalTotal = qAgents.reduce((s, a) => s + a.unitGoal, 0);
-      const qPct = goalTotal > 0 ? unitsTotal / goalTotal : 0;
+      const salesTotal = qAgents.reduce((s, a) => s + a.sales, 0);
+      const expectedTotal = qAgents.reduce((s, a) => s + a.sphExpected, 0);
+      const qPct = expectedTotal > 0 ? salesTotal / expectedTotal : 0;
       return { quartile: i + 1, units: unitsTotal, pctToGoal: qPct, agentCount: qAgents.length };
     });
 
@@ -6821,6 +6825,20 @@ function buildQuartileReport(agentRaw, goalsRaw, newHiresRaw, dateFilter, refere
       const total = inBucket.length;
       const participation = total ? anySale / total : 0;
       return { label: bucketLabel(lo, hi), A: counts[0], B: counts[1], C: counts[2], D: counts[3], participation, total };
+    });
+
+    // Overall totals row
+    const totalA = tenureMatrix.reduce((s, r) => s + r.A, 0);
+    const totalB = tenureMatrix.reduce((s, r) => s + r.B, 0);
+    const totalC = tenureMatrix.reduce((s, r) => s + r.C, 0);
+    const totalD = tenureMatrix.reduce((s, r) => s + r.D, 0);
+    const totalAny = withMetrics.filter(a => a.unitsMade >= 1).length;
+    const totalAgents = withMetrics.length;
+    tenureMatrix.push({
+      label: "Total", A: totalA, B: totalB, C: totalC, D: totalD,
+      participation: totalAgents ? totalAny / totalAgents : 0,
+      total: totalAgents,
+      isTotal: true,
     });
 
     return { quartileSummary, tenureMatrix };
@@ -7563,14 +7581,17 @@ function buildCorpQuartileSlide(pres, agentRaw, goalsRaw, newHiresRaw, reporting
           { text: "D", options: { bold: true, align: "center", fill: { color: "DC2626" }, color: "FFFFFF" } },
           { text: "Part %", options: { bold: true, align: "center", fill: { color: "F3F4F6" } } },
         ],
-        ...section.tenureMatrix.map(row => ([
-          { text: row.label, options: { bold: true, align: "center" } },
-          { text: String(row.A), options: { align: "center" } },
-          { text: String(row.B), options: { align: "center" } },
-          { text: String(row.C), options: { align: "center" } },
-          { text: String(row.D), options: { align: "center" } },
-          { text: `${(row.participation * 100).toFixed(1)}%`, options: { align: "center" } },
-        ])),
+        ...section.tenureMatrix.map(row => {
+          const totalFill = row.isTotal ? { fill: { color: "F3F4F6" } } : {};
+          return [
+            { text: row.label, options: { bold: true, align: "center", ...totalFill } },
+            { text: String(row.A), options: { align: "center", bold: !!row.isTotal, ...totalFill } },
+            { text: String(row.B), options: { align: "center", bold: !!row.isTotal, ...totalFill } },
+            { text: String(row.C), options: { align: "center", bold: !!row.isTotal, ...totalFill } },
+            { text: String(row.D), options: { align: "center", bold: !!row.isTotal, ...totalFill } },
+            { text: `${(row.participation * 100).toFixed(1)}%`, options: { align: "center", bold: !!row.isTotal, ...totalFill } },
+          ];
+        }),
       ];
       slide.addTable(matrixRows, {
         x: xBase + 2.7, y: y + 0.25, w: 3.5,
