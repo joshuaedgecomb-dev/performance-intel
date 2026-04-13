@@ -15609,9 +15609,12 @@ export default function App() {
       if (legacy) {
         try {
           const parsed = JSON.parse(legacy);
-          localStorage.setItem("perf_intel_corp_insights_v1", legacy);
-          localStorage.removeItem("perf_intel_virgil_insights_v1");
-          return parsed || {};
+          if (parsed && typeof parsed === "object") {
+            localStorage.setItem("perf_intel_corp_insights_v1", legacy);
+            localStorage.removeItem("perf_intel_virgil_insights_v1");
+            return parsed;
+          }
+          // Legacy value is not a usable object; leave legacy key in place untouched
         } catch(e) {}
       }
       return {};
