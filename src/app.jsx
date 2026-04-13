@@ -7012,11 +7012,11 @@ function buildVirgilMyPerformanceSlide(pres, stats, loginBuckets, priorPriorMont
 
   // Legend (top right) — 3 months + goal line
   const legendY = 0.7;
-  slide.addShape("rect", { x: 9.5, y: legendY, w: 0.22, h: 0.18, fill: { color: "A78BFA" }, line: { type: "none" } });
+  slide.addShape("rect", { x: 9.5, y: legendY, w: 0.22, h: 0.18, fill: { color: "A78BFA" } });
   slide.addText(priorPriorAbbrev, { x: 9.78, y: legendY - 0.03, w: 0.7, h: 0.25, fontSize: 10, color: virgilTheme.bodyText });
-  slide.addShape("rect", { x: 10.65, y: legendY, w: 0.22, h: 0.18, fill: { color: "7C3AED" }, line: { type: "none" } });
+  slide.addShape("rect", { x: 10.65, y: legendY, w: 0.22, h: 0.18, fill: { color: "7C3AED" } });
   slide.addText(priorAbbrev, { x: 10.93, y: legendY - 0.03, w: 0.7, h: 0.25, fontSize: 10, color: virgilTheme.bodyText });
-  slide.addShape("rect", { x: 11.8, y: legendY, w: 0.22, h: 0.18, fill: { color: "1E3A8A" }, line: { type: "none" } });
+  slide.addShape("rect", { x: 11.8, y: legendY, w: 0.22, h: 0.18, fill: { color: "1E3A8A" } });
   slide.addText(currAbbrev, { x: 12.08, y: legendY - 0.03, w: 0.75, h: 0.25, fontSize: 10, color: virgilTheme.bodyText });
   slide.addText("---  Goal (75%)", { x: 9.5, y: legendY + 0.22, w: 3.3, h: 0.2, fontSize: 9, color: virgilTheme.subtle, italic: true });
 
@@ -7089,7 +7089,7 @@ function buildVirgilMyPerformanceSlide(pres, stats, loginBuckets, priorPriorMont
       const barHpx = axisH * Math.max(0, Math.min(1, v));
       slide.addShape("rect", {
         x: barX, y: axisY + axisH - barHpx, w: barW, h: barHpx,
-        fill: { color: barColors[i] }, line: { type: "none" },
+        fill: { color: barColors[i] },
       });
       slide.addText(`${(v * 100).toFixed(1)}%`, {
         x: barX - 0.2, y: axisY + axisH - barHpx + 0.05, w: barW + 0.4, h: 0.25,
@@ -7170,7 +7170,7 @@ function buildVirgilMyPerformanceSlide(pres, stats, loginBuckets, priorPriorMont
   const insH = 2.6;
   slide.addShape("rect", {
     x: rightColX, y: insY, w: rightColW, h: 0.4,
-    fill: { color: "1E3A8A" }, line: { type: "none" },
+    fill: { color: "1E3A8A" },
   });
   slide.addText("Insights", {
     x: rightColX, y: insY + 0.03, w: rightColW, h: 0.35,
@@ -7300,7 +7300,7 @@ function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
       const color = i === values.length - 1 ? barColMtd : barCol;
       slide.addShape("rect", {
         x: barX, y: barY, w: barW, h: barH,
-        fill: { color }, line: { type: "none" },
+        fill: { color },
       });
       slide.addText(format(v), {
         x: barX - 0.1, y: barY + 0.05, w: barW + 0.2, h: 0.25,
@@ -7430,7 +7430,7 @@ function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
       const color = vendors[i] === "GCS" ? barColMtd : barCol;
       slide.addShape("rect", {
         x: barX, y: barY, w: barW, h: h2,
-        fill: { color }, line: { type: "none" },
+        fill: { color },
       });
       slide.addText(v.toFixed(3), {
         x: barX - 0.1, y: barY + 0.05, w: barW + 0.2, h: 0.25,
@@ -7450,7 +7450,7 @@ function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
   const insX = col3X;
   slide.addShape("rect", {
     x: insX, y: botY, w: chartW, h: 0.4,
-    fill: { color: "1E3A8A" }, line: { type: "none" },
+    fill: { color: "1E3A8A" },
   });
   slide.addText("Insights", {
     x: insX, y: botY + 0.03, w: chartW, h: 0.35,
@@ -7463,10 +7463,10 @@ function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
 
   // Footer legend
   const legY = 6.55;
-  slide.addShape("rect", { x: 4.2, y: legY + 0.05, w: 0.25, h: 0.15, fill: { color: barCol }, line: { type: "none" } });
+  slide.addShape("rect", { x: 4.2, y: legY + 0.05, w: 0.25, h: 0.15, fill: { color: barCol } });
   slide.addText("Company", { x: 4.5, y: legY, w: 1.0, h: 0.25, fontSize: 10, color: virgilTheme.bodyText });
   slide.addText("---  Goal", { x: 5.6, y: legY, w: 1.0, h: 0.25, fontSize: 10, color: goalCol, italic: true });
-  slide.addShape("rect", { x: 6.7, y: legY + 0.05, w: 0.25, h: 0.15, fill: { color: barColMtd }, line: { type: "none" } });
+  slide.addShape("rect", { x: 6.7, y: legY + 0.05, w: 0.25, h: 0.15, fill: { color: barColMtd } });
   slide.addText("MTD", { x: 7.0, y: legY, w: 1.0, h: 0.25, fontSize: 10, color: virgilTheme.bodyText });
 }
 
@@ -7626,7 +7626,7 @@ function buildCorpCampaignHoursSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
       if (pctW > 0) {
         slide.addShape("rect", {
           x: xStart, y: rowY1, w: pctW, h: 0.4,
-          fill: { color: fundingColors[f] }, line: { type: "none" },
+          fill: { color: fundingColors[f] },
         });
         const pctVal = seg.plan > 0 ? (seg.actual / seg.plan) * 100 : 0;
         slide.addText(`${pctVal.toFixed(0)}%`, {
@@ -7637,7 +7637,7 @@ function buildCorpCampaignHoursSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
       if (actW > 0) {
         slide.addShape("rect", {
           x: xStart, y: rowY2, w: actW, h: 0.4,
-          fill: { color: fundingColors[f] }, line: { type: "none" },
+          fill: { color: fundingColors[f] },
         });
         slide.addText(Math.round(seg.actual).toLocaleString(), {
           x: xStart, y: rowY2 + 0.05, w: actW, h: 0.3,
@@ -7669,7 +7669,7 @@ function buildCorpCampaignHoursSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
       .sort((a, b) => b.hoursActual - a.hoursActual);
     slide.addShape("rect", {
       x, y: breakoutY + 0.3, w, h: 0.35,
-      fill: { color: fundingColors[funding] }, line: { type: "none" },
+      fill: { color: fundingColors[funding] },
     });
     slide.addText(`${funding} Funded`, {
       x, y: breakoutY + 0.3, w, h: 0.35,
