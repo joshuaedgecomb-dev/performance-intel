@@ -8506,6 +8506,15 @@ If any vendor is missing or unreadable, use null for that value.`;
   const corpExtendedAgent = useMemo(() => parseExtendedAgentStats(corpExtendedAgentRaw), [corpExtendedAgentRaw]);
   const hasExtendedAgent = !!(corpExtendedAgentRaw && corpExtendedAgentRaw.trim());
 
+  const campaignUniverse = useMemo(() => {
+    return buildCampaignUniverse(
+      priorMonthRaw || "", priorMonthGoalsRaw || "",
+      rawAgentCsv || "", goalsRaw || ""
+    );
+  }, [priorMonthRaw, priorMonthGoalsRaw, rawAgentCsv, goalsRaw]);
+
+  const priorMonthLabelDisplay = useMemo(() => getPriorMonthLabel(reportingMonth), [reportingMonth]);
+
   const hasCoachingDetails = !!(coachingDetailsRaw && coachingDetailsRaw.trim());
   const hasCoachingWeekly = !!(coachingWeeklyRaw && coachingWeeklyRaw.trim());
   const hasLoginBuckets = !!(loginBucketsRaw && loginBucketsRaw.trim());
@@ -8667,6 +8676,46 @@ Write bullet-point style insights focused on movement vs prior, gaps vs 75% goal
               onChange={e => setUseAiInsights(e.target.checked)} />
             <span style={{ fontSize: 13 }}>{useAiInsights ? "On" : "Off"}</span>
           </label>
+        </div>
+
+        <div style={{ marginTop: 16, padding: 12, background: "#fafafa", borderRadius: 6, border: "1px solid #d1d5db" }}>
+          <div style={{ fontSize: 13, fontWeight: 600 }}>Slide 6 — Per-Campaign Performance Notes</div>
+          <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>
+            {campaignUniverse.length
+              ? `${campaignUniverse.length} campaigns detected across ${priorMonthLabelDisplay} / ${reportingMonth}. Notes render on the per-campaign slides; blank = empty panel.`
+              : "No campaigns detected yet — load prior-month + current-month data first."}
+          </div>
+          <div style={{ maxHeight: 260, overflow: "auto", marginTop: 8 }}>
+            {campaignUniverse.map(c => {
+              const entry = ((insights && insights.slide6Notes) || {})[c.name] || { feb: "", march: "" };
+              const update = (key, v) => {
+                setInsights({
+                  ...(insights || {}),
+                  slide6Notes: {
+                    ...((insights && insights.slide6Notes) || {}),
+                    [c.name]: { ...entry, [key]: v },
+                  },
+                });
+              };
+              return (
+                <div key={c.name} style={{ padding: 8, background: "#fff", borderRadius: 4, marginBottom: 8, border: "1px solid #e5e7eb" }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>{c.name}</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 6 }}>
+                    <label style={{ fontSize: 11, color: "#6b7280" }}>
+                      {priorMonthLabelDisplay} notes
+                      <textarea value={entry.feb} onChange={e => update("feb", e.target.value)}
+                        rows={2} style={{ display: "block", width: "100%", padding: 6, border: "1px solid #d1d5db", borderRadius: 4, marginTop: 2, fontSize: 11, fontFamily: "inherit", resize: "vertical" }} />
+                    </label>
+                    <label style={{ fontSize: 11, color: "#6b7280" }}>
+                      {reportingMonth} notes
+                      <textarea value={entry.march} onChange={e => update("march", e.target.value)}
+                        rows={2} style={{ display: "block", width: "100%", padding: 6, border: "1px solid #d1d5db", borderRadius: 4, marginTop: 2, fontSize: 11, fontFamily: "inherit", resize: "vertical" }} />
+                    </label>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         <div style={{ display: "flex", gap: 8, marginTop: 20, justifyContent: "flex-end" }}>
