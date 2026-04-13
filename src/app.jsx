@@ -7315,18 +7315,57 @@ function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
         fontSize: 8, color: virgilTheme.subtle, align: "center",
       });
     });
-    // Goal line — drawn AFTER bars (z-order on top).
-    // One horizontal dashed segment per slot (always h=0 to avoid pptx-corruption edge cases).
+    // Goal line — connect bar-center points across the chart, drawn AFTER bars.
+    // Lines that go upward have negative dy; we use flipV to avoid negative h in XML.
     if (goals && goals.length === values.length) {
       const goalSlotW = axisW / values.length;
-      goals.forEach((g, i) => {
-        if (g === null || g === undefined || isNaN(g)) return;
-        const gy = valToY(g);
+      const points = goals.map((g, i) => {
+        if (g === null || g === undefined || isNaN(g)) return null;
+        return { x: axisX + goalSlotW * i + goalSlotW / 2, y: valToY(g) };
+      });
+      // Leading tail from plot's left edge to first point
+      const firstIdx = points.findIndex(p => p !== null);
+      if (firstIdx >= 0) {
+        const p = points[firstIdx];
         slide.addShape("line", {
-          x: axisX + goalSlotW * i, y: gy, w: goalSlotW, h: 0,
+          x: axisX + goalSlotW * firstIdx, y: p.y, w: goalSlotW / 2, h: 0,
           line: { color: goalCol, width: 1.5, dashType: "dash" },
         });
-      });
+      }
+      // Connecting segments between consecutive points
+      for (let i = 0; i < points.length - 1; i++) {
+        const p1 = points[i], p2 = points[i + 1];
+        if (!p1 || !p2) continue;
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        if (dx <= 0) continue;
+        if (dy >= 0) {
+          // Downward slope — use positive h directly
+          slide.addShape("line", {
+            x: p1.x, y: p1.y, w: dx, h: dy,
+            line: { color: goalCol, width: 1.5, dashType: "dash" },
+          });
+        } else {
+          // Upward slope — flip vertically to keep h positive
+          slide.addShape("line", {
+            x: p1.x, y: p2.y, w: dx, h: -dy,
+            line: { color: goalCol, width: 1.5, dashType: "dash" },
+            flipV: true,
+          });
+        }
+      }
+      // Trailing tail from last point to plot's right edge
+      let lastIdx = -1;
+      for (let i = points.length - 1; i >= 0; i--) {
+        if (points[i]) { lastIdx = i; break; }
+      }
+      if (lastIdx >= 0) {
+        const p = points[lastIdx];
+        slide.addShape("line", {
+          x: p.x, y: p.y, w: goalSlotW / 2, h: 0,
+          line: { color: goalCol, width: 1.5, dashType: "dash" },
+        });
+      }
     }
   };
 
