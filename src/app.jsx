@@ -7381,14 +7381,14 @@ function virgilSlideFrame(pres, slide, options) {
   // --- Top-right: category badge + GCS logo ---
   if (opts.categoryLabel) {
     slide.addShape("roundRect", {
-      x: 10.7, y: 0.45, w: 1.85, h: 0.4,
+      x: 10.2, y: 0.45, w: 2.4, h: 0.4,
       fill: { color: corpPalette.navy },
       line: { color: corpPalette.navy, width: 0 },
       rectRadius: 0.08,
     });
     slide.addText(opts.categoryLabel.toUpperCase(), {
-      x: 10.7, y: 0.45, w: 1.85, h: 0.4,
-      fontSize: 9, fontFace: "Segoe UI", color: "FFFFFF", bold: true, align: "center", valign: "middle", charSpacing: 1.5,
+      x: 10.2, y: 0.45, w: 2.4, h: 0.4,
+      fontSize: 8, fontFace: "Segoe UI", color: "FFFFFF", bold: true, align: "center", valign: "middle", charSpacing: 1,
     });
   }
   if (opts.gcsLogoDataUrl) {
@@ -8388,7 +8388,7 @@ function buildCorpCampaignDetailSlide(pres, campaign, detailPrior, detailReporti
   slide.background = { color: virgilTheme.slideBg };
   const categoryLabel = (campaign.category || "OPERATIONAL PERFORMANCE").toUpperCase();
   virgilSlideFrame(pres, slide, {
-    eyebrow: `OPERATIONAL PERFORMANCE  ·  ${categoryLabel}`,
+    eyebrow: "OPERATIONAL PERFORMANCE",
     title: `Actual to Goal – ${campaign.name}`,
     categoryLabel,
     reportingMonthLabel: (frameOptions && frameOptions.reportingMonthLabel) || reportingMonthLabel,
