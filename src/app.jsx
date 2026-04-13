@@ -7361,18 +7361,18 @@ function virgilSlideFrame(pres, slide, options) {
   if (opts.showTitle !== false) {
     const eyebrowText = opts.eyebrow || "OPERATIONAL PERFORMANCE";
     slide.addText(eyebrowText, {
-      x: 0.5, y: 0.40, w: 9, h: 0.22,
+      x: 0.5, y: 0.28, w: 9, h: 0.22,
       fontSize: 10, fontFace: "Segoe UI", color: virgilTheme.eyebrow, bold: true, charSpacing: 2,
     });
     if (opts.title) {
       slide.addText(opts.title, {
-        x: 0.5, y: 0.66, w: 9, h: 0.55,
+        x: 0.5, y: 0.54, w: 9, h: 0.55,
         fontSize: 24, fontFace: "Segoe UI", color: virgilTheme.bodyText, bold: true,
       });
     }
     // Accent line below title
     slide.addShape("rect", {
-      x: 0.5, y: 1.2, w: 8.0, h: 0.03,
+      x: 0.5, y: 1.08, w: 8.0, h: 0.03,
       fill: { color: virgilTheme.gradientLeft },
       line: { color: virgilTheme.gradientLeft, width: 0 },
     });
@@ -7381,20 +7381,20 @@ function virgilSlideFrame(pres, slide, options) {
   // --- Top-right: category badge + GCS logo ---
   if (opts.categoryLabel) {
     slide.addShape("roundRect", {
-      x: 10.3, y: 0.42, w: 1.9, h: 0.4,
+      x: 10.3, y: 0.30, w: 1.9, h: 0.4,
       fill: { color: corpPalette.navy },
       line: { color: corpPalette.navy, width: 0 },
       rectRadius: 0.08,
     });
     slide.addText(opts.categoryLabel.toUpperCase(), {
-      x: 10.3, y: 0.42, w: 1.9, h: 0.4,
+      x: 10.3, y: 0.30, w: 1.9, h: 0.4,
       fontSize: 9, fontFace: "Segoe UI", color: "FFFFFF", bold: true, align: "center", valign: "middle", charSpacing: 1.5,
     });
   }
   if (opts.gcsLogoDataUrl) {
     slide.addImage({
       data: opts.gcsLogoDataUrl,
-      x: 12.35, y: 0.3, w: 0.8, h: 0.8,
+      x: 12.35, y: 0.2, w: 0.8, h: 0.8,
     });
   }
 
