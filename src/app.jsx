@@ -6617,20 +6617,30 @@ function buildLoginActivitySingle(loginBuckets, monthLabel) {
 // Returns a predicate accepting a YYYY-MM-DD (or M/D/Y, etc.) date string.
 // monthLabel like "Mar '26" / "Mar 26" / "March 2026" → matches year 2026, month 3.
 function makeMonthFilter(monthLabel) {
+  // Fiscal-month filter (22nd of prior month through 21st of current month).
+  // Comcast's fiscal calendar: Fiscal Mar = Feb 22 - Mar 21, Fiscal Apr = Mar 22 - Apr 21, etc.
   const m = String(monthLabel || "").trim().match(/^([A-Za-z]{3,})\s*'?(\d{2,4})$/);
   if (!m) return () => true;
   const mon = m[1].slice(0, 3).toLowerCase();
   const monIdx = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12 }[mon];
   if (!monIdx) return () => false;
   const yr = Number(m[2].length === 4 ? m[2] : `20${m[2]}`);
+  // Compute fiscal window: prior-month-22 to current-month-21
+  let startYr = yr, startMon = monIdx - 1;
+  if (startMon === 0) { startMon = 12; startYr = yr - 1; }
+  const fiscalStart = new Date(startYr, startMon - 1, 22); // JS months are 0-indexed
+  const fiscalEnd = new Date(yr, monIdx - 1, 21);
+  fiscalEnd.setHours(23, 59, 59, 999);
   return (dateStr) => {
     if (!dateStr) return false;
     const parts = String(dateStr).trim().split(/[-\/]/);
     if (parts.length < 3) return false;
-    let y, mo;
-    if (parts[0].length === 4) { y = Number(parts[0]); mo = Number(parts[1]); }
-    else { y = Number(parts[2].length === 4 ? parts[2] : `20${parts[2]}`); mo = Number(parts[0]); }
-    return y === yr && mo === monIdx;
+    let y, mo, d;
+    if (parts[0].length === 4) { y = Number(parts[0]); mo = Number(parts[1]); d = Number(parts[2]); }
+    else { y = Number(parts[2].length === 4 ? parts[2] : `20${parts[2]}`); mo = Number(parts[0]); d = Number(parts[1]); }
+    if (!y || !mo || !d) return false;
+    const t = new Date(y, mo - 1, d).getTime();
+    return t >= fiscalStart.getTime() && t <= fiscalEnd.getTime();
   };
 }
 
@@ -7249,7 +7259,11 @@ function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
     makeMonthFilter(reportingMonthLabel), makeGoalsMonthFilter(reportingMonthLabel));
 
   // SPH-only computations excluding GLB-prefix ROCs (Add XMC campaigns)
-  const excludeGLB = (roc) => !String(roc || "").toUpperCase().startsWith("GLB");
+  // Exclude GLB (XMC) and GS* (Cox) — keep only GL-prefixed Xfinity campaigns (except GLB)
+  const excludeGLB = (roc) => {
+    const r = String(roc || "").toUpperCase();
+    return !r.startsWith("GLB") && !r.startsWith("GS");
+  };
   const q4Sph = computeCorpAttainment(priorQuarterAgentRaw, priorQuarterGoalsRaw, null, null, excludeGLB, excludeGLB);
   const p2Sph = computeCorpAttainment(corpPriorMonthAgentRaw, corpPriorMonthGoalsRaw, makeMonthFilter(prior2), makeGoalsMonthFilter(prior2), excludeGLB, excludeGLB);
   const p1Sph = computeCorpAttainment(priorAgentRaw, priorGoalsRaw, makeMonthFilter(prior1), makeGoalsMonthFilter(prior1), excludeGLB, excludeGLB);
