@@ -8410,35 +8410,13 @@ function buildCorpCampaignDetailSlide(pres, campaign, detailPrior, detailReporti
   renderCorpCampaignColumn(slide, 0.5, 1.55, detailPrior, priorMonthLabel);
   renderCorpCampaignColumn(slide, 6.8, 1.55, detailReporting, reportingMonthLabel);
 
-  // Performance Notes panels (bottom)
-  const notesY = 6.55;
-  const panelW = 6.0;
-  const drawNotePanel = (x, title, body) => {
-    slide.addShape("roundRect", {
-      x, y: notesY, w: panelW, h: 0.5,
-      fill: { color: corpPalette.muted },
-      line: { color: corpPalette.cardBorder, width: 0.5 },
-      rectRadius: 0.06,
-    });
-    slide.addText(title, {
-      x: x + 0.1, y: notesY + 0.04, w: panelW - 0.2, h: 0.16,
-      fontSize: 8, color: virgilTheme.eyebrow, bold: true, charSpacing: 1.5,
-    });
-    slide.addText(body || "(no notes entered)", {
-      x: x + 0.1, y: notesY + 0.2, w: panelW - 0.2, h: 0.28,
-      fontSize: 9, color: body ? virgilTheme.bodyText : virgilTheme.subtle,
-      italic: !body, valign: "top",
-    });
-  };
-  drawNotePanel(0.5, `${priorMonthLabel.toUpperCase()} — PERFORMANCE NOTES`, (notes && notes.prior) || "");
-  drawNotePanel(6.8, `${reportingMonthLabel.toUpperCase()} — PERFORMANCE NOTES`, (notes && notes.reporting) || "");
 }
 
 // Renders the three stacked tables (Volume / Cost-Efficiency / Leads-Extended) for one column.
 function renderCorpCampaignColumn(slide, x, y, detail, columnLabel) {
   const tableW = 6.0;
   const colW = [1.55, 0.89, 0.89, 0.89, 0.89, 0.89]; // 6 cols: Label | Goals | Budget | Actual | Variance | % Goal
-  const rowH = 0.17;
+  const rowH = 0.20;
 
   const hdrBase = { fill: { color: corpPalette.purple }, color: "FFFFFF", bold: true, align: "center", fontSize: 9 };
   const labelBase = { bold: true, color: corpPalette.ink, fontSize: 8, align: "left" };
@@ -8502,7 +8480,7 @@ function renderCorpCampaignColumn(slide, x, y, detail, columnLabel) {
     border: { type: "solid", pt: 0.5, color: corpPalette.cardBorder },
     autoPage: false,
   });
-  cy += rowH * (volRows.length + 1) + 0.08;
+  cy += rowH * (volRows.length + 1) + 0.15;
 
   // ── Table 2: Cost & Efficiency ──
   // 5 cols: Label | Budget | Actual | Variance | % Goal
@@ -8552,7 +8530,7 @@ function renderCorpCampaignColumn(slide, x, y, detail, columnLabel) {
       border: { type: "solid", pt: 0.5, color: corpPalette.cardBorder },
       autoPage: false,
     });
-    cy += rowH * (costRows.length + 1) + 0.08;
+    cy += rowH * (costRows.length + 1) + 0.15;
   }
 
   // ── Table 3: Leads & Extended ──
