@@ -286,6 +286,41 @@ async function ollamaGenerate(prompt, model = "qwen3:8b") {
   });
 }
 
+async function ollamaGenerateWithImage(prompt, imageDataUrl, model = "llava") {
+  return new Promise((resolve) => {
+    const run = async () => {
+      _aiRunning++;
+      try {
+        // Strip "data:image/...;base64," prefix → raw base64
+        const base64 = String(imageDataUrl || "").replace(/^data:image\/[a-zA-Z]+;base64,/, "");
+        if (!base64) { resolve(null); return; }
+        const res = await fetch("http://localhost:11434/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model,
+            prompt,
+            images: [base64],
+            stream: false,
+            options: { temperature: 0.2, num_predict: 400 },
+          }),
+        });
+        if (!res.ok) { resolve(null); return; }
+        const data = await res.json();
+        let text = (data.response || "").trim();
+        text = text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+        resolve(text || null);
+      } catch(e) { resolve(null); }
+      finally {
+        _aiRunning--;
+        if (_aiQueue.length > 0) _aiQueue.shift()();
+      }
+    };
+    if (_aiRunning < AI_CONCURRENCY) run();
+    else _aiQueue.push(run);
+  });
+}
+
 function buildAIPrompt(type, data) {
   const { jobType, uniqueAgentCount, totalHours, totalGoals, gph, attainment, planGoals, actGoals,
     distUnique, q1Agents, q4Agents, regions, healthScore, totalNewXI, totalXmLines,
@@ -7748,6 +7783,58 @@ function VirgilMbrExportModal({
   }, [useAiInsights]);
 
   const [scorecardDataUrl, setScorecardDataUrl] = useState("");
+  const [scorecardExtractLoading, setScorecardExtractLoading] = useState(false);
+  const [scorecardExtractError, setScorecardExtractError] = useState("");
+
+  const handleAutoExtractScorecard = useCallback(async () => {
+    if (!scorecardDataUrl) return;
+    setScorecardExtractLoading(true);
+    setScorecardExtractError("");
+    try {
+      const prompt = `This image is a Comcast BP scorecard. It has a table called "SCORING" near the bottom with rows for 4 vendors: Avantive, GCS, GTCX (or GTS), Results. For each vendor there's a column called "TTL SCR" (total score) with a decimal number like 1.087 or 0.973.
+
+Extract ONLY the TTL SCR value for each vendor. Respond with ONLY a valid JSON object in this exact format (no other text, no markdown fences):
+
+{"Avantive": 1.087, "GCS": 0.973, "GTCX": 1.24, "Results": 1.41}
+
+If any vendor is missing or unreadable, use null for that value.`;
+      const raw = await ollamaGenerateWithImage(prompt, scorecardDataUrl);
+      if (!raw) {
+        setScorecardExtractError("Ollama did not respond. Is a vision model (e.g. `ollama pull llava`) installed?");
+        return;
+      }
+      // Try to parse the raw response as JSON. Fall back to regex extraction.
+      let parsed = null;
+      try {
+        const jsonMatch = raw.match(/\{[\s\S]*\}/);
+        if (jsonMatch) parsed = JSON.parse(jsonMatch[0]);
+      } catch(e) {}
+      if (!parsed) {
+        // Regex fallback: look for "Vendor: number" or "Vendor - number"
+        parsed = {};
+        const nameMap = { avantive: "Avantive", gcs: "GCS", gtcx: "GTCX", gts: "GTCX", results: "Results" };
+        for (const key of Object.keys(nameMap)) {
+          const re = new RegExp(`${key}[^0-9\\-]*([\\-]?\\d*\\.?\\d+)`, "i");
+          const m = raw.match(re);
+          if (m) parsed[nameMap[key]] = Number(m[1]);
+        }
+      }
+      // Merge into vendorScores, preserving anything already typed
+      const nextScores = { ...vendorScores };
+      for (const key of ["Results", "GTCX", "GCS", "Avantive"]) {
+        const v = parsed[key];
+        if (typeof v === "number" && !isNaN(v)) {
+          nextScores[key] = String(v);
+        }
+      }
+      setVendorScores(nextScores);
+    } catch(e) {
+      setScorecardExtractError(`Extract failed: ${e.message || e}`);
+    } finally {
+      setScorecardExtractLoading(false);
+    }
+  }, [scorecardDataUrl, vendorScores]);
+
   const [vendorScores, setVendorScores] = useState({ Results: "", GTCX: "", GCS: "", Avantive: "" });
   const scorecardInputRef = useRef(null);
   const handleScorecardUpload = useCallback((file) => {
@@ -7856,7 +7943,9 @@ Write bullet-point style insights focused on movement vs prior, gaps vs 75% goal
         <div style={{ marginTop: 16, padding: 12, background: "#fafafa", borderRadius: 6, border: "1px solid #d1d5db" }}>
           <div style={{ fontSize: 13, fontWeight: 600 }}>Scorecard PNG (Slide 3)</div>
           <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>
-            {scorecardDataUrl ? "Loaded — will embed into Slide 3." : "Optional. Upload the Comcast scorecard screenshot for the reporting month."}
+            {scorecardDataUrl
+              ? (ollamaAvailable ? "Loaded. Click Auto-extract to OCR vendor TTL SCR values, or enter them manually below." : "Loaded — vendor scores must be entered manually.")
+              : "Optional. Upload the Comcast scorecard screenshot for the reporting month."}
           </div>
           <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
             <button onClick={() => scorecardInputRef.current?.click()}
@@ -7869,9 +7958,19 @@ Write bullet-point style insights focused on movement vs prior, gaps vs 75% goal
                 Remove
               </button>
             )}
+            {scorecardDataUrl && ollamaAvailable && (
+              <button onClick={handleAutoExtractScorecard}
+                disabled={scorecardExtractLoading}
+                style={{ padding: "6px 12px", border: "none", background: "#7C3AED", color: "#fff", borderRadius: 6, cursor: scorecardExtractLoading ? "wait" : "pointer", fontSize: 12, fontWeight: 600 }}>
+                {scorecardExtractLoading ? "Extracting…" : "✨ Auto-extract scores"}
+              </button>
+            )}
           </div>
           <input ref={scorecardInputRef} type="file" accept=".png,.jpg,.jpeg" style={{ display: "none" }}
             onChange={e => { if (e.target.files[0]) handleScorecardUpload(e.target.files[0]); e.target.value = ""; }} />
+          {scorecardExtractError && (
+            <div style={{ marginTop: 6, fontSize: 11, color: "#dc2626" }}>{scorecardExtractError}</div>
+          )}
         </div>
 
         <div style={{ marginTop: 12, padding: 12, background: "#fafafa", borderRadius: 6, border: "1px solid #d1d5db" }}>
