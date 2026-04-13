@@ -7791,9 +7791,25 @@ function buildCorpCampaignHoursSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
     if (isMtd) {
       const b = fiscalBounds(label);
       if (b) {
-        const totalDays = Math.max(1, Math.round((b.end - b.start) / 86400000) + 1);
-        const elapsed = Math.min(totalDays, Math.max(1, Math.round((Date.now() - b.start.getTime()) / 86400000) + 1));
-        paceFactor = totalDays / elapsed;
+        // Count business days (Mon-Fri) — Comcast paces on business days only
+        const bizDaysBetween = (start, end) => {
+          const s = new Date(start); s.setHours(0, 0, 0, 0);
+          const e = new Date(end); e.setHours(0, 0, 0, 0);
+          if (s > e) return 0;
+          let count = 0;
+          const d = new Date(s);
+          while (d <= e) {
+            const dow = d.getDay();
+            if (dow !== 0 && dow !== 6) count++;
+            d.setDate(d.getDate() + 1);
+          }
+          return count;
+        };
+        const totalBiz = Math.max(1, bizDaysBetween(b.start, b.end));
+        const now = new Date();
+        const effectiveEnd = now < b.start ? b.start : (now > b.end ? b.end : now);
+        const elapsedBiz = Math.max(1, bizDaysBetween(b.start, effectiveEnd));
+        paceFactor = totalBiz / elapsedBiz;
       }
     }
     buckets.forEach((f, i) => {
@@ -7843,7 +7859,7 @@ function buildCorpCampaignHoursSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
   drawMonthBlock(1.25, reportingPeriodLabel, reporting, false);
   drawMonthBlock(3.2, mtdLabel, mtd, true);
   // Small annotation explaining MTD pacing
-  slide.addText("MTD % projects actuals to full-month run rate (pacing model)", {
+  slide.addText("MTD % projects actuals to full-month run rate based on business days elapsed", {
     x: 0.5, y: 3.2 + 1.85 + 0.05, w: 12.3, h: 0.2,
     fontSize: 8, color: corpPalette.inkSubtle, italic: true, align: "center",
   });
