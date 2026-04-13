@@ -7483,7 +7483,7 @@ function buildVirgilTitleSlide(pres, reportingMonthLabel, fiscalInfo, virgilLast
   // Apply unified frame AFTER image so footer bar and logo sit on top
   virgilSlideFrame(pres, slide, {
     showTitle: false,
-    reportingMonthLabel,
+    reportingMonthLabel: (frameOptions && frameOptions.reportingMonthLabel) || reportingMonthLabel,
     gcsLogoDataUrl: (frameOptions || {}).gcsLogoDataUrl,
     pageNumber: (frameOptions || {}).pageNumber,
   });
@@ -7527,7 +7527,7 @@ function buildVirgilMyPerformanceSlide(pres, stats, loginBuckets, priorPriorMont
     eyebrow: "MY PERFORMANCE / QUALITY",
     title: `My Performance / Quality — ${reportingMonthLabel}`,
     categoryLabel: "PERFORMANCE",
-    reportingMonthLabel,
+    reportingMonthLabel: (frameOptions && frameOptions.reportingMonthLabel) || reportingMonthLabel,
     pageNumber: (frameOptions || {}).pageNumber,
     gcsLogoDataUrl: (frameOptions || {}).gcsLogoDataUrl,
   });
@@ -7730,7 +7730,7 @@ function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
     eyebrow: "OPERATIONAL PERFORMANCE",
     title: `All-in Attainment — ${reportingMonthLabel}`,
     categoryLabel: "OPERATIONS",
-    reportingMonthLabel,
+    reportingMonthLabel: (frameOptions && frameOptions.reportingMonthLabel) || reportingMonthLabel,
     pageNumber: (frameOptions || {}).pageNumber,
     gcsLogoDataUrl: (frameOptions || {}).gcsLogoDataUrl,
   });
@@ -8024,7 +8024,7 @@ function buildCorpQuartileSlide(pres, agentRaw, goalsRaw, priorAgentRaw, priorGo
     eyebrow: "OPERATIONAL PERFORMANCE",
     title: `Quartile Reporting — ${reportingMonthLabel}`,
     categoryLabel: "OPERATIONS",
-    reportingMonthLabel,
+    reportingMonthLabel: (frameOptions && frameOptions.reportingMonthLabel) || reportingMonthLabel,
     pageNumber: (frameOptions || {}).pageNumber,
     gcsLogoDataUrl: (frameOptions || {}).gcsLogoDataUrl,
   });
@@ -8150,7 +8150,7 @@ function buildCorpCampaignHoursSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
     eyebrow: "OPERATIONAL PERFORMANCE",
     title: `Campaign Hours — ${reportingMonthLabel}`,
     categoryLabel: "OPERATIONS",
-    reportingMonthLabel,
+    reportingMonthLabel: (frameOptions && frameOptions.reportingMonthLabel) || reportingMonthLabel,
     pageNumber: (frameOptions || {}).pageNumber,
     gcsLogoDataUrl: (frameOptions || {}).gcsLogoDataUrl,
   });
@@ -8391,7 +8391,7 @@ function buildCorpCampaignDetailSlide(pres, campaign, detailPrior, detailReporti
     eyebrow: `OPERATIONAL PERFORMANCE  ·  ${categoryLabel}`,
     title: `Actual to Goal – ${campaign.name}`,
     categoryLabel,
-    reportingMonthLabel,
+    reportingMonthLabel: (frameOptions && frameOptions.reportingMonthLabel) || reportingMonthLabel,
     pageNumber: (frameOptions || {}).pageNumber,
     gcsLogoDataUrl: (frameOptions || {}).gcsLogoDataUrl,
   });
@@ -8592,7 +8592,7 @@ function buildCorpTnpsSlide(pres, perf, reportingMonthLabel, insightText, frameO
       eyebrow: "CUSTOMER EXPERIENCE",
       title: `tNPS — ${reportingMonthLabel}`,
       categoryLabel: "CUSTOMER EXPERIENCE",
-      reportingMonthLabel,
+      reportingMonthLabel: (frameOptions && frameOptions.reportingMonthLabel) || reportingMonthLabel,
       pageNumber: (frameOptions || {}).pageNumber,
       gcsLogoDataUrl: (frameOptions || {}).gcsLogoDataUrl,
     });
@@ -8608,7 +8608,7 @@ function buildCorpTnpsSlide(pres, perf, reportingMonthLabel, insightText, frameO
     eyebrow: "CUSTOMER EXPERIENCE",
     title: `tNPS — ${reportingMonthLabel}`,
     categoryLabel: "CUSTOMER EXPERIENCE",
-    reportingMonthLabel,
+    reportingMonthLabel: (frameOptions && frameOptions.reportingMonthLabel) || reportingMonthLabel,
     pageNumber: (frameOptions || {}).pageNumber,
     gcsLogoDataUrl: (frameOptions || {}).gcsLogoDataUrl,
   });
@@ -8806,7 +8806,7 @@ function buildCorpPartnerExperienceSlide(pres, stats, reportingMonthLabel, suppo
     eyebrow: "PEOPLE & OPERATIONS",
     title: `Partner Experience — ${reportingMonthLabel}`,
     categoryLabel: "PEOPLE & OPERATIONS",
-    reportingMonthLabel,
+    reportingMonthLabel: (frameOptions && frameOptions.reportingMonthLabel) || reportingMonthLabel,
     pageNumber: (frameOptions || {}).pageNumber,
     gcsLogoDataUrl: (frameOptions || {}).gcsLogoDataUrl,
   });
@@ -8947,7 +8947,7 @@ function buildVirgilMbrPresentation(perf, options) {
 
   // Slide 1 — Title
   buildVirgilTitleSlide(pres, options.reportingMonthLabel, perf && perf.fiscalInfo, options.virgilLastName,
-    { pageNumber: pageNumber++, gcsLogoDataUrl });
+    { pageNumber: pageNumber++, gcsLogoDataUrl, reportingMonthLabel: options.reportingMonthLabel });
 
   // Slide 2 — My Performance / Quality
   buildVirgilMyPerformanceSlide(
@@ -8969,14 +8969,14 @@ function buildVirgilMbrPresentation(perf, options) {
     options.reportingMonthLabel, options.scorecardDataUrl || "",
     options.vendorScores || {},
     options.corpPriorMonthAgentRaw || "", options.corpPriorMonthGoalsRaw || "",
-    { pageNumber: pageNumber++, gcsLogoDataUrl });
+    { pageNumber: pageNumber++, gcsLogoDataUrl, reportingMonthLabel: options.reportingMonthLabel });
 
   // Slide 4 — Quartile Reporting
   buildCorpQuartileSlide(pres,
     options.agentRaw || "", options.goalsRaw || "",
     options.priorAgentRaw || "", options.priorGoalsRaw || "",
     options.newHiresRaw || "", options.reportingMonthLabel,
-    { pageNumber: pageNumber++, gcsLogoDataUrl });
+    { pageNumber: pageNumber++, gcsLogoDataUrl, reportingMonthLabel: options.reportingMonthLabel });
 
   // Slide 5 — Campaign Hours Info
   buildCorpCampaignHoursSlide(pres,
@@ -8984,7 +8984,7 @@ function buildVirgilMbrPresentation(perf, options) {
     options.priorAgentRaw || "", options.priorGoalsRaw || "",
     options.reportingMonthLabel,
     options.corpPriorMonthAgentRaw || "", options.corpPriorMonthGoalsRaw || "",
-    { pageNumber: pageNumber++, gcsLogoDataUrl });
+    { pageNumber: pageNumber++, gcsLogoDataUrl, reportingMonthLabel: options.reportingMonthLabel });
 
   // Slide 6 — Per-Campaign Actual-to-Goal (N slides, one per campaign)
   // With picker = current fiscal month (e.g. Apr), spec columns are:
@@ -9017,12 +9017,12 @@ function buildVirgilMbrPresentation(perf, options) {
     const notes = perCampaignNotes[campaign.name] || { prior: "", reporting: "" };
     // Each campaign gets its own incrementing page number
     buildCorpCampaignDetailSlide(pres, campaign, detailPrior, detailReporting, priorPriorMonthKey, priorMonthKey, notes,
-      { pageNumber: pageNumber++, gcsLogoDataUrl });
+      { pageNumber: pageNumber++, gcsLogoDataUrl, reportingMonthLabel: options.reportingMonthLabel });
   }
 
   // Slide 7 — Customer Experience (tNPS)
   buildCorpTnpsSlide(pres, perf, options.reportingMonthLabel, (options.insights && options.insights.slide7) || "",
-    { pageNumber: pageNumber++, gcsLogoDataUrl });
+    { pageNumber: pageNumber++, gcsLogoDataUrl, reportingMonthLabel: options.reportingMonthLabel });
 
   // Slide 8 — Partner Experience
   const partnerStats = buildPartnerExperienceStats(options.newHiresRaw || "", perf && perf.bpLookup, options.reportingMonthLabel);
@@ -9030,7 +9030,7 @@ function buildVirgilMbrPresentation(perf, options) {
     options.reportingMonthLabel,
     (options.insights && options.insights.slide8Support) || "",
     (options.insights && options.insights.slide8Incentives) || "",
-    { pageNumber: pageNumber++, gcsLogoDataUrl });
+    { pageNumber: pageNumber++, gcsLogoDataUrl, reportingMonthLabel: options.reportingMonthLabel });
 
   return pres;
 }
