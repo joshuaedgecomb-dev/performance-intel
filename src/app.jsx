@@ -15761,7 +15761,7 @@ export default function App() {
   // Auto-load prior month data from Google Sheet (after main data loads, non-blocking)
   const [priorSheetLoading, setPriorSheetLoading] = useState(false);
   useEffect(() => {
-    if (!rawData || priorMonthRaw || !priorSheetUrl || priorSheetLoading) return;
+    if (!rawData || (priorMonthRaw && priorMonthRawCsv) || !priorSheetUrl || priorSheetLoading) return;
     let cancelled = false;
     (async () => {
       try {
@@ -15777,11 +15777,11 @@ export default function App() {
       finally { if (!cancelled) setPriorSheetLoading(false); }
     })();
     return () => { cancelled = true; };
-  }, [rawData, priorSheetUrl, priorMonthRaw]);
+  }, [rawData, priorSheetUrl, priorMonthRaw, priorMonthRawCsv]);
 
   // Auto-load prior month goals from Google Sheet (after prior data loads)
   useEffect(() => {
-    if (!rawData || priorMonthGoalsRaw || !priorGoalsSheetUrl) return;
+    if (!rawData || (priorMonthGoalsRaw && priorMonthGoalsRawCsv) || !priorGoalsSheetUrl) return;
     let cancelled = false;
     (async () => {
       try {
