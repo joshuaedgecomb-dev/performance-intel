@@ -8398,17 +8398,17 @@ function buildCorpCampaignDetailSlide(pres, campaign, detailPrior, detailReporti
 
   // Column sub-titles
   slide.addText("PREVIOUS MONTH", {
-    x: 0.5, y: 1.3, w: 6, h: 0.25,
+    x: 0.5, y: 1.12, w: 6, h: 0.25,
     fontSize: 9, color: virgilTheme.subtle, bold: true, align: "center", charSpacing: 2,
   });
   slide.addText("MONTH OF DISCUSSION", {
-    x: 6.8, y: 1.3, w: 6, h: 0.25,
+    x: 6.8, y: 1.12, w: 6, h: 0.25,
     fontSize: 9, color: virgilTheme.subtle, bold: true, align: "center", charSpacing: 2,
   });
 
   // Render the three tables for each column
-  renderCorpCampaignColumn(slide, 0.5, 1.55, detailPrior, priorMonthLabel);
-  renderCorpCampaignColumn(slide, 6.8, 1.55, detailReporting, reportingMonthLabel);
+  renderCorpCampaignColumn(slide, 0.5, 1.35, detailPrior, priorMonthLabel);
+  renderCorpCampaignColumn(slide, 6.8, 1.35, detailReporting, reportingMonthLabel);
 
 }
 
@@ -8416,7 +8416,7 @@ function buildCorpCampaignDetailSlide(pres, campaign, detailPrior, detailReporti
 function renderCorpCampaignColumn(slide, x, y, detail, columnLabel) {
   const tableW = 6.0;
   const colW = [1.55, 0.89, 0.89, 0.89, 0.89, 0.89]; // 6 cols: Label | Goals | Budget | Actual | Variance | % Goal
-  const rowH = 0.20;
+  const rowH = 0.235;
 
   const hdrBase = { fill: { color: corpPalette.purple }, color: "FFFFFF", bold: true, align: "center", fontSize: 9 };
   const labelBase = { bold: true, color: corpPalette.ink, fontSize: 8, align: "left" };
@@ -8480,7 +8480,7 @@ function renderCorpCampaignColumn(slide, x, y, detail, columnLabel) {
     border: { type: "solid", pt: 0.5, color: corpPalette.cardBorder },
     autoPage: false,
   });
-  cy += rowH * (volRows.length + 1) + 0.15;
+  cy += rowH * (volRows.length + 1);
 
   // ── Table 2: Cost & Efficiency ──
   // 5 cols: Label | Budget | Actual | Variance | % Goal
@@ -8530,7 +8530,7 @@ function renderCorpCampaignColumn(slide, x, y, detail, columnLabel) {
       border: { type: "solid", pt: 0.5, color: corpPalette.cardBorder },
       autoPage: false,
     });
-    cy += rowH * (costRows.length + 1) + 0.15;
+    cy += rowH * (costRows.length + 1) + 0.12;
   }
 
   // ── Table 3: Leads & Extended ──
@@ -8555,11 +8555,11 @@ function renderCorpCampaignColumn(slide, x, y, detail, columnLabel) {
   pushLead(5, "Lead Penetration", detail.leadPenetration === null ? "—" : `${detail.leadPenetration.toFixed(1)}%`);
 
   slide.addTable([leadsHdr, ...leadsRows], {
-    x, y: cy, w: tableW, colW: leadsColW, rowH,
+    x, y: cy, w: tableW, colW: leadsColW, rowH: 0.17,
     border: { type: "solid", pt: 0.5, color: corpPalette.cardBorder },
     autoPage: false,
   });
-  cy += rowH * (leadsRows.length + 1) + 0.1;
+  cy += 0.17 * (leadsRows.length + 1) + 0.08;
   // --- Comment box (manual edit in PowerPoint) ---
   slide.addShape("rect", {
     x, y: cy, w: tableW, h: 0.45,
