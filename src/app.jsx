@@ -7153,7 +7153,7 @@ function buildCampaignMonthDetail(campaign, agentRaw, goalsRaw, monthFilter, ext
   result.sph = result.hoursActual ? result.salesActual / result.hoursActual : 0;
   result.rguph = result.hoursActual ? result.rgusActual / result.hoursActual : 0;
   result.rguPerSale = result.salesActual ? result.rgusActual / result.salesActual : 0;
-  result.salesPerLead = result.actualLeads ? result.salesActual / result.actualLeads : 0;
+  result.salesPer1000Leads = result.actualLeads ? (result.salesActual / result.actualLeads) * 1000 : 0;
   result.pctTotalLeads = totalsForMonth && totalsForMonth.sumActualLeads ? result.actualLeads / totalsForMonth.sumActualLeads : 0;
   result.pctTotalHours = totalsForMonth && totalsForMonth.sumHoursActual ? result.hoursActual / totalsForMonth.sumHoursActual : 0;
   result.contactRate = result.actualLeads ? (result.contacts / result.actualLeads) * 100 : null;
@@ -8467,7 +8467,7 @@ function renderCorpCampaignColumn(slide, x, y, detail, columnLabel) {
     ]);
   };
   pushLead(0, "Total Leads", detail.actualLeads ? fmtInt(detail.actualLeads) : "0");
-  pushLead(1, "Sales per Lead", detail.actualLeads > 0 ? detail.salesPerLead.toFixed(2) : "—");
+  pushLead(1, "Sales per 1000 Leads", detail.actualLeads > 0 ? detail.salesPer1000Leads.toFixed(2) : "—");
   pushLead(2, "% of Total Leads", fmtPct(detail.pctTotalLeads));
   pushLead(3, "% of Total Hours", fmtPct(detail.pctTotalHours));
   pushLead(4, "Contact Rate", detail.contactRate === null ? "—" : `${detail.contactRate.toFixed(1)}%`);
