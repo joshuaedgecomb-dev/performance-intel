@@ -7394,7 +7394,7 @@ function virgilSlideFrame(pres, slide, options) {
   if (opts.gcsLogoDataUrl) {
     slide.addImage({
       data: opts.gcsLogoDataUrl,
-      x: 12.65, y: 0.25, w: 0.6, h: 0.6,
+      x: 9.92, y: 0.12, w: 0.6, h: 0.6,
     });
   }
 
