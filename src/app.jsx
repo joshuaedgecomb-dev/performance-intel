@@ -6504,6 +6504,8 @@ function parseLoginBuckets(rawCsv) {
 // Extended Agent Stats — per-agent-per-day rows from the richer Extended Agent CSV.
 // Columns used by Slide 6: Job (ROC), Date, AgentName, Dials, Contacts, Finals, Goals, Hours.
 // Other columns are tolerated but unused (e.g. XMSales, NewVideo, etc.).
+// NOTE: Column names are a hard dependency on Comcast's export. A rename upstream would
+// cause Number(undefined)→NaN→0 fallthrough and silently zero the Slide 6 metrics.
 function parseExtendedAgentStats(rawCsv) {
   if (!rawCsv || !rawCsv.trim()) return [];
   const rows = parseCSV(rawCsv);
@@ -6946,6 +6948,8 @@ function buildCampaignHoursByFunding(agentRaw, goalsRaw, monthFilter) {
 // Roll up Extended Agent Stats into per-ROC totals filtered to a month.
 // Returns { [roc]: { dials, contacts, finals } } for each ROC present in the filtered rows.
 // If the CSV is empty, returns {} — downstream callers render "—" for Contact Rate / Lead Penetration.
+// goals/hours are intentionally NOT rolled up here — hours come from buildCampaignHoursByFunding
+// and goals are handled via the main Goals CSV per Slide 6 spec.
 function buildExtendedAgentLookup(extendedRows, monthFilter) {
   if (!Array.isArray(extendedRows) || extendedRows.length === 0) return {};
   const out = {};
