@@ -502,6 +502,7 @@ const DEFAULT_CORP_COACHING_WEEKLY_URL = import.meta.env.VITE_DEFAULT_CORP_COACH
 const DEFAULT_CORP_LOGIN_BUCKETS_URL = import.meta.env.VITE_DEFAULT_CORP_LOGIN_BUCKETS_URL || "";
 const DEFAULT_CORP_PRIOR_QUARTER_AGENT_URL = import.meta.env.VITE_DEFAULT_CORP_PRIOR_QUARTER_AGENT_URL || "";
 const DEFAULT_CORP_PRIOR_QUARTER_GOALS_URL = import.meta.env.VITE_DEFAULT_CORP_PRIOR_QUARTER_GOALS_URL || "";
+const DEFAULT_CORP_EXTENDED_AGENT_URL = import.meta.env.VITE_DEFAULT_CORP_EXTENDED_AGENT_URL || "";
 const DEFAULT_CORP_PRIOR_MONTH_AGENT_URL = import.meta.env.VITE_DEFAULT_CORP_PRIOR_MONTH_AGENT_URL || "";
 const DEFAULT_CORP_PRIOR_MONTH_GOALS_URL = import.meta.env.VITE_DEFAULT_CORP_PRIOR_MONTH_GOALS_URL || "";
 const TNPS_STORAGE_KEY = "perf_intel_tnps_v1";
@@ -15664,6 +15665,22 @@ export default function App() {
     try { localStorage.setItem("perf_intel_prior_quarter_goals_url_v1", v || ""); } catch(e) {}
   }, []);
 
+  const [corpExtendedAgentUrl, _setCorpExtendedAgentUrl] = useState(() => {
+    try { return localStorage.getItem("perf_intel_corp_extended_agent_url_v1") || DEFAULT_CORP_EXTENDED_AGENT_URL; } catch(e) { return DEFAULT_CORP_EXTENDED_AGENT_URL; }
+  });
+  const setCorpExtendedAgentUrl = useCallback(v => {
+    _setCorpExtendedAgentUrl(v);
+    try { localStorage.setItem("perf_intel_corp_extended_agent_url_v1", v || ""); } catch(e) {}
+  }, []);
+
+  const [corpExtendedAgentRaw, _setCorpExtendedAgentRaw] = useState(() => {
+    try { return localStorage.getItem("perf_intel_extended_agent_v1") || ""; } catch(e) { return ""; }
+  });
+  const setCorpExtendedAgentRaw = useCallback(v => {
+    _setCorpExtendedAgentRaw(v);
+    try { localStorage.setItem("perf_intel_extended_agent_v1", v || ""); } catch(e) {}
+  }, []);
+
   const [priorQuarterAgentRaw, _setPriorQuarterAgentRaw] = useState(() => {
     try { return localStorage.getItem("perf_intel_prior_quarter_agent_v1") || ""; } catch(e) { return ""; }
   });
@@ -16147,6 +16164,26 @@ export default function App() {
       }
     })();
   }, [priorQuarterGoalsUrl]);
+
+  useEffect(() => {
+    if (!corpExtendedAgentUrl) return;
+    (async () => {
+      try {
+        const res = await fetch(corpExtendedAgentUrl);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const text = await res.text();
+        setCorpExtendedAgentRaw(text);
+      } catch(e) {
+        try {
+          const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(corpExtendedAgentUrl)}`);
+          if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
+          setCorpExtendedAgentRaw(await res.text());
+        } catch(e2) {
+          console.error("Corp Extended Agent Stats fetch failed:", e2);
+        }
+      }
+    })();
+  }, [corpExtendedAgentUrl]);
 
   useEffect(() => {
     if (!corpPriorMonthAgentUrl) return;
