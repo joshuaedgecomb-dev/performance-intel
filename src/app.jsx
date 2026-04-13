@@ -6419,20 +6419,13 @@ function buildGoalLookupTolerant(goalsRows) {
   return buildGoalLookup(patched);
 }
 
-// Tolerant finder for the "Actual Leads" column in a Goals CSV row.
-// Tries exact names via findCol, then falls back to a regex scan of the row's own keys
-// so we match any header containing "actual" + "lead" (e.g. "Actual Leads ", "Actual Lead Count", "ActualLeads").
+// "Actual Leads" lives in the LAST column of the goals CSV by convention.
+// Read it positionally — more robust than header name matching given sheet-renaming noise.
 function findAnyLeadsColumn(row) {
-  const direct = findCol(row, "Actual Leads", "Leads Actual", "Leads", "Actual Lead Count", "ActualLeads");
-  if (direct !== undefined && direct !== "") return direct;
   if (!row) return undefined;
-  for (const key of Object.keys(row)) {
-    if (/actual.*lead|lead.*actual/i.test(key)) {
-      const v = row[key];
-      if (v !== undefined && v !== "") return v;
-    }
-  }
-  return undefined;
+  const keys = Object.keys(row);
+  if (keys.length === 0) return undefined;
+  return row[keys[keys.length - 1]];
 }
 
 // Parse a possibly formatted numeric cell — strips $, commas, whitespace.
@@ -16730,11 +16723,11 @@ export default function App() {
   }, []);
 
   const [corpPriorMonthGoalsUrl, _setCorpPriorMonthGoalsUrl] = useState(() => {
-    try { return localStorage.getItem("perf_intel_corp_prior_month_goals_url_v2") || DEFAULT_CORP_PRIOR_MONTH_GOALS_URL; } catch(e) { return DEFAULT_CORP_PRIOR_MONTH_GOALS_URL; }
+    try { return localStorage.getItem("perf_intel_corp_prior_month_goals_url_v3") || DEFAULT_CORP_PRIOR_MONTH_GOALS_URL; } catch(e) { return DEFAULT_CORP_PRIOR_MONTH_GOALS_URL; }
   });
   const setCorpPriorMonthGoalsUrl = useCallback(v => {
     _setCorpPriorMonthGoalsUrl(v);
-    try { localStorage.setItem("perf_intel_corp_prior_month_goals_url_v2", v || ""); } catch(e) {}
+    try { localStorage.setItem("perf_intel_corp_prior_month_goals_url_v3", v || ""); } catch(e) {}
   }, []);
 
   const [corpPriorMonthAgentRaw, _setCorpPriorMonthAgentRaw] = useState(() => {
@@ -16746,11 +16739,11 @@ export default function App() {
   }, []);
 
   const [corpPriorMonthGoalsRaw, _setCorpPriorMonthGoalsRaw] = useState(() => {
-    try { return localStorage.getItem("perf_intel_corp_prior_month_goals_v2") || ""; } catch(e) { return ""; }
+    try { return localStorage.getItem("perf_intel_corp_prior_month_goals_v3") || ""; } catch(e) { return ""; }
   });
   const setCorpPriorMonthGoalsRaw = useCallback(v => {
     _setCorpPriorMonthGoalsRaw(v);
-    try { localStorage.setItem("perf_intel_corp_prior_month_goals_v2", v || ""); } catch(e) {}
+    try { localStorage.setItem("perf_intel_corp_prior_month_goals_v3", v || ""); } catch(e) {}
   }, []);
 
   const [localAI, setLocalAI]      = useState(false);
