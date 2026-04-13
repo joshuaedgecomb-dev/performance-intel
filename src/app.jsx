@@ -15603,7 +15603,18 @@ export default function App() {
   const [corpInsights, _setCorpInsights] = useState(() => {
     try {
       const raw = localStorage.getItem("perf_intel_corp_insights_v1");
-      return raw ? JSON.parse(raw) : {};
+      if (raw) return JSON.parse(raw);
+      // One-time migration from legacy key introduced in Phase 1
+      const legacy = localStorage.getItem("perf_intel_virgil_insights_v1");
+      if (legacy) {
+        try {
+          const parsed = JSON.parse(legacy);
+          localStorage.setItem("perf_intel_corp_insights_v1", legacy);
+          localStorage.removeItem("perf_intel_virgil_insights_v1");
+          return parsed || {};
+        } catch(e) {}
+      }
+      return {};
     } catch(e) { return {}; }
   });
   const setCorpInsights = useCallback(updater => {
@@ -15668,14 +15679,6 @@ export default function App() {
       console.error("Login Buckets upload failed:", e);
     }
   }, [setLoginBucketsRaw]);
-
-  const [virgilInsights, _setVirgilInsights] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("perf_intel_virgil_insights_v1") || "{}"); } catch(e) { return {}; }
-  });
-  const setVirgilInsights = useCallback(v => {
-    _setVirgilInsights(v);
-    try { localStorage.setItem("perf_intel_virgil_insights_v1", JSON.stringify(v || {})); } catch(e) {}
-  }, []);
 
   const [coachingDetailsSheetUrl, _setCoachingDetailsSheetUrl] = useState(() => {
     try { return localStorage.getItem("perf_intel_coaching_details_url_v1") || DEFAULT_CORP_COACHING_DETAILS_URL; } catch(e) { return DEFAULT_CORP_COACHING_DETAILS_URL; }
