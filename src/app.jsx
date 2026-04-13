@@ -7122,12 +7122,12 @@ function buildCampaignMonthDetail(campaign, agentRaw, goalsRaw, monthFilter, ext
     if (getCorpMbrCampaignGroup(jobType) !== targetGroup) continue;
     result.hoursActual += Number(r["Hours"]) || 0;
     result.salesActual += Number(r["Goals"]) || 0;
-    result.xiActual += (Number(r["NewData"]) || 0) + (Number(r["UpgradeData"]) || 0);
+    result.xiActual += Number(r["NewData"]) || 0;
     result.xmActual += Number(r["XMLines"]) || 0;
-    result.videoActual += (Number(r["NewVideo"]) || 0) + (Number(r["UpgradeVideo"]) || 0);
+    result.videoActual += Number(r["NewVideo"]) || 0;
     // XH = XFinity Home / security
-    result.xhActual += (Number(r["NewSecurity"]) || 0) + (Number(r["UpgradeSecurity"]) || 0);
-    result.phoneActual += (Number(r["NewVoice"]) || 0) + (Number(r["UpgradeVoice"]) || 0);
+    result.xhActual += Number(r["NewSecurity"]) || 0;
+    result.phoneActual += Number(r["NewVoice"]) || 0;
   }
 
   if (goalsRaw && goalsRaw.trim()) {
