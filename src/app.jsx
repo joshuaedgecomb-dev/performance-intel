@@ -7315,46 +7315,18 @@ function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
         fontSize: 8, color: virgilTheme.subtle, align: "center",
       });
     });
-    // Goal line — draw AFTER bars so it sits on top.
-    // Connect goal points at bar centers with straight segments between consecutive periods.
+    // Goal line — drawn AFTER bars (z-order on top).
+    // One horizontal dashed segment per slot (always h=0 to avoid pptx-corruption edge cases).
     if (goals && goals.length === values.length) {
       const goalSlotW = axisW / values.length;
-      const points = goals.map((g, i) => {
-        if (g === null || g === undefined || isNaN(g)) return null;
-        return { x: axisX + goalSlotW * i + goalSlotW / 2, y: valToY(g) };
+      goals.forEach((g, i) => {
+        if (g === null || g === undefined || isNaN(g)) return;
+        const gy = valToY(g);
+        slide.addShape("line", {
+          x: axisX + goalSlotW * i, y: gy, w: goalSlotW, h: 0,
+          line: { color: goalCol, width: 1.5, dashType: "dash" },
+        });
       });
-      // Connect consecutive non-null points with dashed segments
-      for (let i = 0; i < points.length - 1; i++) {
-        const p1 = points[i];
-        const p2 = points[i + 1];
-        if (!p1 || !p2) continue;
-        const dx = p2.x - p1.x;
-        const dy = p2.y - p1.y;
-        if (dx <= 0) continue;
-        // pptxgenjs addShape("line") needs x/y/w/h; negative h is allowed for upward slope
-        slide.addShape("line", {
-          x: p1.x, y: p1.y, w: dx, h: dy,
-          line: { color: goalCol, width: 1.5, dashType: "dash" },
-        });
-      }
-      // Also draw small leading/trailing horizontal tails so the line extends over the outer bar centers
-      const firstIdx = points.findIndex(p => p !== null);
-      const lastIdx = points.length - 1 - [...points].reverse().findIndex(p => p !== null);
-      if (firstIdx >= 0 && points[firstIdx]) {
-        const p = points[firstIdx];
-        // Tail to left edge of first bar's slot
-        slide.addShape("line", {
-          x: axisX + goalSlotW * firstIdx, y: p.y, w: goalSlotW / 2, h: 0,
-          line: { color: goalCol, width: 1.5, dashType: "dash" },
-        });
-      }
-      if (lastIdx >= 0 && points[lastIdx]) {
-        const p = points[lastIdx];
-        slide.addShape("line", {
-          x: p.x, y: p.y, w: goalSlotW / 2, h: 0,
-          line: { color: goalCol, width: 1.5, dashType: "dash" },
-        });
-      }
     }
   };
 
