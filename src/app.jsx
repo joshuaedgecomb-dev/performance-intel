@@ -7654,8 +7654,8 @@ function buildCorpCampaignHoursSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
     fontSize: 10, color: virgilTheme.eyebrow, bold: true, charSpacing: 2,
   });
   slide.addText("Campaign Info – Month of Discussion vs MTD", {
-    x: 0.5, y: 0.65, w: 12, h: 0.5,
-    fontSize: 24, color: virgilTheme.bodyText, bold: true,
+    x: 0.5, y: 0.65, w: 12, h: 0.45,
+    fontSize: 18, color: virgilTheme.bodyText, bold: true,
   });
 
   const reportingPeriodLabel = getPriorMonthLabel(reportingMonthLabel); // Current − 1 (e.g., Mar)
@@ -7681,7 +7681,7 @@ function buildCorpCampaignHoursSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
   };
 
   const drawMonthBlock = (yTop, label, data) => {
-    const blockH = 2.7;
+    const blockH = 1.85;
     const containerX = 0.5;
     const containerW = 12.3;
     // Rounded container
@@ -7696,7 +7696,7 @@ function buildCorpCampaignHoursSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
       fontSize: 12, color: virgilTheme.bodyText, bold: true, align: "center",
     });
     // Legend
-    const legendY = yTop + 0.5;
+    const legendY = yTop + 0.4;
     const buckets = [...fundingOrder, "Total"];
     const legendItemW = 2.1;
     const legendStartX = containerX + (containerW - legendItemW * buckets.length) / 2;
@@ -7719,7 +7719,7 @@ function buildCorpCampaignHoursSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
     const barW = barsTotalW / buckets.length;
     const barGap = 0.05;
     // Row 1: % to Hours Goal
-    const row1Y = yTop + 1.1;
+    const row1Y = yTop + 0.85;
     slide.addText("% to Hours Goal", {
       x: barsLabelX, y: row1Y + 0.05, w: barsLabelW, h: 0.3,
       fontSize: 9, color: virgilTheme.subtle,
@@ -7732,7 +7732,7 @@ function buildCorpCampaignHoursSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
         : (data.byFunding[f] || { plan: 0, actual: 0 });
       const pct = seg.plan > 0 ? (seg.actual / seg.plan) * 100 : 0;
       slide.addShape("rect", {
-        x: bx, y: row1Y, w: bw, h: 0.4,
+        x: bx, y: row1Y, w: bw, h: 0.32,
         fill: { color: fundingColors[f] },
       });
       if (seg.plan > 0) {
@@ -7743,7 +7743,7 @@ function buildCorpCampaignHoursSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
       }
     });
     // Row 2: Hours Actual
-    const row2Y = yTop + 1.75;
+    const row2Y = yTop + 1.35;
     slide.addText("Hours Actual", {
       x: barsLabelX, y: row2Y + 0.05, w: barsLabelW, h: 0.3,
       fontSize: 9, color: virgilTheme.subtle,
@@ -7755,7 +7755,7 @@ function buildCorpCampaignHoursSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
         ? { plan: data.totalPlan, actual: data.totalActual }
         : (data.byFunding[f] || { plan: 0, actual: 0 });
       slide.addShape("rect", {
-        x: bx, y: row2Y, w: bw, h: 0.4,
+        x: bx, y: row2Y, w: bw, h: 0.32,
         fill: { color: fundingColors[f] },
       });
       if (seg.actual > 0) {
@@ -7767,11 +7767,11 @@ function buildCorpCampaignHoursSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
     });
   };
 
-  drawMonthBlock(1.3, reportingPeriodLabel, reporting);
-  drawMonthBlock(4.1, mtdLabel, mtd);
+  drawMonthBlock(1.25, reportingPeriodLabel, reporting);
+  drawMonthBlock(3.2, mtdLabel, mtd);
 
   // Bottom: Campaign Outlook / Base Management breakout
-  const breakoutY = 6.9;
+  const breakoutY = 5.3;
   // Thin horizontal accent lines
   slide.addShape("line", {
     x: 0.5, y: breakoutY, w: 5.5, h: 0,
