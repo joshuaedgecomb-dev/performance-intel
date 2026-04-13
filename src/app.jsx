@@ -8772,23 +8772,25 @@ function buildVirgilMbrPresentation(perf, options) {
 
   // Slide 6 — Per-Campaign Actual-to-Goal (N slides, one per campaign)
   // Columns: previous month (left) vs month of discussion / reporting (right)
-  // Agent data: priorAgentRaw for prior month, agentRaw for reporting month.
-  // Goals: priorGoalsRaw for prior month, goalsRaw for reporting month.
+  // Agent data: corpPriorMonthAgentRaw for prior month, agentRaw for reporting month.
+  // Goals: corpPriorMonthGoalsRaw for prior month, goalsRaw for reporting month.
   const priorFilter = makeMonthFilter(priorMonthKey);
   const reportingFilter = makeMonthFilter(options.reportingMonthLabel);
+  const corpPriorAgent = options.corpPriorMonthAgentRaw || "";
+  const corpPriorGoals = options.corpPriorMonthGoalsRaw || "";
   const campaignUniverse = buildCampaignUniverse(
-    options.priorAgentRaw || "", options.priorGoalsRaw || "",
+    corpPriorAgent, corpPriorGoals,
     options.agentRaw || "", options.goalsRaw || "",
     priorMonthKey, options.reportingMonthLabel
   );
-  const priorTotals = buildCampaignMonthTotals(options.priorAgentRaw || "", options.priorGoalsRaw || "", priorFilter);
+  const priorTotals = buildCampaignMonthTotals(corpPriorAgent, corpPriorGoals, priorFilter);
   const reportingTotals = buildCampaignMonthTotals(options.agentRaw || "", options.goalsRaw || "", reportingFilter);
   const extendedRows = Array.isArray(options.corpExtendedAgent) ? options.corpExtendedAgent : [];
   const extPriorLookup = buildExtendedAgentLookup(extendedRows, priorFilter);
   const extReportingLookup = buildExtendedAgentLookup(extendedRows, reportingFilter);
   const perCampaignNotes = (options.insights && options.insights.slide6Notes) || {};
   for (const campaign of campaignUniverse) {
-    const detailPrior = buildCampaignMonthDetail(campaign, options.priorAgentRaw || "", options.priorGoalsRaw || "", priorFilter, extPriorLookup, priorTotals);
+    const detailPrior = buildCampaignMonthDetail(campaign, corpPriorAgent, corpPriorGoals, priorFilter, extPriorLookup, priorTotals);
     const detailReporting = buildCampaignMonthDetail(campaign, options.agentRaw || "", options.goalsRaw || "", reportingFilter, extReportingLookup, reportingTotals);
     const notes = perCampaignNotes[campaign.name] || { prior: "", reporting: "" };
     buildCorpCampaignDetailSlide(pres, campaign, detailPrior, detailReporting, priorMonthKey, options.reportingMonthLabel, notes);
