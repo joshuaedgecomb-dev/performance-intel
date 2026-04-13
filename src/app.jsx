@@ -8402,7 +8402,7 @@ function buildCorpTnpsSlide(pres, perf, reportingMonthLabel, insightText) {
   });
   slide.addTable([rankHdr, ...rankRows], {
     x: 0.5, y: tableY, w: leftTableW,
-    colW: [0.4, 3.0, 0.8, 0.9, 0.7, 0.7],
+    colW: [0.4, 3.5, 0.8, 0.9, 0.7, 0.7],
     rowH: 0.3,
     border: { type: "solid", pt: 0.5, color: corpPalette.cardBorder },
     autoPage: false,
@@ -8449,7 +8449,7 @@ function buildCorpTnpsSlide(pres, perf, reportingMonthLabel, insightText) {
   });
 
   // Monthly Vendor Ranking trend — 4-month trailing across GCS / Avantive / Global Telesourcing / Results
-  const trendY = 5.45;
+  const trendY = 5.30;
   slide.addText("MONTHLY VENDOR RANKING", { x: 0.5, y: trendY - 0.25, w: 12.3, h: 0.2, fontSize: 9, color: virgilTheme.eyebrow, bold: true, charSpacing: 1.5 });
   const vendorColors = { "GCS": corpPalette.q2, "Avantive": corpPalette.navy, "Global Telesourcing": corpPalette.fundHQ, "Results": corpPalette.purple };
   const vendorNames = ["GCS", "Avantive", "Global Telesourcing", "Results"];
@@ -8487,7 +8487,7 @@ function buildCorpTnpsSlide(pres, perf, reportingMonthLabel, insightText) {
   slide.addTable([trendHdr, ...trendRows], {
     x: 0.5, y: trendY + 0.2, w: 12.3,
     colW: [2.3, ...months.map(() => (12.3 - 2.3) / Math.max(1, months.length))],
-    rowH: 0.26,
+    rowH: 0.22,
     border: { type: "solid", pt: 0.5, color: corpPalette.cardBorder },
     autoPage: false,
   });
