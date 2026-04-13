@@ -8091,6 +8091,7 @@ function VirgilMbrExportModal({
   rawAgentCsv, goalsRaw, priorMonthRaw, priorMonthGoalsRaw, newHiresRaw,
   priorQuarterAgentRaw, priorQuarterGoalsRaw,
   corpPriorMonthAgentRaw, corpPriorMonthGoalsRaw,
+  corpExtendedAgentRaw,
   insights, setInsights, ollamaAvailable, onClose
 }) {
   const [reportingMonth, setReportingMonth] = useState(() => {
@@ -8178,6 +8179,8 @@ If any vendor is missing or unreadable, use null for that value.`;
   const coachingDetails = useMemo(() => parseCoachingDetails(coachingDetailsRaw), [coachingDetailsRaw]);
   const coachingWeekly = useMemo(() => parseCoachingWeekly(coachingWeeklyRaw), [coachingWeeklyRaw]);
   const loginBuckets = useMemo(() => parseLoginBuckets(loginBucketsRaw), [loginBucketsRaw]);
+  const corpExtendedAgent = useMemo(() => parseExtendedAgentStats(corpExtendedAgentRaw), [corpExtendedAgentRaw]);
+  const hasExtendedAgent = !!(corpExtendedAgentRaw && corpExtendedAgentRaw.trim());
 
   const hasCoachingDetails = !!(coachingDetailsRaw && coachingDetailsRaw.trim());
   const hasCoachingWeekly = !!(coachingWeeklyRaw && coachingWeeklyRaw.trim());
@@ -8226,13 +8229,14 @@ Write bullet-point style insights focused on movement vs prior, gaps vs 75% goal
       priorQuarterGoalsRaw: priorQuarterGoalsRaw || "",
       corpPriorMonthAgentRaw: corpPriorMonthAgentRaw || "",
       corpPriorMonthGoalsRaw: corpPriorMonthGoalsRaw || "",
+      corpExtendedAgent,
       scorecardDataUrl,
       vendorScores,
       insights: { ...(insights || {}), slide2: slide2Insights },
     });
     const safeMonth = (reportingMonth || "Virgil").replace(/[^A-Za-z0-9 _-]+/g, "");
     await pres.writeFile({ fileName: `Corp MBR - ${safeMonth}.pptx` });
-  }, [perf, reportingMonth, coachingDetails, coachingWeekly, loginBuckets, rawAgentCsv, goalsRaw, priorMonthRaw, priorMonthGoalsRaw, newHiresRaw, priorQuarterAgentRaw, priorQuarterGoalsRaw, corpPriorMonthAgentRaw, corpPriorMonthGoalsRaw, scorecardDataUrl, vendorScores, insights, useAiInsights, ollamaAvailable]);
+  }, [perf, reportingMonth, coachingDetails, coachingWeekly, loginBuckets, rawAgentCsv, goalsRaw, priorMonthRaw, priorMonthGoalsRaw, newHiresRaw, priorQuarterAgentRaw, priorQuarterGoalsRaw, corpPriorMonthAgentRaw, corpPriorMonthGoalsRaw, corpExtendedAgent, scorecardDataUrl, vendorScores, insights, useAiInsights, ollamaAvailable]);
 
   const StatusRow = ({ label, ok }) => (
     <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", fontSize: 13 }}>
@@ -8268,6 +8272,7 @@ Write bullet-point style insights focused on movement vs prior, gaps vs 75% goal
           <StatusRow label="Prior Month Goals (Current − 2)" ok={!!(corpPriorMonthGoalsRaw && corpPriorMonthGoalsRaw.trim())} />
           <StatusRow label="Prior Quarter Agent (Q4 2025)" ok={!!(priorQuarterAgentRaw && priorQuarterAgentRaw.trim())} />
           <StatusRow label="Prior Quarter Goals (Q4 2025)" ok={!!(priorQuarterGoalsRaw && priorQuarterGoalsRaw.trim())} />
+          <StatusRow label="Extended Agent Stats (Slide 6 Contact Rate / Lead Penetration)" ok={hasExtendedAgent} />
           <StatusRow label="Scorecard PNG (Slide 3)" ok={!!scorecardDataUrl} />
         </div>
 
@@ -16492,6 +16497,7 @@ export default function App() {
           priorQuarterGoalsRaw={priorQuarterGoalsRaw}
           corpPriorMonthAgentRaw={corpPriorMonthAgentRaw}
           corpPriorMonthGoalsRaw={corpPriorMonthGoalsRaw}
+          corpExtendedAgentRaw={corpExtendedAgentRaw}
           insights={corpInsights}
           setInsights={setCorpInsights}
           ollamaAvailable={ollamaAvailable}
