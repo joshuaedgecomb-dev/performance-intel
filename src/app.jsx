@@ -6419,13 +6419,20 @@ function buildGoalLookupTolerant(goalsRows) {
   return buildGoalLookup(patched);
 }
 
-// "Actual Leads" lives in the LAST column of the goals CSV by convention.
-// Read it positionally — more robust than header name matching given sheet-renaming noise.
+// Tolerant finder for the "Actual Leads" column in a Goals CSV row.
+// Tries exact name via findCol, then a regex scan of the row's keys for any
+// header containing "actual" + "lead" (handles trailing whitespace, etc.).
 function findAnyLeadsColumn(row) {
   if (!row) return undefined;
-  const keys = Object.keys(row);
-  if (keys.length === 0) return undefined;
-  return row[keys[keys.length - 1]];
+  const direct = findCol(row, "Actual Leads", "Leads Actual", "Actual Lead Count", "ActualLeads");
+  if (direct !== undefined && direct !== "") return direct;
+  for (const key of Object.keys(row)) {
+    if (/actual.*lead|lead.*actual/i.test(key)) {
+      const v = row[key];
+      if (v !== undefined && v !== "") return v;
+    }
+  }
+  return undefined;
 }
 
 // Parse a possibly formatted numeric cell — strips $, commas, whitespace.
