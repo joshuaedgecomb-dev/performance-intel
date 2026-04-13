@@ -6811,7 +6811,7 @@ function buildQuartileReport(agentRaw, goalsRaw, newHiresRaw, dateFilter, refere
       const salesTotal = qAgents.reduce((s, a) => s + a.sales, 0);
       const expectedTotal = qAgents.reduce((s, a) => s + a.sphExpected, 0);
       const qPct = expectedTotal > 0 ? salesTotal / expectedTotal : 0;
-      return { quartile: i + 1, units: qAgents.length, pctToGoal: qPct, agentCount: qAgents.length };
+      return { quartile: i + 1, agents: qAgents.length, units: unitsTotal, pctToGoal: qPct, agentCount: qAgents.length };
     });
 
     const tenureMatrix = tenureBuckets.map(([lo, hi]) => {
@@ -7555,17 +7555,19 @@ function buildCorpQuartileSlide(pres, agentRaw, goalsRaw, newHiresRaw, reporting
       const qColors = ["16A34A", "F59E0B", "F97316", "DC2626"];
       const summaryRows = [
         [{ text: "Q", options: { bold: true, align: "center", fill: { color: "F3F4F6" } } },
+         { text: "Agents", options: { bold: true, align: "center", fill: { color: "F3F4F6" } } },
          { text: "Units", options: { bold: true, align: "center", fill: { color: "F3F4F6" } } },
          { text: "% to Goal", options: { bold: true, align: "center", fill: { color: "F3F4F6" } } }],
         ...section.quartileSummary.map((q, i) => ([
           { text: String(q.quartile), options: { align: "center", fill: { color: qColors[i] }, color: "FFFFFF", bold: true } },
+          { text: String(q.agents), options: { align: "center" } },
           { text: String(q.units), options: { align: "center" } },
           { text: `${(q.pctToGoal * 100).toFixed(1)}%`, options: { align: "center" } },
         ])),
       ];
       slide.addTable(summaryRows, {
-        x: xBase, y: y + 0.25, w: 2.6,
-        colW: [0.5, 1.0, 1.1],
+        x: xBase, y: y + 0.25, w: 2.9,
+        colW: [0.4, 0.8, 0.7, 1.0],
         rowH: 0.28,
         fontSize: 9,
         border: { type: "solid", pt: 0.5, color: "D1D5DB" },
