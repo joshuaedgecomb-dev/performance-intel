@@ -7080,8 +7080,8 @@ function buildVirgilMyPerformanceSlide(pres, stats, loginBuckets, priorPriorMont
     fontSize: 10, color: virgilTheme.eyebrow, bold: true, charSpacing: 2,
   });
   slide.addText(`Global Callcenter Solutions | Quality and Coaching`, {
-    x: 0.5, y: 0.65, w: 12, h: 0.55,
-    fontSize: 26, color: virgilTheme.bodyText, bold: true,
+    x: 0.5, y: 0.65, w: 12, h: 0.5,
+    fontSize: 22, color: virgilTheme.bodyText, bold: true,
   });
 
   // Legend (top right) — 3 months + goal line
@@ -7572,7 +7572,7 @@ function buildCorpQuartileSlide(pres, agentRaw, goalsRaw, priorAgentRaw, priorGo
   });
   slide.addText("Global Callcenter Solutions | Quartile Reporting", {
     x: 0.5, y: 0.65, w: 12, h: 0.5,
-    fontSize: 24, color: virgilTheme.bodyText, bold: true,
+    fontSize: 22, color: virgilTheme.bodyText, bold: true,
   });
 
   const reportingPeriodLabel = getPriorMonthLabel(reportingMonthLabel);
@@ -7680,9 +7680,9 @@ function buildCorpCampaignHoursSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
     x: 0.5, y: 0.35, w: 6, h: 0.25,
     fontSize: 10, color: virgilTheme.eyebrow, bold: true, charSpacing: 2,
   });
-  slide.addText("Campaign Info – Month of Discussion vs MTD", {
-    x: 0.5, y: 0.65, w: 12, h: 0.45,
-    fontSize: 18, color: virgilTheme.bodyText, bold: true,
+  slide.addText("Global Callcenter Solutions | Campaign Info – Month of Discussion vs MTD", {
+    x: 0.5, y: 0.65, w: 12, h: 0.5,
+    fontSize: 22, color: virgilTheme.bodyText, bold: true,
   });
 
   const reportingPeriodLabel = getPriorMonthLabel(reportingMonthLabel); // Current − 1 (e.g., Mar)
