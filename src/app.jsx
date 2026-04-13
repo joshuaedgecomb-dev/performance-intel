@@ -8328,6 +8328,26 @@ function buildVirgilMbrPresentation(perf, options) {
     options.reportingMonthLabel,
     options.corpPriorMonthAgentRaw || "", options.corpPriorMonthGoalsRaw || "");
 
+  // Slide 6 — Per-Campaign Actual-to-Goal (N slides, one per campaign)
+  const campaignUniverse = buildCampaignUniverse(
+    options.priorAgentRaw || "", options.priorGoalsRaw || "",
+    options.agentRaw || "", options.goalsRaw || ""
+  );
+  const priorFilter = makeMonthFilter(priorMonthKey);
+  const currFilter = makeMonthFilter(options.reportingMonthLabel);
+  const priorTotals = buildCampaignMonthTotals(options.priorAgentRaw || "", options.priorGoalsRaw || "", priorFilter);
+  const currTotals = buildCampaignMonthTotals(options.agentRaw || "", options.goalsRaw || "", currFilter);
+  const extendedRows = Array.isArray(options.corpExtendedAgent) ? options.corpExtendedAgent : [];
+  const extPriorLookup = buildExtendedAgentLookup(extendedRows, priorFilter);
+  const extCurrLookup = buildExtendedAgentLookup(extendedRows, currFilter);
+  const perCampaignNotes = (options.insights && options.insights.slide6Notes) || {};
+  for (const campaign of campaignUniverse) {
+    const detailPrior = buildCampaignMonthDetail(campaign, options.priorAgentRaw || "", options.priorGoalsRaw || "", priorFilter, extPriorLookup, priorTotals);
+    const detailCurr = buildCampaignMonthDetail(campaign, options.agentRaw || "", options.goalsRaw || "", currFilter, extCurrLookup, currTotals);
+    const notes = perCampaignNotes[campaign.name] || { feb: "", march: "" };
+    buildCorpCampaignDetailSlide(pres, campaign, detailPrior, detailCurr, priorMonthKey, options.reportingMonthLabel, notes);
+  }
+
   return pres;
 }
 
