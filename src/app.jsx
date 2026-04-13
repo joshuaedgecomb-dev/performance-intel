@@ -6404,6 +6404,21 @@ async function generateMBR(perf, onProgress, { includeAI = true } = {}) {
 // CORP MBR — Parsers
 // ═══════════════════════════════════════════════════════════════════
 
+// Tolerant buildGoalLookup wrapper — fills in a default "ALL" Site for rows missing Site.
+// The existing `buildGoalLookup` skips any row without both Target Audience AND Site.
+// Corp MBR's prior-month goals sheet can arrive with an empty Site column — we still want
+// those rows indexed so campaign totals populate.
+function buildGoalLookupTolerant(goalsRows) {
+  if (!goalsRows || goalsRows.length === 0) return buildGoalLookup(goalsRows);
+  const patched = goalsRows.map(r => {
+    const site = (findCol(r, "Site") || "").trim();
+    if (site) return r;
+    // Preserve the original row shape but add a synthetic Site key.
+    return { ...r, Site: "ALL" };
+  });
+  return buildGoalLookup(patched);
+}
+
 // Tolerant finder for the "Actual Leads" column in a Goals CSV row.
 // Tries exact names via findCol, then falls back to a regex scan of the row's own keys
 // so we match any header containing "actual" + "lead" (e.g. "Actual Leads ", "Actual Lead Count", "ActualLeads").
@@ -7030,7 +7045,7 @@ function buildCampaignUniverse(priorAgentRaw, priorGoalsRaw, agentRaw, goalsRaw,
   const accumulateGoals = (goalsRawStr, key) => {
     if (!goalsRawStr || !goalsRawStr.trim()) return;
     const goalsRows = parseCSV(goalsRawStr);
-    const lookup = buildGoalLookup(goalsRows);
+    const lookup = buildGoalLookupTolerant(goalsRows);
     if (!lookup) return;
     Object.keys(lookup.byTA || {}).forEach(ta => {
       const category = keep(ta);
@@ -7092,7 +7107,7 @@ function buildCampaignMonthDetail(campaign, agentRaw, goalsRaw, monthFilter, ext
 
   if (goalsRaw && goalsRaw.trim()) {
     const goalRows = parseCSV(goalsRaw);
-    const goalLookup = buildGoalLookup(goalRows);
+    const goalLookup = buildGoalLookupTolerant(goalRows);
     if (goalLookup) {
       const entries = getGoalEntries(goalLookup, campaign.name, null);
       // Collapse all matched entries into one combined siteMap
