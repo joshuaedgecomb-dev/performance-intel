@@ -6906,9 +6906,11 @@ function buildCampaignHoursByFunding(agentRaw, goalsRaw, monthFilter) {
     if (byFunding[meta.funding]) {
       byFunding[meta.funding].plan += meta.hoursGoal;
       byFunding[meta.funding].actual += act;
+      totalPlan += meta.hoursGoal;
+      totalActual += act;
     }
-    totalPlan += meta.hoursGoal;
-    totalActual += act;
+    // Rows with funding = "Other" or blank are intentionally excluded from totals so the
+    // Total bar equals the sum of the 4 displayed funding buckets.
     if (meta.name) {
       campaigns.push({ name: meta.name, funding: meta.funding, hoursGoal: meta.hoursGoal, hoursActual: act, par: meta.par, roc });
     }
