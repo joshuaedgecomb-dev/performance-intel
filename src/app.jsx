@@ -7798,22 +7798,10 @@ function buildCorpCampaignHoursSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
 
   // Bottom: Campaign Outlook / Base Management breakout
   const breakoutY = 5.3;
-  // Thin horizontal accent lines
-  slide.addShape("line", {
-    x: 0.5, y: breakoutY, w: 5.5, h: 0,
-    line: { color: virgilTheme.eyebrow, width: 1 },
-  });
-  slide.addShape("line", {
-    x: 7.3, y: breakoutY, w: 5.5, h: 0,
-    line: { color: virgilTheme.eyebrow, width: 1 },
-  });
-  slide.addText("Campaign Outlook", {
-    x: 2.0, y: breakoutY - 0.15, w: 2.5, h: 0.25,
-    fontSize: 11, color: virgilTheme.eyebrow, bold: true, align: "center",
-  });
-  slide.addText("Base Management", {
-    x: 8.8, y: breakoutY - 0.15, w: 2.5, h: 0.25,
-    fontSize: 11, color: virgilTheme.eyebrow, bold: true, align: "center",
+  // Compact section headers (no accent lines — pills provide separation)
+  slide.addText("Campaign Outlook  ·  Base Management", {
+    x: 0.5, y: breakoutY, w: 12.3, h: 0.25,
+    fontSize: 10, color: corpPalette.inkSubtle, bold: false, italic: true, align: "center", charSpacing: 2,
   });
   // Pills (bucket headers)
   const pillY = breakoutY + 0.15;
@@ -7838,26 +7826,37 @@ function buildCorpCampaignHoursSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
       if (!seen[key]) seen[key] = { name: c.name, hours: 0 };
       seen[key].hours += c.hoursActual;
     }
-    const rows = Object.values(seen).sort((a, b) => b.hours - a.hours).slice(0, 6);
-    const items = rows.map(r => `${r.name} — ${Math.round(r.hours).toLocaleString()} hours`);
-    slide.addText(items.length ? items.join("\n") : "(no data)", {
-      x, y: pillY + pillH + 0.1, w, h: 1.5,
-      fontSize: 9, color: virgilTheme.bodyText, valign: "top", paraSpaceAfter: 4,
+    const rows = Object.values(seen).sort((a, b) => b.hours - a.hours).slice(0, 4);
+    if (rows.length === 0) {
+      slide.addText("(no data)", {
+        x, y: pillY + pillH + 0.1, w, h: 1.2,
+        fontSize: 9, color: corpPalette.inkSubtle, italic: true, valign: "top",
+      });
+      return;
+    }
+    const bulletItems = rows.map((r, i) => ({
+      text: `${r.name} - ${Math.round(r.hours).toLocaleString()} hrs`,
+      options: { bullet: { code: "2022" }, breakLine: i < rows.length - 1 },
+    }));
+    slide.addText(bulletItems, {
+      x: x + 0.05, y: pillY + pillH + 0.1, w: w - 0.05, h: 1.3,
+      fontSize: 8, color: corpPalette.ink, valign: "top", paraSpaceAfter: 3,
     });
   };
   // Campaign Outlook = Growth Funded only
-  drawPill(0.5, 5.5, "Growth Funded", fundingColors.Growth);
-  drawCampaignList(0.7, 5.3, "Growth", reporting.campaigns);
-  // Base Management = HQ + Marketing + National, each a pill in their own column
-  const bmCols = [
-    { funding: "HQ",        label: "HQ Funded",        x: 7.3,  w: 1.8 },
-    { funding: "Marketing", label: "Marketing Funded",  x: 9.2,  w: 1.8 },
-    { funding: "National",  label: "National Funded",   x: 11.1, w: 1.7 },
+  // 4 equal-width pills across the slide: Growth, HQ, Marketing, National
+  const pillsCols = [
+    { funding: "Growth",    label: "Growth Funded",    x: 0.5 },
+    { funding: "HQ",        label: "HQ Funded",        x: 3.6 },
+    { funding: "Marketing", label: "Marketing Funded", x: 6.7 },
+    { funding: "National",  label: "National Funded",  x: 9.8 },
   ];
-  bmCols.forEach(col => {
-    drawPill(col.x, col.w, col.label, fundingColors[col.funding]);
-    drawCampaignList(col.x + 0.1, col.w - 0.15, col.funding, reporting.campaigns);
+  const pillW = 2.95;
+  pillsCols.forEach(col => {
+    drawPill(col.x, pillW, col.label, fundingColors[col.funding]);
+    drawCampaignList(col.x + 0.1, pillW - 0.2, col.funding, reporting.campaigns);
   });
+  // (Legacy bmCols block below is unreachable; kept for removal)
 }
 
 // ═══════════════════════════════════════════════════════════════════
