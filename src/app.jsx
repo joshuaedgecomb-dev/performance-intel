@@ -16715,11 +16715,11 @@ export default function App() {
   }, []);
 
   const [corpPriorMonthGoalsUrl, _setCorpPriorMonthGoalsUrl] = useState(() => {
-    try { return localStorage.getItem("perf_intel_corp_prior_month_goals_url_v1") || DEFAULT_CORP_PRIOR_MONTH_GOALS_URL; } catch(e) { return DEFAULT_CORP_PRIOR_MONTH_GOALS_URL; }
+    try { return localStorage.getItem("perf_intel_corp_prior_month_goals_url_v2") || DEFAULT_CORP_PRIOR_MONTH_GOALS_URL; } catch(e) { return DEFAULT_CORP_PRIOR_MONTH_GOALS_URL; }
   });
   const setCorpPriorMonthGoalsUrl = useCallback(v => {
     _setCorpPriorMonthGoalsUrl(v);
-    try { localStorage.setItem("perf_intel_corp_prior_month_goals_url_v1", v || ""); } catch(e) {}
+    try { localStorage.setItem("perf_intel_corp_prior_month_goals_url_v2", v || ""); } catch(e) {}
   }, []);
 
   const [corpPriorMonthAgentRaw, _setCorpPriorMonthAgentRaw] = useState(() => {
@@ -16731,11 +16731,11 @@ export default function App() {
   }, []);
 
   const [corpPriorMonthGoalsRaw, _setCorpPriorMonthGoalsRaw] = useState(() => {
-    try { return localStorage.getItem("perf_intel_corp_prior_month_goals_v1") || ""; } catch(e) { return ""; }
+    try { return localStorage.getItem("perf_intel_corp_prior_month_goals_v2") || ""; } catch(e) { return ""; }
   });
   const setCorpPriorMonthGoalsRaw = useCallback(v => {
     _setCorpPriorMonthGoalsRaw(v);
-    try { localStorage.setItem("perf_intel_corp_prior_month_goals_v1", v || ""); } catch(e) {}
+    try { localStorage.setItem("perf_intel_corp_prior_month_goals_v2", v || ""); } catch(e) {}
   }, []);
 
   const [localAI, setLocalAI]      = useState(false);
