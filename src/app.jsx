@@ -8771,29 +8771,32 @@ function buildVirgilMbrPresentation(perf, options) {
     options.corpPriorMonthAgentRaw || "", options.corpPriorMonthGoalsRaw || "");
 
   // Slide 6 — Per-Campaign Actual-to-Goal (N slides, one per campaign)
-  // Columns: previous month (left) vs month of discussion / reporting (right)
-  // Agent data: corpPriorMonthAgentRaw for prior month, agentRaw for reporting month.
-  // Goals: corpPriorMonthGoalsRaw for prior month, goalsRaw for reporting month.
-  const priorFilter = makeMonthFilter(priorMonthKey);
-  const reportingFilter = makeMonthFilter(options.reportingMonthLabel);
-  const corpPriorAgent = options.corpPriorMonthAgentRaw || "";
-  const corpPriorGoals = options.corpPriorMonthGoalsRaw || "";
+  // With picker = current fiscal month (e.g. Apr), spec columns are:
+  //   LEFT  = Previous Month       = picker − 2 (Feb) ← corpPriorMonthAgentRaw / corpPriorMonthGoalsRaw
+  //   RIGHT = Month of Discussion  = picker − 1 (Mar) ← priorAgentRaw / priorGoalsRaw (Phase 1 "current − 1")
+  const priorPriorMonthKey = getPriorMonthLabel(priorMonthKey);
+  const prevFilter = makeMonthFilter(priorPriorMonthKey);
+  const discussionFilter = makeMonthFilter(priorMonthKey);
+  const prevAgent = options.corpPriorMonthAgentRaw || "";
+  const prevGoals = options.corpPriorMonthGoalsRaw || "";
+  const discussionAgent = options.priorAgentRaw || "";
+  const discussionGoals = options.priorGoalsRaw || "";
   const campaignUniverse = buildCampaignUniverse(
-    corpPriorAgent, corpPriorGoals,
-    options.agentRaw || "", options.goalsRaw || "",
-    priorMonthKey, options.reportingMonthLabel
+    prevAgent, prevGoals,
+    discussionAgent, discussionGoals,
+    priorPriorMonthKey, priorMonthKey
   );
-  const priorTotals = buildCampaignMonthTotals(corpPriorAgent, corpPriorGoals, priorFilter);
-  const reportingTotals = buildCampaignMonthTotals(options.agentRaw || "", options.goalsRaw || "", reportingFilter);
+  const prevTotals = buildCampaignMonthTotals(prevAgent, prevGoals, prevFilter);
+  const discussionTotals = buildCampaignMonthTotals(discussionAgent, discussionGoals, discussionFilter);
   const extendedRows = Array.isArray(options.corpExtendedAgent) ? options.corpExtendedAgent : [];
-  const extPriorLookup = buildExtendedAgentLookup(extendedRows, priorFilter);
-  const extReportingLookup = buildExtendedAgentLookup(extendedRows, reportingFilter);
+  const extPrevLookup = buildExtendedAgentLookup(extendedRows, prevFilter);
+  const extDiscussionLookup = buildExtendedAgentLookup(extendedRows, discussionFilter);
   const perCampaignNotes = (options.insights && options.insights.slide6Notes) || {};
   for (const campaign of campaignUniverse) {
-    const detailPrior = buildCampaignMonthDetail(campaign, corpPriorAgent, corpPriorGoals, priorFilter, extPriorLookup, priorTotals);
-    const detailReporting = buildCampaignMonthDetail(campaign, options.agentRaw || "", options.goalsRaw || "", reportingFilter, extReportingLookup, reportingTotals);
+    const detailPrior = buildCampaignMonthDetail(campaign, prevAgent, prevGoals, prevFilter, extPrevLookup, prevTotals);
+    const detailReporting = buildCampaignMonthDetail(campaign, discussionAgent, discussionGoals, discussionFilter, extDiscussionLookup, discussionTotals);
     const notes = perCampaignNotes[campaign.name] || { prior: "", reporting: "" };
-    buildCorpCampaignDetailSlide(pres, campaign, detailPrior, detailReporting, priorMonthKey, options.reportingMonthLabel, notes);
+    buildCorpCampaignDetailSlide(pres, campaign, detailPrior, detailReporting, priorPriorMonthKey, priorMonthKey, notes);
   }
 
   // Slide 7 — Customer Experience (tNPS)
@@ -8879,8 +8882,7 @@ function VirgilMbrExportModal({
         const dt = new Date(end);
         const mo = dt.toLocaleDateString("en-US", { month: "short" });
         const yr = String(dt.getFullYear()).slice(2);
-        // Default to the LAST COMPLETE fiscal month (current in-progress − 1)
-        return getPriorMonthLabel(`${mo} '${yr}`);
+        return `${mo} '${yr}`;
       }
     } catch(e) {}
     return "";
@@ -8960,14 +8962,16 @@ If any vendor is missing or unreadable, use null for that value.`;
   const loginBuckets = useMemo(() => parseLoginBuckets(loginBucketsRaw), [loginBucketsRaw]);
   const corpExtendedAgent = useMemo(() => parseExtendedAgentStats(rawAgentCsv), [rawAgentCsv]);
 
+  // Slide 6 column labels: picker=Apr → previous=Feb (picker-2), discussion=Mar (picker-1)
   const priorMonthLabelDisplay = useMemo(() => getPriorMonthLabel(reportingMonth), [reportingMonth]);
+  const priorPriorMonthLabelDisplay = useMemo(() => getPriorMonthLabel(priorMonthLabelDisplay), [priorMonthLabelDisplay]);
   const campaignUniverse = useMemo(() => {
     return buildCampaignUniverse(
+      corpPriorMonthAgentRaw || "", corpPriorMonthGoalsRaw || "",
       priorMonthRaw || "", priorMonthGoalsRaw || "",
-      rawAgentCsv || "", goalsRaw || "",
-      priorMonthLabelDisplay, reportingMonth
+      priorPriorMonthLabelDisplay, priorMonthLabelDisplay
     );
-  }, [priorMonthRaw, priorMonthGoalsRaw, rawAgentCsv, goalsRaw, priorMonthLabelDisplay, reportingMonth]);
+  }, [corpPriorMonthAgentRaw, corpPriorMonthGoalsRaw, priorMonthRaw, priorMonthGoalsRaw, priorPriorMonthLabelDisplay, priorMonthLabelDisplay]);
 
   const hasCoachingDetails = !!(coachingDetailsRaw && coachingDetailsRaw.trim());
   const hasCoachingWeekly = !!(coachingWeeklyRaw && coachingWeeklyRaw.trim());
@@ -9043,11 +9047,11 @@ Write bullet-point style insights focused on movement vs prior, gaps vs 75% goal
         </p>
 
         <label style={{ display: "block", marginTop: 16, fontSize: 13, fontWeight: 600 }}>
-          Reporting Month (Month of Discussion)
+          Current Fiscal Month Label
           <input type="text" value={reportingMonth} onChange={e => setReportingMonth(e.target.value)}
-            placeholder="Mar '26"
+            placeholder="Apr '26"
             style={{ display: "block", marginTop: 4, width: "100%", padding: 8, border: "1px solid #d1d5db", borderRadius: 6 }} />
-          <small style={{ color: "#6b7280" }}>The last complete fiscal month. Must match format like "Mar '26". Previous month auto-derives as (this − 1), MTD as (this + 1).</small>
+          <small style={{ color: "#6b7280" }}>The current in-progress fiscal month (MTD). Must match format like "Apr '26". Slide 6 previous month auto-derives as (this − 2), month of discussion as (this − 1).</small>
         </label>
 
         <div style={{ marginTop: 16, padding: 12, background: "#f9fafb", borderRadius: 6 }}>
@@ -9169,7 +9173,7 @@ Write bullet-point style insights focused on movement vs prior, gaps vs 75% goal
           <div style={{ fontSize: 13, fontWeight: 600 }}>Slide 6 — Per-Campaign Performance Notes</div>
           <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>
             {campaignUniverse.length
-              ? `${campaignUniverse.length} campaigns detected across ${priorMonthLabelDisplay} / ${reportingMonth}. Notes render on the per-campaign slides; blank = empty panel.`
+              ? `${campaignUniverse.length} campaigns detected across ${priorPriorMonthLabelDisplay} / ${priorMonthLabelDisplay}. Notes render on the per-campaign slides; blank = empty panel.`
               : "No campaigns detected yet — load current-month data first."}
           </div>
           <div style={{ maxHeight: 260, overflow: "auto", marginTop: 8 }}>
@@ -9189,12 +9193,12 @@ Write bullet-point style insights focused on movement vs prior, gaps vs 75% goal
                   <div style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>{c.name}</div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 6 }}>
                     <label style={{ fontSize: 11, color: "#6b7280" }}>
-                      {priorMonthLabelDisplay} notes
+                      {priorPriorMonthLabelDisplay} notes
                       <textarea value={entry.prior} onChange={e => update("prior", e.target.value)}
                         rows={2} style={{ display: "block", width: "100%", padding: 6, border: "1px solid #d1d5db", borderRadius: 4, marginTop: 2, fontSize: 11, fontFamily: "inherit", resize: "vertical" }} />
                     </label>
                     <label style={{ fontSize: 11, color: "#6b7280" }}>
-                      {reportingMonth} notes
+                      {priorMonthLabelDisplay} notes
                       <textarea value={entry.reporting} onChange={e => update("reporting", e.target.value)}
                         rows={2} style={{ display: "block", width: "100%", padding: 6, border: "1px solid #d1d5db", borderRadius: 4, marginTop: 2, fontSize: 11, fontFamily: "inherit", resize: "vertical" }} />
                     </label>
