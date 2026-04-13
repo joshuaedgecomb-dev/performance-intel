@@ -7034,7 +7034,7 @@ function buildCampaignUniverse(priorAgentRaw, priorGoalsRaw, agentRaw, goalsRaw,
 //   totalsForMonth: { sumActualLeads, sumHoursActual } — used for % of Total Leads / % of Total Hours
 // Returns an object of raw values; downstream formatter turns it into table cells.
 function buildCampaignMonthDetail(campaign, agentRaw, goalsRaw, monthFilter, extendedLookup, totalsForMonth) {
-  const HOURLY_COST = 19.77;
+  const HOURLY_COST = MBR_BILLING_RATE;
   const result = {
     hoursActual: 0, hoursGoal: 0,
     salesActual: 0, salesGoal: 0,
@@ -8234,74 +8234,8 @@ function buildCorpCampaignHoursSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
 // Returns an array of pptxgenjs table rows including a header row.
 // Each row has 6 cells: [ROW LABEL, GOALS, BUDGET, ACTUAL, VARIANCE, % GOAL].
 // For derived ratio rows (CPS, SPH, etc.) and "Total Leads"-style rows, the GOALS / BUDGET / VARIANCE / % GOAL cells are blank — only ACTUAL has data (per spec §6.6).
-function formatCampaignDetailTable(detail, columnLabel) {
-  const fmtInt = n => (n === null || n === undefined || Number.isNaN(n)) ? "—" : Math.round(n).toLocaleString();
-  const fmtIntSigned = n => (n === null || n === undefined || Number.isNaN(n)) ? "—" : `${n >= 0 ? "+" : ""}${Math.round(n).toLocaleString()}`;
-  const fmtMoney = n => (n === null || n === undefined || Number.isNaN(n)) ? "—" : `$${Math.round(n).toLocaleString()}`;
-  const fmtMoneySigned = n => (n === null || n === undefined || Number.isNaN(n)) ? "—" : `${n >= 0 ? "+" : "-"}$${Math.round(Math.abs(n)).toLocaleString()}`;
-  const fmtMoney2 = n => (n === null || n === undefined || Number.isNaN(n)) ? "—" : `$${n.toFixed(2)}`;
-  const fmtPct = n => (n === null || n === undefined || Number.isNaN(n)) ? "—" : `${(n * 100).toFixed(1)}%`;
-  const fmtRatio = n => (n === null || n === undefined || Number.isNaN(n)) ? "—" : n.toFixed(3);
-  const varOf = (act, goal) => (act || 0) - (goal || 0);
-  const pctOf = (act, goal) => (goal === 0 ? 0 : act / goal);
-
-  const hdrBase = { fill: { color: corpPalette.purple }, color: "FFFFFF", bold: true, align: "center", fontSize: 9 };
-  const labelBase = { bold: true, color: corpPalette.ink, fontSize: 9, align: "left" };
-  const cellBase = { color: corpPalette.ink, fontSize: 9, align: "center" };
-
-  const headerRow = [
-    { text: columnLabel, options: hdrBase },
-    { text: "GOALS", options: hdrBase },
-    { text: "BUDGET", options: hdrBase },
-    { text: "ACTUAL", options: hdrBase },
-    { text: "VARIANCE", options: hdrBase },
-    { text: "% GOAL", options: hdrBase },
-  ];
-
-  const rows = [];
-  const push = (label, goal, budget, actual, variance, pct) => {
-    rows.push([
-      { text: label, options: labelBase },
-      { text: goal, options: cellBase },
-      { text: budget, options: cellBase },
-      { text: actual, options: cellBase },
-      { text: variance, options: cellBase },
-      { text: pct, options: cellBase },
-    ]);
-  };
-
-  // Top block — $/hours/sales/RGU breakdown. Each of these has goal + actual with variance + % Goal.
-  push("BUDGET ($)", fmtMoney(detail.budgetGoal), fmtMoney(detail.budgetGoal), fmtMoney(detail.budget), fmtMoneySigned(varOf(detail.budget, detail.budgetGoal)), fmtPct(pctOf(detail.budget, detail.budgetGoal)));
-  push("HOURS", fmtInt(detail.hoursGoal), fmtMoney(detail.budgetGoal), fmtInt(detail.hoursActual), fmtIntSigned(varOf(detail.hoursActual, detail.hoursGoal)), fmtPct(pctOf(detail.hoursActual, detail.hoursGoal)));
-  push("SALES", fmtInt(detail.salesGoal), "", fmtInt(detail.salesActual), fmtIntSigned(varOf(detail.salesActual, detail.salesGoal)), fmtPct(pctOf(detail.salesActual, detail.salesGoal)));
-  push("RGUs", fmtInt(detail.rgusGoal), "", fmtInt(detail.rgusActual), fmtIntSigned(varOf(detail.rgusActual, detail.rgusGoal)), fmtPct(pctOf(detail.rgusActual, detail.rgusGoal)));
-  push("HSD RGUs", fmtInt(detail.xiGoal), "", fmtInt(detail.xiActual), fmtIntSigned(varOf(detail.xiActual, detail.xiGoal)), fmtPct(pctOf(detail.xiActual, detail.xiGoal)));
-  push("XM RGUs", fmtInt(detail.xmGoal), "", fmtInt(detail.xmActual), fmtIntSigned(varOf(detail.xmActual, detail.xmGoal)), fmtPct(pctOf(detail.xmActual, detail.xmGoal)));
-  push("VIDEO RGUs", fmtInt(detail.videoGoal), "", fmtInt(detail.videoActual), fmtIntSigned(varOf(detail.videoActual, detail.videoGoal)), fmtPct(pctOf(detail.videoActual, detail.videoGoal)));
-  push("XH RGUs", fmtInt(detail.xhGoal), "", fmtInt(detail.xhActual), fmtIntSigned(varOf(detail.xhActual, detail.xhGoal)), fmtPct(pctOf(detail.xhActual, detail.xhGoal)));
-  push("PHONE RGUs", fmtInt(detail.phoneGoal), "", fmtInt(detail.phoneActual), fmtIntSigned(varOf(detail.phoneActual, detail.phoneGoal)), fmtPct(pctOf(detail.phoneActual, detail.phoneGoal)));
-
-  // Bottom block — derived ratios (no goal to compare against)
-  push("CPS", "", "", fmtMoney2(detail.cps), "", "");
-  push("CPRGU", "", "", fmtMoney2(detail.cprgu), "", "");
-  push("SPH", "", "", fmtRatio(detail.sph), "", "");
-  push("RGUPH", "", "", fmtRatio(detail.rguph), "", "");
-  push("RGU/HOME", "", "", fmtRatio(detail.rguPerSale), "", "");
-
-  // Additional rows — Leads + Extended Agent-derived
-  push("Total Leads", "", "", fmtInt(detail.actualLeads), "", "");
-  push("Sales per Lead", "", "", detail.actualLeads ? detail.salesPerLead.toFixed(2) : "—", "", "");
-  push("% of Total Leads", "", "", fmtPct(detail.pctTotalLeads), "", "");
-  push("% of Total Hours", "", "", fmtPct(detail.pctTotalHours), "", "");
-  push("Contact Rate", "", "", detail.contactRate === null ? "—" : `${detail.contactRate.toFixed(1)}%`, "", "");
-  push("Lead Penetration", "", "", detail.leadPenetration === null ? "—" : `${detail.leadPenetration.toFixed(1)}%`, "", "");
-
-  return [headerRow, ...rows];
-}
-
 // Render a single per-campaign slide for Slide 6 fan-out.
-// detailPrior / detailReporting are the output of buildCampaignMonthDetail for each month.
-// notes = { prior, reporting } are the two free-text Performance Notes for this campaign.
+// Two columns (PREVIOUS MONTH | MONTH OF DISCUSSION); each column has three stacked tables.
 function buildCorpCampaignDetailSlide(pres, campaign, detailPrior, detailReporting, priorMonthLabel, reportingMonthLabel, notes) {
   const slide = pres.addSlide();
   slide.background = { color: virgilTheme.slideBg };
@@ -8328,47 +8262,181 @@ function buildCorpCampaignDetailSlide(pres, campaign, detailPrior, detailReporti
     fontSize: 9, color: virgilTheme.subtle, bold: true, align: "center", charSpacing: 2,
   });
 
-  // Two side-by-side tables
-  const priorRows = formatCampaignDetailTable(detailPrior, priorMonthLabel);
-  const currRows = formatCampaignDetailTable(detailReporting, reportingMonthLabel);
-
-  slide.addTable(priorRows, {
-    x: 0.5, y: 1.55, w: 6.0,
-    colW: [1.55, 0.89, 0.89, 0.89, 0.89, 0.89],
-    rowH: 0.20,
-    border: { type: "solid", pt: 0.5, color: corpPalette.cardBorder },
-    autoPage: false,
-  });
-  slide.addTable(currRows, {
-    x: 6.8, y: 1.55, w: 6.0,
-    colW: [1.55, 0.89, 0.89, 0.89, 0.89, 0.89],
-    rowH: 0.20,
-    border: { type: "solid", pt: 0.5, color: corpPalette.cardBorder },
-    autoPage: false,
-  });
+  // Render the three tables for each column
+  renderCorpCampaignColumn(slide, 0.5, 1.55, detailPrior, priorMonthLabel);
+  renderCorpCampaignColumn(slide, 6.8, 1.55, detailReporting, reportingMonthLabel);
 
   // Performance Notes panels (bottom)
-  const notesY = 6.3;
+  const notesY = 6.55;
   const panelW = 6.0;
   const drawNotePanel = (x, title, body) => {
     slide.addShape("roundRect", {
-      x, y: notesY, w: panelW, h: 0.7,
+      x, y: notesY, w: panelW, h: 0.5,
       fill: { color: corpPalette.muted },
       line: { color: corpPalette.cardBorder, width: 0.5 },
       rectRadius: 0.06,
     });
     slide.addText(title, {
-      x: x + 0.1, y: notesY + 0.04, w: panelW - 0.2, h: 0.18,
+      x: x + 0.1, y: notesY + 0.04, w: panelW - 0.2, h: 0.16,
       fontSize: 8, color: virgilTheme.eyebrow, bold: true, charSpacing: 1.5,
     });
     slide.addText(body || "(no notes entered)", {
-      x: x + 0.1, y: notesY + 0.22, w: panelW - 0.2, h: 0.46,
+      x: x + 0.1, y: notesY + 0.2, w: panelW - 0.2, h: 0.28,
       fontSize: 9, color: body ? virgilTheme.bodyText : virgilTheme.subtle,
       italic: !body, valign: "top",
     });
   };
   drawNotePanel(0.5, `${priorMonthLabel.toUpperCase()} — PERFORMANCE NOTES`, (notes && notes.prior) || "");
   drawNotePanel(6.8, `${reportingMonthLabel.toUpperCase()} — PERFORMANCE NOTES`, (notes && notes.reporting) || "");
+}
+
+// Renders the three stacked tables (Volume / Cost-Efficiency / Leads-Extended) for one column.
+function renderCorpCampaignColumn(slide, x, y, detail, columnLabel) {
+  const tableW = 6.0;
+  const colW = [1.55, 0.89, 0.89, 0.89, 0.89, 0.89]; // 6 cols: Label | Goals | Budget | Actual | Variance | % Goal
+  const rowH = 0.2;
+
+  const hdrBase = { fill: { color: corpPalette.purple }, color: "FFFFFF", bold: true, align: "center", fontSize: 9 };
+  const labelBase = { bold: true, color: corpPalette.ink, fontSize: 8, align: "left" };
+  const mkCell = (text, ri, align = "center") => ({
+    text: text || "",
+    options: { fontSize: 8, color: corpPalette.ink, align, fill: { color: ri % 2 === 1 ? "F5F5FA" : "FFFFFF" } },
+  });
+  const mkLabel = (text, ri) => ({
+    text, options: { ...labelBase, fill: { color: ri % 2 === 1 ? "F5F5FA" : "FFFFFF" } },
+  });
+
+  // Formatters
+  const fmtInt = n => (n === null || n === undefined || Number.isNaN(n)) ? "" : Math.round(n).toLocaleString();
+  const fmtIntSigned = n => (n === null || n === undefined || Number.isNaN(n) || n === 0) ? "" : `${n > 0 ? "+" : ""}${Math.round(n).toLocaleString()}`;
+  const fmtMoney = n => (n === null || n === undefined || Number.isNaN(n)) ? "" : `$${Math.round(n).toLocaleString()}`;
+  const fmtMoneySigned = n => (n === null || n === undefined || Number.isNaN(n) || n === 0) ? "" : `${n > 0 ? "+" : "-"}$${Math.round(Math.abs(n)).toLocaleString()}`;
+  const fmtMoney2 = n => (n === null || n === undefined || Number.isNaN(n)) ? "—" : `$${n.toFixed(2)}`;
+  const fmtRatio = n => (n === null || n === undefined || Number.isNaN(n)) ? "—" : n.toFixed(3);
+  const fmtPct = n => (n === null || n === undefined || Number.isNaN(n)) ? "" : `${(n * 100).toFixed(1)}%`;
+  const pctOf = (act, plan) => (plan > 0 ? act / plan : null);
+
+  // ── Table 1: Volume ──
+  let cy = y;
+  const volHdr = [
+    { text: columnLabel, options: hdrBase },
+    { text: "GOALS", options: hdrBase },
+    { text: "BUDGET", options: hdrBase },
+    { text: "ACTUAL", options: hdrBase },
+    { text: "VARIANCE", options: hdrBase },
+    { text: "% GOAL", options: hdrBase },
+  ];
+  const volRows = [];
+  const pushVol = (ri, label, goalsPct, budgetNum, actualNum, { money = false } = {}) => {
+    const plan = budgetNum;
+    const actual = actualNum;
+    const variance = (plan != null && actual != null) ? actual - plan : null;
+    const pct = pctOf(actual, plan);
+    volRows.push([
+      mkLabel(label, ri),
+      mkCell(goalsPct != null ? fmtPct(goalsPct) : "", ri),
+      mkCell(plan == null ? "" : (money ? fmtMoney(plan) : fmtInt(plan)), ri),
+      mkCell(actual == null ? "" : (money ? fmtMoney(actual) : fmtInt(actual)), ri),
+      mkCell(money ? fmtMoneySigned(variance) : fmtIntSigned(variance), ri),
+      mkCell(pct == null ? "" : fmtPct(pct), ri),
+    ]);
+  };
+  // Top block (no GOALS %)
+  pushVol(0, "BUDGET ($)", null, detail.budgetGoal, detail.budget, { money: true });
+  pushVol(1, "HOURS", null, detail.hoursGoal, detail.hoursActual);
+  pushVol(2, "SALES", null, detail.salesGoal, detail.salesActual);
+  pushVol(3, "RGUs", null, detail.rgusGoal, detail.rgusActual);
+  // Product block (has GOALS % = productGoal / salesGoal)
+  pushVol(4, "HSD RGUs", pctOf(detail.xiGoal, detail.salesGoal), detail.xiGoal, detail.xiActual);
+  pushVol(5, "XM RGUs",  pctOf(detail.xmGoal, detail.salesGoal), detail.xmGoal, detail.xmActual);
+  pushVol(6, "VIDEO RGUs", pctOf(detail.videoGoal, detail.salesGoal), detail.videoGoal, detail.videoActual);
+  pushVol(7, "XH RGUs",  pctOf(detail.xhGoal, detail.salesGoal), detail.xhGoal, detail.xhActual);
+  pushVol(8, "PHONE RGUs", null, detail.phoneGoal, detail.phoneActual);
+
+  slide.addTable([volHdr, ...volRows], {
+    x, y: cy, w: tableW, colW, rowH,
+    border: { type: "solid", pt: 0.5, color: corpPalette.cardBorder },
+    autoPage: false,
+  });
+  cy += rowH * (volRows.length + 1) + 0.08;
+
+  // ── Table 2: Cost & Efficiency ──
+  // 5 cols: Label | Budget | Actual | Variance | % Goal
+  const costColW = [1.55, 1.1125, 1.1125, 1.1125, 1.1125]; // sums to 6.0
+  const costHdr = [
+    { text: "", options: hdrBase },
+    { text: "BUDGET", options: hdrBase },
+    { text: "ACTUAL", options: hdrBase },
+    { text: "VARIANCE", options: hdrBase },
+    { text: "% GOAL", options: hdrBase },
+  ];
+  const costRows = [];
+  // Derived plan values
+  const cpsPlan = (detail.salesGoal > 0) ? (detail.budgetGoal / detail.salesGoal) : null;
+  const cprguPlan = (detail.rgusGoal > 0) ? (detail.budgetGoal / detail.rgusGoal) : null;
+  const cpxiPlan = (detail.xiGoal > 0) ? (detail.budgetGoal / detail.xiGoal) : null;
+  const sphPlan = (detail.hoursGoal > 0) ? (detail.salesGoal / detail.hoursGoal) : null;
+  const rguphPlan = (detail.hoursGoal > 0) ? (detail.rgusGoal / detail.hoursGoal) : null;
+  const rguPerSalePlan = (detail.salesGoal > 0) ? (detail.rgusGoal / detail.salesGoal) : null;
+
+  const pushCostRow = (ri, label, plan, actual, { money = false, inverted = false } = {}) => {
+    // inverted=true → lower is better (cost metrics). % Goal = plan / actual.
+    // Skip row entirely if plan == null AND actual == null/zero
+    if (plan == null && (actual == null || actual === 0)) return;
+    const variance = (plan != null && actual != null) ? actual - plan : null;
+    const pct = (plan != null && actual > 0)
+      ? (inverted ? (plan / actual) : (actual / plan))
+      : null;
+    costRows.push([
+      mkLabel(label, ri),
+      mkCell(plan == null ? "—" : (money ? fmtMoney2(plan) : fmtRatio(plan)), ri),
+      mkCell(actual == null ? "—" : (money ? fmtMoney2(actual) : fmtRatio(actual)), ri),
+      mkCell(variance == null ? "" : (money ? fmtMoneySigned(variance) : (variance === 0 ? "" : `${variance > 0 ? "+" : ""}${variance.toFixed(2)}`)), ri),
+      mkCell(pct == null ? "" : fmtPct(pct), ri),
+    ]);
+  };
+  pushCostRow(0, "CPS", cpsPlan, detail.cps, { money: true, inverted: true });
+  pushCostRow(1, "CPRGU", cprguPlan, detail.cprgu, { money: true, inverted: true });
+  pushCostRow(2, "CPXI", cpxiPlan, (detail.xiActual > 0 ? detail.budget / detail.xiActual : null), { money: true, inverted: true });
+  pushCostRow(3, "SPH", sphPlan, detail.sph);
+  pushCostRow(4, "RGUPH", rguphPlan, detail.rguph);
+  pushCostRow(5, "RGU/HOME", rguPerSalePlan, detail.rguPerSale);
+
+  if (costRows.length > 0) {
+    slide.addTable([costHdr, ...costRows], {
+      x, y: cy, w: tableW, colW: costColW, rowH,
+      border: { type: "solid", pt: 0.5, color: corpPalette.cardBorder },
+      autoPage: false,
+    });
+    cy += rowH * (costRows.length + 1) + 0.08;
+  }
+
+  // ── Table 3: Leads & Extended ──
+  // 2 cols: Label | Value
+  const leadsColW = [3.0, 3.0];
+  const leadsHdr = [
+    { text: "LEADS & EXTENDED", options: hdrBase },
+    { text: "", options: hdrBase },
+  ];
+  const leadsRows = [];
+  const pushLead = (ri, label, val) => {
+    leadsRows.push([
+      mkLabel(label, ri),
+      mkCell(val, ri, "right"),
+    ]);
+  };
+  pushLead(0, "Total Leads", detail.actualLeads ? fmtInt(detail.actualLeads) : "0");
+  pushLead(1, "Sales per Lead", detail.actualLeads > 0 ? detail.salesPerLead.toFixed(2) : "—");
+  pushLead(2, "% of Total Leads", fmtPct(detail.pctTotalLeads));
+  pushLead(3, "% of Total Hours", fmtPct(detail.pctTotalHours));
+  pushLead(4, "Contact Rate", detail.contactRate === null ? "—" : `${detail.contactRate.toFixed(1)}%`);
+  pushLead(5, "Lead Penetration", detail.leadPenetration === null ? "—" : `${detail.leadPenetration.toFixed(1)}%`);
+
+  slide.addTable([leadsHdr, ...leadsRows], {
+    x, y: cy, w: tableW, colW: leadsColW, rowH,
+    border: { type: "solid", pt: 0.5, color: corpPalette.cardBorder },
+    autoPage: false,
+  });
 }
 
 function buildCorpTnpsSlide(pres, perf, reportingMonthLabel, insightText) {
