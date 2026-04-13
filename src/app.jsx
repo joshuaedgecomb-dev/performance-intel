@@ -15600,6 +15600,19 @@ export default function App() {
   const [showMbrModal, setShowMbrModal] = useState(false);
 
   const [showVirgilMbrModal, setShowVirgilMbrModal] = useState(false);
+  const [corpInsights, _setCorpInsights] = useState(() => {
+    try {
+      const raw = localStorage.getItem("perf_intel_corp_insights_v1");
+      return raw ? JSON.parse(raw) : {};
+    } catch(e) { return {}; }
+  });
+  const setCorpInsights = useCallback(updater => {
+    _setCorpInsights(prev => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      try { localStorage.setItem("perf_intel_corp_insights_v1", JSON.stringify(next || {})); } catch(e) {}
+      return next;
+    });
+  }, []);
   const [showCorpDataSourcesModal, setShowCorpDataSourcesModal] = useState(false);
 
   const [coachingDetailsRaw, _setCoachingDetailsRaw] = useState(() => {
@@ -16470,8 +16483,8 @@ export default function App() {
           priorQuarterGoalsRaw={priorQuarterGoalsRaw}
           corpPriorMonthAgentRaw={corpPriorMonthAgentRaw}
           corpPriorMonthGoalsRaw={corpPriorMonthGoalsRaw}
-          insights={virgilInsights}
-          setInsights={setVirgilInsights}
+          insights={corpInsights}
+          setInsights={setCorpInsights}
           ollamaAvailable={ollamaAvailable}
           onClose={() => setShowVirgilMbrModal(false)}
         />
