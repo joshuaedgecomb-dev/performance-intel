@@ -8774,7 +8774,7 @@ function buildVirgilMbrPresentation(perf, options) {
   // With picker = current fiscal month (e.g. Apr), spec columns are:
   //   LEFT  = Previous Month       = picker − 2 (Feb) ← corpPriorMonthAgentRaw / corpPriorMonthGoalsRaw
   //   RIGHT = Month of Discussion  = picker − 1 (Mar) ← priorAgentRaw / priorGoalsRaw (Phase 1 "current − 1")
-  const priorPriorMonthKey = getPriorMonthLabel(priorMonthKey);
+  // NOTE: priorPriorMonthKey already declared above for Slide 2 — reuse.
   const prevFilter = makeMonthFilter(priorPriorMonthKey);
   const discussionFilter = makeMonthFilter(priorMonthKey);
   const prevAgent = options.corpPriorMonthAgentRaw || "";
