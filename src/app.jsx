@@ -6880,7 +6880,11 @@ function buildCampaignHoursByFunding(agentRaw, goalsRaw, monthFilter) {
     const par = (r["PAR?"] || "").trim().toUpperCase() === "Y";
     const hoursGoal = Number(String(r["Hours Goal"] || r["Hours per ROC"] || "").replace(/,/g, "").replace(/%/g, "")) || 0;
     for (const roc of rocList) {
-      rocMeta[roc] = { funding, name, hoursGoal, par };
+      // Accumulate across site rows (DR + BZ) — same ROC in multiple rows means their plan hours SUM.
+      if (!rocMeta[roc]) {
+        rocMeta[roc] = { funding, name, hoursGoal: 0, par };
+      }
+      rocMeta[roc].hoursGoal += hoursGoal;
     }
   }
 
