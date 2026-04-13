@@ -8582,6 +8582,9 @@ function buildVirgilMbrPresentation(perf, options) {
     buildCorpCampaignDetailSlide(pres, campaign, detailPrior, detailCurr, priorMonthKey, options.reportingMonthLabel, notes);
   }
 
+  // Slide 7 — Customer Experience (tNPS)
+  buildCorpTnpsSlide(pres, perf, options.reportingMonthLabel, (options.insights && options.insights.slide7) || "");
+
   return pres;
 }
 
@@ -8910,6 +8913,17 @@ Write bullet-point style insights focused on movement vs prior, gaps vs 75% goal
               onChange={e => setUseAiInsights(e.target.checked)} />
             <span style={{ fontSize: 13 }}>{useAiInsights ? "On" : "Off"}</span>
           </label>
+        </div>
+
+        <div style={{ marginTop: 16, padding: 12, background: "#fafafa", borderRadius: 6, border: "1px solid #d1d5db" }}>
+          <div style={{ fontSize: 13, fontWeight: 600 }}>Slide 7 — tNPS Insights</div>
+          <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>Free-text summary rendered below the tNPS tables. Blank = italicized empty panel.</div>
+          <textarea
+            value={(insights && insights.slide7) || ""}
+            onChange={e => setInsights({ ...(insights || {}), slide7: e.target.value })}
+            rows={3}
+            style={{ display: "block", width: "100%", marginTop: 6, padding: 8, border: "1px solid #d1d5db", borderRadius: 4, fontSize: 12, fontFamily: "inherit", resize: "vertical" }}
+          />
         </div>
 
         <div style={{ marginTop: 16, padding: 12, background: "#fafafa", borderRadius: 6, border: "1px solid #d1d5db" }}>
