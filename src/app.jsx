@@ -7381,20 +7381,20 @@ function virgilSlideFrame(pres, slide, options) {
   // --- Top-right: category badge + GCS logo ---
   if (opts.categoryLabel) {
     slide.addShape("roundRect", {
-      x: 11.0, y: 0.45, w: 1.6, h: 0.4,
+      x: 10.7, y: 0.45, w: 1.85, h: 0.4,
       fill: { color: corpPalette.navy },
       line: { color: corpPalette.navy, width: 0 },
       rectRadius: 0.08,
     });
     slide.addText(opts.categoryLabel.toUpperCase(), {
-      x: 11.0, y: 0.45, w: 1.6, h: 0.4,
+      x: 10.7, y: 0.45, w: 1.85, h: 0.4,
       fontSize: 9, fontFace: "Segoe UI", color: "FFFFFF", bold: true, align: "center", valign: "middle", charSpacing: 1.5,
     });
   }
   if (opts.gcsLogoDataUrl) {
     slide.addImage({
       data: opts.gcsLogoDataUrl,
-      x: 12.45, y: 0.38, w: 0.75, h: 0.75,
+      x: 12.65, y: 0.38, w: 0.6, h: 0.6,
     });
   }
 
