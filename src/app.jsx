@@ -8484,7 +8484,7 @@ function renderCorpCampaignColumn(slide, x, y, detail, columnLabel) {
 
   // ── Table 2: Cost & Efficiency ──
   // 5 cols: Label | Budget | Actual | Variance | % Goal
-  const costColW = [1.55, 1.1125, 1.1125, 1.1125, 1.1125]; // sums to 6.0
+  const costColW = [2.44, 0.89, 0.89, 0.89, 0.89]; // aligns Cost/Eff cols with Volume BUDGET/ACTUAL/VAR/%GOAL
   const costHdr = [
     { text: "", options: hdrBase },
     { text: "BUDGET", options: hdrBase },
@@ -8558,6 +8558,17 @@ function renderCorpCampaignColumn(slide, x, y, detail, columnLabel) {
     x, y: cy, w: tableW, colW: leadsColW, rowH,
     border: { type: "solid", pt: 0.5, color: corpPalette.cardBorder },
     autoPage: false,
+  });
+  cy += rowH * (leadsRows.length + 1) + 0.1;
+  // --- Comment box (manual edit in PowerPoint) ---
+  slide.addShape("rect", {
+    x, y: cy, w: tableW, h: 0.45,
+    fill: { color: corpPalette.muted },
+    line: { color: corpPalette.cardBorder, width: 0.5 },
+  });
+  slide.addText("Comments", {
+    x: x + 0.08, y: cy + 0.02, w: tableW - 0.16, h: 0.18,
+    fontSize: 8, fontFace: "Segoe UI", color: virgilTheme.eyebrow, bold: true, charSpacing: 1.5,
   });
 }
 
