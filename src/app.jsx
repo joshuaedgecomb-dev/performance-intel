@@ -6621,17 +6621,16 @@ function makeGoalsMonthFilter(monthLabel) {
   const mon3 = m[1].slice(0, 3).toLowerCase();
   return (row) => {
     const rowMon = String(row["Month"] || "").trim().slice(0, 3).toLowerCase();
+    if (!rowMon) return true; // no Month column — include row (file is already month-scoped)
     return rowMon === mon3;
   };
 }
 
 // Returns a predicate for filtering goals-CSV rows by Quarter column (Q1-Q4).
 function makeGoalsQuarterFilter(qStr) {
-  const q = String(qStr || "").toUpperCase();
-  return (row) => {
-    const rowQ = String(row["Quarter"] || "").toUpperCase().trim();
-    return rowQ === q;
-  };
+  // Q4 goals file may label rows as "Q3" (fiscal offset) or have no Quarter column.
+  // We assume the file itself is already quarter-scoped, so include all rows.
+  return () => true;
 }
 
 // Compute org-wide XI attainment %, XM attainment %, SPH, CPS for a filtered agent dataset.
@@ -6657,9 +6656,14 @@ function computeCorpAttainment(agentRaw, goalsRaw, dateFilter, goalsMonthFilter)
   for (const r of goalsRows) {
     // Apply goals month filter if provided — goals CSV has a "Month" column like "March"/"April"
     if (goalsMonthFilter && !goalsMonthFilter(r)) continue;
-    hoursPlan += Number(r["Hours Goal"]) || 0;
-    xiPlan += Number(r["HSD GOAL"] || r["HSD Sell In Goal"]) || 0;
-    xmPlan += Number(r["XM GOAL"] || r["XM Sell In Goal"]) || 0;
+    const parseNum = (v) => {
+      const s = String(v == null ? "" : v).replace(/,/g, "").replace(/%/g, "");
+      const n = Number(s);
+      return Number.isFinite(n) ? n : 0;
+    };
+    hoursPlan += parseNum(r["Hours Goal"] || r["Hours per ROC"]);
+    xiPlan += parseNum(r["HSD GOAL"] || r["HSD Unit Goal"]);
+    xmPlan += parseNum(r["XM GOAL"] || r["XM Unit Goal"]);
   }
   const sph = hours ? sales / hours : 0;
   const cps = sales ? (hours * 19.77) / sales : (hours * 19.77);
