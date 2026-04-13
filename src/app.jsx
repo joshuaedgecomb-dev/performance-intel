@@ -6404,7 +6404,7 @@ async function generateMBR(perf, onProgress, { includeAI = true } = {}) {
 // CORP MBR — Parsers
 // ═══════════════════════════════════════════════════════════════════
 
-// Slide 6 campaign grouping — consolidates similar Job Types into one slide.
+// Campaign Slides grouping — consolidates similar Job Types into one slide.
 // Returns the group name (used as campaign.name in the per-slide aggregation), or null to exclude.
 function getCorpMbrCampaignGroup(jobType) {
   const jt = (jobType || "").trim();
@@ -6569,10 +6569,10 @@ function parseLoginBuckets(rawCsv) {
 }
 
 // Extended Agent Stats — per-agent-per-day rows from the richer Extended Agent CSV.
-// Columns used by Slide 6: Job (ROC), Date, AgentName, Dials, Contacts, Finals, Goals, Hours.
+// Columns used by Campaign Slides: Job (ROC), Date, AgentName, Dials, Contacts, Finals, Goals, Hours.
 // Other columns are tolerated but unused (e.g. XMSales, NewVideo, etc.).
 // NOTE: Column names are a hard dependency on Comcast's export. A rename upstream would
-// cause Number(undefined)→NaN→0 fallthrough and silently zero the Slide 6 metrics.
+// cause Number(undefined)→NaN→0 fallthrough and silently zero the Campaign Slides metrics.
 function parseExtendedAgentStats(rawCsv) {
   if (!rawCsv || !rawCsv.trim()) return [];
   const rows = parseCSV(rawCsv);
@@ -7017,14 +7017,14 @@ function buildCampaignHoursByFunding(agentRaw, goalsRaw, monthFilter) {
 // Returns { [roc]: { dials, contacts, finals } } for each ROC present in the filtered rows.
 // If the CSV is empty, returns {} — downstream callers render "—" for Contact Rate / Lead Penetration.
 // goals/hours are intentionally NOT rolled up here — hours come from buildCampaignHoursByFunding
-// and goals are handled via the main Goals CSV per Slide 6 spec.
+// and goals are handled via the main Goals CSV per Campaign Slides spec.
 // Returns { [jobType]: { dials, contacts, finals } } for the given month filter.
 function buildExtendedAgentLookup(extendedRows, monthFilter) {
   if (!Array.isArray(extendedRows) || extendedRows.length === 0) return {};
   const out = {};
   for (const r of extendedRows) {
     if (monthFilter && !monthFilter(r.date)) continue;
-    // Key by Slide 6 campaign group so multiple Job Types within a group merge.
+    // Key by Campaign Slides campaign group so multiple Job Types within a group merge.
     const key = getCorpMbrCampaignGroup(r.jobType);
     if (!key) continue;
     if (!out[key]) out[key] = { dials: 0, contacts: 0, finals: 0 };
@@ -7044,7 +7044,7 @@ function buildCampaignUniverse(priorAgentRaw, priorGoalsRaw, agentRaw, goalsRaw,
   const priorFilter = makeMonthFilter(priorMonthLabel);
   const reportingFilter = makeMonthFilter(reportingMonthLabel);
 
-  // Group Job Types into consolidated Slide 6 buckets
+  // Group Job Types into consolidated Campaign Slides buckets
   const byGroup = {};
   const ensure = (group) => {
     if (!byGroup[group]) {
@@ -7090,7 +7090,7 @@ function buildCampaignUniverse(priorAgentRaw, priorGoalsRaw, agentRaw, goalsRaw,
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-// Compute the full Slide 6 column (GOALS, BUDGET, ACTUAL, VARIANCE, % GOAL) for a single campaign + month.
+// Compute the full Campaign Slides column (GOALS, BUDGET, ACTUAL, VARIANCE, % GOAL) for a single campaign + month.
 // Inputs:
 //   campaign:   { name, rocs: [string, ...] }
 //   agentRaw:   raw agent CSV text for the month
@@ -7187,7 +7187,7 @@ function buildCampaignMonthDetail(campaign, agentRaw, goalsRaw, monthFilter, ext
   return result;
 }
 
-// Pre-compute sums used as denominators for % of Total Leads / % of Total Hours on Slide 6.
+// Pre-compute sums used as denominators for % of Total Leads / % of Total Hours on the Campaign Slides.
 // Returns { sumActualLeads, sumHoursActual } from the full month of data (all campaigns combined).
 // NOTE: goalsRaw is expected to be month-segregated (one CSV per month). sumActualLeads does
 // NOT apply monthFilter — every row in goalsRaw is summed. Pass a combined goals CSV at your peril.
@@ -8377,11 +8377,11 @@ function buildCorpCampaignHoursSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
   // (Legacy bmCols block below is unreachable; kept for removal)
 }
 
-// Format a single (campaign × month) detail object into the 6-column table rows for Slide 6.
+// Format a single (campaign × month) detail object into the 6-column table rows for the Campaign Slides.
 // Returns an array of pptxgenjs table rows including a header row.
 // Each row has 6 cells: [ROW LABEL, GOALS, BUDGET, ACTUAL, VARIANCE, % GOAL].
 // For derived ratio rows (CPS, SPH, etc.) and "Total Leads"-style rows, the GOALS / BUDGET / VARIANCE / % GOAL cells are blank — only ACTUAL has data (per spec §6.6).
-// Render a single per-campaign slide for Slide 6 fan-out.
+// Render a single per-campaign slide for the Campaign Slides fan-out.
 // Two columns (PREVIOUS MONTH | MONTH OF DISCUSSION); each column has three stacked tables.
 function buildCorpCampaignDetailSlide(pres, campaign, detailPrior, detailReporting, priorMonthLabel, reportingMonthLabel, notes, frameOptions) {
   const slide = pres.addSlide();
@@ -8978,7 +8978,7 @@ function buildVirgilMbrPresentation(perf, options) {
     options.corpPriorMonthAgentRaw || "", options.corpPriorMonthGoalsRaw || "",
     { pageNumber: pageNumber++, gcsLogoDataUrl, reportingMonthLabel: options.reportingMonthLabel });
 
-  // Slide 6 — Per-Campaign Actual-to-Goal (N slides, one per campaign)
+  // Campaign Slides — Per-Campaign Actual-to-Goal (N slides, one per campaign)
   // With picker = current fiscal month (e.g. Apr), spec columns are:
   //   LEFT  = Previous Month       = picker − 2 (Feb) ← corpPriorMonthAgentRaw / corpPriorMonthGoalsRaw
   //   RIGHT = Month of Discussion  = picker − 1 (Mar) ← priorAgentRaw / priorGoalsRaw (Phase 1 "current − 1")
@@ -9177,7 +9177,7 @@ If any vendor is missing or unreadable, use null for that value.`;
   const loginBuckets = useMemo(() => parseLoginBuckets(loginBucketsRaw), [loginBucketsRaw]);
   const corpExtendedAgent = useMemo(() => parseExtendedAgentStats(rawAgentCsv), [rawAgentCsv]);
 
-  // Slide 6 column labels: picker=Apr → previous=Feb (picker-2), discussion=Mar (picker-1)
+  // Campaign Slides column labels: picker=Apr → previous=Feb (picker-2), discussion=Mar (picker-1)
   const priorMonthLabelDisplay = useMemo(() => getPriorMonthLabel(reportingMonth), [reportingMonth]);
   const priorPriorMonthLabelDisplay = useMemo(() => getPriorMonthLabel(priorMonthLabelDisplay), [priorMonthLabelDisplay]);
   const campaignUniverse = useMemo(() => {
@@ -9280,7 +9280,7 @@ Write bullet-point style insights focused on movement vs prior, gaps vs 75% goal
           <input type="text" value={reportingMonth} onChange={e => setReportingMonth(e.target.value)}
             placeholder="Apr '26"
             style={{ display: "block", marginTop: 4, width: "100%", padding: 8, border: "1px solid #d1d5db", borderRadius: 6 }} />
-          <small style={{ color: "#6b7280" }}>The current in-progress fiscal month (MTD). Must match format like "Apr '26". Slide 6 previous month auto-derives as (this − 2), month of discussion as (this − 1).</small>
+          <small style={{ color: "#6b7280" }}>The current in-progress fiscal month (MTD). Must match format like "Apr '26". Campaign Slides previous month auto-derives as (this − 2), month of discussion as (this − 1).</small>
         </label>
 
         <div style={{ marginTop: 16, padding: 12, background: "#f9fafb", borderRadius: 6 }}>
