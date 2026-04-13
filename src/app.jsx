@@ -6672,7 +6672,7 @@ function makeGoalsQuarterFilter(qStr) {
 // agentRaw / goalsRaw are the full CSVs; dateFilter(dateStr) → boolean tells which rows to include.
 // goalsMonthFilter(row) → boolean filters goals rows by month (prevents multi-month over-counting).
 // Returns numeric metrics (fractions for % fields, e.g. 0.943 = 94.3%).
-function computeCorpAttainment(agentRaw, goalsRaw, dateFilter, goalsMonthFilter, agentRocFilter) {
+function computeCorpAttainment(agentRaw, goalsRaw, dateFilter, goalsMonthFilter, agentRocFilter, goalsRocFilter) {
   if (!agentRaw || !agentRaw.trim()) {
     return { xiPct: 0, xmPct: 0, sph: 0, cps: 0, planSph: 0, planCps: 0, sales: 0, hours: 0, xiPlan: 0, xmPlan: 0, hoursPlan: 0, homesPlan: 0 };
   }
@@ -6693,6 +6693,11 @@ function computeCorpAttainment(agentRaw, goalsRaw, dateFilter, goalsMonthFilter,
   for (const r of goalsRows) {
     // Apply goals month filter if provided — goals CSV has a "Month" column like "March"/"April"
     if (goalsMonthFilter && !goalsMonthFilter(r)) continue;
+    // Apply ROC filter to exclude campaigns like GLB (XMC) from plan if requested
+    if (goalsRocFilter) {
+      const roc = String(r["ROC Numbers"] || r["ROC Number"] || "").trim();
+      if (!goalsRocFilter(roc)) continue;
+    }
     const parseNum = (v) => {
       const s = String(v == null ? "" : v).replace(/,/g, "").replace(/%/g, "");
       const n = Number(s);
@@ -7245,10 +7250,10 @@ function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
 
   // SPH-only computations excluding GLB-prefix ROCs (Add XMC campaigns)
   const excludeGLB = (roc) => !String(roc || "").toUpperCase().startsWith("GLB");
-  const q4Sph = computeCorpAttainment(priorQuarterAgentRaw, priorQuarterGoalsRaw, null, null, excludeGLB);
-  const p2Sph = computeCorpAttainment(corpPriorMonthAgentRaw, corpPriorMonthGoalsRaw, makeMonthFilter(prior2), makeGoalsMonthFilter(prior2), excludeGLB);
-  const p1Sph = computeCorpAttainment(priorAgentRaw, priorGoalsRaw, makeMonthFilter(prior1), makeGoalsMonthFilter(prior1), excludeGLB);
-  const mtdSph = computeCorpAttainment(agentRaw, goalsRaw, makeMonthFilter(reportingMonthLabel), makeGoalsMonthFilter(reportingMonthLabel), excludeGLB);
+  const q4Sph = computeCorpAttainment(priorQuarterAgentRaw, priorQuarterGoalsRaw, null, null, excludeGLB, excludeGLB);
+  const p2Sph = computeCorpAttainment(corpPriorMonthAgentRaw, corpPriorMonthGoalsRaw, makeMonthFilter(prior2), makeGoalsMonthFilter(prior2), excludeGLB, excludeGLB);
+  const p1Sph = computeCorpAttainment(priorAgentRaw, priorGoalsRaw, makeMonthFilter(prior1), makeGoalsMonthFilter(prior1), excludeGLB, excludeGLB);
+  const mtdSph = computeCorpAttainment(agentRaw, goalsRaw, makeMonthFilter(reportingMonthLabel), makeGoalsMonthFilter(reportingMonthLabel), excludeGLB, excludeGLB);
 
   // Colors
   const barCol = "1E3A8A";       // navy for first 3
