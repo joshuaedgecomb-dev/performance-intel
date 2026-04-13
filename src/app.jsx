@@ -7797,14 +7797,23 @@ function buildCorpCampaignHoursSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
   drawMonthBlock(3.2, mtdLabel, mtd);
 
   // Bottom: Campaign Outlook / Base Management breakout
-  const breakoutY = 5.3;
-  // Compact section headers (no accent lines — pills provide separation)
-  slide.addText("Campaign Outlook  ·  Base Management", {
-    x: 0.5, y: breakoutY, w: 12.3, h: 0.25,
-    fontSize: 10, color: corpPalette.inkSubtle, bold: false, italic: true, align: "center", charSpacing: 2,
+  const breakoutY = 5.1;
+  // Section labels with dividing line (matches reference)
+  slide.addText("Campaign Outlook", {
+    x: 0.5, y: breakoutY, w: 2.95, h: 0.22,
+    fontSize: 11, color: corpPalette.navy, bold: true, align: "center",
+  });
+  slide.addText("Base Management", {
+    x: 5.4, y: breakoutY, w: 5.4, h: 0.22,
+    fontSize: 11, color: corpPalette.navy, bold: true, align: "center",
+  });
+  // Horizontal line below the labels spanning the full slide width
+  slide.addShape("line", {
+    x: 0.5, y: breakoutY + 0.26, w: 12.3, h: 0,
+    line: { color: corpPalette.ink, width: 1 },
   });
   // Pills (bucket headers)
-  const pillY = breakoutY + 0.15;
+  const pillY = breakoutY + 0.38;
   const pillH = 0.4;
   const drawPill = (x, w, label, color) => {
     slide.addShape("roundRect", {
@@ -7839,8 +7848,8 @@ function buildCorpCampaignHoursSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
       options: { bullet: { code: "2022" }, breakLine: i < rows.length - 1 },
     }));
     slide.addText(bulletItems, {
-      x: x + 0.05, y: pillY + pillH + 0.1, w: w - 0.05, h: 1.3,
-      fontSize: 8, color: corpPalette.ink, valign: "top", paraSpaceAfter: 3,
+      x: x + 0.05, y: pillY + pillH + 0.1, w: w - 0.05, h: 1.45,
+      fontSize: 10, color: corpPalette.ink, valign: "top", paraSpaceAfter: 4,
     });
   };
   // Campaign Outlook = Growth Funded only
