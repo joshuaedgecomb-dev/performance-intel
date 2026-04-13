@@ -7524,7 +7524,7 @@ function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
   slide.addText("MTD", { x: 7.0, y: legY, w: 1.0, h: 0.25, fontSize: 10, color: virgilTheme.bodyText });
 }
 
-function buildCorpQuartileSlide(pres, agentRaw, goalsRaw, newHiresRaw, reportingMonthLabel) {
+function buildCorpQuartileSlide(pres, agentRaw, goalsRaw, priorAgentRaw, priorGoalsRaw, newHiresRaw, reportingMonthLabel) {
   const slide = pres.addSlide();
   slide.background = { color: virgilTheme.slideBg };
   virgilBrandBars(pres, slide);
@@ -7540,7 +7540,8 @@ function buildCorpQuartileSlide(pres, agentRaw, goalsRaw, newHiresRaw, reporting
 
   const reportingPeriodLabel = getPriorMonthLabel(reportingMonthLabel);
   const mtdLabel = reportingMonthLabel;
-  const reporting = buildQuartileReport(agentRaw, goalsRaw, newHiresRaw,
+  // Reporting month (Mar) data lives in priorAgentRaw/priorGoalsRaw; MTD (Apr) in agentRaw/goalsRaw
+  const reporting = buildQuartileReport(priorAgentRaw, priorGoalsRaw, newHiresRaw,
     makeMonthFilter(reportingPeriodLabel), endOfMonthDate(reportingPeriodLabel));
   const mtd = buildQuartileReport(agentRaw, goalsRaw, newHiresRaw,
     makeMonthFilter(mtdLabel), new Date());
@@ -7792,6 +7793,7 @@ function buildVirgilMbrPresentation(perf, options) {
   // Slide 4 — Quartile Reporting
   buildCorpQuartileSlide(pres,
     options.agentRaw || "", options.goalsRaw || "",
+    options.priorAgentRaw || "", options.priorGoalsRaw || "",
     options.newHiresRaw || "", options.reportingMonthLabel);
 
   // Slide 5 — Campaign Hours Info
