@@ -8241,14 +8241,14 @@ function buildCorpCampaignDetailSlide(pres, campaign, detailPrior, detailCurrent
   slide.addTable(priorRows, {
     x: 0.5, y: 1.55, w: 6.0,
     colW: [1.55, 0.89, 0.89, 0.89, 0.89, 0.89],
-    rowH: 0.22,
+    rowH: 0.20,
     border: { type: "solid", pt: 0.5, color: corpPalette.cardBorder },
     autoPage: false,
   });
   slide.addTable(currRows, {
     x: 6.8, y: 1.55, w: 6.0,
     colW: [1.55, 0.89, 0.89, 0.89, 0.89, 0.89],
-    rowH: 0.22,
+    rowH: 0.20,
     border: { type: "solid", pt: 0.5, color: corpPalette.cardBorder },
     autoPage: false,
   });
