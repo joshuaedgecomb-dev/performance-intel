@@ -6811,7 +6811,7 @@ function buildQuartileReport(agentRaw, goalsRaw, newHiresRaw, dateFilter, refere
       const salesTotal = qAgents.reduce((s, a) => s + a.sales, 0);
       const expectedTotal = qAgents.reduce((s, a) => s + a.sphExpected, 0);
       const qPct = expectedTotal > 0 ? salesTotal / expectedTotal : 0;
-      return { quartile: i + 1, units: unitsTotal, pctToGoal: qPct, agentCount: qAgents.length };
+      return { quartile: i + 1, units: qAgents.length, pctToGoal: qPct, agentCount: qAgents.length };
     });
 
     const tenureMatrix = tenureBuckets.map(([lo, hi]) => {
