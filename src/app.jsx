@@ -6696,8 +6696,10 @@ function computeCorpAttainment(agentRaw, goalsRaw, dateFilter, goalsMonthFilter,
     if (agentRocFilter && !agentRocFilter(roc)) continue;
     hours += Number(r["Hours"]) || 0;
     sales += Number(r["Goals"]) || 0;
-    xi += Number(r["New XI"] || r["NewData"] || r["HSD RGUs"]) || 0;
-    xm += Number(r["XM Lines"] || r["XMLines"] || r["NewXM"]) || 0;
+    // Pick by existence, not truthiness
+    const pickCol = (...cols) => { for (const c of cols) if (r[c] !== undefined && r[c] !== "") return r[c]; return 0; };
+    xi += Number(pickCol("NewData", "New XI", "HSD RGUs")) || 0;
+    xm += Number(pickCol("XMLines", "XM Lines", "NewXM")) || 0;
   }
   let xiPlan = 0, xmPlan = 0, hoursPlan = 0, homesPlan = 0;
   for (const r of goalsRows) {
@@ -6776,8 +6778,10 @@ function buildQuartileReport(agentRaw, goalsRaw, newHiresRaw, dateFilter, refere
     const a = byAgent[key];
     a.hours += Number(r["Hours"]) || 0;
     a.sales += Number(r["Goals"]) || 0;
-    a.xi += Number(r["New XI"] || r["NewData"] || r["HSD RGUs"]) || 0;
-    a.xm += Number(r["XM Lines"] || r["XMLines"] || r["NewXM"]) || 0;
+    // Pick by existence, not truthiness — "0" is truthy as a string and would never fall through
+    const pickCol = (...cols) => { for (const c of cols) if (r[c] !== undefined && r[c] !== "") return r[c]; return 0; };
+    a.xi += Number(pickCol("NewData", "New XI", "HSD RGUs")) || 0;
+    a.xm += Number(pickCol("XMLines", "XM Lines", "NewXM")) || 0;
   }
 
   const refDate = referenceDate ? new Date(referenceDate) : new Date();
