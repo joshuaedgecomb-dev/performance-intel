@@ -6969,12 +6969,13 @@ function buildExtendedAgentLookup(extendedRows, monthFilter) {
 // Produce the list of GL campaigns (Job Types matching an MBR category) active in reporting or MTD month.
 // Returns an array of { name, category, hoursReporting, hoursMtd, goalReporting, goalMtd }.
 // Sorted alphabetically by campaign name for stable, review-friendly slide order.
-function buildCampaignUniverse(agentRaw, goalsRaw, reportingMonthLabel, mtdLabel) {
-  const agentRows = agentRaw && agentRaw.trim() ? parseCSV(agentRaw) : [];
-  const goalsRows = goalsRaw && goalsRaw.trim() ? parseCSV(goalsRaw) : [];
+function buildCampaignUniverse(priorAgentRaw, priorGoalsRaw, agentRaw, goalsRaw, priorMonthLabel, reportingMonthLabel) {
+  const agentsPrior = priorAgentRaw && priorAgentRaw.trim() ? parseCSV(priorAgentRaw) : [];
+  const agentsCurr = agentRaw && agentRaw.trim() ? parseCSV(agentRaw) : [];
+  const priorFilter = makeMonthFilter(priorMonthLabel);
   const reportingFilter = makeMonthFilter(reportingMonthLabel);
-  const mtdFilter = makeMonthFilter(mtdLabel);
 
+  // Gather Job Types from both agent CSVs
   const byJobType = {};
   const keep = (name) => {
     const jt = (name || "").trim();
@@ -6983,34 +6984,43 @@ function buildCampaignUniverse(agentRaw, goalsRaw, reportingMonthLabel, mtdLabel
     if (category === jt) return null; // Not a recognized GL category
     return category;
   };
-
-  for (const r of agentRows) {
-    const jobType = (r["Job Type"] || "").trim();
-    const category = keep(jobType);
-    if (!category) continue;
-    const dateStr = (r["Date"] || "").trim();
-    const hours = Number(r["Hours"]) || 0;
-    if (!byJobType[jobType]) {
-      byJobType[jobType] = { name: jobType, category, hoursReporting: 0, hoursMtd: 0, goalReporting: 0, goalMtd: 0 };
+  const accumulate = (rows, filter, hoursField) => {
+    for (const r of rows) {
+      const jobType = (r["Job Type"] || "").trim();
+      const category = keep(jobType);
+      if (!category) continue;
+      if (filter && !filter((r["Date"] || "").trim())) continue;
+      const hours = Number(r["Hours"]) || 0;
+      if (!byJobType[jobType]) {
+        byJobType[jobType] = { name: jobType, category, hoursPrior: 0, hoursReporting: 0, goalPrior: 0, goalReporting: 0 };
+      }
+      byJobType[jobType][hoursField] += hours;
     }
-    if (reportingFilter(dateStr)) byJobType[jobType].hoursReporting += hours;
-    if (mtdFilter(dateStr)) byJobType[jobType].hoursMtd += hours;
-  }
+  };
+  accumulate(agentsPrior, priorFilter, "hoursPrior");
+  accumulate(agentsCurr, reportingFilter, "hoursReporting");
 
-  for (const g of goalsRows) {
-    const name = (g["Campaign"] || g["Campaign Name"] || "").trim();
-    const category = keep(name);
-    if (!category) continue;
-    const hoursGoal = Number(g["Hours Goal"]) || 0;
-    if (!byJobType[name]) {
-      byJobType[name] = { name, category, hoursReporting: 0, hoursMtd: 0, goalReporting: 0, goalMtd: 0 };
-    }
-    byJobType[name].goalReporting += hoursGoal;
-    byJobType[name].goalMtd += hoursGoal;
-  }
+  // Goal hours from each month's goals CSV
+  const accumulateGoals = (goalsRawStr, key) => {
+    if (!goalsRawStr || !goalsRawStr.trim()) return;
+    const goalsRows = parseCSV(goalsRawStr);
+    const lookup = buildGoalLookup(goalsRows);
+    if (!lookup) return;
+    Object.keys(lookup.byTA || {}).forEach(ta => {
+      const category = keep(ta);
+      if (!category) return;
+      if (!byJobType[ta]) {
+        byJobType[ta] = { name: ta, category, hoursPrior: 0, hoursReporting: 0, goalPrior: 0, goalReporting: 0 };
+      }
+      const hoursGoal = getPlanForKey(lookup.byTA[ta], "Hours Goal") || 0;
+      byJobType[ta][key] += hoursGoal;
+    });
+  };
+  accumulateGoals(priorGoalsRaw, "goalPrior");
+  accumulateGoals(goalsRaw, "goalReporting");
 
   return Object.values(byJobType)
-    .filter(c => c.hoursReporting > 0 || c.hoursMtd > 0 || c.goalReporting > 0 || c.goalMtd > 0)
+    .filter(c => c.hoursPrior > 0 || c.hoursReporting > 0 || c.goalPrior > 0 || c.goalReporting > 0)
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
@@ -7056,17 +7066,31 @@ function buildCampaignMonthDetail(campaign, agentRaw, goalsRaw, monthFilter, ext
 
   if (goalsRaw && goalsRaw.trim()) {
     const goalRows = parseCSV(goalsRaw);
-    for (const g of goalRows) {
-      const name = (g["Campaign"] || g["Campaign Name"] || "").trim();
-      if (name !== campaign.name) continue;
-      result.hoursGoal += Number(g["Hours Goal"]) || 0;
-      result.salesGoal += Number(g["Projected Sales"] || g["Sales Goal"] || g["Goals"]) || 0;
-      result.xiGoal += Number(g["HSD GOAL"] || g["HSD Sell In Goal"]) || 0;
-      result.xmGoal += Number(g["XM GOAL"] || g["XM Sell In Goal"]) || 0;
-      result.videoGoal += Number(g["VIDEO GOAL"] || g["Video Sell In Goal"]) || 0;
-      result.xhGoal += Number(g["XH GOAL"] || g["XH Sell In Goal"]) || 0;
-      result.phoneGoal += Number(g["Projected Phone"] || g["Phone Sell In Goal"]) || 0;
-      result.actualLeads += Number(g["Actual Leads"]) || 0;
+    const goalLookup = buildGoalLookup(goalRows);
+    if (goalLookup) {
+      const entries = getGoalEntries(goalLookup, campaign.name, null);
+      // Collapse all matched entries into one combined siteMap
+      const combinedSiteMap = {};
+      entries.forEach(({ siteMap }) => {
+        Object.entries(siteMap).forEach(([site, rows]) => {
+          if (!combinedSiteMap[site]) combinedSiteMap[site] = [];
+          combinedSiteMap[site].push(...rows);
+        });
+      });
+      result.hoursGoal = getPlanForKey(combinedSiteMap, "Hours Goal") || 0;
+      result.salesGoal = getPlanForKey(combinedSiteMap, "HOMES GOAL") || 0;
+      result.xiGoal = getPlanForKey(combinedSiteMap, "HSD Sell In Goal") || 0;
+      result.xmGoal = getPlanForKey(combinedSiteMap, "XM GOAL") || 0;
+      result.videoGoal = getPlanForKey(combinedSiteMap, "VIDEO GOAL") || 0;
+      result.xhGoal = getPlanForKey(combinedSiteMap, "XH GOAL") || 0;
+      result.phoneGoal = getPlanForKey(combinedSiteMap, "Projected Phone") || 0;
+      // Actual Leads — sum across all unique goal rows
+      const uniqueRows = [];
+      Object.values(combinedSiteMap).forEach(rows => uniqueRows.push(...rows));
+      for (const r of uniqueRows) {
+        const leadsVal = findCol(r, "Actual Leads", "Leads Actual", "Leads", "Actual Lead Count");
+        result.actualLeads += Number(leadsVal) || 0;
+      }
     }
   }
 
@@ -7112,7 +7136,8 @@ function buildCampaignMonthTotals(agentRaw, goalsRaw, monthFilter) {
   if (goalsRaw && goalsRaw.trim()) {
     const rows = parseCSV(goalsRaw);
     for (const g of rows) {
-      sumActualLeads += Number(g["Actual Leads"]) || 0;
+      const leadsVal = findCol(g, "Actual Leads", "Leads Actual", "Leads", "Actual Lead Count");
+      sumActualLeads += Number(leadsVal) || 0;
     }
   }
   return { sumActualLeads, sumHoursActual };
@@ -8275,9 +8300,9 @@ function formatCampaignDetailTable(detail, columnLabel) {
 }
 
 // Render a single per-campaign slide for Slide 6 fan-out.
-// detailReporting / detailMtd are the output of buildCampaignMonthDetail for each month.
-// notes = { reporting, mtd } are the two free-text Performance Notes for this campaign.
-function buildCorpCampaignDetailSlide(pres, campaign, detailReporting, detailMtd, reportingMonthLabel, mtdLabel, notes) {
+// detailPrior / detailReporting are the output of buildCampaignMonthDetail for each month.
+// notes = { prior, reporting } are the two free-text Performance Notes for this campaign.
+function buildCorpCampaignDetailSlide(pres, campaign, detailPrior, detailReporting, priorMonthLabel, reportingMonthLabel, notes) {
   const slide = pres.addSlide();
   slide.background = { color: virgilTheme.slideBg };
   virgilBrandBars(pres, slide);
@@ -8294,18 +8319,18 @@ function buildCorpCampaignDetailSlide(pres, campaign, detailReporting, detailMtd
   });
 
   // Column sub-titles
-  slide.addText("MONTH OF DISCUSSION", {
+  slide.addText("PREVIOUS MONTH", {
     x: 0.5, y: 1.3, w: 6, h: 0.25,
     fontSize: 9, color: virgilTheme.subtle, bold: true, align: "center", charSpacing: 2,
   });
-  slide.addText("MTD", {
+  slide.addText("MONTH OF DISCUSSION", {
     x: 6.8, y: 1.3, w: 6, h: 0.25,
     fontSize: 9, color: virgilTheme.subtle, bold: true, align: "center", charSpacing: 2,
   });
 
   // Two side-by-side tables
-  const priorRows = formatCampaignDetailTable(detailReporting, reportingMonthLabel);
-  const currRows = formatCampaignDetailTable(detailMtd, `${mtdLabel} MTD`);
+  const priorRows = formatCampaignDetailTable(detailPrior, priorMonthLabel);
+  const currRows = formatCampaignDetailTable(detailReporting, reportingMonthLabel);
 
   slide.addTable(priorRows, {
     x: 0.5, y: 1.55, w: 6.0,
@@ -8342,8 +8367,8 @@ function buildCorpCampaignDetailSlide(pres, campaign, detailReporting, detailMtd
       italic: !body, valign: "top",
     });
   };
-  drawNotePanel(0.5, `${reportingMonthLabel.toUpperCase()} — PERFORMANCE NOTES`, (notes && notes.reporting) || "");
-  drawNotePanel(6.8, `${mtdLabel.toUpperCase()} MTD — PERFORMANCE NOTES`, (notes && notes.mtd) || "");
+  drawNotePanel(0.5, `${priorMonthLabel.toUpperCase()} — PERFORMANCE NOTES`, (notes && notes.prior) || "");
+  drawNotePanel(6.8, `${reportingMonthLabel.toUpperCase()} — PERFORMANCE NOTES`, (notes && notes.reporting) || "");
 }
 
 function buildCorpTnpsSlide(pres, perf, reportingMonthLabel, insightText) {
@@ -8746,25 +8771,27 @@ function buildVirgilMbrPresentation(perf, options) {
     options.corpPriorMonthAgentRaw || "", options.corpPriorMonthGoalsRaw || "");
 
   // Slide 6 — Per-Campaign Actual-to-Goal (N slides, one per campaign)
-  // Columns: reporting month (left) vs MTD (right) — both from rawAgentCsv with month filters
-  const mtdKey = getNextMonthLabel(options.reportingMonthLabel);
+  // Columns: previous month (left) vs month of discussion / reporting (right)
+  // Agent data: priorAgentRaw for prior month, agentRaw for reporting month.
+  // Goals: priorGoalsRaw for prior month, goalsRaw for reporting month.
+  const priorFilter = makeMonthFilter(priorMonthKey);
   const reportingFilter = makeMonthFilter(options.reportingMonthLabel);
-  const mtdFilter = makeMonthFilter(mtdKey);
   const campaignUniverse = buildCampaignUniverse(
+    options.priorAgentRaw || "", options.priorGoalsRaw || "",
     options.agentRaw || "", options.goalsRaw || "",
-    options.reportingMonthLabel, mtdKey
+    priorMonthKey, options.reportingMonthLabel
   );
+  const priorTotals = buildCampaignMonthTotals(options.priorAgentRaw || "", options.priorGoalsRaw || "", priorFilter);
   const reportingTotals = buildCampaignMonthTotals(options.agentRaw || "", options.goalsRaw || "", reportingFilter);
-  const mtdTotals = buildCampaignMonthTotals(options.agentRaw || "", options.goalsRaw || "", mtdFilter);
   const extendedRows = Array.isArray(options.corpExtendedAgent) ? options.corpExtendedAgent : [];
+  const extPriorLookup = buildExtendedAgentLookup(extendedRows, priorFilter);
   const extReportingLookup = buildExtendedAgentLookup(extendedRows, reportingFilter);
-  const extMtdLookup = buildExtendedAgentLookup(extendedRows, mtdFilter);
   const perCampaignNotes = (options.insights && options.insights.slide6Notes) || {};
   for (const campaign of campaignUniverse) {
+    const detailPrior = buildCampaignMonthDetail(campaign, options.priorAgentRaw || "", options.priorGoalsRaw || "", priorFilter, extPriorLookup, priorTotals);
     const detailReporting = buildCampaignMonthDetail(campaign, options.agentRaw || "", options.goalsRaw || "", reportingFilter, extReportingLookup, reportingTotals);
-    const detailMtd = buildCampaignMonthDetail(campaign, options.agentRaw || "", options.goalsRaw || "", mtdFilter, extMtdLookup, mtdTotals);
-    const notes = perCampaignNotes[campaign.name] || { reporting: "", mtd: "" };
-    buildCorpCampaignDetailSlide(pres, campaign, detailReporting, detailMtd, options.reportingMonthLabel, mtdKey, notes);
+    const notes = perCampaignNotes[campaign.name] || { prior: "", reporting: "" };
+    buildCorpCampaignDetailSlide(pres, campaign, detailPrior, detailReporting, priorMonthKey, options.reportingMonthLabel, notes);
   }
 
   // Slide 7 — Customer Experience (tNPS)
@@ -8930,13 +8957,14 @@ If any vendor is missing or unreadable, use null for that value.`;
   const loginBuckets = useMemo(() => parseLoginBuckets(loginBucketsRaw), [loginBucketsRaw]);
   const corpExtendedAgent = useMemo(() => parseExtendedAgentStats(rawAgentCsv), [rawAgentCsv]);
 
-  const mtdLabelDisplay = useMemo(() => getNextMonthLabel(reportingMonth), [reportingMonth]);
+  const priorMonthLabelDisplay = useMemo(() => getPriorMonthLabel(reportingMonth), [reportingMonth]);
   const campaignUniverse = useMemo(() => {
     return buildCampaignUniverse(
+      priorMonthRaw || "", priorMonthGoalsRaw || "",
       rawAgentCsv || "", goalsRaw || "",
-      reportingMonth, mtdLabelDisplay
+      priorMonthLabelDisplay, reportingMonth
     );
-  }, [rawAgentCsv, goalsRaw, reportingMonth, mtdLabelDisplay]);
+  }, [priorMonthRaw, priorMonthGoalsRaw, rawAgentCsv, goalsRaw, priorMonthLabelDisplay, reportingMonth]);
 
   const hasCoachingDetails = !!(coachingDetailsRaw && coachingDetailsRaw.trim());
   const hasCoachingWeekly = !!(coachingWeeklyRaw && coachingWeeklyRaw.trim());
@@ -9138,12 +9166,12 @@ Write bullet-point style insights focused on movement vs prior, gaps vs 75% goal
           <div style={{ fontSize: 13, fontWeight: 600 }}>Slide 6 — Per-Campaign Performance Notes</div>
           <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>
             {campaignUniverse.length
-              ? `${campaignUniverse.length} campaigns detected across ${reportingMonth} / ${mtdLabelDisplay} MTD. Notes render on the per-campaign slides; blank = empty panel.`
+              ? `${campaignUniverse.length} campaigns detected across ${priorMonthLabelDisplay} / ${reportingMonth}. Notes render on the per-campaign slides; blank = empty panel.`
               : "No campaigns detected yet — load current-month data first."}
           </div>
           <div style={{ maxHeight: 260, overflow: "auto", marginTop: 8 }}>
             {campaignUniverse.map(c => {
-              const entry = ((insights && insights.slide6Notes) || {})[c.name] || { reporting: "", mtd: "" };
+              const entry = ((insights && insights.slide6Notes) || {})[c.name] || { prior: "", reporting: "" };
               const update = (key, v) => {
                 setInsights({
                   ...(insights || {}),
@@ -9158,13 +9186,13 @@ Write bullet-point style insights focused on movement vs prior, gaps vs 75% goal
                   <div style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>{c.name}</div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 6 }}>
                     <label style={{ fontSize: 11, color: "#6b7280" }}>
-                      {reportingMonth} notes
-                      <textarea value={entry.reporting} onChange={e => update("reporting", e.target.value)}
+                      {priorMonthLabelDisplay} notes
+                      <textarea value={entry.prior} onChange={e => update("prior", e.target.value)}
                         rows={2} style={{ display: "block", width: "100%", padding: 6, border: "1px solid #d1d5db", borderRadius: 4, marginTop: 2, fontSize: 11, fontFamily: "inherit", resize: "vertical" }} />
                     </label>
                     <label style={{ fontSize: 11, color: "#6b7280" }}>
-                      {mtdLabelDisplay} MTD notes
-                      <textarea value={entry.mtd} onChange={e => update("mtd", e.target.value)}
+                      {reportingMonth} notes
+                      <textarea value={entry.reporting} onChange={e => update("reporting", e.target.value)}
                         rows={2} style={{ display: "block", width: "100%", padding: 6, border: "1px solid #d1d5db", borderRadius: 4, marginTop: 2, fontSize: 11, fontFamily: "inherit", resize: "vertical" }} />
                     </label>
                   </div>
