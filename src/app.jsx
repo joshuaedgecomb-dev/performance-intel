@@ -7250,13 +7250,15 @@ function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
   // Compute all 4 periods
   // Q4 file is already quarter-scoped (fiscal months, Sep 22 - Dec 21).
   // Pass null filters to include every row without date restriction.
-  const q4 = computeCorpAttainment(priorQuarterAgentRaw, priorQuarterGoalsRaw, null, null);
+  // XI/XM: exclude Cox (GS*) only — keep GLB (XMC) since it contributes to XM attainment
+  const excludeCox = (roc) => !String(roc || "").toUpperCase().startsWith("GS");
+  const q4 = computeCorpAttainment(priorQuarterAgentRaw, priorQuarterGoalsRaw, null, null, excludeCox, excludeCox);
   const colP2 = computeCorpAttainment(corpPriorMonthAgentRaw, corpPriorMonthGoalsRaw,
-    makeMonthFilter(prior2), makeGoalsMonthFilter(prior2));
+    makeMonthFilter(prior2), makeGoalsMonthFilter(prior2), excludeCox, excludeCox);
   const colP1 = computeCorpAttainment(priorAgentRaw, priorGoalsRaw,
-    makeMonthFilter(prior1), makeGoalsMonthFilter(prior1));
+    makeMonthFilter(prior1), makeGoalsMonthFilter(prior1), excludeCox, excludeCox);
   const colMtd = computeCorpAttainment(agentRaw, goalsRaw,
-    makeMonthFilter(reportingMonthLabel), makeGoalsMonthFilter(reportingMonthLabel));
+    makeMonthFilter(reportingMonthLabel), makeGoalsMonthFilter(reportingMonthLabel), excludeCox, excludeCox);
 
   // SPH-only computations excluding GLB-prefix ROCs (Add XMC campaigns)
   // Exclude GLB (XMC) and GS* (Cox) — keep only GL-prefixed Xfinity campaigns (except GLB)
