@@ -7338,26 +7338,101 @@ const corpPalette = {
   muted: "F9FAFB",
 };
 
-// Adds the top and bottom teal→purple brand bars + footer text to a slide.
-// pres is the pptxgenjs instance; slide is the slide object.
-function virgilBrandBars(pres, slide) {
-  const w = pres.presLayout ? pres.presLayout.width : 13.333;
+// Unified slide frame — applied to every Corp MBR slide.
+// Options: { categoryLabel, pageNumber, reportingMonthLabel, gcsLogoDataUrl, title, eyebrow, showTitle=true }
+// If showTitle is false, caller renders its own title (for custom slides).
+function virgilSlideFrame(pres, slide, options) {
+  const w = 13.333;
+  const opts = options || {};
+
+  // --- TOP: thin teal→purple gradient bar ---
   slide.addShape("rect", {
-    x: 0, y: 0, w, h: 0.22,
+    x: 0, y: 0, w: w * 0.5, h: 0.2,
     fill: { color: virgilTheme.gradientLeft },
     line: { color: virgilTheme.gradientLeft, width: 0 },
   });
   slide.addShape("rect", {
-    x: 0, y: 7.28, w, h: 0.22,
+    x: w * 0.5, y: 0, w: w * 0.5, h: 0.2,
     fill: { color: virgilTheme.gradientRight },
     line: { color: virgilTheme.gradientRight, width: 0 },
   });
+
+  // --- Eyebrow + title (optional; caller can skip with showTitle: false) ---
+  if (opts.showTitle !== false) {
+    const eyebrowText = opts.eyebrow || "OPERATIONAL PERFORMANCE";
+    slide.addText(eyebrowText, {
+      x: 0.5, y: 0.40, w: 9, h: 0.22,
+      fontSize: 10, fontFace: "Segoe UI", color: virgilTheme.eyebrow, bold: true, charSpacing: 2,
+    });
+    if (opts.title) {
+      slide.addText(opts.title, {
+        x: 0.5, y: 0.66, w: 9, h: 0.55,
+        fontSize: 24, fontFace: "Segoe UI", color: virgilTheme.bodyText, bold: true,
+      });
+    }
+    // Accent line below title
+    slide.addShape("rect", {
+      x: 0.5, y: 1.2, w: 8.0, h: 0.03,
+      fill: { color: virgilTheme.gradientLeft },
+      line: { color: virgilTheme.gradientLeft, width: 0 },
+    });
+  }
+
+  // --- Top-right: category badge + GCS logo ---
+  if (opts.categoryLabel) {
+    slide.addShape("roundRect", {
+      x: 10.3, y: 0.42, w: 1.9, h: 0.4,
+      fill: { color: corpPalette.navy },
+      line: { color: corpPalette.navy, width: 0 },
+      rectRadius: 0.08,
+    });
+    slide.addText(opts.categoryLabel.toUpperCase(), {
+      x: 10.3, y: 0.42, w: 1.9, h: 0.4,
+      fontSize: 9, fontFace: "Segoe UI", color: "FFFFFF", bold: true, align: "center", valign: "middle", charSpacing: 1.5,
+    });
+  }
+  if (opts.gcsLogoDataUrl) {
+    slide.addImage({
+      data: opts.gcsLogoDataUrl,
+      x: 12.35, y: 0.3, w: 0.8, h: 0.8,
+    });
+  }
+
+  // --- BOTTOM: dark gradient footer bar with review label / title / xfinity ---
+  const footerY = 7.0;
+  const footerH = 0.5;
+  slide.addShape("rect", {
+    x: 0, y: footerY, w: w * 0.5, h: footerH,
+    fill: { color: virgilTheme.gradientLeft },
+    line: { color: virgilTheme.gradientLeft, width: 0 },
+  });
+  slide.addShape("rect", {
+    x: w * 0.5, y: footerY, w: w * 0.5, h: footerH,
+    fill: { color: virgilTheme.gradientRight },
+    line: { color: virgilTheme.gradientRight, width: 0 },
+  });
+  const reviewLabel = opts.reportingMonthLabel
+    ? `${String(opts.reportingMonthLabel).split(" ")[0].toUpperCase()} REVIEW`
+    : "REVIEW";
+  slide.addText(reviewLabel, {
+    x: 0.4, y: footerY + 0.12, w: 3, h: 0.25,
+    fontSize: 10, fontFace: "Segoe UI", color: "FFFFFF", bold: true, charSpacing: 2,
+  });
   slide.addText("GLOBAL CALLCENTER SOLUTIONS", {
-    x: 0.3, y: 7.05, w: 5, h: 0.2, fontSize: 8, color: virgilTheme.footerText, bold: true,
+    x: 4.5, y: footerY + 0.12, w: 4.5, h: 0.25,
+    fontSize: 10, fontFace: "Segoe UI", color: "FFFFFF", bold: true, align: "center", charSpacing: 2,
   });
-  slide.addText("xfinity", {
-    x: w - 1.0, y: 7.05, w: 0.9, h: 0.2, fontSize: 10, color: virgilTheme.footerText, align: "right",
-  });
+  if (opts.pageNumber !== undefined) {
+    slide.addText(`xfinity  |  ${opts.pageNumber}`, {
+      x: 11.0, y: footerY + 0.12, w: 2.0, h: 0.25,
+      fontSize: 10, fontFace: "Segoe UI", color: "FFFFFF", align: "right",
+    });
+  } else {
+    slide.addText("xfinity", {
+      x: 11.0, y: footerY + 0.12, w: 2.0, h: 0.25,
+      fontSize: 10, fontFace: "Segoe UI", color: "FFFFFF", align: "right",
+    });
+  }
 }
 
 // Rounded white card with thin light-gray border — unified container motif for data panels.
@@ -7388,15 +7463,24 @@ function expandMonthLabel(label) {
   return `${monName} ${year}`;
 }
 
-function buildVirgilTitleSlide(pres, reportingMonthLabel, fiscalInfo, virgilLastName) {
+function buildVirgilTitleSlide(pres, reportingMonthLabel, fiscalInfo, virgilLastName, frameOptions) {
   const slide = pres.addSlide();
   const w = 13.333;
   const h = 7.5;
 
   // --- Pre-rendered title background (gradient + X + title + xfinity all baked in) ---
+  // Image covers y=0..7.0; footer bar at y=7.0 is added by virgilSlideFrame on top.
   slide.addImage({
     path: `${import.meta.env.BASE_URL}corp-mbr-title-bg.png`,
     x: 0, y: 0, w, h,
+  });
+
+  // Apply unified frame AFTER image so footer bar and logo sit on top
+  virgilSlideFrame(pres, slide, {
+    showTitle: false,
+    reportingMonthLabel,
+    gcsLogoDataUrl: (frameOptions || {}).gcsLogoDataUrl,
+    pageNumber: (frameOptions || {}).pageNumber,
   });
 
   // --- Dynamic date (below the baked-in title) ---
@@ -7431,10 +7515,17 @@ function buildVirgilTitleSlide(pres, reportingMonthLabel, fiscalInfo, virgilLast
   });
 }
 
-function buildVirgilMyPerformanceSlide(pres, stats, loginBuckets, priorPriorMonthLabel, priorMonthLabel, reportingMonthLabel, insightsText) {
+function buildVirgilMyPerformanceSlide(pres, stats, loginBuckets, priorPriorMonthLabel, priorMonthLabel, reportingMonthLabel, insightsText, frameOptions) {
   const slide = pres.addSlide();
   slide.background = { color: virgilTheme.slideBg };
-  virgilBrandBars(pres, slide);
+  virgilSlideFrame(pres, slide, {
+    eyebrow: "MY PERFORMANCE / QUALITY",
+    title: `My Performance / Quality — ${reportingMonthLabel}`,
+    categoryLabel: "PERFORMANCE",
+    reportingMonthLabel,
+    pageNumber: (frameOptions || {}).pageNumber,
+    gcsLogoDataUrl: (frameOptions || {}).gcsLogoDataUrl,
+  });
 
   // Month abbreviation helpers
   const monAbbrev = (label) => {
@@ -7446,25 +7537,15 @@ function buildVirgilMyPerformanceSlide(pres, stats, loginBuckets, priorPriorMont
   const priorAbbrev = monAbbrev(priorMonthLabel) || "Prior";
   const currAbbrev = monAbbrev(reportingMonthLabel) || "Current";
 
-  // Eyebrow + title
-  slide.addText("OPERATIONAL PERFORMANCE", {
-    x: 0.5, y: 0.35, w: 6, h: 0.25,
-    fontSize: 10, color: virgilTheme.eyebrow, bold: true, charSpacing: 2,
-  });
-  slide.addText(`Global Callcenter Solutions | Quality and Coaching`, {
-    x: 0.5, y: 0.65, w: 12, h: 0.5,
-    fontSize: 22, color: virgilTheme.bodyText, bold: true,
-  });
-
-  // Legend (top right) — 3 months + goal line
-  const legendY = 0.7;
-  slide.addShape("rect", { x: 9.5, y: legendY, w: 0.22, h: 0.18, fill: { color: corpPalette.lavender } });
-  slide.addText(priorPriorAbbrev, { x: 9.78, y: legendY - 0.03, w: 0.7, h: 0.25, fontSize: 10, color: virgilTheme.bodyText });
-  slide.addShape("rect", { x: 10.65, y: legendY, w: 0.22, h: 0.18, fill: { color: corpPalette.purple } });
-  slide.addText(priorAbbrev, { x: 10.93, y: legendY - 0.03, w: 0.7, h: 0.25, fontSize: 10, color: virgilTheme.bodyText });
-  slide.addShape("rect", { x: 11.8, y: legendY, w: 0.22, h: 0.18, fill: { color: corpPalette.navy } });
-  slide.addText(currAbbrev, { x: 12.08, y: legendY - 0.03, w: 0.75, h: 0.25, fontSize: 10, color: virgilTheme.bodyText });
-  slide.addText("---  Goal (75%)", { x: 9.5, y: legendY + 0.22, w: 3.3, h: 0.2, fontSize: 9, color: virgilTheme.subtle, italic: true });
+  // Legend (top right) — 3 months + goal line; nudged down to clear category badge (badge ends ~y=0.82)
+  const legendY = 0.9;
+  slide.addShape("rect", { x: 9.3, y: legendY, w: 0.22, h: 0.18, fill: { color: corpPalette.lavender } });
+  slide.addText(priorPriorAbbrev, { x: 9.58, y: legendY - 0.03, w: 0.7, h: 0.25, fontSize: 10, color: virgilTheme.bodyText });
+  slide.addShape("rect", { x: 10.35, y: legendY, w: 0.22, h: 0.18, fill: { color: corpPalette.purple } });
+  slide.addText(priorAbbrev, { x: 10.63, y: legendY - 0.03, w: 0.7, h: 0.25, fontSize: 10, color: virgilTheme.bodyText });
+  slide.addShape("rect", { x: 11.4, y: legendY, w: 0.22, h: 0.18, fill: { color: corpPalette.navy } });
+  slide.addText(currAbbrev, { x: 11.68, y: legendY - 0.03, w: 0.75, h: 0.25, fontSize: 10, color: virgilTheme.bodyText });
+  slide.addText("---  Goal (75%)", { x: 9.3, y: legendY + 0.22, w: 3.3, h: 0.2, fontSize: 9, color: virgilTheme.subtle, italic: true });
 
   // Full-month-name helper
   const monFull = (label) => {
@@ -7637,18 +7718,16 @@ function buildVirgilMyPerformanceSlide(pres, stats, loginBuckets, priorPriorMont
   }
 }
 
-function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, priorGoalsRaw, priorQuarterAgentRaw, priorQuarterGoalsRaw, reportingMonthLabel, scorecardDataUrl, vendorScores, corpPriorMonthAgentRaw, corpPriorMonthGoalsRaw) {
+function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, priorGoalsRaw, priorQuarterAgentRaw, priorQuarterGoalsRaw, reportingMonthLabel, scorecardDataUrl, vendorScores, corpPriorMonthAgentRaw, corpPriorMonthGoalsRaw, frameOptions) {
   const slide = pres.addSlide();
   slide.background = { color: virgilTheme.slideBg };
-  virgilBrandBars(pres, slide);
-
-  slide.addText("OPERATIONAL PERFORMANCE", {
-    x: 0.5, y: 0.35, w: 6, h: 0.25,
-    fontSize: 10, color: virgilTheme.eyebrow, bold: true, charSpacing: 2,
-  });
-  slide.addText(`Global Callcenter Solutions | All-in Attainment — ${reportingMonthLabel}`, {
-    x: 0.5, y: 0.65, w: 12, h: 0.5,
-    fontSize: 22, color: virgilTheme.bodyText, bold: true,
+  virgilSlideFrame(pres, slide, {
+    eyebrow: "OPERATIONAL PERFORMANCE",
+    title: `All-in Attainment — ${reportingMonthLabel}`,
+    categoryLabel: "OPERATIONS",
+    reportingMonthLabel,
+    pageNumber: (frameOptions || {}).pageNumber,
+    gcsLogoDataUrl: (frameOptions || {}).gcsLogoDataUrl,
   });
 
   // Time periods: Q4 / (R-2) / (R-1) / R as MTD
@@ -7933,18 +8012,16 @@ function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
   slide.addText("MTD", { x: 7.0, y: legY, w: 1.0, h: 0.25, fontSize: 10, color: virgilTheme.bodyText });
 }
 
-function buildCorpQuartileSlide(pres, agentRaw, goalsRaw, priorAgentRaw, priorGoalsRaw, newHiresRaw, reportingMonthLabel) {
+function buildCorpQuartileSlide(pres, agentRaw, goalsRaw, priorAgentRaw, priorGoalsRaw, newHiresRaw, reportingMonthLabel, frameOptions) {
   const slide = pres.addSlide();
   slide.background = { color: virgilTheme.slideBg };
-  virgilBrandBars(pres, slide);
-
-  slide.addText("OPERATIONAL PERFORMANCE", {
-    x: 0.5, y: 0.35, w: 6, h: 0.25,
-    fontSize: 10, color: virgilTheme.eyebrow, bold: true, charSpacing: 2,
-  });
-  slide.addText("Global Callcenter Solutions | Quartile Reporting", {
-    x: 0.5, y: 0.65, w: 12, h: 0.5,
-    fontSize: 22, color: virgilTheme.bodyText, bold: true,
+  virgilSlideFrame(pres, slide, {
+    eyebrow: "OPERATIONAL PERFORMANCE",
+    title: `Quartile Reporting — ${reportingMonthLabel}`,
+    categoryLabel: "OPERATIONS",
+    reportingMonthLabel,
+    pageNumber: (frameOptions || {}).pageNumber,
+    gcsLogoDataUrl: (frameOptions || {}).gcsLogoDataUrl,
   });
 
   const reportingPeriodLabel = getPriorMonthLabel(reportingMonthLabel);
@@ -8061,18 +8138,16 @@ function buildCorpQuartileSlide(pres, agentRaw, goalsRaw, priorAgentRaw, priorGo
   });
 }
 
-function buildCorpCampaignHoursSlide(pres, agentRaw, goalsRaw, priorAgentRaw, priorGoalsRaw, reportingMonthLabel, corpPriorMonthAgentRaw, corpPriorMonthGoalsRaw) {
+function buildCorpCampaignHoursSlide(pres, agentRaw, goalsRaw, priorAgentRaw, priorGoalsRaw, reportingMonthLabel, corpPriorMonthAgentRaw, corpPriorMonthGoalsRaw, frameOptions) {
   const slide = pres.addSlide();
   slide.background = { color: virgilTheme.slideBg };
-  virgilBrandBars(pres, slide);
-
-  slide.addText("OPERATIONAL PERFORMANCE", {
-    x: 0.5, y: 0.35, w: 6, h: 0.25,
-    fontSize: 10, color: virgilTheme.eyebrow, bold: true, charSpacing: 2,
-  });
-  slide.addText("Global Callcenter Solutions | Campaign Info – Month of Discussion vs MTD", {
-    x: 0.5, y: 0.65, w: 12, h: 0.5,
-    fontSize: 22, color: virgilTheme.bodyText, bold: true,
+  virgilSlideFrame(pres, slide, {
+    eyebrow: "OPERATIONAL PERFORMANCE",
+    title: `Campaign Hours — ${reportingMonthLabel}`,
+    categoryLabel: "OPERATIONS",
+    reportingMonthLabel,
+    pageNumber: (frameOptions || {}).pageNumber,
+    gcsLogoDataUrl: (frameOptions || {}).gcsLogoDataUrl,
   });
 
   const reportingPeriodLabel = getPriorMonthLabel(reportingMonthLabel); // Current − 1 (e.g., Mar)
@@ -8303,20 +8378,17 @@ function buildCorpCampaignHoursSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
 // For derived ratio rows (CPS, SPH, etc.) and "Total Leads"-style rows, the GOALS / BUDGET / VARIANCE / % GOAL cells are blank — only ACTUAL has data (per spec §6.6).
 // Render a single per-campaign slide for Slide 6 fan-out.
 // Two columns (PREVIOUS MONTH | MONTH OF DISCUSSION); each column has three stacked tables.
-function buildCorpCampaignDetailSlide(pres, campaign, detailPrior, detailReporting, priorMonthLabel, reportingMonthLabel, notes) {
+function buildCorpCampaignDetailSlide(pres, campaign, detailPrior, detailReporting, priorMonthLabel, reportingMonthLabel, notes, frameOptions) {
   const slide = pres.addSlide();
   slide.background = { color: virgilTheme.slideBg };
-  virgilBrandBars(pres, slide);
-
-  // Eyebrow + title
   const categoryLabel = (campaign.category || "OPERATIONAL PERFORMANCE").toUpperCase();
-  slide.addText(`OPERATIONAL PERFORMANCE  ·  ${categoryLabel}`, {
-    x: 0.5, y: 0.35, w: 12, h: 0.25,
-    fontSize: 10, color: virgilTheme.eyebrow, bold: true, charSpacing: 2,
-  });
-  slide.addText(`Actual to Goal – ${campaign.name}`, {
-    x: 0.5, y: 0.65, w: 12.3, h: 0.55,
-    fontSize: 22, color: virgilTheme.bodyText, bold: true,
+  virgilSlideFrame(pres, slide, {
+    eyebrow: `OPERATIONAL PERFORMANCE  ·  ${categoryLabel}`,
+    title: `Actual to Goal – ${campaign.name}`,
+    categoryLabel,
+    reportingMonthLabel,
+    pageNumber: (frameOptions || {}).pageNumber,
+    gcsLogoDataUrl: (frameOptions || {}).gcsLogoDataUrl,
   });
 
   // Column sub-titles
@@ -8506,19 +8578,18 @@ function renderCorpCampaignColumn(slide, x, y, detail, columnLabel) {
   });
 }
 
-function buildCorpTnpsSlide(pres, perf, reportingMonthLabel, insightText) {
+function buildCorpTnpsSlide(pres, perf, reportingMonthLabel, insightText, frameOptions) {
   if (!perf || !perf.tnpsData || perf.tnpsData.length === 0) {
     // Render an empty placeholder so the slide count is predictable
     const slide = pres.addSlide();
     slide.background = { color: virgilTheme.slideBg };
-    virgilBrandBars(pres, slide);
-    slide.addText("CUSTOMER EXPERIENCE", {
-      x: 0.5, y: 0.35, w: 12, h: 0.25,
-      fontSize: 10, color: virgilTheme.eyebrow, bold: true, charSpacing: 2,
-    });
-    slide.addText(`tNPS — ${reportingMonthLabel}`, {
-      x: 0.5, y: 0.65, w: 12, h: 0.55,
-      fontSize: 22, color: virgilTheme.bodyText, bold: true,
+    virgilSlideFrame(pres, slide, {
+      eyebrow: "CUSTOMER EXPERIENCE",
+      title: `tNPS — ${reportingMonthLabel}`,
+      categoryLabel: "CUSTOMER EXPERIENCE",
+      reportingMonthLabel,
+      pageNumber: (frameOptions || {}).pageNumber,
+      gcsLogoDataUrl: (frameOptions || {}).gcsLogoDataUrl,
     });
     slide.addText("No tNPS data loaded.", {
       x: 0.5, y: 3.5, w: 12, h: 0.4,
@@ -8528,16 +8599,13 @@ function buildCorpTnpsSlide(pres, perf, reportingMonthLabel, insightText) {
   }
   const slide = pres.addSlide();
   slide.background = { color: virgilTheme.slideBg };
-  virgilBrandBars(pres, slide);
-
-  // Eyebrow + title
-  slide.addText("CUSTOMER EXPERIENCE", {
-    x: 0.5, y: 0.35, w: 12, h: 0.25,
-    fontSize: 10, color: virgilTheme.eyebrow, bold: true, charSpacing: 2,
-  });
-  slide.addText(`tNPS — ${reportingMonthLabel}`, {
-    x: 0.5, y: 0.65, w: 12, h: 0.55,
-    fontSize: 22, color: virgilTheme.bodyText, bold: true,
+  virgilSlideFrame(pres, slide, {
+    eyebrow: "CUSTOMER EXPERIENCE",
+    title: `tNPS — ${reportingMonthLabel}`,
+    categoryLabel: "CUSTOMER EXPERIENCE",
+    reportingMonthLabel,
+    pageNumber: (frameOptions || {}).pageNumber,
+    gcsLogoDataUrl: (frameOptions || {}).gcsLogoDataUrl,
   });
 
   // Filter ALL data sources to the picker-driven month.
@@ -8726,19 +8794,16 @@ function buildCorpTnpsSlide(pres, perf, reportingMonthLabel, insightText) {
   });
 }
 
-function buildCorpPartnerExperienceSlide(pres, stats, reportingMonthLabel, supportText, incentivesText) {
+function buildCorpPartnerExperienceSlide(pres, stats, reportingMonthLabel, supportText, incentivesText, frameOptions) {
   const slide = pres.addSlide();
   slide.background = { color: virgilTheme.slideBg };
-  virgilBrandBars(pres, slide);
-
-  // Eyebrow + title
-  slide.addText("PEOPLE & OPERATIONS", {
-    x: 0.5, y: 0.35, w: 12, h: 0.25,
-    fontSize: 10, color: virgilTheme.eyebrow, bold: true, charSpacing: 2,
-  });
-  slide.addText(`Partner Experience — ${reportingMonthLabel}`, {
-    x: 0.5, y: 0.65, w: 12, h: 0.55,
-    fontSize: 22, color: virgilTheme.bodyText, bold: true,
+  virgilSlideFrame(pres, slide, {
+    eyebrow: "PEOPLE & OPERATIONS",
+    title: `Partner Experience — ${reportingMonthLabel}`,
+    categoryLabel: "PEOPLE & OPERATIONS",
+    reportingMonthLabel,
+    pageNumber: (frameOptions || {}).pageNumber,
+    gcsLogoDataUrl: (frameOptions || {}).gcsLogoDataUrl,
   });
 
   // Top row — two text panels with purple gradient headers
@@ -8858,10 +8923,13 @@ function buildCorpPartnerExperienceSlide(pres, stats, reportingMonthLabel, suppo
 // CORP MBR — Orchestrator
 // ═══════════════════════════════════════════════════════════════════
 
-// options: { reportingMonthLabel, virgilLastName, coachingDetails, coachingWeekly, loginBuckets, insights }
+// options: { reportingMonthLabel, virgilLastName, coachingDetails, coachingWeekly, loginBuckets, insights, gcsLogoDataUrl }
 function buildVirgilMbrPresentation(perf, options) {
   const pres = new pptxgen();
   pres.layout = "LAYOUT_WIDE"; // 13.333 x 7.5
+
+  const gcsLogoDataUrl = options.gcsLogoDataUrl || "";
+  let pageNumber = 1;
 
   const stats = buildCoachingStats(
     options.coachingDetails || {},
@@ -8872,7 +8940,11 @@ function buildVirgilMbrPresentation(perf, options) {
   const priorMonthKey = getPriorMonthLabel(options.reportingMonthLabel);
   const priorPriorMonthKey = getPriorMonthLabel(priorMonthKey);
 
-  buildVirgilTitleSlide(pres, options.reportingMonthLabel, perf && perf.fiscalInfo, options.virgilLastName);
+  // Slide 1 — Title
+  buildVirgilTitleSlide(pres, options.reportingMonthLabel, perf && perf.fiscalInfo, options.virgilLastName,
+    { pageNumber: pageNumber++, gcsLogoDataUrl });
+
+  // Slide 2 — My Performance / Quality
   buildVirgilMyPerformanceSlide(
     pres,
     stats,
@@ -8880,7 +8952,8 @@ function buildVirgilMbrPresentation(perf, options) {
     priorPriorMonthKey,
     priorMonthKey,
     options.reportingMonthLabel,
-    (options.insights && options.insights.slide2) || ""
+    (options.insights && options.insights.slide2) || "",
+    { pageNumber: pageNumber++, gcsLogoDataUrl }
   );
 
   // Slide 3 — All-in Attainment + Scorecard
@@ -8890,20 +8963,23 @@ function buildVirgilMbrPresentation(perf, options) {
     options.priorQuarterAgentRaw || "", options.priorQuarterGoalsRaw || "",
     options.reportingMonthLabel, options.scorecardDataUrl || "",
     options.vendorScores || {},
-    options.corpPriorMonthAgentRaw || "", options.corpPriorMonthGoalsRaw || "");
+    options.corpPriorMonthAgentRaw || "", options.corpPriorMonthGoalsRaw || "",
+    { pageNumber: pageNumber++, gcsLogoDataUrl });
 
   // Slide 4 — Quartile Reporting
   buildCorpQuartileSlide(pres,
     options.agentRaw || "", options.goalsRaw || "",
     options.priorAgentRaw || "", options.priorGoalsRaw || "",
-    options.newHiresRaw || "", options.reportingMonthLabel);
+    options.newHiresRaw || "", options.reportingMonthLabel,
+    { pageNumber: pageNumber++, gcsLogoDataUrl });
 
   // Slide 5 — Campaign Hours Info
   buildCorpCampaignHoursSlide(pres,
     options.agentRaw || "", options.goalsRaw || "",
     options.priorAgentRaw || "", options.priorGoalsRaw || "",
     options.reportingMonthLabel,
-    options.corpPriorMonthAgentRaw || "", options.corpPriorMonthGoalsRaw || "");
+    options.corpPriorMonthAgentRaw || "", options.corpPriorMonthGoalsRaw || "",
+    { pageNumber: pageNumber++, gcsLogoDataUrl });
 
   // Slide 6 — Per-Campaign Actual-to-Goal (N slides, one per campaign)
   // With picker = current fiscal month (e.g. Apr), spec columns are:
@@ -8934,18 +9010,22 @@ function buildVirgilMbrPresentation(perf, options) {
     const detailPrior = buildCampaignMonthDetail(campaign, prevAgent, prevGoals, prevFilter, extPrevLookup, prevTotals);
     const detailReporting = buildCampaignMonthDetail(campaign, discussionAgent, discussionGoals, discussionFilter, extDiscussionLookup, discussionTotals);
     const notes = perCampaignNotes[campaign.name] || { prior: "", reporting: "" };
-    buildCorpCampaignDetailSlide(pres, campaign, detailPrior, detailReporting, priorPriorMonthKey, priorMonthKey, notes);
+    // Each campaign gets its own incrementing page number
+    buildCorpCampaignDetailSlide(pres, campaign, detailPrior, detailReporting, priorPriorMonthKey, priorMonthKey, notes,
+      { pageNumber: pageNumber++, gcsLogoDataUrl });
   }
 
   // Slide 7 — Customer Experience (tNPS)
-  buildCorpTnpsSlide(pres, perf, options.reportingMonthLabel, (options.insights && options.insights.slide7) || "");
+  buildCorpTnpsSlide(pres, perf, options.reportingMonthLabel, (options.insights && options.insights.slide7) || "",
+    { pageNumber: pageNumber++, gcsLogoDataUrl });
 
   // Slide 8 — Partner Experience
   const partnerStats = buildPartnerExperienceStats(options.newHiresRaw || "", perf && perf.bpLookup, options.reportingMonthLabel);
   buildCorpPartnerExperienceSlide(pres, partnerStats,
     options.reportingMonthLabel,
     (options.insights && options.insights.slide8Support) || "",
-    (options.insights && options.insights.slide8Incentives) || "");
+    (options.insights && options.insights.slide8Incentives) || "",
+    { pageNumber: pageNumber++, gcsLogoDataUrl });
 
   return pres;
 }
@@ -9144,6 +9224,19 @@ Write bullet-point style insights focused on movement vs prior, gaps vs 75% goal
         console.error("AI insights generation failed:", e);
       }
     }
+    // Load GCS logo (white transparent PNG served from public/)
+    let gcsLogoDataUrl = "";
+    try {
+      const logoRes = await fetch("/gcs-logo.png");
+      if (logoRes.ok) {
+        const blob = await logoRes.blob();
+        gcsLogoDataUrl = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(String(reader.result || ""));
+          reader.readAsDataURL(blob);
+        });
+      }
+    } catch(e) { console.warn("GCS logo load failed:", e); }
     const pres = buildVirgilMbrPresentation(perf, {
       reportingMonthLabel: reportingMonth,
       coachingDetails,
@@ -9161,6 +9254,7 @@ Write bullet-point style insights focused on movement vs prior, gaps vs 75% goal
       corpExtendedAgent,
       scorecardDataUrl,
       vendorScores,
+      gcsLogoDataUrl,
       insights: { ...(insights || {}), slide2: slide2Insights },
     });
     const safeMonth = (reportingMonth || "Virgil").replace(/[^A-Za-z0-9 _-]+/g, "");
