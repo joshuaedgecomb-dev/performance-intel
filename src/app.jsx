@@ -7731,7 +7731,19 @@ function buildCorpCampaignHoursSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
     return m ? (full[m[1].slice(0, 3).toLowerCase()] || m[1]) : label;
   };
 
-  const drawMonthBlock = (yTop, label, data) => {
+  // Fiscal-month bounds for pacing calc (22nd of prior → 21st of current)
+  const fiscalBounds = (label) => {
+    const m = String(label || "").trim().match(/^([A-Za-z]{3,})\s*'?(\d{2,4})$/);
+    if (!m) return null;
+    const mon = m[1].slice(0, 3).toLowerCase();
+    const monIdx = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12 }[mon];
+    const yr = Number(m[2].length === 4 ? m[2] : `20${m[2]}`);
+    if (!monIdx) return null;
+    let startYr = yr, startMon = monIdx - 1;
+    if (startMon === 0) { startMon = 12; startYr = yr - 1; }
+    return { start: new Date(startYr, startMon - 1, 22), end: new Date(yr, monIdx - 1, 21) };
+  };
+  const drawMonthBlock = (yTop, label, data, isMtd) => {
     const blockH = 1.85;
     const containerX = 0.5;
     const containerW = 12.3;
@@ -7774,13 +7786,24 @@ function buildCorpCampaignHoursSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
       x: barsLabelX, y: row1Y + 0.05, w: barsLabelW, h: 0.3,
       fontSize: 9, color: virgilTheme.subtle,
     });
+    // For MTD month, project actuals to full-month run rate before computing %
+    let paceFactor = 1;
+    if (isMtd) {
+      const b = fiscalBounds(label);
+      if (b) {
+        const totalDays = Math.max(1, Math.round((b.end - b.start) / 86400000) + 1);
+        const elapsed = Math.min(totalDays, Math.max(1, Math.round((Date.now() - b.start.getTime()) / 86400000) + 1));
+        paceFactor = totalDays / elapsed;
+      }
+    }
     buckets.forEach((f, i) => {
       const bx = barsStartX + i * barW + barGap / 2;
       const bw = barW - barGap;
       const seg = f === "Total"
         ? { plan: data.totalPlan, actual: data.totalActual }
         : (data.byFunding[f] || { plan: 0, actual: 0 });
-      const pct = seg.plan > 0 ? (seg.actual / seg.plan) * 100 : 0;
+      const projectedActual = seg.actual * paceFactor;
+      const pct = seg.plan > 0 ? (projectedActual / seg.plan) * 100 : 0;
       slide.addShape("rect", {
         x: bx, y: row1Y, w: bw, h: 0.32,
         fill: { color: fundingColors[f] },
@@ -7817,8 +7840,13 @@ function buildCorpCampaignHoursSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
     });
   };
 
-  drawMonthBlock(1.25, reportingPeriodLabel, reporting);
-  drawMonthBlock(3.2, mtdLabel, mtd);
+  drawMonthBlock(1.25, reportingPeriodLabel, reporting, false);
+  drawMonthBlock(3.2, mtdLabel, mtd, true);
+  // Small annotation explaining MTD pacing
+  slide.addText("MTD % projects actuals to full-month run rate (pacing model)", {
+    x: 0.5, y: 3.2 + 1.85 + 0.05, w: 12.3, h: 0.2,
+    fontSize: 8, color: corpPalette.inkSubtle, italic: true, align: "center",
+  });
 
   // Bottom: Campaign Outlook / Base Management breakout
   const breakoutY = 5.1;
