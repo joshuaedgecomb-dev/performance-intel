@@ -6939,6 +6939,33 @@ const virgilFundingColors = {
   Total: "7C3AED",      // purple
 };
 
+const corpPalette = {
+  // Brand
+  navy: "1E3A8A",       // dominant — reporting month bars, headers, table accents
+  purple: "7C3AED",     // MTD / current-month highlight, section pills
+  lavender: "A78BFA",   // prior-month (older comparative), secondary
+  green: "16A34A",      // goal lines, positive, Q1
+  // Quartile rank
+  q1: "16A34A",
+  q2: "F59E0B",
+  q3: "F97316",
+  q4: "DC2626",
+  // Funding (Slide 5 categories; semantic distinct)
+  fundGrowth: "7C3AED",
+  fundNational: "1E3A8A",
+  fundHQ: "2563EB",
+  fundMarketing: "16A34A",
+  fundTotal: "9CA3AF",
+  // Neutrals
+  ink: "1F2937",
+  inkSubtle: "6B7280",
+  border: "E5E7EB",
+  surface: "FFFFFF",
+  cardBorder: "E5E7EB",
+  gridline: "F3F4F6",
+  muted: "F9FAFB",
+};
+
 // Adds the top and bottom teal→purple brand bars + footer text to a slide.
 // pres is the pptxgenjs instance; slide is the slide object.
 function virgilBrandBars(pres, slide) {
@@ -6958,6 +6985,16 @@ function virgilBrandBars(pres, slide) {
   });
   slide.addText("xfinity", {
     x: w - 1.0, y: 7.05, w: 0.9, h: 0.2, fontSize: 10, color: virgilTheme.footerText, align: "right",
+  });
+}
+
+// Rounded white card with thin light-gray border — unified container motif for data panels.
+function drawCorpCard(slide, x, y, w, h) {
+  slide.addShape("roundRect", {
+    x, y, w, h,
+    fill: { color: corpPalette.surface },
+    line: { color: corpPalette.cardBorder, width: 0.75 },
+    rectRadius: 0.1,
   });
 }
 
@@ -7049,11 +7086,11 @@ function buildVirgilMyPerformanceSlide(pres, stats, loginBuckets, priorPriorMont
 
   // Legend (top right) — 3 months + goal line
   const legendY = 0.7;
-  slide.addShape("rect", { x: 9.5, y: legendY, w: 0.22, h: 0.18, fill: { color: "A78BFA" } });
+  slide.addShape("rect", { x: 9.5, y: legendY, w: 0.22, h: 0.18, fill: { color: corpPalette.lavender } });
   slide.addText(priorPriorAbbrev, { x: 9.78, y: legendY - 0.03, w: 0.7, h: 0.25, fontSize: 10, color: virgilTheme.bodyText });
-  slide.addShape("rect", { x: 10.65, y: legendY, w: 0.22, h: 0.18, fill: { color: "7C3AED" } });
+  slide.addShape("rect", { x: 10.65, y: legendY, w: 0.22, h: 0.18, fill: { color: corpPalette.purple } });
   slide.addText(priorAbbrev, { x: 10.93, y: legendY - 0.03, w: 0.7, h: 0.25, fontSize: 10, color: virgilTheme.bodyText });
-  slide.addShape("rect", { x: 11.8, y: legendY, w: 0.22, h: 0.18, fill: { color: "1E3A8A" } });
+  slide.addShape("rect", { x: 11.8, y: legendY, w: 0.22, h: 0.18, fill: { color: corpPalette.navy } });
   slide.addText(currAbbrev, { x: 12.08, y: legendY - 0.03, w: 0.75, h: 0.25, fontSize: 10, color: virgilTheme.bodyText });
   slide.addText("---  Goal (75%)", { x: 9.5, y: legendY + 0.22, w: 3.3, h: 0.2, fontSize: 9, color: virgilTheme.subtle, italic: true });
 
@@ -7090,12 +7127,6 @@ function buildVirgilMyPerformanceSlide(pres, stats, loginBuckets, priorPriorMont
     const axisY = y + 0.4;
     const axisW = width - 0.6;
     const axisH = height - 0.8;
-    // Plot background
-    slide.addShape("rect", {
-      x: axisX, y: axisY, w: axisW, h: axisH,
-      fill: { color: "FAFAFA" },
-      line: { color: "E5E7EB", width: 0.5 },
-    });
     // Y-axis gridlines with % labels
     const ticks = [0, 0.25, 0.5, 0.75, 1.0];
     ticks.forEach(t => {
@@ -7118,7 +7149,7 @@ function buildVirgilMyPerformanceSlide(pres, stats, loginBuckets, priorPriorMont
     // Three bars (priorPrior, prior, current) at 20/50/80% of axisW
     const barW = axisW * 0.18;
     const barPositions = [0.20, 0.50, 0.80];
-    const barColors = ["A78BFA", "7C3AED", "1E3A8A"];
+    const barColors = [corpPalette.lavender, corpPalette.purple, corpPalette.navy];
     const barValues = [priorPriorPct, priorPct, currPct];
     const barLabels = [priorPriorAbbrev, priorAbbrev, currAbbrev];
     barValues.forEach((v, i) => {
@@ -7140,8 +7171,10 @@ function buildVirgilMyPerformanceSlide(pres, stats, loginBuckets, priorPriorMont
   };
 
   // Left column — two stacked bar charts
+  drawCorpCard(slide, leftColX, chartTopY, leftColW, chartTopH);
   drawBarChart(leftColX, chartTopY, leftColW, chartTopH, "Coaching Standard Attainment",
     stats.orgPriorPrior.coachingPct || 0, stats.orgPrior.coachingPct || 0, stats.org.coachingPct || 0);
+  drawCorpCard(slide, leftColX, chartBotY, leftColW, chartBotH);
   drawBarChart(leftColX, chartBotY, leftColW, chartBotH, "Acknowledge %",
     stats.orgPriorPrior.acknowledgePct || 0, stats.orgPrior.acknowledgePct || 0, stats.org.acknowledgePct || 0);
 
@@ -7162,6 +7195,7 @@ function buildVirgilMyPerformanceSlide(pres, stats, loginBuckets, priorPriorMont
       cUsers: currCell.users, cPct: currCell.pct,
     };
   });
+  drawCorpCard(slide, rightColX, chartTopY, rightColW, chartTopH);
   slide.addText("myPerformance Login Activity", {
     x: rightColX, y: chartTopY, w: rightColW, h: 0.3,
     fontSize: 13, color: virgilTheme.bodyText, bold: true, align: "center",
@@ -7205,9 +7239,10 @@ function buildVirgilMyPerformanceSlide(pres, stats, loginBuckets, priorPriorMont
   // Insights — right column, below the table
   const insY = 4.25;
   const insH = 2.6;
+  drawCorpCard(slide, rightColX, insY, rightColW, insH);
   slide.addShape("rect", {
     x: rightColX, y: insY, w: rightColW, h: 0.4,
-    fill: { color: "1E3A8A" },
+    fill: { color: corpPalette.navy },
   });
   slide.addText("Insights", {
     x: rightColX, y: insY + 0.03, w: rightColW, h: 0.35,
@@ -7276,9 +7311,9 @@ function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
   const mtdSph = computeCorpAttainment(agentRaw, goalsRaw, makeMonthFilter(reportingMonthLabel), makeGoalsMonthFilter(reportingMonthLabel), excludeGLB, excludeGLB);
 
   // Colors
-  const barCol = "1E3A8A";       // navy for first 3
-  const barColMtd = "7C3AED";    // purple for MTD
-  const goalCol = "16A34A";      // green goal line
+  const barCol = corpPalette.navy;       // navy for first 3
+  const barColMtd = corpPalette.purple;  // purple for MTD
+  const goalCol = corpPalette.green;     // green goal line
   const plotBg = "FAFAFA";
   const plotBorder = "E5E7EB";
   const labels = [q4Label, prior2, prior1, `${reportingMonthLabel} MTD`];
@@ -7297,10 +7332,6 @@ function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
     const axisY = y + 0.35;
     const axisW = w - 0.5 - yAxisW;
     const axisH = h - 0.8;
-    slide.addShape("rect", {
-      x: axisX, y: axisY, w: axisW, h: axisH,
-      fill: { color: plotBg }, line: { color: plotBorder, width: 0.5 },
-    });
     // Scale
     const presentVals = values.filter(v => v !== null && v !== undefined && !isNaN(v));
     const presentGoals = (goals || []).filter(v => v !== null && v !== undefined && !isNaN(v));
@@ -7423,6 +7454,7 @@ function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
   const col3X = 8.9;
 
   // XI
+  drawCorpCard(slide, col1X, topY, chartW, chartH);
   drawChart(col1X, topY, chartW, chartH, "XI Attainment",
     [q4.xiPct, colP2.xiPct, colP1.xiPct, colMtd.xiPct].map(v => v || 0),
     fmtPctCapped,
@@ -7431,6 +7463,7 @@ function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
     1.2);
 
   // XM
+  drawCorpCard(slide, col2X, topY, chartW, chartH);
   drawChart(col2X, topY, chartW, chartH, "XM Attainment",
     [q4.xmPct, colP2.xmPct, colP1.xmPct, colMtd.xmPct].map(v => v || 0),
     fmtPctCapped,
@@ -7438,6 +7471,7 @@ function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
     v => `${(v * 100).toFixed(0)}%`,
     1.2);
   // SPH — per-period plan SPH goal line (excluding GLB)
+  drawCorpCard(slide, col3X, topY, chartW, chartH);
   drawChart(col3X, topY, chartW, chartH, "SPH Attainment",
     [q4Sph.sph, p2Sph.sph, p1Sph.sph, mtdSph.sph],
     v => v.toFixed(2),
@@ -7448,6 +7482,7 @@ function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
   const botY = 4.0;
   const botH = 2.4;
 
+  drawCorpCard(slide, col1X, botY, chartW, botH);
   drawChart(col1X, botY, chartW, botH, "CPS Attainment",
     [q4Sph.cps, p2Sph.cps, p1Sph.cps, mtdSph.cps],
     v => `$${v.toFixed(0)}`,
@@ -7463,6 +7498,7 @@ function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
   {
     const x = col2X, y = botY, w = chartW, h = botH;
     const title = "Scorecard by BP";
+    drawCorpCard(slide, x, y, w, h);
     slide.addText(title, {
       x, y, w, h: 0.3,
       fontSize: 12, color: virgilTheme.bodyText, bold: true, align: "center",
@@ -7471,10 +7507,6 @@ function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
     const axisY = y + 0.35;
     const axisW = w - 0.5;
     const axisH = h - 0.8;
-    slide.addShape("rect", {
-      x: axisX, y: axisY, w: axisW, h: axisH,
-      fill: { color: plotBg }, line: { color: plotBorder, width: 0.5 },
-    });
     const present = vendorVals.filter(v => v > 0);
     const effMax = Math.max(...present, 0.001);
     const scaleMax = effMax * 1.15;
@@ -7506,9 +7538,10 @@ function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
 
   // Insights panel (right)
   const insX = col3X;
+  drawCorpCard(slide, insX, botY, chartW, botH);
   slide.addShape("rect", {
     x: insX, y: botY, w: chartW, h: 0.4,
-    fill: { color: "1E3A8A" },
+    fill: { color: corpPalette.navy },
   });
   slide.addText("Insights", {
     x: insX, y: botY + 0.03, w: chartW, h: 0.35,
@@ -7578,7 +7611,7 @@ function buildCorpQuartileSlide(pres, agentRaw, goalsRaw, priorAgentRaw, priorGo
         });
         return;
       }
-      const qColors = ["16A34A", "F59E0B", "F97316", "DC2626"];
+      const qColors = [corpPalette.q1, corpPalette.q2, corpPalette.q3, corpPalette.q4];
       const summaryRows = [
         [{ text: "Q", options: { bold: true, align: "center", fill: { color: "F3F4F6" } } },
          { text: "Units", options: { bold: true, align: "center", fill: { color: "F3F4F6" } } },
@@ -7601,10 +7634,10 @@ function buildCorpQuartileSlide(pres, agentRaw, goalsRaw, priorAgentRaw, priorGo
       const matrixRows = [
         [
           { text: "Tenure", options: { bold: true, align: "center", fill: { color: "F3F4F6" } } },
-          { text: "A", options: { bold: true, align: "center", fill: { color: "16A34A" }, color: "FFFFFF" } },
-          { text: "B", options: { bold: true, align: "center", fill: { color: "F59E0B" }, color: "FFFFFF" } },
-          { text: "C", options: { bold: true, align: "center", fill: { color: "F97316" }, color: "FFFFFF" } },
-          { text: "D", options: { bold: true, align: "center", fill: { color: "DC2626" }, color: "FFFFFF" } },
+          { text: "A", options: { bold: true, align: "center", fill: { color: corpPalette.q1 }, color: "FFFFFF" } },
+          { text: "B", options: { bold: true, align: "center", fill: { color: corpPalette.q2 }, color: "FFFFFF" } },
+          { text: "C", options: { bold: true, align: "center", fill: { color: corpPalette.q3 }, color: "FFFFFF" } },
+          { text: "D", options: { bold: true, align: "center", fill: { color: corpPalette.q4 }, color: "FFFFFF" } },
           { text: "Part %", options: { bold: true, align: "center", fill: { color: "F3F4F6" } } },
         ],
         ...section.tenureMatrix.map(row => {
@@ -7633,15 +7666,10 @@ function buildCorpQuartileSlide(pres, agentRaw, goalsRaw, priorAgentRaw, priorGo
     drawSection(4.55, "XI Participation (GLN)", report.xi);
   };
 
+  drawCorpCard(slide, col1X, 1.5, colW, 5.55);
   drawQuartileColumn(col1X, `Month Reporting On — ${reportingPeriodLabel}`, reporting);
+  drawCorpCard(slide, col2X, 1.5, colW, 5.55);
   drawQuartileColumn(col2X, `MTD — ${mtdLabel}`, mtd);
-
-  // Vertical divider between the two columns
-  const dividerX = (col1X + colW + col2X) / 2;
-  slide.addShape("line", {
-    x: dividerX, y: 1.25, w: 0, h: 5.8,
-    line: { color: "D1D5DB", width: 1 },
-  });
 }
 
 function buildCorpCampaignHoursSlide(pres, agentRaw, goalsRaw, priorAgentRaw, priorGoalsRaw, reportingMonthLabel, corpPriorMonthAgentRaw, corpPriorMonthGoalsRaw) {
@@ -7665,11 +7693,11 @@ function buildCorpCampaignHoursSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
 
   const fundingOrder = ["Growth", "National", "HQ", "Marketing"];
   const fundingColors = {
-    Growth: "7C3AED",
-    National: "1E3A8A",
-    HQ: "2563EB",
-    Marketing: "16A34A",
-    Total: "9CA3AF",
+    Growth: corpPalette.fundGrowth,
+    National: corpPalette.fundNational,
+    HQ: corpPalette.fundHQ,
+    Marketing: corpPalette.fundMarketing,
+    Total: corpPalette.fundTotal,
   };
 
   // Full month names
@@ -7687,7 +7715,7 @@ function buildCorpCampaignHoursSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
     // Rounded container
     slide.addShape("roundRect", {
       x: containerX, y: yTop, w: containerW, h: blockH,
-      fill: { color: "FFFFFF" }, line: { color: "E5E7EB", width: 1 },
+      fill: { color: corpPalette.surface }, line: { color: corpPalette.cardBorder, width: 1 },
       rectRadius: 0.12,
     });
     // Header
