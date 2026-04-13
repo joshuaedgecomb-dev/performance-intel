@@ -7757,7 +7757,7 @@ function buildCorpCampaignHoursSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
     });
     // Header
     slide.addText(`Total ${monFull(label)} Monthly Budgeted Hours = ${Math.round(data.totalPlan).toLocaleString()}`, {
-      x: containerX, y: yTop + 0.1, w: containerW, h: 0.3,
+      x: containerX, y: yTop + 0.02, w: containerW, h: 0.3,
       fontSize: 12, color: virgilTheme.bodyText, bold: true, align: "center",
     });
     // Legend
@@ -7860,11 +7860,6 @@ function buildCorpCampaignHoursSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
 
   drawMonthBlock(1.25, reportingPeriodLabel, reporting, false);
   drawMonthBlock(3.2, mtdLabel, mtd, true);
-  // Small annotation explaining MTD pacing
-  slide.addText("MTD % projects actuals to full-month run rate based on business days elapsed", {
-    x: 0.5, y: 3.2 + 1.85 + 0.05, w: 12.3, h: 0.2,
-    fontSize: 8, color: corpPalette.inkSubtle, italic: true, align: "center",
-  });
 
   // Bottom: Campaign Outlook / Base Management breakout
   const breakoutY = 5.1;
