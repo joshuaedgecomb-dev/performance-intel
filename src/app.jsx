@@ -7108,6 +7108,8 @@ function buildCampaignMonthDetail(campaign, agentRaw, goalsRaw, monthFilter, ext
 
 // Pre-compute sums used as denominators for % of Total Leads / % of Total Hours on Slide 6.
 // Returns { sumActualLeads, sumHoursActual } from the full month of data (all campaigns combined).
+// NOTE: goalsRaw is expected to be month-segregated (one CSV per month). sumActualLeads does
+// NOT apply monthFilter — every row in goalsRaw is summed. Pass a combined goals CSV at your peril.
 function buildCampaignMonthTotals(agentRaw, goalsRaw, monthFilter) {
   let sumActualLeads = 0, sumHoursActual = 0;
   if (agentRaw && agentRaw.trim()) {
