@@ -410,7 +410,7 @@ Place immediately after `buildExtendedAgentLookup` (the function you added in Ta
 // Produce the list of distinct campaigns that had activity (hours or goal) in either month.
 // Returns an array of { name, rocs: [string, ...], hoursFeb, hoursMar, goalFeb, goalMar }.
 // Sorted alphabetically by campaign name for stable, review-friendly slide order.
-function buildCampaignUniverse(priorAgentRaw, priorGoalsRaw, agentRaw, goalsRaw, priorMonthLabel, reportingMonthLabel) {
+function buildCampaignUniverse(priorAgentRaw, priorGoalsRaw, agentRaw, goalsRaw) {
   const agentsPrior = priorAgentRaw && priorAgentRaw.trim() ? parseCSV(priorAgentRaw) : [];
   const agentsCurr = agentRaw && agentRaw.trim() ? parseCSV(agentRaw) : [];
   const goalsPrior = priorGoalsRaw && priorGoalsRaw.trim() ? parseCSV(priorGoalsRaw) : [];
@@ -826,8 +826,7 @@ In `buildVirgilMbrPresentation`, after the Slide 5 `buildCorpCampaignHoursSlide(
   // Slide 6 — Per-Campaign Actual-to-Goal (N slides, one per campaign)
   const campaignUniverse = buildCampaignUniverse(
     options.priorAgentRaw || "", options.priorGoalsRaw || "",
-    options.agentRaw || "", options.goalsRaw || "",
-    priorMonthKey, options.reportingMonthLabel
+    options.agentRaw || "", options.goalsRaw || ""
   );
   const priorFilter = makeMonthFilter(priorMonthKey);
   const currFilter = makeMonthFilter(options.reportingMonthLabel);
@@ -880,13 +879,11 @@ Inside `VirgilMbrExportModal`, near the other `useMemo` parsers, add:
 
 ```jsx
 const campaignUniverse = useMemo(() => {
-  const priorKey = getPriorMonthLabel(reportingMonth);
   return buildCampaignUniverse(
     priorMonthRaw || "", priorMonthGoalsRaw || "",
-    rawAgentCsv || "", goalsRaw || "",
-    priorKey, reportingMonth
+    rawAgentCsv || "", goalsRaw || ""
   );
-}, [priorMonthRaw, priorMonthGoalsRaw, rawAgentCsv, goalsRaw, reportingMonth]);
+}, [priorMonthRaw, priorMonthGoalsRaw, rawAgentCsv, goalsRaw]);
 
 const priorMonthLabelDisplay = useMemo(() => getPriorMonthLabel(reportingMonth), [reportingMonth]);
 ```

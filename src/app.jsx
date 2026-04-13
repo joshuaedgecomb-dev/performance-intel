@@ -6967,7 +6967,7 @@ function buildExtendedAgentLookup(extendedRows, monthFilter) {
 // Produce the list of distinct campaigns that had activity (hours or goal) in either month.
 // Returns an array of { name, rocs: [string, ...], hoursFeb, hoursMar, goalFeb, goalMar }.
 // Sorted alphabetically by campaign name for stable, review-friendly slide order.
-function buildCampaignUniverse(priorAgentRaw, priorGoalsRaw, agentRaw, goalsRaw, priorMonthLabel, reportingMonthLabel) {
+function buildCampaignUniverse(priorAgentRaw, priorGoalsRaw, agentRaw, goalsRaw) {
   const agentsPrior = priorAgentRaw && priorAgentRaw.trim() ? parseCSV(priorAgentRaw) : [];
   const agentsCurr = agentRaw && agentRaw.trim() ? parseCSV(agentRaw) : [];
   const goalsPrior = priorGoalsRaw && priorGoalsRaw.trim() ? parseCSV(priorGoalsRaw) : [];
