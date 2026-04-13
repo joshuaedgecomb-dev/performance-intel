@@ -489,19 +489,21 @@ const GOALS_STORAGE_KEY = "perf_intel_goals_v1";
 const NH_STORAGE_KEY    = "perf_intel_newhires_v1";
 const SHEET_URLS_KEY    = "perf_intel_sheet_urls_v1";
 const PRIOR_MONTH_STORAGE_KEY = "perf_intel_prior_month_v1";
-const DEFAULT_AGENT_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRagC_XDSQ84y25onmWs6MUOZcEdWZNA6fVRRDFUzNWQp3ginYLtOIQsSrwmbAERkOJ-daTvbHqEtoy/pub?gid=667346347&single=true&output=csv";
-const DEFAULT_GOALS_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRagC_XDSQ84y25onmWs6MUOZcEdWZNA6fVRRDFUzNWQp3ginYLtOIQsSrwmbAERkOJ-daTvbHqEtoy/pub?gid=1685208822&single=true&output=csv";
-const DEFAULT_NH_SHEET_URL    = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRagC_XDSQ84y25onmWs6MUOZcEdWZNA6fVRRDFUzNWQp3ginYLtOIQsSrwmbAERkOJ-daTvbHqEtoy/pub?gid=25912283&single=true&output=csv";
-const DEFAULT_PRIOR_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTZkBGVIxieyjBKftqL1oecSaUxRkao-gz2B9q4Z8zCY8hEtSy1M28S00RDCS8JVPgPFXJAv2LbsZru/pub?gid=667346347&single=true&output=csv";
-const DEFAULT_PRIOR_GOALS_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTZkBGVIxieyjBKftqL1oecSaUxRkao-gz2B9q4Z8zCY8hEtSy1M28S00RDCS8JVPgPFXJAv2LbsZru/pub?gid=1685208822&single=true&output=csv";
-const DEFAULT_TNPS_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRagC_XDSQ84y25onmWs6MUOZcEdWZNA6fVRRDFUzNWQp3ginYLtOIQsSrwmbAERkOJ-daTvbHqEtoy/pub?gid=2128252142&single=true&output=csv";
-const DEFAULT_CORP_COACHING_DETAILS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRagC_XDSQ84y25onmWs6MUOZcEdWZNA6fVRRDFUzNWQp3ginYLtOIQsSrwmbAERkOJ-daTvbHqEtoy/pub?gid=875297648&single=true&output=csv";
-const DEFAULT_CORP_COACHING_WEEKLY_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRagC_XDSQ84y25onmWs6MUOZcEdWZNA6fVRRDFUzNWQp3ginYLtOIQsSrwmbAERkOJ-daTvbHqEtoy/pub?gid=671384384&single=true&output=csv";
-const DEFAULT_CORP_LOGIN_BUCKETS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRagC_XDSQ84y25onmWs6MUOZcEdWZNA6fVRRDFUzNWQp3ginYLtOIQsSrwmbAERkOJ-daTvbHqEtoy/pub?gid=583266390&single=true&output=csv";
-const DEFAULT_CORP_PRIOR_QUARTER_AGENT_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTq4wsNJmMf82DO5PWH0reYQE3I_8-NW8YAuav1z5zbs753xJSATuCesxDif_ZVFTj4YjQL_k77y_Sf/pub?gid=31959038&single=true&output=csv";
-const DEFAULT_CORP_PRIOR_QUARTER_GOALS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTq4wsNJmMf82DO5PWH0reYQE3I_8-NW8YAuav1z5zbs753xJSATuCesxDif_ZVFTj4YjQL_k77y_Sf/pub?gid=1361915394&single=true&output=csv";
-const DEFAULT_CORP_PRIOR_MONTH_AGENT_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQRwJCdrvxQZPM78VX1jKEXjnn5C1yUGQ-dMPXXZ6KYotmkU7W_IZZi1i8IZ_CHBV4MdkYqH_KCptul/pub?gid=667346347&single=true&output=csv";
-const DEFAULT_CORP_PRIOR_MONTH_GOALS_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQRwJCdrvxQZPM78VX1jKEXjnn5C1yUGQ-dMPXXZ6KYotmkU7W_IZZi1i8IZ_CHBV4MdkYqH_KCptul/pub?gid=112805420&single=true&output=csv";
+// Data source URLs are loaded from .env.local (gitignored) via Vite's import.meta.env.
+// To configure: copy .env.example to .env.local and fill in your published Google Sheet CSV URLs.
+const DEFAULT_AGENT_SHEET_URL = import.meta.env.VITE_DEFAULT_AGENT_SHEET_URL || "";
+const DEFAULT_GOALS_SHEET_URL = import.meta.env.VITE_DEFAULT_GOALS_SHEET_URL || "";
+const DEFAULT_NH_SHEET_URL = import.meta.env.VITE_DEFAULT_NH_SHEET_URL || "";
+const DEFAULT_PRIOR_SHEET_URL = import.meta.env.VITE_DEFAULT_PRIOR_SHEET_URL || "";
+const DEFAULT_PRIOR_GOALS_SHEET_URL = import.meta.env.VITE_DEFAULT_PRIOR_GOALS_SHEET_URL || "";
+const DEFAULT_TNPS_SHEET_URL = import.meta.env.VITE_DEFAULT_TNPS_SHEET_URL || "";
+const DEFAULT_CORP_COACHING_DETAILS_URL = import.meta.env.VITE_DEFAULT_CORP_COACHING_DETAILS_URL || "";
+const DEFAULT_CORP_COACHING_WEEKLY_URL = import.meta.env.VITE_DEFAULT_CORP_COACHING_WEEKLY_URL || "";
+const DEFAULT_CORP_LOGIN_BUCKETS_URL = import.meta.env.VITE_DEFAULT_CORP_LOGIN_BUCKETS_URL || "";
+const DEFAULT_CORP_PRIOR_QUARTER_AGENT_URL = import.meta.env.VITE_DEFAULT_CORP_PRIOR_QUARTER_AGENT_URL || "";
+const DEFAULT_CORP_PRIOR_QUARTER_GOALS_URL = import.meta.env.VITE_DEFAULT_CORP_PRIOR_QUARTER_GOALS_URL || "";
+const DEFAULT_CORP_PRIOR_MONTH_AGENT_URL = import.meta.env.VITE_DEFAULT_CORP_PRIOR_MONTH_AGENT_URL || "";
+const DEFAULT_CORP_PRIOR_MONTH_GOALS_URL = import.meta.env.VITE_DEFAULT_CORP_PRIOR_MONTH_GOALS_URL || "";
 const TNPS_STORAGE_KEY = "perf_intel_tnps_v1";
 
 

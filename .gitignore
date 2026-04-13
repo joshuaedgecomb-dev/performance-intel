@@ -14,3 +14,8 @@ Project/
 MBR Deck/
 Virgil MBR Deck/
 performance-intel-training.md
+
+# Local env (Corp MBR data source URLs, etc.) — contains sensitive Google Sheet URLs
+.env
+.env.*.local
+.env.local
