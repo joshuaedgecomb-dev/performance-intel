@@ -8040,6 +8040,7 @@ function CorpMbrDataSourcesModal({
   corpPriorMonthGoalsUrl, setCorpPriorMonthGoalsUrl,
   priorQuarterAgentUrl, setPriorQuarterAgentUrl,
   priorQuarterGoalsUrl, setPriorQuarterGoalsUrl,
+  corpExtendedAgentUrl, setCorpExtendedAgentUrl,
   onClose
 }) {
   const UrlRow = ({ label, value, setValue, hint }) => (
@@ -8074,6 +8075,8 @@ function CorpMbrDataSourcesModal({
           hint="Q4 2025 agent-level stats. Used by Slide 3 comparison table." />
         <UrlRow label="Prior Quarter — Goals" value={priorQuarterGoalsUrl} setValue={setPriorQuarterGoalsUrl}
           hint="Q4 2025 goals CSV. Needed to compute Q4 attainment." />
+        <UrlRow label="Extended Agent Stats (Dials / Contacts / Finals)" value={corpExtendedAgentUrl} setValue={setCorpExtendedAgentUrl}
+          hint="Per-agent-per-day richer stats. Drives Slide 6 Contact Rate + Lead Penetration." />
         <div style={{ display: "flex", gap: 8, marginTop: 20, justifyContent: "flex-end" }}>
           <button onClick={onClose} style={{ padding: "8px 14px", border: "none", background: "#7C3AED", color: "#fff", borderRadius: 6, cursor: "pointer", fontWeight: 600 }}>Close</button>
         </div>
@@ -16511,6 +16514,8 @@ export default function App() {
           setPriorQuarterAgentUrl={setPriorQuarterAgentUrl}
           priorQuarterGoalsUrl={priorQuarterGoalsUrl}
           setPriorQuarterGoalsUrl={setPriorQuarterGoalsUrl}
+          corpExtendedAgentUrl={corpExtendedAgentUrl}
+          setCorpExtendedAgentUrl={setCorpExtendedAgentUrl}
           onClose={() => setShowCorpDataSourcesModal(false)}
         />
       )}
