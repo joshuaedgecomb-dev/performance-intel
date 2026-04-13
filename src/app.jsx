@@ -7391,9 +7391,9 @@ function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
   const botH = 2.4;
 
   drawChart(col1X, botY, chartW, botH, "CPS Attainment",
-    [q4.cps, colP2.cps, colP1.cps, colMtd.cps],
+    [q4Sph.cps, p2Sph.cps, p1Sph.cps, mtdSph.cps],
     v => `$${v.toFixed(0)}`,
-    [q4.planCps, colP2.planCps, colP1.planCps, colMtd.planCps],
+    [q4Sph.planCps, p2Sph.planCps, p1Sph.planCps, mtdSph.planCps],
     v => `$${v.toFixed(0)}`);
 
   // Scorecard by BP (4-bar chart from manual vendor scores)
