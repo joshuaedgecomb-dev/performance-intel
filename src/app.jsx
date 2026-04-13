@@ -8777,6 +8777,13 @@ function buildVirgilMbrPresentation(perf, options) {
   // Slide 7 — Customer Experience (tNPS)
   buildCorpTnpsSlide(pres, perf, options.reportingMonthLabel, (options.insights && options.insights.slide7) || "");
 
+  // Slide 8 — Partner Experience
+  const partnerStats = buildPartnerExperienceStats(options.newHiresRaw || "", perf && perf.bpLookup, options.reportingMonthLabel);
+  buildCorpPartnerExperienceSlide(pres, partnerStats,
+    options.reportingMonthLabel,
+    (options.insights && options.insights.slide8Support) || "",
+    (options.insights && options.insights.slide8Incentives) || "");
+
   return pres;
 }
 
@@ -9116,6 +9123,29 @@ Write bullet-point style insights focused on movement vs prior, gaps vs 75% goal
             rows={3}
             style={{ display: "block", width: "100%", marginTop: 6, padding: 8, border: "1px solid #d1d5db", borderRadius: 4, fontSize: 12, fontFamily: "inherit", resize: "vertical" }}
           />
+        </div>
+
+        <div style={{ marginTop: 16, padding: 12, background: "#fafafa", borderRadius: 6, border: "1px solid #d1d5db" }}>
+          <div style={{ fontSize: 13, fontWeight: 600 }}>Slide 8 — Partner Experience</div>
+          <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>Two panels on the final slide. Incentives newline-split into bullets.</div>
+          <label style={{ display: "block", marginTop: 8, fontSize: 11, color: "#374151" }}>
+            How Can We Support You?
+            <textarea
+              value={(insights && insights.slide8Support) || ""}
+              onChange={e => setInsights({ ...(insights || {}), slide8Support: e.target.value })}
+              rows={3}
+              style={{ display: "block", width: "100%", marginTop: 4, padding: 8, border: "1px solid #d1d5db", borderRadius: 4, fontSize: 12, fontFamily: "inherit", resize: "vertical" }}
+            />
+          </label>
+          <label style={{ display: "block", marginTop: 8, fontSize: 11, color: "#374151" }}>
+            Current Incentives (one bullet per line)
+            <textarea
+              value={(insights && insights.slide8Incentives) || ""}
+              onChange={e => setInsights({ ...(insights || {}), slide8Incentives: e.target.value })}
+              rows={3}
+              style={{ display: "block", width: "100%", marginTop: 4, padding: 8, border: "1px solid #d1d5db", borderRadius: 4, fontSize: 12, fontFamily: "inherit", resize: "vertical" }}
+            />
+          </label>
         </div>
 
         <div style={{ marginTop: 16, padding: 12, background: "#fafafa", borderRadius: 6, border: "1px solid #d1d5db" }}>
