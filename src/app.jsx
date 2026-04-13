@@ -7142,6 +7142,70 @@ function filterTnpsToMonth(surveys, monthLabel) {
   return surveys.filter(s => s.month === targetKey);
 }
 
+// For Slide 8: compute hires, departures, and retention for a given reporting month.
+// rosterRaw MUST be the raw CSV text (not the 180-day-filtered parseNewHires output).
+// bpLookup is the existing BP→site map (perf.bpLookup).
+function buildPartnerExperienceStats(rosterRaw, bpLookup, reportingMonthLabel) {
+  const empty = { hires: [], departures: [], activeAtStart: 0, retentionRate: null, monthStart: null, monthEnd: null };
+  if (!rosterRaw || !rosterRaw.trim()) return empty;
+
+  // Parse reporting month label to a {year, month} pair
+  const m = String(reportingMonthLabel || "").trim().match(/^([A-Za-z]{3,})\s*'?(\d{2,4})$/);
+  if (!m) return empty;
+  const monKey = { jan:0, feb:1, mar:2, apr:3, may:4, jun:5, jul:6, aug:7, sep:8, oct:9, nov:10, dec:11 }[m[1].slice(0, 3).toLowerCase()];
+  if (monKey === undefined) return empty;
+  const yr = Number(m[2].length === 4 ? m[2] : `20${m[2]}`);
+  const monthStart = new Date(yr, monKey, 1);
+  const monthEnd = new Date(yr, monKey + 1, 0); // last day of month
+  const inMonth = (dateStr) => {
+    if (!dateStr) return false;
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return false;
+    return d >= monthStart && d <= monthEnd;
+  };
+
+  const rows = parseCSV(rosterRaw);
+  const siteOfBp = (bp) => {
+    if (!bp || !bpLookup) return "Unknown";
+    const rec = bpLookup[bp.toLowerCase()] || bpLookup[bp];
+    if (!rec) return "Unknown";
+    // bpLookup returns NTID→site in some builds; infer from region field if present
+    return rec.site || rec.region || "Unknown";
+  };
+
+  const hires = [];
+  const departures = [];
+  let activeAtStart = 0;
+
+  for (const r of rows) {
+    const first = (r["First Name"] || r["First"] || "").trim();
+    const last = (r["Last Name"] || r["Last"] || "").trim();
+    const name = [first, last].filter(Boolean).join(" ") || (r["AgentName"] || r["Name"] || "").trim();
+    if (!name) continue;
+    const bp = (r["BP"] || "").trim();
+    const site = siteOfBp(bp);
+    const hireDateStr = (r["Hire Date"] || r["StartDate"] || r["Start Date"] || "").trim();
+    const endDateStr = (r["End Date"] || r["EndDate"] || "").trim();
+    const hireDate = hireDateStr ? new Date(hireDateStr) : null;
+    const endDate = endDateStr ? new Date(endDateStr) : null;
+
+    // Active at month start: hired before month, not ended before month
+    const hiredBeforeStart = hireDate && !isNaN(hireDate.getTime()) && hireDate < monthStart;
+    const endedBeforeStart = endDate && !isNaN(endDate.getTime()) && endDate < monthStart;
+    if (hiredBeforeStart && !endedBeforeStart) activeAtStart++;
+
+    if (hireDate && inMonth(hireDateStr)) {
+      hires.push({ name, site, hireDate: hireDateStr });
+    }
+    if (endDate && inMonth(endDateStr)) {
+      departures.push({ name, site, endDate: endDateStr });
+    }
+  }
+
+  const retentionRate = activeAtStart > 0 ? ((activeAtStart - departures.length) / activeAtStart) * 100 : null;
+  return { hires, departures, activeAtStart, retentionRate, monthStart, monthEnd };
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // CORP MBR — Brand Helpers
 // ═══════════════════════════════════════════════════════════════════
