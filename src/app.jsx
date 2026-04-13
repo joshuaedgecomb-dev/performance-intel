@@ -7023,6 +7023,109 @@ function buildCampaignUniverse(priorAgentRaw, priorGoalsRaw, agentRaw, goalsRaw)
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+// Compute the full Slide 6 column (GOALS, BUDGET, ACTUAL, VARIANCE, % GOAL) for a single campaign + month.
+// Inputs:
+//   campaign:   { name, rocs: [string, ...] }
+//   agentRaw:   raw agent CSV text for the month
+//   goalsRaw:   raw goals CSV text for the month
+//   monthFilter: (dateStr) => boolean (or null to accept all rows in agentRaw)
+//   extendedLookup: { [roc]: { dials, contacts, finals } } (empty object if unavailable)
+//   totalsForMonth: { sumActualLeads, sumHoursActual } — used for % of Total Leads / % of Total Hours
+// Returns an object of raw values; downstream formatter turns it into table cells.
+function buildCampaignMonthDetail(campaign, agentRaw, goalsRaw, monthFilter, extendedLookup, totalsForMonth) {
+  const HOURLY_COST = 19.77;
+  const result = {
+    hoursActual: 0, hoursGoal: 0,
+    salesActual: 0, salesGoal: 0,
+    xiActual: 0, xiGoal: 0,
+    xmActual: 0, xmGoal: 0,
+    videoActual: 0, videoGoal: 0,
+    xhActual: 0, xhGoal: 0,
+    phoneActual: 0, phoneGoal: 0,
+    actualLeads: 0,
+    dials: 0, contacts: 0, finals: 0,
+  };
+  if (!agentRaw || !agentRaw.trim()) return result;
+
+  const rocSet = new Set(campaign.rocs);
+  const agentRows = parseCSV(agentRaw);
+  for (const r of agentRows) {
+    if (monthFilter && !monthFilter((r["Date"] || "").trim())) continue;
+    const roc = (r["Job"] || "").trim();
+    if (!rocSet.has(roc)) continue;
+    result.hoursActual += Number(r["Hours"]) || 0;
+    result.salesActual += Number(r["Goals"]) || 0;
+    result.xiActual += Number(r["New XI"]) || 0;
+    result.xmActual += Number(r["XM Lines"]) || 0;
+    result.videoActual += (Number(r["NewVideo"]) || 0) + (Number(r["UpgradeVideo"]) || 0);
+    // XH = XFinity Home / security
+    result.xhActual += (Number(r["NewSecurity"]) || 0) + (Number(r["UpgradeSecurity"]) || 0);
+    result.phoneActual += (Number(r["NewVoice"]) || 0) + (Number(r["UpgradeVoice"]) || 0);
+  }
+
+  if (goalsRaw && goalsRaw.trim()) {
+    const goalRows = parseCSV(goalsRaw);
+    for (const g of goalRows) {
+      const name = (g["Campaign"] || g["Campaign Name"] || "").trim();
+      if (name !== campaign.name) continue;
+      result.hoursGoal += Number(g["Hours Goal"]) || 0;
+      result.salesGoal += Number(g["Projected Sales"] || g["Sales Goal"] || g["Goals"]) || 0;
+      result.xiGoal += Number(g["HSD GOAL"] || g["HSD Sell In Goal"]) || 0;
+      result.xmGoal += Number(g["XM GOAL"] || g["XM Sell In Goal"]) || 0;
+      result.videoGoal += Number(g["VIDEO GOAL"] || g["Video Sell In Goal"]) || 0;
+      result.xhGoal += Number(g["XH GOAL"] || g["XH Sell In Goal"]) || 0;
+      result.phoneGoal += Number(g["Projected Phone"] || g["Phone Sell In Goal"]) || 0;
+      result.actualLeads += Number(g["Actual Leads"]) || 0;
+    }
+  }
+
+  // Extended stats rollup (one entry per ROC)
+  for (const roc of campaign.rocs) {
+    const ext = extendedLookup[roc];
+    if (!ext) continue;
+    result.dials += ext.dials;
+    result.contacts += ext.contacts;
+    result.finals += ext.finals;
+  }
+
+  // Derived
+  result.budget = result.hoursActual * HOURLY_COST;
+  result.budgetGoal = result.hoursGoal * HOURLY_COST;
+  result.rgusActual = result.xiActual + result.xmActual + result.videoActual + result.xhActual + result.phoneActual;
+  result.rgusGoal = result.xiGoal + result.xmGoal + result.videoGoal + result.xhGoal + result.phoneGoal;
+  result.cps = result.salesActual ? result.budget / result.salesActual : 0;
+  result.cprgu = result.rgusActual ? result.budget / result.rgusActual : 0;
+  result.sph = result.hoursActual ? result.salesActual / result.hoursActual : 0;
+  result.rguph = result.hoursActual ? result.rgusActual / result.hoursActual : 0;
+  result.rguPerSale = result.salesActual ? result.rgusActual / result.salesActual : 0;
+  result.salesPerLead = result.actualLeads ? result.salesActual / result.actualLeads : 0;
+  result.pctTotalLeads = totalsForMonth && totalsForMonth.sumActualLeads ? result.actualLeads / totalsForMonth.sumActualLeads : 0;
+  result.pctTotalHours = totalsForMonth && totalsForMonth.sumHoursActual ? result.hoursActual / totalsForMonth.sumHoursActual : 0;
+  result.contactRate = result.actualLeads ? (result.contacts / result.actualLeads) * 100 : null;
+  result.leadPenetration = result.actualLeads ? (result.finals / result.actualLeads) * 100 : null;
+  return result;
+}
+
+// Pre-compute sums used as denominators for % of Total Leads / % of Total Hours on Slide 6.
+// Returns { sumActualLeads, sumHoursActual } from the full month of data (all campaigns combined).
+function buildCampaignMonthTotals(agentRaw, goalsRaw, monthFilter) {
+  let sumActualLeads = 0, sumHoursActual = 0;
+  if (agentRaw && agentRaw.trim()) {
+    const rows = parseCSV(agentRaw);
+    for (const r of rows) {
+      if (monthFilter && !monthFilter((r["Date"] || "").trim())) continue;
+      sumHoursActual += Number(r["Hours"]) || 0;
+    }
+  }
+  if (goalsRaw && goalsRaw.trim()) {
+    const rows = parseCSV(goalsRaw);
+    for (const g of rows) {
+      sumActualLeads += Number(g["Actual Leads"]) || 0;
+    }
+  }
+  return { sumActualLeads, sumHoursActual };
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // CORP MBR — Brand Helpers
 // ═══════════════════════════════════════════════════════════════════
