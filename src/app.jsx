@@ -6510,6 +6510,7 @@ function parseExtendedAgentStats(rawCsv) {
   const rows = parseCSV(rawCsv);
   return rows.map(r => ({
     roc: (r["Job"] || "").trim(),
+    jobType: (r["Job Type"] || "").trim(),
     date: (r["Date"] || "").trim(),
     agentName: (r["AgentName"] || "").trim(),
     dials: Number(r["Dials"]) || 0,
@@ -6949,22 +6950,24 @@ function buildCampaignHoursByFunding(agentRaw, goalsRaw, monthFilter) {
 // If the CSV is empty, returns {} — downstream callers render "—" for Contact Rate / Lead Penetration.
 // goals/hours are intentionally NOT rolled up here — hours come from buildCampaignHoursByFunding
 // and goals are handled via the main Goals CSV per Slide 6 spec.
+// Returns { [jobType]: { dials, contacts, finals } } for the given month filter.
 function buildExtendedAgentLookup(extendedRows, monthFilter) {
   if (!Array.isArray(extendedRows) || extendedRows.length === 0) return {};
   const out = {};
   for (const r of extendedRows) {
     if (monthFilter && !monthFilter(r.date)) continue;
-    if (!r.roc) continue;
-    if (!out[r.roc]) out[r.roc] = { dials: 0, contacts: 0, finals: 0 };
-    out[r.roc].dials += r.dials;
-    out[r.roc].contacts += r.contacts;
-    out[r.roc].finals += r.finals;
+    const key = r.jobType || "";
+    if (!key) continue;
+    if (!out[key]) out[key] = { dials: 0, contacts: 0, finals: 0 };
+    out[key].dials += r.dials;
+    out[key].contacts += r.contacts;
+    out[key].finals += r.finals;
   }
   return out;
 }
 
-// Produce the list of distinct campaigns that had activity (hours or goal) in either
-// reporting month or MTD month. Returns { name, rocs: [string, ...], hoursReporting, hoursMtd, goalReporting, goalMtd }.
+// Produce the list of GL campaigns (Job Types matching an MBR category) active in reporting or MTD month.
+// Returns an array of { name, category, hoursReporting, hoursMtd, goalReporting, goalMtd }.
 // Sorted alphabetically by campaign name for stable, review-friendly slide order.
 function buildCampaignUniverse(agentRaw, goalsRaw, reportingMonthLabel, mtdLabel) {
   const agentRows = agentRaw && agentRaw.trim() ? parseCSV(agentRaw) : [];
@@ -6972,50 +6975,42 @@ function buildCampaignUniverse(agentRaw, goalsRaw, reportingMonthLabel, mtdLabel
   const reportingFilter = makeMonthFilter(reportingMonthLabel);
   const mtdFilter = makeMonthFilter(mtdLabel);
 
-  // Map ROC → { campaignName, hoursReporting, hoursMtd, goalReporting, goalMtd, rocs: Set }
-  // Goals CSV typically carries monthly targets; apply the same goalsRaw to both columns
-  // (Phase 2 Slide 5 follows this convention — per-month budget is the same static target).
-  const byRoc = {};
-  for (const g of goalsRows) {
-    const name = (g["Campaign"] || g["Campaign Name"] || "").trim();
-    if (!name) continue;
-    const rocList = (g["ROC Numbers"] || "").split(",").map(s => s.trim()).filter(Boolean);
-    const hoursGoal = Number(g["Hours Goal"]) || 0;
-    for (const roc of rocList) {
-      if (!byRoc[roc]) byRoc[roc] = { name, rocs: new Set([roc]), hoursReporting: 0, hoursMtd: 0, goalReporting: 0, goalMtd: 0 };
-      byRoc[roc].name = name;
-      byRoc[roc].rocs.add(roc);
-      byRoc[roc].goalReporting += hoursGoal;
-      byRoc[roc].goalMtd += hoursGoal;
-    }
-  }
+  const byJobType = {};
+  const keep = (name) => {
+    const jt = (name || "").trim();
+    if (!jt || jt === "Job Type" || jt === "Not Found" || jt === "Unknown") return null;
+    const category = getMbrCategory(jt);
+    if (category === jt) return null; // Not a recognized GL category
+    return category;
+  };
 
   for (const r of agentRows) {
-    const roc = (r["Job"] || "").trim();
-    if (!roc) continue;
+    const jobType = (r["Job Type"] || "").trim();
+    const category = keep(jobType);
+    if (!category) continue;
     const dateStr = (r["Date"] || "").trim();
     const hours = Number(r["Hours"]) || 0;
-    if (!byRoc[roc]) byRoc[roc] = { name: roc, rocs: new Set([roc]), hoursReporting: 0, hoursMtd: 0, goalReporting: 0, goalMtd: 0 };
-    if (reportingFilter(dateStr)) byRoc[roc].hoursReporting += hours;
-    if (mtdFilter(dateStr)) byRoc[roc].hoursMtd += hours;
+    if (!byJobType[jobType]) {
+      byJobType[jobType] = { name: jobType, category, hoursReporting: 0, hoursMtd: 0, goalReporting: 0, goalMtd: 0 };
+    }
+    if (reportingFilter(dateStr)) byJobType[jobType].hoursReporting += hours;
+    if (mtdFilter(dateStr)) byJobType[jobType].hoursMtd += hours;
   }
 
-  // Collapse ROCs into unique campaign names
-  const byName = {};
-  for (const entry of Object.values(byRoc)) {
-    if (!entry.name) continue;
-    const key = entry.name;
-    if (!byName[key]) byName[key] = { name: key, rocs: new Set(), hoursReporting: 0, hoursMtd: 0, goalReporting: 0, goalMtd: 0 };
-    for (const roc of entry.rocs) byName[key].rocs.add(roc);
-    byName[key].hoursReporting += entry.hoursReporting;
-    byName[key].hoursMtd += entry.hoursMtd;
-    byName[key].goalReporting += entry.goalReporting;
-    byName[key].goalMtd += entry.goalMtd;
+  for (const g of goalsRows) {
+    const name = (g["Campaign"] || g["Campaign Name"] || "").trim();
+    const category = keep(name);
+    if (!category) continue;
+    const hoursGoal = Number(g["Hours Goal"]) || 0;
+    if (!byJobType[name]) {
+      byJobType[name] = { name, category, hoursReporting: 0, hoursMtd: 0, goalReporting: 0, goalMtd: 0 };
+    }
+    byJobType[name].goalReporting += hoursGoal;
+    byJobType[name].goalMtd += hoursGoal;
   }
 
-  return Object.values(byName)
+  return Object.values(byJobType)
     .filter(c => c.hoursReporting > 0 || c.hoursMtd > 0 || c.goalReporting > 0 || c.goalMtd > 0)
-    .map(c => ({ ...c, rocs: [...c.rocs].sort() }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
@@ -7043,12 +7038,12 @@ function buildCampaignMonthDetail(campaign, agentRaw, goalsRaw, monthFilter, ext
   };
   if (!agentRaw || !agentRaw.trim()) return result;
 
-  const rocSet = new Set(campaign.rocs);
+  const targetJobType = campaign.name;
   const agentRows = parseCSV(agentRaw);
   for (const r of agentRows) {
     if (monthFilter && !monthFilter((r["Date"] || "").trim())) continue;
-    const roc = (r["Job"] || "").trim();
-    if (!rocSet.has(roc)) continue;
+    const jobType = (r["Job Type"] || "").trim();
+    if (jobType !== targetJobType) continue;
     result.hoursActual += Number(r["Hours"]) || 0;
     result.salesActual += Number(r["Goals"]) || 0;
     result.xiActual += Number(r["New XI"]) || 0;
@@ -7075,10 +7070,9 @@ function buildCampaignMonthDetail(campaign, agentRaw, goalsRaw, monthFilter, ext
     }
   }
 
-  // Extended stats rollup (one entry per ROC)
-  for (const roc of campaign.rocs) {
-    const ext = extendedLookup[roc];
-    if (!ext) continue;
+  // Extended stats rollup (keyed by Job Type)
+  const ext = extendedLookup[campaign.name];
+  if (ext) {
     result.dials += ext.dials;
     result.contacts += ext.contacts;
     result.finals += ext.finals;
@@ -8289,8 +8283,9 @@ function buildCorpCampaignDetailSlide(pres, campaign, detailReporting, detailMtd
   virgilBrandBars(pres, slide);
 
   // Eyebrow + title
-  slide.addText("OPERATIONAL PERFORMANCE", {
-    x: 0.5, y: 0.35, w: 6, h: 0.25,
+  const categoryLabel = (campaign.category || "OPERATIONAL PERFORMANCE").toUpperCase();
+  slide.addText(`OPERATIONAL PERFORMANCE  ·  ${categoryLabel}`, {
+    x: 0.5, y: 0.35, w: 12, h: 0.25,
     fontSize: 10, color: virgilTheme.eyebrow, bold: true, charSpacing: 2,
   });
   slide.addText(`Actual to Goal – ${campaign.name}`, {
