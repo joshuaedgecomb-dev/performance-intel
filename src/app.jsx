@@ -7826,6 +7826,7 @@ function VirgilMbrExportModal({
   const [scorecardDataUrl, setScorecardDataUrl] = useState("");
   const [scorecardExtractLoading, setScorecardExtractLoading] = useState(false);
   const [scorecardExtractError, setScorecardExtractError] = useState("");
+  const [vendorScores, setVendorScores] = useState({ Results: "", GTCX: "", GCS: "", Avantive: "" });
 
   const handleAutoExtractScorecard = useCallback(async () => {
     if (!scorecardDataUrl) return;
@@ -7876,7 +7877,6 @@ If any vendor is missing or unreadable, use null for that value.`;
     }
   }, [scorecardDataUrl, vendorScores]);
 
-  const [vendorScores, setVendorScores] = useState({ Results: "", GTCX: "", GCS: "", Avantive: "" });
   const scorecardInputRef = useRef(null);
   const handleScorecardUpload = useCallback((file) => {
     if (!file) return;
