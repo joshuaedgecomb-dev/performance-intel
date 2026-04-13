@@ -8206,6 +8206,77 @@ function formatCampaignDetailTable(detail, columnLabel) {
   return [headerRow, ...rows];
 }
 
+// Render a single per-campaign slide for Slide 6 fan-out.
+// detailPrior / detailCurrent are the output of buildCampaignMonthDetail for each month.
+// notes = { feb, march } are the two free-text Performance Notes for this campaign.
+function buildCorpCampaignDetailSlide(pres, campaign, detailPrior, detailCurrent, priorMonthLabel, reportingMonthLabel, notes) {
+  const slide = pres.addSlide();
+  slide.background = { color: virgilTheme.slideBg };
+  virgilBrandBars(pres, slide);
+
+  // Eyebrow + title
+  slide.addText("OPERATIONAL PERFORMANCE", {
+    x: 0.5, y: 0.35, w: 6, h: 0.25,
+    fontSize: 10, color: virgilTheme.eyebrow, bold: true, charSpacing: 2,
+  });
+  slide.addText(`Actual to Goal – ${campaign.name}`, {
+    x: 0.5, y: 0.65, w: 12.3, h: 0.55,
+    fontSize: 22, color: virgilTheme.bodyText, bold: true,
+  });
+
+  // Column sub-titles
+  slide.addText("PREVIOUS MONTH", {
+    x: 0.5, y: 1.3, w: 6, h: 0.25,
+    fontSize: 9, color: virgilTheme.subtle, bold: true, align: "center", charSpacing: 2,
+  });
+  slide.addText("MONTH OF DISCUSSION", {
+    x: 6.8, y: 1.3, w: 6, h: 0.25,
+    fontSize: 9, color: virgilTheme.subtle, bold: true, align: "center", charSpacing: 2,
+  });
+
+  // Two side-by-side tables
+  const priorRows = formatCampaignDetailTable(detailPrior, priorMonthLabel);
+  const currRows = formatCampaignDetailTable(detailCurrent, reportingMonthLabel);
+
+  slide.addTable(priorRows, {
+    x: 0.5, y: 1.55, w: 6.0,
+    colW: [1.55, 0.89, 0.89, 0.89, 0.89, 0.89],
+    rowH: 0.22,
+    border: { type: "solid", pt: 0.5, color: corpPalette.cardBorder },
+    autoPage: false,
+  });
+  slide.addTable(currRows, {
+    x: 6.8, y: 1.55, w: 6.0,
+    colW: [1.55, 0.89, 0.89, 0.89, 0.89, 0.89],
+    rowH: 0.22,
+    border: { type: "solid", pt: 0.5, color: corpPalette.cardBorder },
+    autoPage: false,
+  });
+
+  // Performance Notes panels (bottom)
+  const notesY = 6.3;
+  const panelW = 6.0;
+  const drawNotePanel = (x, title, body) => {
+    slide.addShape("roundRect", {
+      x, y: notesY, w: panelW, h: 0.7,
+      fill: { color: corpPalette.muted },
+      line: { color: corpPalette.cardBorder, width: 0.5 },
+      rectRadius: 0.06,
+    });
+    slide.addText(title, {
+      x: x + 0.1, y: notesY + 0.04, w: panelW - 0.2, h: 0.18,
+      fontSize: 8, color: virgilTheme.eyebrow, bold: true, charSpacing: 1.5,
+    });
+    slide.addText(body || "(no notes entered)", {
+      x: x + 0.1, y: notesY + 0.22, w: panelW - 0.2, h: 0.46,
+      fontSize: 9, color: body ? virgilTheme.bodyText : virgilTheme.subtle,
+      italic: !body, valign: "top",
+    });
+  };
+  drawNotePanel(0.5, `${priorMonthLabel.toUpperCase()} — PERFORMANCE NOTES`, (notes && notes.feb) || "");
+  drawNotePanel(6.8, `${reportingMonthLabel.toUpperCase()} — PERFORMANCE NOTES`, (notes && notes.march) || "");
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // CORP MBR — Orchestrator
 // ═══════════════════════════════════════════════════════════════════
