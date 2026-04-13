@@ -502,7 +502,6 @@ const DEFAULT_CORP_COACHING_WEEKLY_URL = import.meta.env.VITE_DEFAULT_CORP_COACH
 const DEFAULT_CORP_LOGIN_BUCKETS_URL = import.meta.env.VITE_DEFAULT_CORP_LOGIN_BUCKETS_URL || "";
 const DEFAULT_CORP_PRIOR_QUARTER_AGENT_URL = import.meta.env.VITE_DEFAULT_CORP_PRIOR_QUARTER_AGENT_URL || "";
 const DEFAULT_CORP_PRIOR_QUARTER_GOALS_URL = import.meta.env.VITE_DEFAULT_CORP_PRIOR_QUARTER_GOALS_URL || "";
-const DEFAULT_CORP_EXTENDED_AGENT_URL = import.meta.env.VITE_DEFAULT_CORP_EXTENDED_AGENT_URL || "";
 const DEFAULT_CORP_PRIOR_MONTH_AGENT_URL = import.meta.env.VITE_DEFAULT_CORP_PRIOR_MONTH_AGENT_URL || "";
 const DEFAULT_CORP_PRIOR_MONTH_GOALS_URL = import.meta.env.VITE_DEFAULT_CORP_PRIOR_MONTH_GOALS_URL || "";
 const TNPS_STORAGE_KEY = "perf_intel_tnps_v1";
@@ -8800,7 +8799,6 @@ function CorpMbrDataSourcesModal({
   corpPriorMonthGoalsUrl, setCorpPriorMonthGoalsUrl,
   priorQuarterAgentUrl, setPriorQuarterAgentUrl,
   priorQuarterGoalsUrl, setPriorQuarterGoalsUrl,
-  corpExtendedAgentUrl, setCorpExtendedAgentUrl,
   onClose
 }) {
   const UrlRow = ({ label, value, setValue, hint }) => (
@@ -8835,8 +8833,6 @@ function CorpMbrDataSourcesModal({
           hint="Q4 2025 agent-level stats. Used by Slide 3 comparison table." />
         <UrlRow label="Prior Quarter — Goals" value={priorQuarterGoalsUrl} setValue={setPriorQuarterGoalsUrl}
           hint="Q4 2025 goals CSV. Needed to compute Q4 attainment." />
-        <UrlRow label="Extended Agent Stats (Dials / Contacts / Finals)" value={corpExtendedAgentUrl} setValue={setCorpExtendedAgentUrl}
-          hint="Per-agent-per-day richer stats. Drives Slide 6 Contact Rate + Lead Penetration." />
         <div style={{ display: "flex", gap: 8, marginTop: 20, justifyContent: "flex-end" }}>
           <button onClick={onClose} style={{ padding: "8px 14px", border: "none", background: "#7C3AED", color: "#fff", borderRadius: 6, cursor: "pointer", fontWeight: 600 }}>Close</button>
         </div>
@@ -8851,7 +8847,6 @@ function VirgilMbrExportModal({
   rawAgentCsv, goalsRaw, priorMonthRaw, priorMonthGoalsRaw, newHiresRaw,
   priorQuarterAgentRaw, priorQuarterGoalsRaw,
   corpPriorMonthAgentRaw, corpPriorMonthGoalsRaw,
-  corpExtendedAgentRaw,
   insights, setInsights, ollamaAvailable, onClose
 }) {
   const [reportingMonth, setReportingMonth] = useState(() => {
@@ -8939,8 +8934,7 @@ If any vendor is missing or unreadable, use null for that value.`;
   const coachingDetails = useMemo(() => parseCoachingDetails(coachingDetailsRaw), [coachingDetailsRaw]);
   const coachingWeekly = useMemo(() => parseCoachingWeekly(coachingWeeklyRaw), [coachingWeeklyRaw]);
   const loginBuckets = useMemo(() => parseLoginBuckets(loginBucketsRaw), [loginBucketsRaw]);
-  const corpExtendedAgent = useMemo(() => parseExtendedAgentStats(corpExtendedAgentRaw), [corpExtendedAgentRaw]);
-  const hasExtendedAgent = !!(corpExtendedAgentRaw && corpExtendedAgentRaw.trim());
+  const corpExtendedAgent = useMemo(() => parseExtendedAgentStats(rawAgentCsv), [rawAgentCsv]);
 
   const campaignUniverse = useMemo(() => {
     return buildCampaignUniverse(
@@ -9041,7 +9035,6 @@ Write bullet-point style insights focused on movement vs prior, gaps vs 75% goal
           <StatusRow label="Prior Month Goals (Current − 2)" ok={!!(corpPriorMonthGoalsRaw && corpPriorMonthGoalsRaw.trim())} />
           <StatusRow label="Prior Quarter Agent (Q4 2025)" ok={!!(priorQuarterAgentRaw && priorQuarterAgentRaw.trim())} />
           <StatusRow label="Prior Quarter Goals (Q4 2025)" ok={!!(priorQuarterGoalsRaw && priorQuarterGoalsRaw.trim())} />
-          <StatusRow label="Extended Agent Stats (Slide 6 Contact Rate / Lead Penetration)" ok={hasExtendedAgent} />
           <StatusRow label="Scorecard PNG (Slide 3)" ok={!!scorecardDataUrl} />
         </div>
 
@@ -16574,21 +16567,6 @@ export default function App() {
     try { localStorage.setItem("perf_intel_prior_quarter_goals_url_v1", v || ""); } catch(e) {}
   }, []);
 
-  const [corpExtendedAgentUrl, _setCorpExtendedAgentUrl] = useState(() => {
-    try { return localStorage.getItem("perf_intel_corp_extended_agent_url_v1") || DEFAULT_CORP_EXTENDED_AGENT_URL; } catch(e) { return DEFAULT_CORP_EXTENDED_AGENT_URL; }
-  });
-  const setCorpExtendedAgentUrl = useCallback(v => {
-    _setCorpExtendedAgentUrl(v);
-    try { localStorage.setItem("perf_intel_corp_extended_agent_url_v1", v || ""); } catch(e) {}
-  }, []);
-
-  const [corpExtendedAgentRaw, _setCorpExtendedAgentRaw] = useState(() => {
-    try { return localStorage.getItem("perf_intel_corp_extended_agent_v1") || ""; } catch(e) { return ""; }
-  });
-  const setCorpExtendedAgentRaw = useCallback(v => {
-    _setCorpExtendedAgentRaw(v);
-    try { localStorage.setItem("perf_intel_corp_extended_agent_v1", v || ""); } catch(e) {}
-  }, []);
 
   const [priorQuarterAgentRaw, _setPriorQuarterAgentRaw] = useState(() => {
     try { return localStorage.getItem("perf_intel_prior_quarter_agent_v1") || ""; } catch(e) { return ""; }
@@ -17074,25 +17052,6 @@ export default function App() {
     })();
   }, [priorQuarterGoalsUrl]);
 
-  useEffect(() => {
-    if (!corpExtendedAgentUrl) return;
-    (async () => {
-      try {
-        const res = await fetch(corpExtendedAgentUrl);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const text = await res.text();
-        setCorpExtendedAgentRaw(text);
-      } catch(e) {
-        try {
-          const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(corpExtendedAgentUrl)}`);
-          if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
-          setCorpExtendedAgentRaw(await res.text());
-        } catch(e2) {
-          console.error("Corp Extended Agent Stats fetch failed:", e2);
-        }
-      }
-    })();
-  }, [corpExtendedAgentUrl]);
 
   useEffect(() => {
     if (!corpPriorMonthAgentUrl) return;
@@ -17340,7 +17299,6 @@ export default function App() {
           priorQuarterGoalsRaw={priorQuarterGoalsRaw}
           corpPriorMonthAgentRaw={corpPriorMonthAgentRaw}
           corpPriorMonthGoalsRaw={corpPriorMonthGoalsRaw}
-          corpExtendedAgentRaw={corpExtendedAgentRaw}
           insights={corpInsights}
           setInsights={setCorpInsights}
           ollamaAvailable={ollamaAvailable}
@@ -17363,8 +17321,6 @@ export default function App() {
           setPriorQuarterAgentUrl={setPriorQuarterAgentUrl}
           priorQuarterGoalsUrl={priorQuarterGoalsUrl}
           setPriorQuarterGoalsUrl={setPriorQuarterGoalsUrl}
-          corpExtendedAgentUrl={corpExtendedAgentUrl}
-          setCorpExtendedAgentUrl={setCorpExtendedAgentUrl}
           onClose={() => setShowCorpDataSourcesModal(false)}
         />
       )}
