@@ -7347,12 +7347,12 @@ function virgilSlideFrame(pres, slide, options) {
 
   // --- TOP: thin teal→purple gradient bar ---
   slide.addShape("rect", {
-    x: 0, y: 0, w: w * 0.5, h: 0.3,
+    x: 0, y: 0, w: w * 0.5, h: 0.2,
     fill: { color: virgilTheme.gradientLeft },
     line: { color: virgilTheme.gradientLeft, width: 0 },
   });
   slide.addShape("rect", {
-    x: w * 0.5, y: 0, w: w * 0.5, h: 0.3,
+    x: w * 0.5, y: 0, w: w * 0.5, h: 0.2,
     fill: { color: virgilTheme.gradientRight },
     line: { color: virgilTheme.gradientRight, width: 0 },
   });
@@ -7361,18 +7361,18 @@ function virgilSlideFrame(pres, slide, options) {
   if (opts.showTitle !== false) {
     const eyebrowText = opts.eyebrow || "OPERATIONAL PERFORMANCE";
     slide.addText(eyebrowText, {
-      x: 0.5, y: 0.38, w: 9, h: 0.22,
+      x: 0.5, y: 0.22, w: 9, h: 0.22,
       fontSize: 10, fontFace: "Segoe UI", color: virgilTheme.eyebrow, bold: true, charSpacing: 2,
     });
     if (opts.title) {
       slide.addText(opts.title, {
-        x: 0.5, y: 0.62, w: 9, h: 0.55,
+        x: 0.5, y: 0.40, w: 9, h: 0.55,
         fontSize: 24, fontFace: "Segoe UI", color: virgilTheme.bodyText, bold: true,
       });
     }
     // Accent line below title
     slide.addShape("rect", {
-      x: 0.5, y: 1.14, w: 8.0, h: 0.03,
+      x: 0.5, y: 0.92, w: 8.0, h: 0.03,
       fill: { color: virgilTheme.gradientLeft },
       line: { color: virgilTheme.gradientLeft, width: 0 },
     });
@@ -7381,26 +7381,26 @@ function virgilSlideFrame(pres, slide, options) {
   // --- Top-right: category badge + GCS logo ---
   if (opts.categoryLabel) {
     slide.addShape("roundRect", {
-      x: 10.2, y: 0.45, w: 2.4, h: 0.4,
+      x: 10.2, y: 0.22, w: 2.4, h: 0.4,
       fill: { color: corpPalette.navy },
       line: { color: corpPalette.navy, width: 0 },
       rectRadius: 0.08,
     });
     slide.addText(opts.categoryLabel.toUpperCase(), {
-      x: 10.2, y: 0.45, w: 2.4, h: 0.4,
+      x: 10.2, y: 0.22, w: 2.4, h: 0.4,
       fontSize: 8, fontFace: "Segoe UI", color: "FFFFFF", bold: true, align: "center", valign: "middle", charSpacing: 1,
     });
   }
   if (opts.gcsLogoDataUrl) {
     slide.addImage({
       data: opts.gcsLogoDataUrl,
-      x: 12.65, y: 0.38, w: 0.6, h: 0.6,
+      x: 12.65, y: 0.25, w: 0.6, h: 0.6,
     });
   }
 
   // --- BOTTOM: dark gradient footer bar with review label / title / xfinity ---
-  const footerY = 7.0;
-  const footerH = 0.5;
+  const footerY = 7.1;
+  const footerH = 0.4;
   slide.addShape("rect", {
     x: 0, y: footerY, w: w * 0.5, h: footerH,
     fill: { color: virgilTheme.gradientLeft },
@@ -7420,21 +7420,21 @@ function virgilSlideFrame(pres, slide, options) {
     return `${full} REVIEW`;
   })();
   slide.addText(reviewLabel, {
-    x: 0.4, y: footerY + 0.13, w: 3, h: 0.25,
+    x: 0.4, y: footerY + 0.08, w: 3, h: 0.25,
     fontSize: 10, fontFace: "Segoe UI", color: "FFFFFF", bold: true, charSpacing: 2,
   });
   slide.addText("GLOBAL CALLCENTER SOLUTIONS", {
-    x: 4.5, y: footerY + 0.13, w: 4.5, h: 0.25,
+    x: 4.5, y: footerY + 0.08, w: 4.5, h: 0.25,
     fontSize: 10, fontFace: "Segoe UI", color: "FFFFFF", bold: true, align: "center", charSpacing: 2,
   });
   if (opts.pageNumber !== undefined) {
     slide.addText(`xfinity  |  ${opts.pageNumber}`, {
-      x: 11.0, y: footerY + 0.13, w: 2.0, h: 0.25,
+      x: 11.0, y: footerY + 0.08, w: 2.0, h: 0.25,
       fontSize: 10, fontFace: "Segoe UI", color: "FFFFFF", align: "right",
     });
   } else {
     slide.addText("xfinity", {
-      x: 11.0, y: footerY + 0.13, w: 2.0, h: 0.25,
+      x: 11.0, y: footerY + 0.08, w: 2.0, h: 0.25,
       fontSize: 10, fontFace: "Segoe UI", color: "FFFFFF", align: "right",
     });
   }
@@ -8043,7 +8043,7 @@ function buildCorpQuartileSlide(pres, agentRaw, goalsRaw, priorAgentRaw, priorGo
 
   const drawQuartileColumn = (xBase, header, report) => {
     slide.addText(header, {
-      x: xBase, y: 1.24, w: colW, h: 0.3,
+      x: xBase, y: 1.02, w: colW, h: 0.3,
       fontSize: 13, color: virgilTheme.eyebrow, bold: true,
     });
     if (!report || !report.xm) {
@@ -8117,8 +8117,8 @@ function buildCorpQuartileSlide(pres, agentRaw, goalsRaw, priorAgentRaw, priorGo
       });
     };
 
-    drawSection(1.56, "XM Participation (GLU)", report.xm);
-    drawSection(4.30, "XI Participation (GLN)", report.xi);
+    drawSection(1.40, "XM Participation (GLU)", report.xm);
+    drawSection(4.15, "XI Participation (GLN)", report.xi);
   };
 
   drawQuartileColumn(col1X, `Month Reporting On — ${reportingPeriodLabel}`, reporting);
