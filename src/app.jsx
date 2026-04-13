@@ -6639,7 +6639,7 @@ function makeGoalsQuarterFilter(qStr) {
 // Returns numeric metrics (fractions for % fields, e.g. 0.943 = 94.3%).
 function computeCorpAttainment(agentRaw, goalsRaw, dateFilter, goalsMonthFilter) {
   if (!agentRaw || !agentRaw.trim()) {
-    return { xiPct: 0, xmPct: 0, sph: 0, cps: 0, sales: 0, hours: 0, xiPlan: 0, xmPlan: 0, hoursPlan: 0 };
+    return { xiPct: 0, xmPct: 0, sph: 0, cps: 0, planSph: 0, planCps: 0, sales: 0, hours: 0, xiPlan: 0, xmPlan: 0, hoursPlan: 0, homesPlan: 0 };
   }
   const agentRows = parseCSV(agentRaw);
   const goalsRows = goalsRaw && goalsRaw.trim() ? parseCSV(goalsRaw) : [];
@@ -6652,7 +6652,7 @@ function computeCorpAttainment(agentRaw, goalsRaw, dateFilter, goalsMonthFilter)
     xi += Number(r["New XI"] || r["NewData"] || r["HSD RGUs"]) || 0;
     xm += Number(r["XM Lines"] || r["XMLines"] || r["NewXM"]) || 0;
   }
-  let xiPlan = 0, xmPlan = 0, hoursPlan = 0;
+  let xiPlan = 0, xmPlan = 0, hoursPlan = 0, homesPlan = 0;
   for (const r of goalsRows) {
     // Apply goals month filter if provided — goals CSV has a "Month" column like "March"/"April"
     if (goalsMonthFilter && !goalsMonthFilter(r)) continue;
@@ -6664,15 +6664,17 @@ function computeCorpAttainment(agentRaw, goalsRaw, dateFilter, goalsMonthFilter)
     hoursPlan += parseNum(r["Hours Goal"] || r["Hours per ROC"]);
     xiPlan += parseNum(r["HSD GOAL"] || r["HSD Unit Goal"]);
     xmPlan += parseNum(r["XM GOAL"] || r["XM Unit Goal"]);
+    homesPlan += parseNum(r["HOMES GOAL"] || r["Homes Sold Goal"]);
   }
   const sph = hours ? sales / hours : 0;
   const cps = sales ? (hours * 19.77) / sales : (hours * 19.77);
+  const planSph = hoursPlan ? homesPlan / hoursPlan : 0;
+  const planCps = homesPlan ? (hoursPlan * 19.77) / homesPlan : 0;
   return {
     xiPct: xiPlan ? xi / xiPlan : 0,
     xmPct: xmPlan ? xm / xmPlan : 0,
-    sph,
-    cps,
-    sales, hours, xi, xm, xiPlan, xmPlan, hoursPlan,
+    sph, cps, planSph, planCps,
+    sales, hours, xi, xm, xiPlan, xmPlan, hoursPlan, homesPlan,
   };
 }
 
@@ -7195,32 +7197,65 @@ function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
   const labels = [q4Label, prior2, prior1, `${reportingMonthLabel} MTD`];
 
   // Chart-drawing helper
-  const drawChart = (x, y, w, h, title, values, format, goalVal) => {
+  const drawChart = (x, y, w, h, title, values, format, goals, yFormat) => {
     // Title
     slide.addText(title, {
       x, y, w, h: 0.3,
       fontSize: 12, color: virgilTheme.bodyText, bold: true, align: "center",
     });
-    // Plot area
-    const axisX = x + 0.35;
+    // Plot area (now has room on the left for Y-axis labels)
+    const yAxisW = 0.55;
+    const axisX = x + 0.4 + yAxisW;
     const axisY = y + 0.35;
-    const axisW = w - 0.5;
+    const axisW = w - 0.5 - yAxisW;
     const axisH = h - 0.8;
     slide.addShape("rect", {
       x: axisX, y: axisY, w: axisW, h: axisH,
       fill: { color: plotBg }, line: { color: plotBorder, width: 0.5 },
     });
-    // Scale: find the max value across present values + goal for y-axis fit
-    const present = values.filter(v => v !== null && v !== undefined && !isNaN(v));
-    const effMax = Math.max(...present, goalVal != null ? goalVal : 0, 0.001);
-    const scaleMax = effMax * 1.15; // headroom
+    // Scale
+    const presentVals = values.filter(v => v !== null && v !== undefined && !isNaN(v));
+    const presentGoals = (goals || []).filter(v => v !== null && v !== undefined && !isNaN(v));
+    const effMax = Math.max(...presentVals, ...presentGoals, 0.001);
+    // Round up to a "clean" scale max
+    const niceMax = (() => {
+      if (effMax <= 0.12) return Math.ceil(effMax / 0.02) * 0.02;
+      if (effMax <= 1.0) return Math.ceil(effMax / 0.1) * 0.1;
+      if (effMax <= 10) return Math.ceil(effMax / 1) * 1;
+      if (effMax <= 100) return Math.ceil(effMax / 10) * 10;
+      if (effMax <= 500) return Math.ceil(effMax / 50) * 50;
+      return Math.ceil(effMax / 100) * 100;
+    })();
+    const scaleMax = niceMax * 1.15;
     const valToY = (v) => axisY + axisH - (Math.max(0, v) / scaleMax) * axisH;
-    // Goal line (green dashed) if provided
-    if (goalVal != null) {
-      const gy = valToY(goalVal);
+    // Y-axis tick labels + gridlines
+    const numTicks = 7;
+    for (let i = 0; i <= numTicks; i++) {
+      const t = (i / numTicks) * niceMax;
+      const ty = valToY(t);
+      // Gridline
       slide.addShape("line", {
-        x: axisX, y: gy, w: axisW, h: 0,
-        line: { color: goalCol, width: 1.5, dashType: "dash" },
+        x: axisX, y: ty, w: axisW, h: 0,
+        line: { color: "F3F4F6", width: 0.5 },
+      });
+      // Label
+      slide.addText(yFormat(t), {
+        x: x + 0.1, y: ty - 0.1, w: yAxisW + 0.25, h: 0.2,
+        fontSize: 7, color: virgilTheme.subtle, align: "right",
+      });
+    }
+    // Goal line (per-period dashed green, connect points)
+    if (goals && goals.length === values.length) {
+      const slotW = axisW / values.length;
+      goals.forEach((g, i) => {
+        if (g === null || g === undefined || isNaN(g)) return;
+        const gy = valToY(g);
+        const segX = axisX + slotW * i;
+        const segW = slotW;
+        slide.addShape("line", {
+          x: segX, y: gy, w: segW, h: 0,
+          line: { color: goalCol, width: 1.5, dashType: "dash" },
+        });
       });
     }
     // Bars
@@ -7261,13 +7296,19 @@ function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
 
   drawChart(col1X, topY, chartW, chartH, "XI Attainment",
     [q4.xiPct, colP2.xiPct, colP1.xiPct, colMtd.xiPct].map(v => v || 0),
-    v => `${(v * 100).toFixed(0)}%`, 1.0);
+    v => `${(v * 100).toFixed(0)}%`,
+    [1.0, 1.0, 1.0, 1.0],
+    v => `${(v * 100).toFixed(0)}%`);
   drawChart(col2X, topY, chartW, chartH, "XM Attainment",
     [q4.xmPct, colP2.xmPct, colP1.xmPct, colMtd.xmPct].map(v => v || 0),
-    v => `${(v * 100).toFixed(0)}%`, 1.0);
+    v => `${(v * 100).toFixed(0)}%`,
+    [1.0, 1.0, 1.0, 1.0],
+    v => `${(v * 100).toFixed(0)}%`);
   drawChart(col3X, topY, chartW, chartH, "SPH Attainment",
     [q4.sph, colP2.sph, colP1.sph, colMtd.sph],
-    v => v.toFixed(2), null);
+    v => v.toFixed(2),
+    [q4.planSph, colP2.planSph, colP1.planSph, colMtd.planSph],
+    v => v.toFixed(2));
 
   // Bottom row — 3 panels (CPS, Scorecard, Insights)
   const botY = 4.0;
@@ -7275,7 +7316,9 @@ function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
 
   drawChart(col1X, botY, chartW, botH, "CPS Attainment",
     [q4.cps, colP2.cps, colP1.cps, colMtd.cps],
-    v => `$${v.toFixed(0)}`, null);
+    v => `$${v.toFixed(0)}`,
+    [q4.planCps, colP2.planCps, colP1.planCps, colMtd.planCps],
+    v => `$${v.toFixed(0)}`);
 
   // Scorecard by BP (4-bar chart from manual vendor scores)
   const vendors = ["Results", "GTCX", "GCS", "Avantive"];
