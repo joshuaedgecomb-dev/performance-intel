@@ -7347,12 +7347,12 @@ function virgilSlideFrame(pres, slide, options) {
 
   // --- TOP: thin teal→purple gradient bar ---
   slide.addShape("rect", {
-    x: 0, y: 0, w: w * 0.5, h: 0.2,
+    x: 0, y: 0, w: w * 0.5, h: 0.1,
     fill: { color: virgilTheme.gradientLeft },
     line: { color: virgilTheme.gradientLeft, width: 0 },
   });
   slide.addShape("rect", {
-    x: w * 0.5, y: 0, w: w * 0.5, h: 0.2,
+    x: w * 0.5, y: 0, w: w * 0.5, h: 0.1,
     fill: { color: virgilTheme.gradientRight },
     line: { color: virgilTheme.gradientRight, width: 0 },
   });
