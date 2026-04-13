@@ -6964,6 +6964,65 @@ function buildExtendedAgentLookup(extendedRows, monthFilter) {
   return out;
 }
 
+// Produce the list of distinct campaigns that had activity (hours or goal) in either month.
+// Returns an array of { name, rocs: [string, ...], hoursFeb, hoursMar, goalFeb, goalMar }.
+// Sorted alphabetically by campaign name for stable, review-friendly slide order.
+function buildCampaignUniverse(priorAgentRaw, priorGoalsRaw, agentRaw, goalsRaw, priorMonthLabel, reportingMonthLabel) {
+  const agentsPrior = priorAgentRaw && priorAgentRaw.trim() ? parseCSV(priorAgentRaw) : [];
+  const agentsCurr = agentRaw && agentRaw.trim() ? parseCSV(agentRaw) : [];
+  const goalsPrior = priorGoalsRaw && priorGoalsRaw.trim() ? parseCSV(priorGoalsRaw) : [];
+  const goalsCurr = goalsRaw && goalsRaw.trim() ? parseCSV(goalsRaw) : [];
+
+  // Map ROC → { campaignName, hoursGoalFeb, hoursGoalMar }
+  const byRoc = {};
+  const registerGoal = (goalRows, key) => {
+    for (const g of goalRows) {
+      const name = (g["Campaign"] || g["Campaign Name"] || "").trim();
+      if (!name) continue;
+      const rocList = (g["ROC Numbers"] || "").split(",").map(s => s.trim()).filter(Boolean);
+      const hoursGoal = Number(g["Hours Goal"]) || 0;
+      for (const roc of rocList) {
+        if (!byRoc[roc]) byRoc[roc] = { name, rocs: new Set([roc]), hoursFeb: 0, hoursMar: 0, goalFeb: 0, goalMar: 0 };
+        byRoc[roc].name = name;
+        byRoc[roc].rocs.add(roc);
+        byRoc[roc][key] += hoursGoal;
+      }
+    }
+  };
+  registerGoal(goalsPrior, "goalFeb");
+  registerGoal(goalsCurr, "goalMar");
+
+  const registerActual = (agentRows, key) => {
+    for (const r of agentRows) {
+      const roc = (r["Job"] || "").trim();
+      if (!roc) continue;
+      if (!byRoc[roc]) byRoc[roc] = { name: roc, rocs: new Set([roc]), hoursFeb: 0, hoursMar: 0, goalFeb: 0, goalMar: 0 };
+      byRoc[roc][key] += Number(r["Hours"]) || 0;
+    }
+  };
+  registerActual(agentsPrior, "hoursFeb");
+  registerActual(agentsCurr, "hoursMar");
+
+  // Collapse ROCs into unique campaign names (multiple ROCs may roll up to one campaign)
+  const byName = {};
+  for (const entry of Object.values(byRoc)) {
+    if (!entry.name) continue;
+    const key = entry.name;
+    if (!byName[key]) byName[key] = { name: key, rocs: new Set(), hoursFeb: 0, hoursMar: 0, goalFeb: 0, goalMar: 0 };
+    for (const roc of entry.rocs) byName[key].rocs.add(roc);
+    byName[key].hoursFeb += entry.hoursFeb;
+    byName[key].hoursMar += entry.hoursMar;
+    byName[key].goalFeb += entry.goalFeb;
+    byName[key].goalMar += entry.goalMar;
+  }
+
+  // Only emit campaigns with actual activity in at least one month (some goal rows are inactive placeholders)
+  return Object.values(byName)
+    .filter(c => c.hoursFeb > 0 || c.hoursMar > 0 || c.goalFeb > 0 || c.goalMar > 0)
+    .map(c => ({ ...c, rocs: [...c.rocs].sort() }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // CORP MBR — Brand Helpers
 // ═══════════════════════════════════════════════════════════════════
