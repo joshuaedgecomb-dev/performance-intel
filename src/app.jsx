@@ -6963,61 +6963,58 @@ function buildExtendedAgentLookup(extendedRows, monthFilter) {
   return out;
 }
 
-// Produce the list of distinct campaigns that had activity (hours or goal) in either month.
-// Returns an array of { name, rocs: [string, ...], hoursFeb, hoursMar, goalFeb, goalMar }.
+// Produce the list of distinct campaigns that had activity (hours or goal) in either
+// reporting month or MTD month. Returns { name, rocs: [string, ...], hoursReporting, hoursMtd, goalReporting, goalMtd }.
 // Sorted alphabetically by campaign name for stable, review-friendly slide order.
-function buildCampaignUniverse(priorAgentRaw, priorGoalsRaw, agentRaw, goalsRaw) {
-  const agentsPrior = priorAgentRaw && priorAgentRaw.trim() ? parseCSV(priorAgentRaw) : [];
-  const agentsCurr = agentRaw && agentRaw.trim() ? parseCSV(agentRaw) : [];
-  const goalsPrior = priorGoalsRaw && priorGoalsRaw.trim() ? parseCSV(priorGoalsRaw) : [];
-  const goalsCurr = goalsRaw && goalsRaw.trim() ? parseCSV(goalsRaw) : [];
+function buildCampaignUniverse(agentRaw, goalsRaw, reportingMonthLabel, mtdLabel) {
+  const agentRows = agentRaw && agentRaw.trim() ? parseCSV(agentRaw) : [];
+  const goalsRows = goalsRaw && goalsRaw.trim() ? parseCSV(goalsRaw) : [];
+  const reportingFilter = makeMonthFilter(reportingMonthLabel);
+  const mtdFilter = makeMonthFilter(mtdLabel);
 
-  // Map ROC → { campaignName, hoursGoalFeb, hoursGoalMar }
+  // Map ROC → { campaignName, hoursReporting, hoursMtd, goalReporting, goalMtd, rocs: Set }
+  // Goals CSV typically carries monthly targets; apply the same goalsRaw to both columns
+  // (Phase 2 Slide 5 follows this convention — per-month budget is the same static target).
   const byRoc = {};
-  const registerGoal = (goalRows, key) => {
-    for (const g of goalRows) {
-      const name = (g["Campaign"] || g["Campaign Name"] || "").trim();
-      if (!name) continue;
-      const rocList = (g["ROC Numbers"] || "").split(",").map(s => s.trim()).filter(Boolean);
-      const hoursGoal = Number(g["Hours Goal"]) || 0;
-      for (const roc of rocList) {
-        if (!byRoc[roc]) byRoc[roc] = { name, rocs: new Set([roc]), hoursFeb: 0, hoursMar: 0, goalFeb: 0, goalMar: 0 };
-        byRoc[roc].name = name;
-        byRoc[roc].rocs.add(roc);
-        byRoc[roc][key] += hoursGoal;
-      }
+  for (const g of goalsRows) {
+    const name = (g["Campaign"] || g["Campaign Name"] || "").trim();
+    if (!name) continue;
+    const rocList = (g["ROC Numbers"] || "").split(",").map(s => s.trim()).filter(Boolean);
+    const hoursGoal = Number(g["Hours Goal"]) || 0;
+    for (const roc of rocList) {
+      if (!byRoc[roc]) byRoc[roc] = { name, rocs: new Set([roc]), hoursReporting: 0, hoursMtd: 0, goalReporting: 0, goalMtd: 0 };
+      byRoc[roc].name = name;
+      byRoc[roc].rocs.add(roc);
+      byRoc[roc].goalReporting += hoursGoal;
+      byRoc[roc].goalMtd += hoursGoal;
     }
-  };
-  registerGoal(goalsPrior, "goalFeb");
-  registerGoal(goalsCurr, "goalMar");
+  }
 
-  const registerActual = (agentRows, key) => {
-    for (const r of agentRows) {
-      const roc = (r["Job"] || "").trim();
-      if (!roc) continue;
-      if (!byRoc[roc]) byRoc[roc] = { name: roc, rocs: new Set([roc]), hoursFeb: 0, hoursMar: 0, goalFeb: 0, goalMar: 0 };
-      byRoc[roc][key] += Number(r["Hours"]) || 0;
-    }
-  };
-  registerActual(agentsPrior, "hoursFeb");
-  registerActual(agentsCurr, "hoursMar");
+  for (const r of agentRows) {
+    const roc = (r["Job"] || "").trim();
+    if (!roc) continue;
+    const dateStr = (r["Date"] || "").trim();
+    const hours = Number(r["Hours"]) || 0;
+    if (!byRoc[roc]) byRoc[roc] = { name: roc, rocs: new Set([roc]), hoursReporting: 0, hoursMtd: 0, goalReporting: 0, goalMtd: 0 };
+    if (reportingFilter(dateStr)) byRoc[roc].hoursReporting += hours;
+    if (mtdFilter(dateStr)) byRoc[roc].hoursMtd += hours;
+  }
 
-  // Collapse ROCs into unique campaign names (multiple ROCs may roll up to one campaign)
+  // Collapse ROCs into unique campaign names
   const byName = {};
   for (const entry of Object.values(byRoc)) {
     if (!entry.name) continue;
     const key = entry.name;
-    if (!byName[key]) byName[key] = { name: key, rocs: new Set(), hoursFeb: 0, hoursMar: 0, goalFeb: 0, goalMar: 0 };
+    if (!byName[key]) byName[key] = { name: key, rocs: new Set(), hoursReporting: 0, hoursMtd: 0, goalReporting: 0, goalMtd: 0 };
     for (const roc of entry.rocs) byName[key].rocs.add(roc);
-    byName[key].hoursFeb += entry.hoursFeb;
-    byName[key].hoursMar += entry.hoursMar;
-    byName[key].goalFeb += entry.goalFeb;
-    byName[key].goalMar += entry.goalMar;
+    byName[key].hoursReporting += entry.hoursReporting;
+    byName[key].hoursMtd += entry.hoursMtd;
+    byName[key].goalReporting += entry.goalReporting;
+    byName[key].goalMtd += entry.goalMtd;
   }
 
-  // Only emit campaigns with actual activity in at least one month (some goal rows are inactive placeholders)
   return Object.values(byName)
-    .filter(c => c.hoursFeb > 0 || c.hoursMar > 0 || c.goalFeb > 0 || c.goalMar > 0)
+    .filter(c => c.hoursReporting > 0 || c.hoursMtd > 0 || c.goalReporting > 0 || c.goalMtd > 0)
     .map(c => ({ ...c, rocs: [...c.rocs].sort() }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -8284,9 +8281,9 @@ function formatCampaignDetailTable(detail, columnLabel) {
 }
 
 // Render a single per-campaign slide for Slide 6 fan-out.
-// detailPrior / detailCurrent are the output of buildCampaignMonthDetail for each month.
-// notes = { feb, march } are the two free-text Performance Notes for this campaign.
-function buildCorpCampaignDetailSlide(pres, campaign, detailPrior, detailCurrent, priorMonthLabel, reportingMonthLabel, notes) {
+// detailReporting / detailMtd are the output of buildCampaignMonthDetail for each month.
+// notes = { reporting, mtd } are the two free-text Performance Notes for this campaign.
+function buildCorpCampaignDetailSlide(pres, campaign, detailReporting, detailMtd, reportingMonthLabel, mtdLabel, notes) {
   const slide = pres.addSlide();
   slide.background = { color: virgilTheme.slideBg };
   virgilBrandBars(pres, slide);
@@ -8302,18 +8299,18 @@ function buildCorpCampaignDetailSlide(pres, campaign, detailPrior, detailCurrent
   });
 
   // Column sub-titles
-  slide.addText("PREVIOUS MONTH", {
+  slide.addText("MONTH OF DISCUSSION", {
     x: 0.5, y: 1.3, w: 6, h: 0.25,
     fontSize: 9, color: virgilTheme.subtle, bold: true, align: "center", charSpacing: 2,
   });
-  slide.addText("MONTH OF DISCUSSION", {
+  slide.addText("MTD", {
     x: 6.8, y: 1.3, w: 6, h: 0.25,
     fontSize: 9, color: virgilTheme.subtle, bold: true, align: "center", charSpacing: 2,
   });
 
   // Two side-by-side tables
-  const priorRows = formatCampaignDetailTable(detailPrior, priorMonthLabel);
-  const currRows = formatCampaignDetailTable(detailCurrent, reportingMonthLabel);
+  const priorRows = formatCampaignDetailTable(detailReporting, reportingMonthLabel);
+  const currRows = formatCampaignDetailTable(detailMtd, `${mtdLabel} MTD`);
 
   slide.addTable(priorRows, {
     x: 0.5, y: 1.55, w: 6.0,
@@ -8350,8 +8347,8 @@ function buildCorpCampaignDetailSlide(pres, campaign, detailPrior, detailCurrent
       italic: !body, valign: "top",
     });
   };
-  drawNotePanel(0.5, `${priorMonthLabel.toUpperCase()} — PERFORMANCE NOTES`, (notes && notes.feb) || "");
-  drawNotePanel(6.8, `${reportingMonthLabel.toUpperCase()} — PERFORMANCE NOTES`, (notes && notes.march) || "");
+  drawNotePanel(0.5, `${reportingMonthLabel.toUpperCase()} — PERFORMANCE NOTES`, (notes && notes.reporting) || "");
+  drawNotePanel(6.8, `${mtdLabel.toUpperCase()} MTD — PERFORMANCE NOTES`, (notes && notes.mtd) || "");
 }
 
 function buildCorpTnpsSlide(pres, perf, reportingMonthLabel, insightText) {
@@ -8754,23 +8751,25 @@ function buildVirgilMbrPresentation(perf, options) {
     options.corpPriorMonthAgentRaw || "", options.corpPriorMonthGoalsRaw || "");
 
   // Slide 6 — Per-Campaign Actual-to-Goal (N slides, one per campaign)
+  // Columns: reporting month (left) vs MTD (right) — both from rawAgentCsv with month filters
+  const mtdKey = getNextMonthLabel(options.reportingMonthLabel);
+  const reportingFilter = makeMonthFilter(options.reportingMonthLabel);
+  const mtdFilter = makeMonthFilter(mtdKey);
   const campaignUniverse = buildCampaignUniverse(
-    options.priorAgentRaw || "", options.priorGoalsRaw || "",
-    options.agentRaw || "", options.goalsRaw || ""
+    options.agentRaw || "", options.goalsRaw || "",
+    options.reportingMonthLabel, mtdKey
   );
-  const priorFilter = makeMonthFilter(priorMonthKey);
-  const currFilter = makeMonthFilter(options.reportingMonthLabel);
-  const priorTotals = buildCampaignMonthTotals(options.priorAgentRaw || "", options.priorGoalsRaw || "", priorFilter);
-  const currTotals = buildCampaignMonthTotals(options.agentRaw || "", options.goalsRaw || "", currFilter);
+  const reportingTotals = buildCampaignMonthTotals(options.agentRaw || "", options.goalsRaw || "", reportingFilter);
+  const mtdTotals = buildCampaignMonthTotals(options.agentRaw || "", options.goalsRaw || "", mtdFilter);
   const extendedRows = Array.isArray(options.corpExtendedAgent) ? options.corpExtendedAgent : [];
-  const extPriorLookup = buildExtendedAgentLookup(extendedRows, priorFilter);
-  const extCurrLookup = buildExtendedAgentLookup(extendedRows, currFilter);
+  const extReportingLookup = buildExtendedAgentLookup(extendedRows, reportingFilter);
+  const extMtdLookup = buildExtendedAgentLookup(extendedRows, mtdFilter);
   const perCampaignNotes = (options.insights && options.insights.slide6Notes) || {};
   for (const campaign of campaignUniverse) {
-    const detailPrior = buildCampaignMonthDetail(campaign, options.priorAgentRaw || "", options.priorGoalsRaw || "", priorFilter, extPriorLookup, priorTotals);
-    const detailCurr = buildCampaignMonthDetail(campaign, options.agentRaw || "", options.goalsRaw || "", currFilter, extCurrLookup, currTotals);
-    const notes = perCampaignNotes[campaign.name] || { feb: "", march: "" };
-    buildCorpCampaignDetailSlide(pres, campaign, detailPrior, detailCurr, priorMonthKey, options.reportingMonthLabel, notes);
+    const detailReporting = buildCampaignMonthDetail(campaign, options.agentRaw || "", options.goalsRaw || "", reportingFilter, extReportingLookup, reportingTotals);
+    const detailMtd = buildCampaignMonthDetail(campaign, options.agentRaw || "", options.goalsRaw || "", mtdFilter, extMtdLookup, mtdTotals);
+    const notes = perCampaignNotes[campaign.name] || { reporting: "", mtd: "" };
+    buildCorpCampaignDetailSlide(pres, campaign, detailReporting, detailMtd, options.reportingMonthLabel, mtdKey, notes);
   }
 
   // Slide 7 — Customer Experience (tNPS)
@@ -8936,14 +8935,13 @@ If any vendor is missing or unreadable, use null for that value.`;
   const loginBuckets = useMemo(() => parseLoginBuckets(loginBucketsRaw), [loginBucketsRaw]);
   const corpExtendedAgent = useMemo(() => parseExtendedAgentStats(rawAgentCsv), [rawAgentCsv]);
 
+  const mtdLabelDisplay = useMemo(() => getNextMonthLabel(reportingMonth), [reportingMonth]);
   const campaignUniverse = useMemo(() => {
     return buildCampaignUniverse(
-      priorMonthRaw || "", priorMonthGoalsRaw || "",
-      rawAgentCsv || "", goalsRaw || ""
+      rawAgentCsv || "", goalsRaw || "",
+      reportingMonth, mtdLabelDisplay
     );
-  }, [priorMonthRaw, priorMonthGoalsRaw, rawAgentCsv, goalsRaw]);
-
-  const priorMonthLabelDisplay = useMemo(() => getPriorMonthLabel(reportingMonth), [reportingMonth]);
+  }, [rawAgentCsv, goalsRaw, reportingMonth, mtdLabelDisplay]);
 
   const hasCoachingDetails = !!(coachingDetailsRaw && coachingDetailsRaw.trim());
   const hasCoachingWeekly = !!(coachingWeeklyRaw && coachingWeeklyRaw.trim());
@@ -9145,12 +9143,12 @@ Write bullet-point style insights focused on movement vs prior, gaps vs 75% goal
           <div style={{ fontSize: 13, fontWeight: 600 }}>Slide 6 — Per-Campaign Performance Notes</div>
           <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>
             {campaignUniverse.length
-              ? `${campaignUniverse.length} campaigns detected across ${priorMonthLabelDisplay} / ${reportingMonth}. Notes render on the per-campaign slides; blank = empty panel.`
-              : "No campaigns detected yet — load prior-month + current-month data first."}
+              ? `${campaignUniverse.length} campaigns detected across ${reportingMonth} / ${mtdLabelDisplay} MTD. Notes render on the per-campaign slides; blank = empty panel.`
+              : "No campaigns detected yet — load current-month data first."}
           </div>
           <div style={{ maxHeight: 260, overflow: "auto", marginTop: 8 }}>
             {campaignUniverse.map(c => {
-              const entry = ((insights && insights.slide6Notes) || {})[c.name] || { feb: "", march: "" };
+              const entry = ((insights && insights.slide6Notes) || {})[c.name] || { reporting: "", mtd: "" };
               const update = (key, v) => {
                 setInsights({
                   ...(insights || {}),
@@ -9165,13 +9163,13 @@ Write bullet-point style insights focused on movement vs prior, gaps vs 75% goal
                   <div style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>{c.name}</div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 6 }}>
                     <label style={{ fontSize: 11, color: "#6b7280" }}>
-                      {priorMonthLabelDisplay} notes
-                      <textarea value={entry.feb} onChange={e => update("feb", e.target.value)}
+                      {reportingMonth} notes
+                      <textarea value={entry.reporting} onChange={e => update("reporting", e.target.value)}
                         rows={2} style={{ display: "block", width: "100%", padding: 6, border: "1px solid #d1d5db", borderRadius: 4, marginTop: 2, fontSize: 11, fontFamily: "inherit", resize: "vertical" }} />
                     </label>
                     <label style={{ fontSize: 11, color: "#6b7280" }}>
-                      {reportingMonth} notes
-                      <textarea value={entry.march} onChange={e => update("march", e.target.value)}
+                      {mtdLabelDisplay} MTD notes
+                      <textarea value={entry.mtd} onChange={e => update("mtd", e.target.value)}
                         rows={2} style={{ display: "block", width: "100%", padding: 6, border: "1px solid #d1d5db", borderRadius: 4, marginTop: 2, fontSize: 11, fontFamily: "inherit", resize: "vertical" }} />
                     </label>
                   </div>
