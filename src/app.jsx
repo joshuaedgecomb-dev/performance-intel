@@ -8137,6 +8137,75 @@ function buildCorpCampaignHoursSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
   // (Legacy bmCols block below is unreachable; kept for removal)
 }
 
+// Format a single (campaign × month) detail object into the 6-column table rows for Slide 6.
+// Returns an array of pptxgenjs table rows including a header row.
+// Each row has 6 cells: [ROW LABEL, GOALS, BUDGET, ACTUAL, VARIANCE, % GOAL].
+// For derived ratio rows (CPS, SPH, etc.) and "Total Leads"-style rows, the GOALS / BUDGET / VARIANCE / % GOAL cells are blank — only ACTUAL has data (per spec §6.6).
+function formatCampaignDetailTable(detail, columnLabel) {
+  const fmtInt = n => (n === null || n === undefined || Number.isNaN(n)) ? "—" : Math.round(n).toLocaleString();
+  const fmtIntSigned = n => (n === null || n === undefined || Number.isNaN(n)) ? "—" : `${n >= 0 ? "+" : ""}${Math.round(n).toLocaleString()}`;
+  const fmtMoney = n => (n === null || n === undefined || Number.isNaN(n)) ? "—" : `$${Math.round(n).toLocaleString()}`;
+  const fmtMoneySigned = n => (n === null || n === undefined || Number.isNaN(n)) ? "—" : `${n >= 0 ? "+" : "-"}$${Math.round(Math.abs(n)).toLocaleString()}`;
+  const fmtMoney2 = n => (n === null || n === undefined || Number.isNaN(n)) ? "—" : `$${n.toFixed(2)}`;
+  const fmtPct = n => (n === null || n === undefined || Number.isNaN(n)) ? "—" : `${(n * 100).toFixed(1)}%`;
+  const fmtRatio = n => (n === null || n === undefined || Number.isNaN(n)) ? "—" : n.toFixed(3);
+  const varOf = (act, goal) => (act || 0) - (goal || 0);
+  const pctOf = (act, goal) => (goal === 0 ? 0 : act / goal);
+
+  const hdrBase = { fill: { color: corpPalette.purple }, color: "FFFFFF", bold: true, align: "center", fontSize: 9 };
+  const labelBase = { bold: true, color: corpPalette.ink, fontSize: 9, align: "left" };
+  const cellBase = { color: corpPalette.ink, fontSize: 9, align: "center" };
+
+  const headerRow = [
+    { text: columnLabel, options: hdrBase },
+    { text: "GOALS", options: hdrBase },
+    { text: "BUDGET", options: hdrBase },
+    { text: "ACTUAL", options: hdrBase },
+    { text: "VARIANCE", options: hdrBase },
+    { text: "% GOAL", options: hdrBase },
+  ];
+
+  const rows = [];
+  const push = (label, goal, budget, actual, variance, pct) => {
+    rows.push([
+      { text: label, options: labelBase },
+      { text: goal, options: cellBase },
+      { text: budget, options: cellBase },
+      { text: actual, options: cellBase },
+      { text: variance, options: cellBase },
+      { text: pct, options: cellBase },
+    ]);
+  };
+
+  // Top block — $/hours/sales/RGU breakdown. Each of these has goal + actual with variance + % Goal.
+  push("BUDGET ($)", fmtMoney(detail.budgetGoal), fmtMoney(detail.budgetGoal), fmtMoney(detail.budget), fmtMoneySigned(varOf(detail.budget, detail.budgetGoal)), fmtPct(pctOf(detail.budget, detail.budgetGoal)));
+  push("HOURS", fmtInt(detail.hoursGoal), fmtMoney(detail.budgetGoal), fmtInt(detail.hoursActual), fmtIntSigned(varOf(detail.hoursActual, detail.hoursGoal)), fmtPct(pctOf(detail.hoursActual, detail.hoursGoal)));
+  push("SALES", fmtInt(detail.salesGoal), "", fmtInt(detail.salesActual), fmtIntSigned(varOf(detail.salesActual, detail.salesGoal)), fmtPct(pctOf(detail.salesActual, detail.salesGoal)));
+  push("RGUs", fmtInt(detail.rgusGoal), "", fmtInt(detail.rgusActual), fmtIntSigned(varOf(detail.rgusActual, detail.rgusGoal)), fmtPct(pctOf(detail.rgusActual, detail.rgusGoal)));
+  push("HSD RGUs", fmtInt(detail.xiGoal), "", fmtInt(detail.xiActual), fmtIntSigned(varOf(detail.xiActual, detail.xiGoal)), fmtPct(pctOf(detail.xiActual, detail.xiGoal)));
+  push("XM RGUs", fmtInt(detail.xmGoal), "", fmtInt(detail.xmActual), fmtIntSigned(varOf(detail.xmActual, detail.xmGoal)), fmtPct(pctOf(detail.xmActual, detail.xmGoal)));
+  push("VIDEO RGUs", fmtInt(detail.videoGoal), "", fmtInt(detail.videoActual), fmtIntSigned(varOf(detail.videoActual, detail.videoGoal)), fmtPct(pctOf(detail.videoActual, detail.videoGoal)));
+  push("XH RGUs", fmtInt(detail.xhGoal), "", fmtInt(detail.xhActual), fmtIntSigned(varOf(detail.xhActual, detail.xhGoal)), fmtPct(pctOf(detail.xhActual, detail.xhGoal)));
+  push("PHONE RGUs", fmtInt(detail.phoneGoal), "", fmtInt(detail.phoneActual), fmtIntSigned(varOf(detail.phoneActual, detail.phoneGoal)), fmtPct(pctOf(detail.phoneActual, detail.phoneGoal)));
+
+  // Bottom block — derived ratios (no goal to compare against)
+  push("CPS", "", "", fmtMoney2(detail.cps), "", "");
+  push("CPRGU", "", "", fmtMoney2(detail.cprgu), "", "");
+  push("SPH", "", "", fmtRatio(detail.sph), "", "");
+  push("RGUPH", "", "", fmtRatio(detail.rguph), "", "");
+  push("RGU/HOME", "", "", fmtRatio(detail.rguPerSale), "", "");
+
+  // Additional rows — Leads + Extended Agent-derived
+  push("Total Leads", "", "", fmtInt(detail.actualLeads), "", "");
+  push("Sales per Lead", "", "", detail.actualLeads ? detail.salesPerLead.toFixed(2) : "—", "", "");
+  push("% of Total Leads", "", "", fmtPct(detail.pctTotalLeads), "", "");
+  push("% of Total Hours", "", "", fmtPct(detail.pctTotalHours), "", "");
+  push("Contact Rate", "", "", detail.contactRate === null ? "—" : `${detail.contactRate.toFixed(1)}%`, "", "");
+  push("Lead Penetration", "", "", detail.leadPenetration === null ? "—" : `${detail.leadPenetration.toFixed(1)}%`, "", "");
+
+  return [headerRow, ...rows];
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // CORP MBR — Orchestrator
 // ═══════════════════════════════════════════════════════════════════
