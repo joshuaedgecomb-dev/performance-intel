@@ -7588,6 +7588,13 @@ function buildCorpQuartileSlide(pres, agentRaw, goalsRaw, newHiresRaw, reporting
 
   drawQuartileColumn(col1X, `Month Reporting On — ${reportingPeriodLabel}`, reporting);
   drawQuartileColumn(col2X, `MTD — ${mtdLabel}`, mtd);
+
+  // Vertical divider between the two columns
+  const dividerX = (col1X + colW + col2X) / 2;
+  slide.addShape("line", {
+    x: dividerX, y: 1.25, w: 0, h: 5.8,
+    line: { color: "D1D5DB", width: 1 },
+  });
 }
 
 function buildCorpCampaignHoursSlide(pres, agentRaw, goalsRaw, priorAgentRaw, priorGoalsRaw, reportingMonthLabel, corpPriorMonthAgentRaw, corpPriorMonthGoalsRaw) {
@@ -15778,7 +15785,7 @@ export default function App() {
           } catch(e) {}
         }
         // Auto-load roster sheet if URL configured
-        if (!cancelled && nhSheetUrl && !newHiresRaw) {
+        if (!cancelled && nhSheetUrl && (!newHiresRaw || !newHiresRawCsv)) {
           try {
             const proxyN = url => `https://corsproxy.io/?${encodeURIComponent(url)}`;
             let nRes;
