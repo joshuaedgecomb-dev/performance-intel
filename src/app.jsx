@@ -15674,11 +15674,11 @@ export default function App() {
   }, []);
 
   const [corpExtendedAgentRaw, _setCorpExtendedAgentRaw] = useState(() => {
-    try { return localStorage.getItem("perf_intel_extended_agent_v1") || ""; } catch(e) { return ""; }
+    try { return localStorage.getItem("perf_intel_corp_extended_agent_v1") || ""; } catch(e) { return ""; }
   });
   const setCorpExtendedAgentRaw = useCallback(v => {
     _setCorpExtendedAgentRaw(v);
-    try { localStorage.setItem("perf_intel_extended_agent_v1", v || ""); } catch(e) {}
+    try { localStorage.setItem("perf_intel_corp_extended_agent_v1", v || ""); } catch(e) {}
   }, []);
 
   const [priorQuarterAgentRaw, _setPriorQuarterAgentRaw] = useState(() => {
