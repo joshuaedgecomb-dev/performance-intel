@@ -6501,6 +6501,24 @@ function parseLoginBuckets(rawCsv) {
   return byMonth;
 }
 
+// Extended Agent Stats — per-agent-per-day rows from the richer Extended Agent CSV.
+// Columns used by Slide 6: Job (ROC), Date, AgentName, Dials, Contacts, Finals, Goals, Hours.
+// Other columns are tolerated but unused (e.g. XMSales, NewVideo, etc.).
+function parseExtendedAgentStats(rawCsv) {
+  if (!rawCsv || !rawCsv.trim()) return [];
+  const rows = parseCSV(rawCsv);
+  return rows.map(r => ({
+    roc: (r["Job"] || "").trim(),
+    date: (r["Date"] || "").trim(),
+    agentName: (r["AgentName"] || "").trim(),
+    dials: Number(r["Dials"]) || 0,
+    contacts: Number(r["Contacts"]) || 0,
+    finals: Number(r["Finals"]) || 0,
+    goals: Number(r["Goals"]) || 0,
+    hours: Number(r["Hours"]) || 0,
+  })).filter(r => r.roc || r.agentName);
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // CORP MBR — Aggregators
 // ═══════════════════════════════════════════════════════════════════
@@ -6923,6 +6941,23 @@ function buildCampaignHoursByFunding(agentRaw, goalsRaw, monthFilter) {
     }
   }
   return { byFunding, totalPlan, totalActual, campaigns };
+}
+
+// Roll up Extended Agent Stats into per-ROC totals filtered to a month.
+// Returns { [roc]: { dials, contacts, finals } } for each ROC present in the filtered rows.
+// If the CSV is empty, returns {} — downstream callers render "—" for Contact Rate / Lead Penetration.
+function buildExtendedAgentLookup(extendedRows, monthFilter) {
+  if (!Array.isArray(extendedRows) || extendedRows.length === 0) return {};
+  const out = {};
+  for (const r of extendedRows) {
+    if (monthFilter && !monthFilter(r.date)) continue;
+    if (!r.roc) continue;
+    if (!out[r.roc]) out[r.roc] = { dials: 0, contacts: 0, finals: 0 };
+    out[r.roc].dials += r.dials;
+    out[r.roc].contacts += r.contacts;
+    out[r.roc].finals += r.finals;
+  }
+  return out;
 }
 
 // ═══════════════════════════════════════════════════════════════════
