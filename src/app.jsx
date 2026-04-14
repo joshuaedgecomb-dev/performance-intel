@@ -6881,8 +6881,13 @@ function buildQuartileReport(agentRaw, goalsRaw, newHiresRaw, dateFilter, refere
   ];
   const bucketLabel = (lo, hi) => hi === Infinity ? "361+" : `${lo}-${hi}`;
 
+  // Minimum hours threshold — agents below this are excluded from the quartile dispersion
+  // (and therefore from unit totals, tenure matrix, and participation). Low-hours agents
+  // skew SPH and distort the distribution; gating to ≥20h keeps quartiles meaningful.
+  const MIN_HOURS = 20;
+
   const buildSection = (group) => {
-    const agents = Object.values(byAgent).filter(a => a.group === group);
+    const agents = Object.values(byAgent).filter(a => a.group === group && a.hours >= MIN_HOURS);
     const withMetrics = agents.map(a => {
       const goal = goalByRoc[a.roc];
       let unitGoal = 0, planSph = 0;
@@ -8124,6 +8129,11 @@ function buildCorpQuartileSlide(pres, agentRaw, goalsRaw, priorAgentRaw, priorGo
   drawQuartileColumn(col1X, `Month Reporting On — ${reportingPeriodLabel}`, reporting);
   drawQuartileColumn(col2X, `MTD — ${mtdLabel}`, mtd);
 
+  slide.addText("All dispersions include only agents with 20+ hours logged.", {
+    x: 10, y: 6.89, w: 3.25, h: 0.27,
+    fontSize: 6, color: "9CA3AF", italic: true, align: "right",
+  });
+
   // Dividers — vertical between columns, horizontal between XM and XI within each column
   const dividerColor = corpPalette.navy;
   // Vertical divider (between the two columns)
@@ -8513,7 +8523,7 @@ function renderCorpCampaignColumn(slide, x, y, detail, columnLabel) {
       mkLabel(label, ri),
       mkCell(plan == null ? "—" : (money ? fmtMoney2(plan) : fmtRatio(plan)), ri),
       mkCell(actual == null ? "—" : (money ? fmtMoney2(actual) : fmtRatio(actual)), ri),
-      mkCell(variance == null ? "" : (money ? fmtMoneySigned(variance) : (variance === 0 ? "" : `${variance > 0 ? "+" : ""}${variance.toFixed(2)}`)), ri),
+      mkCell(variance == null ? "" : (money ? fmtMoneySigned(variance) : (variance === 0 ? "" : `${variance > 0 ? "+" : ""}${variance.toFixed(3)}`)), ri),
       mkCell(pct == null ? "" : fmtPct(pct), ri),
     ]);
   };
