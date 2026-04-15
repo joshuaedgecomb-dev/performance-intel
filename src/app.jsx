@@ -10253,6 +10253,151 @@ function CoachingAllAgentsTab({ data, lightMode }) {
   );
 }
 
+function CoachingPage({ coachingWeekly, coachingDetails, bpLookup, lightMode }) {
+  const [tab, setTab] = useState("summary");
+  const [timeMode, setTimeMode] = useState("current"); // "current" | "select" | "all"
+  const [selectedMonths, setSelectedMonths] = useState(() => new Set());
+
+  // Build the page data with the active filter
+  const monthFilter = useMemo(() => ({ mode: timeMode, months: selectedMonths }), [timeMode, selectedMonths]);
+  const data = useMemo(
+    () => buildCoachingPageData(coachingWeekly, coachingDetails, bpLookup, monthFilter),
+    [coachingWeekly, coachingDetails, bpLookup, monthFilter]
+  );
+
+  const hasWeekly = Array.isArray(coachingWeekly) && coachingWeekly.length > 0;
+  const hasDetails = coachingDetails && Object.keys(coachingDetails).length > 0;
+
+  // Empty state: nothing loaded
+  if (!hasWeekly && !hasDetails) {
+    return (
+      <div style={{ minHeight: "60vh", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-faint)", fontFamily: "var(--font-ui, Inter, sans-serif)", textAlign: "center", padding: "2rem" }}>
+        <div>
+          <div style={{ fontSize: "1rem", marginBottom: "0.5rem", color: "var(--text-warm)" }}>No coaching data loaded</div>
+          <div style={{ fontSize: "0.85rem" }}>Upload Coaching Details and Weekly Breakdown via Settings ⚙ → Data sources.</div>
+        </div>
+      </div>
+    );
+  }
+
+  const toggleMonth = (m) => setSelectedMonths(prev => {
+    const next = new Set(prev);
+    if (next.has(m)) next.delete(m); else next.add(m);
+    return next;
+  });
+
+  const tabs = [
+    { key: "summary",    label: "Summary" },
+    { key: "supervisor", label: "By Supervisor" },
+    { key: "agents",     label: "All Agents" },
+  ];
+
+  // Subtitle: count of agent-weeks in active period
+  const totalAgentWeeks = data.allAgents.reduce(
+    (acc, a) => acc + a.weeks.reduce((s, w) => s + (w.eligible ? 1 : 0), 0),
+    0
+  );
+  const periodLabel = timeMode === "current"
+    ? data.currentMonth || "—"
+    : timeMode === "all"
+      ? "All Time"
+      : (selectedMonths.size === 0 ? "All months" : `${selectedMonths.size} month${selectedMonths.size > 1 ? "s" : ""}`);
+
+  return (
+    <div style={{ maxWidth: 1100, margin: "0 auto", padding: "0 2.5rem 2rem" }}>
+      {/* Header */}
+      <div style={{ marginBottom: "0.75rem" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.5rem" }}>
+          <div>
+            <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.5rem", fontWeight: 700, color: "var(--text-warm)" }}>
+              Coaching Standard Attainment — myPerformance
+            </div>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: "var(--text-dim)" }}>
+              {totalAgentWeeks} agent-weeks · {periodLabel}
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: "0.25rem" }}>
+            {[{ key: "current", label: "Current Month" }, { key: "select", label: "Select Month" }, { key: "all", label: "All Time" }].map(opt => (
+              <button
+                key={opt.key}
+                onClick={() => setTimeMode(opt.key)}
+                style={{
+                  padding: "0.35rem 0.75rem",
+                  borderRadius: "var(--radius-sm, 6px)",
+                  border: `1px solid ${timeMode === opt.key ? "#d9770650" : "var(--border-muted)"}`,
+                  background: timeMode === opt.key ? "#d9770612" : "transparent",
+                  color: timeMode === opt.key ? "#d97706" : "var(--text-dim)",
+                  fontFamily: "var(--font-ui, Inter, sans-serif)",
+                  fontSize: "0.78rem",
+                  cursor: "pointer",
+                  fontWeight: timeMode === opt.key ? 600 : 400,
+                }}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {timeMode === "select" && (
+          <div style={{ display: "flex", gap: "0.3rem", marginTop: "0.5rem", flexWrap: "wrap" }}>
+            {data.fiscalMonths.map(m => {
+              const selected = selectedMonths.has(m);
+              return (
+                <button
+                  key={m}
+                  onClick={() => toggleMonth(m)}
+                  style={{
+                    padding: "0.3rem 0.65rem",
+                    borderRadius: "var(--radius-sm, 6px)",
+                    border: `1px solid ${selected ? "#6366f150" : "var(--border-muted)"}`,
+                    background: selected ? "#6366f118" : "transparent",
+                    color: selected ? "#6366f1" : "var(--text-dim)",
+                    fontFamily: "var(--font-ui, Inter, sans-serif)",
+                    fontSize: "0.75rem",
+                    cursor: "pointer",
+                    fontWeight: selected ? 600 : 400,
+                  }}
+                >
+                  {m}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Sub-tab navigation */}
+      <div style={{ display: "flex", gap: "0.35rem", marginBottom: "1.25rem", borderBottom: "1px solid var(--border)" }}>
+        {tabs.map(t => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            style={{
+              padding: "0.55rem 1rem",
+              border: "none",
+              borderBottom: tab === t.key ? "2px solid #d97706" : "2px solid transparent",
+              background: "transparent",
+              color: tab === t.key ? "var(--text-warm)" : "var(--text-dim)",
+              fontFamily: "var(--font-ui, Inter, sans-serif)",
+              fontSize: "0.82rem",
+              fontWeight: tab === t.key ? 600 : 400,
+              cursor: "pointer",
+              transition: "all 150ms",
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "summary"    && <CoachingSummaryTab       data={data} lightMode={lightMode} />}
+      {tab === "supervisor" && <CoachingBySupervisorTab  data={data} lightMode={lightMode} />}
+      {tab === "agents"     && <CoachingAllAgentsTab     data={data} lightMode={lightMode} />}
+    </div>
+  );
+}
+
 // SECTION 11b — tNPS DEEP-DIVE SLIDE  (pages/TNPSSlide.jsx)
 // Full tNPS analysis with 4 sub-tabs: Summary, By Campaign, By Supervisor, Customer Voices
 // ══════════════════════════════════════════════════════════════════════════════
