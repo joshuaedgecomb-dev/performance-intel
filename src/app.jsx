@@ -6799,27 +6799,30 @@ function buildCoachingPageData(coachingWeekly, coachingDetails, bpLookup, monthF
     if (typeof ka === "number" && typeof kb === "number") return ka - kb;
     return String(a).localeCompare(String(b));
   });
-  // For single-month: label FW1..FWn. For multi-month: prefix with month abbrev.
+  // For single-month: label FW1..FWn. For multi-month: prefix with month abbrev + per-month counter.
   const isMultiMonth = activeMonths.size > 1;
+  let perMonthCounter = {};
   const weekLabels = rawWeeks.map((raw, i) => {
     if (isMultiMonth) {
       // Try to extract the month from the date string itself
       const d = new Date(raw);
       if (!isNaN(d.getTime())) {
         const mon = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()];
-        return `${mon} W${i + 1}`;
+        perMonthCounter[mon] = (perMonthCounter[mon] || 0) + 1;
+        return `${mon} W${perMonthCounter[mon]}`;
       }
       return raw;
     }
     return `FW${i + 1}`;
   });
 
-  // Build per-agent week map. Key: ntid|fiscalWeek → {sessions, eligible, supervisor, region}
-  // (sums multiple rows for the same agent-week, marks eligible if any non-NCR row exists)
+  // Build per-agent week map. Key: ntid|fiscalWeek → {sessions}
+  // Entry existence signals eligibility; NCR rows are skipped entirely (matches buildCoachingStats).
   const agentWeekMap = new Map();
-  const agentMeta = new Map(); // ntid → {displayName, supervisor, region, site}
+  const agentMeta = new Map(); // ntid → {ntid, agentName, supervisor, site, region}
   for (const row of activeRows) {
     if (!row.ntid) continue;
+    if (row.colorWb === "No Coaching Required") continue;  // skip NCR entirely (matches buildCoachingStats)
     const bp = safeBp[row.ntid];
     const region = bp ? bp.region : "";
     const { site } = coachingSiteFromRegion(region);
@@ -6829,9 +6832,8 @@ function buildCoachingPageData(coachingWeekly, coachingDetails, bpLookup, monthF
       agentMeta.set(row.ntid, { ntid: row.ntid, agentName: row.displayName, supervisor, site, region });
     }
     const key = `${row.ntid}|${row.fiscalWeek}`;
-    const existing = agentWeekMap.get(key) || { sessions: 0, eligible: false };
+    const existing = agentWeekMap.get(key) || { sessions: 0 };
     existing.sessions += row.sessions || 0;
-    if (row.colorWb !== "No Coaching Required") existing.eligible = true;
     agentWeekMap.set(key, existing);
   }
 
@@ -6840,8 +6842,8 @@ function buildCoachingPageData(coachingWeekly, coachingDetails, bpLookup, monthF
     const v = agentWeekMap.get(`${ntid}|${wk}`);
     return {
       week: weekLabels[i],
-      sessions: v && v.eligible ? v.sessions : null,
-      eligible: !!(v && v.eligible),
+      sessions: v ? v.sessions : null,
+      eligible: !!v,
     };
   });
 
