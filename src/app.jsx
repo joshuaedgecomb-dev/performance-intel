@@ -10169,7 +10169,7 @@ function CoachingAllAgentsTab({ data, lightMode }) {
       else { av = a.pct ?? 999; bv = b.pct ?? 999; }
       if (av < bv) return sortDir === "asc" ? -1 : 1;
       if (av > bv) return sortDir === "asc" ? 1 : -1;
-      return 0;
+      return (a.agentName || "").localeCompare(b.agentName || "");
     });
     return rows;
   }, [data.allAgents, activeChip, search, sortBy, sortDir]);
