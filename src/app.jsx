@@ -6824,7 +6824,8 @@ function buildCoachingPageData(coachingWeekly, coachingDetails, bpLookup, monthF
   for (const row of activeRows) {
     if (!row.ntid) continue;
     if (row.colorWb === "No Coaching Required") continue;  // skip NCR entirely (matches buildCoachingStats)
-    const bp = row.ntid ? safeBp[String(row.ntid).toLowerCase()] : null;
+    const ntidLower = row.ntid ? String(row.ntid).toLowerCase() : "";
+    const bp = ntidLower ? (safeBp[ntidLower] || safeBp[`bp-${ntidLower}`] || safeBp[ntidLower.replace(/^bp-/, "")]) : null;
     const region = bp ? bp.region : "";
     const { site } = coachingSiteFromRegion(region);
     if (!site) continue; // skip rows with no roster match (per existing convention)
