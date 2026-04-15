@@ -82,6 +82,40 @@ function attainColor(pct) {
   return Q.Q4.color;
 }
 
+// Maps an agent's per-week session count to a {bg, fg} color pair.
+//   0  → red    (gap)
+//   1  → green  (on standard)
+//  ≥2  → indigo (over-indexed)
+//  null → grey  (future or "No Coaching Required")
+function coachingCellColor(sessions) {
+  if (sessions === null || sessions === undefined) return { bg: "#444", fg: "#888" };
+  if (sessions === 0) return { bg: "#dc2626", fg: "#ffffff" };
+  if (sessions === 1) return { bg: "#16a34a", fg: "#ffffff" };
+  return { bg: "#6366f1", fg: "#ffffff" };
+}
+
+// Same color band as attainColor() but returns indigo when over-indexed (>100%).
+// Used by Sessions / % cells where over-indexing is meaningful.
+function coachingPctColor(pct) {
+  if (pct == null) return "var(--text-faint)";
+  if (pct > 1)    return "#6366f1";
+  if (pct >= 1)   return "#16a34a";
+  if (pct >= 0.8) return "#2563eb";
+  if (pct > 0)    return "#d97706";
+  return "#dc2626";
+}
+
+// Subtle row tint for an attainment percentage.
+// Returned as {dark, light} so consumers pick by lightMode.
+function coachingRowTint(pct) {
+  if (pct == null) return { dark: "transparent", light: "transparent" };
+  if (pct > 1)     return { dark: "#1a1d28",  light: "#eef2ff" };
+  if (pct >= 1)    return { dark: "#14241a",  light: "#f0fdf4" };
+  if (pct >= 0.8)  return { dark: "#15212a",  light: "#eff6ff" };
+  if (pct > 0)     return { dark: "#2a2014",  light: "#fffbeb" };
+  return { dark: "#2a1414", light: "#fef2f2" };
+}
+
 // ── MBR Export Constants ─────────────────────────────────────────────────────
 // Category detection: GL-code prefixes, display name keywords, and exact overrides
 function getMbrCategory(jobType) {
@@ -6682,6 +6716,267 @@ function buildCoachingStats(coachingDetails, coachingWeekly, bpLookup, reporting
     totalSessions: Number(priorPriorBucket["Total Sessions"]) || 0,
   };
   return { org, orgPrior, orgPriorPrior, dr: siteSummary(dr), bz: siteSummary(bz) };
+}
+
+// Site/sub-site mapping for a region string. Mirrors buildCoachingStats logic
+// but also returns the full region for sub-site filtering.
+function coachingSiteFromRegion(region) {
+  const r = (region || "").trim();
+  if (!r) return { site: null, region: null };
+  const isBz = r.toUpperCase().includes("XOTM");
+  return { site: isBz ? "BZ" : "DR", region: r };
+}
+
+// Returns a friendly site label for chips: "DR" → "DR", "Belize City-XOTM" → "Belize City".
+function coachingRegionLabel(region) {
+  if (!region) return "—";
+  const r = String(region).trim();
+  if (r.toUpperCase().includes("XOTM")) {
+    return r.replace(/-XOTM$/i, "").trim();
+  }
+  if (r === "SD-Xfinity") return "DR";
+  return r;
+}
+
+// Reads "Acknowledged %" / "Completed %" defensively — handles both 0.84 and 84 conventions.
+function coachingNormalizedPct(rawVal) {
+  const n = Number(rawVal);
+  if (!Number.isFinite(n)) return 0;
+  return n > 1 ? n / 100 : n;
+}
+
+// Heart of the page. Returns the structured data for all three tabs.
+//
+// monthFilter: { mode: "current" | "select" | "all", months: Set<string> }
+//   "current" → use the most recent fiscalMonth in coachingWeekly
+//   "select"  → use only fiscalMonths in months (or all if months is empty)
+//   "all"     → no filter
+//
+// See spec §3 for full output shape.
+function buildCoachingPageData(coachingWeekly, coachingDetails, bpLookup, monthFilter) {
+  const safeWeekly = Array.isArray(coachingWeekly) ? coachingWeekly : [];
+  const safeDetails = coachingDetails || {};
+  const safeBp = bpLookup || {};
+  const filter = monthFilter || { mode: "current", months: new Set() };
+
+  // Sorted list of fiscal months present in weekly data (chronological, oldest first).
+  const monthNames = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
+  const monthOrder = (label) => {
+    const m = String(label || "").trim().match(/^([A-Za-z]{3,})\s*'?(\d{2,4})$/);
+    if (!m) return 0;
+    const mIdx = monthNames.indexOf(m[1].slice(0, 3).toLowerCase());
+    if (mIdx < 0) return 0;
+    const yr = Number(m[2].length === 4 ? m[2] : `20${m[2]}`);
+    return yr * 12 + mIdx;
+  };
+  const fiscalMonths = [...new Set(safeWeekly.map(r => r.fiscalMonth).filter(Boolean))]
+    .sort((a, b) => monthOrder(a) - monthOrder(b));
+
+  // Resolve which months are active per filter mode.
+  const currentMonth = fiscalMonths.length ? fiscalMonths[fiscalMonths.length - 1] : "";
+  let activeMonths;
+  if (filter.mode === "all") {
+    activeMonths = new Set(fiscalMonths);
+  } else if (filter.mode === "select") {
+    activeMonths = filter.months && filter.months.size > 0 ? new Set(filter.months) : new Set(fiscalMonths);
+  } else {
+    activeMonths = new Set(currentMonth ? [currentMonth] : []);
+  }
+
+  // Filter weekly to active months.
+  const activeRows = safeWeekly.filter(r => activeMonths.has(r.fiscalMonth));
+
+  // Determine fiscal-week labels and ordering.
+  // Use raw fiscalWeek strings, sorted chronologically. If they parse as dates, sort by date.
+  // Otherwise sort lexically. Then label as FW1..FWn within the active period.
+  const rawWeeks = [...new Set(activeRows.map(r => r.fiscalWeek).filter(Boolean))];
+  const weekKey = (s) => {
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? String(s) : d.getTime();
+  };
+  rawWeeks.sort((a, b) => {
+    const ka = weekKey(a), kb = weekKey(b);
+    if (typeof ka === "number" && typeof kb === "number") return ka - kb;
+    return String(a).localeCompare(String(b));
+  });
+  // For single-month: label FW1..FWn. For multi-month: prefix with month abbrev.
+  const isMultiMonth = activeMonths.size > 1;
+  const weekLabels = rawWeeks.map((raw, i) => {
+    if (isMultiMonth) {
+      // Try to extract the month from the date string itself
+      const d = new Date(raw);
+      if (!isNaN(d.getTime())) {
+        const mon = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()];
+        return `${mon} W${i + 1}`;
+      }
+      return raw;
+    }
+    return `FW${i + 1}`;
+  });
+
+  // Build per-agent week map. Key: ntid|fiscalWeek → {sessions, eligible, supervisor, region}
+  // (sums multiple rows for the same agent-week, marks eligible if any non-NCR row exists)
+  const agentWeekMap = new Map();
+  const agentMeta = new Map(); // ntid → {displayName, supervisor, region, site}
+  for (const row of activeRows) {
+    if (!row.ntid) continue;
+    const bp = safeBp[row.ntid];
+    const region = bp ? bp.region : "";
+    const { site } = coachingSiteFromRegion(region);
+    if (!site) continue; // skip rows with no roster match (per existing convention)
+    const supervisor = (bp && bp.supervisor) || row.supervisor || "Unassigned";
+    if (!agentMeta.has(row.ntid)) {
+      agentMeta.set(row.ntid, { ntid: row.ntid, agentName: row.displayName, supervisor, site, region });
+    }
+    const key = `${row.ntid}|${row.fiscalWeek}`;
+    const existing = agentWeekMap.get(key) || { sessions: 0, eligible: false };
+    existing.sessions += row.sessions || 0;
+    if (row.colorWb !== "No Coaching Required") existing.eligible = true;
+    agentWeekMap.set(key, existing);
+  }
+
+  // Helper: weeks array for one agent across rawWeeks
+  const weeksForAgent = (ntid) => rawWeeks.map((wk, i) => {
+    const v = agentWeekMap.get(`${ntid}|${wk}`);
+    return {
+      week: weekLabels[i],
+      sessions: v && v.eligible ? v.sessions : null,
+      eligible: !!(v && v.eligible),
+    };
+  });
+
+  // Build per-agent rollups
+  const allAgents = [];
+  for (const [ntid, meta] of agentMeta.entries()) {
+    const weeks = weeksForAgent(ntid);
+    const sessionsX = weeks.reduce((acc, w) => acc + (w.eligible ? (w.sessions || 0) : 0), 0);
+    const sessionsY = weeks.reduce((acc, w) => acc + (w.eligible ? 1 : 0), 0);
+    const pct = sessionsY ? sessionsX / sessionsY : null;
+    allAgents.push({ ...meta, weeks, sessionsX, sessionsY, pct });
+  }
+  allAgents.sort((a, b) => (a.pct ?? 999) - (b.pct ?? 999));
+
+  // Group agents by supervisor
+  const supMap = new Map();
+  for (const ag of allAgents) {
+    if (!supMap.has(ag.supervisor)) {
+      supMap.set(ag.supervisor, { supervisor: ag.supervisor, agents: [] });
+    }
+    supMap.get(ag.supervisor).agents.push(ag);
+  }
+  const bySupervisor = [...supMap.values()].map(g => {
+    // primary site = mode of agent regions; ties broken alphabetically
+    const regionCounts = {};
+    g.agents.forEach(a => { regionCounts[a.region] = (regionCounts[a.region] || 0) + 1; });
+    const primaryRegion = Object.keys(regionCounts).sort((a, b) =>
+      regionCounts[b] - regionCounts[a] || a.localeCompare(b)
+    )[0] || "";
+    const { site } = coachingSiteFromRegion(primaryRegion);
+    // Per-week supervisor stats: agents coached that week / eligible agents that week
+    const weeks = rawWeeks.map((wk, i) => {
+      let x = 0, y = 0;
+      for (const a of g.agents) {
+        const w = a.weeks[i];
+        if (w.eligible) {
+          y += 1;
+          if ((w.sessions || 0) >= 1) x += 1;
+        }
+      }
+      return { week: weekLabels[i], x, y, pct: y ? x / y : null };
+    });
+    const sessionsX = g.agents.reduce((acc, a) => acc + a.sessionsX, 0);
+    const sessionsY = g.agents.reduce((acc, a) => acc + a.sessionsY, 0);
+    return {
+      supervisor: g.supervisor,
+      site,
+      region: primaryRegion,
+      agentCount: g.agents.length,
+      weeks,
+      sessionsX,
+      sessionsY,
+      pct: sessionsY ? sessionsX / sessionsY : null,
+      agents: g.agents,
+    };
+  }).sort((a, b) => (a.pct ?? 999) - (b.pct ?? 999));
+
+  // Per-site stats (sub-region granularity).
+  const regionMap = new Map(); // region → { x, y } accumulator
+  for (const a of allAgents) {
+    if (!regionMap.has(a.region)) regionMap.set(a.region, { x: 0, y: 0 });
+    const acc = regionMap.get(a.region);
+    a.weeks.forEach(w => {
+      if (w.eligible) {
+        acc.y += 1;
+        if ((w.sessions || 0) >= 1) acc.x += 1;
+      }
+    });
+  }
+  const bySite = [...regionMap.entries()].map(([region, s]) => {
+    const { site } = coachingSiteFromRegion(region);
+    return { site, region, x: s.x, y: s.y, pct: s.y ? s.x / s.y : null };
+  });
+
+  // Aggregated DR / BZ totals (for the summary tile + comparison chart).
+  const drRollup = bySite.filter(s => s.site === "DR")
+    .reduce((acc, s) => ({ x: acc.x + s.x, y: acc.y + s.y }), { x: 0, y: 0 });
+  const bzRollup = bySite.filter(s => s.site === "BZ")
+    .reduce((acc, s) => ({ x: acc.x + s.x, y: acc.y + s.y }), { x: 0, y: 0 });
+
+  // Org-level KPIs from coachingDetails (Comcast authoritative). Sum across active months.
+  let orgCoachingX = 0, orgCoachingY = 0, orgTotalSessions = 0;
+  let ackPctSum = 0, ackPctCount = 0;
+  for (const month of activeMonths) {
+    const bucket = safeDetails[month] || {};
+    orgCoachingX += Number(bucket["Coaching Sessions"]) || 0;
+    orgCoachingY += Number(bucket["Coachings Due"]) || 0;
+    orgTotalSessions += Number(bucket["Total Sessions"]) || 0;
+    const ackRaw = bucket["Acknowledged %"] || bucket["Acknowledged % "];
+    if (ackRaw !== undefined && ackRaw !== "") {
+      ackPctSum += coachingNormalizedPct(ackRaw);
+      ackPctCount += 1;
+    }
+  }
+  const orgCoachingPct = orgCoachingY ? orgCoachingX / orgCoachingY : null;
+  const ackPct = ackPctCount ? ackPctSum / ackPctCount : null;
+  const ackY = orgTotalSessions;
+  const ackX = ackPct != null && ackY ? Math.round(ackPct * ackY) : 0;
+
+  // Per-week org trend (sum over all eligible agent-weeks across active months).
+  const byWeek = rawWeeks.map((wk, i) => {
+    let x = 0, y = 0;
+    for (const a of allAgents) {
+      const w = a.weeks[i];
+      if (w.eligible) {
+        y += 1;
+        if ((w.sessions || 0) >= 1) x += 1;
+      }
+    }
+    return { week: weekLabels[i], x, y, pct: y ? x / y : null };
+  });
+
+  return {
+    org: {
+      coachingPct: orgCoachingPct,
+      coachingX: orgCoachingX,
+      coachingY: orgCoachingY,
+      ackPct,
+      ackX,
+      ackY,
+      totalSessions: orgTotalSessions,
+    },
+    bySiteRollup: {
+      dr: { x: drRollup.x, y: drRollup.y, pct: drRollup.y ? drRollup.x / drRollup.y : null },
+      bz: { x: bzRollup.x, y: bzRollup.y, pct: bzRollup.y ? bzRollup.x / bzRollup.y : null },
+    },
+    bySite,
+    byWeek,
+    bySupervisor,
+    allAgents,
+    fiscalMonths,
+    currentMonth,
+    activeMonths: [...activeMonths],
+    weekLabels,
+  };
 }
 
 // Returns an array of { bucket, pct, users } for the reporting month, in canonical bucket order.
