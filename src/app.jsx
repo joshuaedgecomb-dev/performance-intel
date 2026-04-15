@@ -97,7 +97,7 @@ function coachingCellColor(sessions) {
 // Same color band as attainColor() but returns indigo when over-indexed (>100%).
 // Used by Sessions / % cells where over-indexing is meaningful.
 function coachingPctColor(pct) {
-  if (pct == null) return "var(--text-faint)";
+  if (pct == null) return "#94a3b8";
   if (pct > 1)    return "#6366f1";
   if (pct >= 1)   return "#16a34a";
   if (pct >= 0.8) return "#2563eb";
@@ -9812,7 +9812,7 @@ function WeekCell({ mode, data }) {
     );
   }
   // mode === "pct"
-  if (data.y === 0 || data.pct == null) {
+  if (data.y == null || data.y === 0 || data.pct == null) {
     return (
       <span style={{ display: "block", textAlign: "center", background: "#444", color: "#888", fontSize: "0.72rem", fontWeight: 700, padding: "0.25rem 0", borderRadius: 3 }}>—</span>
     );
