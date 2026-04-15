@@ -9780,6 +9780,73 @@ function MbrExportModal({ perf, onClose }) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
+// COACHING PAGE — Module-scope sub-components
+// ═══════════════════════════════════════════════════════════════════
+
+function KpiTile({ label, value, sub, accent }) {
+  return (
+    <div style={{ background: "var(--glass-bg)", border: `1px solid ${accent}18`, borderTop: `3px solid ${accent}`, borderRadius: "var(--radius-md, 10px)", padding: "1rem" }}>
+      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: "var(--text-muted)", letterSpacing: "0.06em", textTransform: "uppercase" }}>{label}</div>
+      <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "2.25rem", color: accent, fontWeight: 800, lineHeight: 1.1 }}>{value}</div>
+      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "var(--text-dim)" }}>{sub}</div>
+    </div>
+  );
+}
+
+// Renders one fiscal-week cell.
+// mode = "count": shows raw session count, color from coachingCellColor
+// mode = "pct":   shows "X/Y", color from coachingPctColor band
+function WeekCell({ mode, data }) {
+  if (!data || (mode === "count" && !data.eligible)) {
+    return (
+      <span style={{ display: "block", textAlign: "center", background: "#444", color: "#888", fontSize: "0.72rem", fontWeight: 700, padding: "0.25rem 0", borderRadius: 3 }}>—</span>
+    );
+  }
+  if (mode === "count") {
+    const c = coachingCellColor(data.sessions);
+    return (
+      <span style={{ display: "block", textAlign: "center", background: c.bg, color: c.fg, fontSize: "0.78rem", fontWeight: 700, padding: "0.25rem 0", borderRadius: 3 }}>
+        {data.sessions}
+      </span>
+    );
+  }
+  // mode === "pct"
+  if (data.y === 0 || data.pct == null) {
+    return (
+      <span style={{ display: "block", textAlign: "center", background: "#444", color: "#888", fontSize: "0.72rem", fontWeight: 700, padding: "0.25rem 0", borderRadius: 3 }}>—</span>
+    );
+  }
+  const bg = coachingPctColor(data.pct);
+  return (
+    <span style={{ display: "block", textAlign: "center", background: bg, color: "#fff", fontSize: "0.78rem", fontWeight: 700, padding: "0.25rem 0", borderRadius: 3 }}>
+      {data.x}/{data.y}
+    </span>
+  );
+}
+
+function SiteChip({ label, accent, active, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        padding: "0.3rem 0.75rem",
+        borderRadius: "var(--radius-sm, 6px)",
+        border: `1px solid ${active ? accent : "var(--border-muted)"}`,
+        background: active ? `${accent}18` : "transparent",
+        color: active ? accent : "var(--text-dim)",
+        fontFamily: "var(--font-ui, Inter, sans-serif)",
+        fontSize: "0.78rem",
+        fontWeight: active ? 600 : 400,
+        cursor: "pointer",
+        transition: "all 150ms",
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
 // SECTION 11b — tNPS DEEP-DIVE SLIDE  (pages/TNPSSlide.jsx)
 // Full tNPS analysis with 4 sub-tabs: Summary, By Campaign, By Supervisor, Customer Voices
 // ══════════════════════════════════════════════════════════════════════════════
