@@ -9848,18 +9848,21 @@ function SiteChip({ label, accent, active, onClick }) {
 }
 
 // One row in an agent grid (used by All Agents tab + inside expanded supervisor rows).
-// columns: 1.5fr supervisor 1.2fr site 0.7fr [weeks] sessions 0.6fr pct 0.5fr
+// columns (when not indented): name(1.5fr) supervisor(1.2fr) site(1.2fr) [weeks 0.5fr each] sessions(0.7fr) pct(0.5fr)
+// columns (when indented):     name(1.5fr) site(1.2fr) [weeks 0.5fr each] sessions(0.7fr) pct(0.5fr)
 function AgentRow({ agent, weekLabels, lightMode, indented }) {
   const tint = coachingRowTint(agent.pct);
   const overIndexed = agent.sessionsX > agent.sessionsY;
   const sessionsColor = overIndexed ? "#6366f1" : coachingPctColor(agent.pct);
-  const pctColor = sessionsColor;
   const accent = coachingPctColor(agent.pct);
+  const colsBase = indented
+    ? `1.5fr 1.2fr ${weekLabels.map(() => "0.5fr").join(" ")} 0.7fr 0.5fr`
+    : `1.5fr 1.2fr 1.2fr ${weekLabels.map(() => "0.5fr").join(" ")} 0.7fr 0.5fr`;
   return (
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: `1.5fr 1.2fr 1.2fr ${weekLabels.map(() => "0.5fr").join(" ")} 0.7fr 0.5fr`,
+        gridTemplateColumns: colsBase,
         gap: 4,
         padding: indented ? "0.3rem 0.5rem 0.3rem 0.5rem" : "0.4rem 0.5rem",
         alignItems: "center",
@@ -9870,7 +9873,9 @@ function AgentRow({ agent, weekLabels, lightMode, indented }) {
       }}
     >
       <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: indented ? "0.78rem" : "0.82rem", color: "var(--text-warm)", fontWeight: 500 }}>{agent.agentName}</span>
-      <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "var(--text-dim)" }}>{agent.supervisor}</span>
+      {!indented && (
+        <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "var(--text-dim)" }}>{agent.supervisor}</span>
+      )}
       <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: agent.site === "DR" ? "#ed8936" : "#48bb78" }}>{coachingRegionLabel(agent.region)}</span>
       {agent.weeks.map((w, i) => (
         <WeekCell key={i} mode="count" data={w} />
@@ -9878,7 +9883,7 @@ function AgentRow({ agent, weekLabels, lightMode, indented }) {
       <span style={{ textAlign: "right", fontFamily: "var(--font-data, monospace)", fontSize: "0.82rem", fontWeight: 700, color: sessionsColor }}>
         {agent.sessionsX}/{agent.sessionsY}
       </span>
-      <span style={{ textAlign: "right", fontFamily: "var(--font-data, monospace)", fontSize: "0.82rem", fontWeight: 700, color: pctColor }}>
+      <span style={{ textAlign: "right", fontFamily: "var(--font-data, monospace)", fontSize: "0.82rem", fontWeight: 700, color: sessionsColor }}>
         {agent.pct == null ? "—" : `${Math.round(agent.pct * 100)}%`}
       </span>
     </div>
