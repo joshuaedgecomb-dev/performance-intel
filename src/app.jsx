@@ -9941,6 +9941,96 @@ function SupervisorRow({ sup, weekLabels, expanded, onToggle, lightMode }) {
   );
 }
 
+function CoachingSummaryTab({ data, lightMode }) {
+  const { org, bySiteRollup, bySite, byWeek } = data;
+
+  const fmtPct = (p) => p == null ? "—" : `${Math.round(p * 100)}%`;
+
+  // Tile color picks
+  const orgAccent  = coachingPctColor(org.coachingPct);
+  const drAccent   = coachingPctColor(bySiteRollup.dr.pct);
+  const bzAccent   = coachingPctColor(bySiteRollup.bz.pct);
+  const ackAccent  = coachingPctColor(org.ackPct);
+
+  // Site comparison max for bar scaling (cap at 100% for height; allow >100% as label).
+  const maxBarPct = Math.max(1, ...bySite.map(s => s.pct || 0));
+  // Weekly trend — same maxBarPct
+  const maxTrendPct = Math.max(1, ...byWeek.map(w => w.pct || 0));
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+      {/* KPI tiles */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.75rem" }}>
+        <KpiTile label="Org Coaching" value={fmtPct(org.coachingPct)} sub={`${org.coachingX} / ${org.coachingY} sessions`} accent={orgAccent} />
+        <KpiTile label="DR Coaching" value={fmtPct(bySiteRollup.dr.pct)} sub={`${bySiteRollup.dr.x} / ${bySiteRollup.dr.y} agent-weeks`} accent={drAccent} />
+        <KpiTile label="BZ Coaching" value={fmtPct(bySiteRollup.bz.pct)} sub={`${bySiteRollup.bz.x} / ${bySiteRollup.bz.y} agent-weeks`} accent={bzAccent} />
+        <KpiTile label="Acknowledgement" value={fmtPct(org.ackPct)} sub={`${org.ackX} / ${org.ackY} sessions`} accent={ackAccent} />
+      </div>
+
+      {/* Site comparison bar chart */}
+      <div style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem 1.5rem" }}>
+        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: "1rem" }}>Site Comparison</div>
+        {bySite.length === 0 ? (
+          <div style={{ color: "var(--text-faint)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem" }}>No site data for the selected period.</div>
+        ) : (
+          <div style={{ display: "flex", gap: "1rem", alignItems: "flex-end", height: 220, paddingTop: 24 }}>
+            {bySite.map((s, i) => {
+              const pct = s.pct || 0;
+              const barH = Math.max(20, (pct / maxBarPct) * 160);
+              const color = coachingPctColor(s.pct);
+              return (
+                <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
+                  <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "1.05rem", fontWeight: 700, color, marginBottom: 4 }}>
+                    {fmtPct(s.pct)}
+                  </div>
+                  <div style={{ width: "60%", height: barH, borderRadius: "6px 6px 0 0", background: `${color}cc` }} />
+                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: "var(--text-warm)", marginTop: 6, fontWeight: 600 }}>{coachingRegionLabel(s.region)}</div>
+                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.68rem", color: "var(--text-dim)" }}>{s.x}/{s.y}</div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Weekly trend chart */}
+      <div style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem 1.5rem" }}>
+        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: "1rem" }}>Weekly Trend</div>
+        {byWeek.length === 0 ? (
+          <div style={{ color: "var(--text-faint)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem" }}>No weekly data for the selected period.</div>
+        ) : (
+          <div style={{ display: "flex", gap: "1.5rem", alignItems: "flex-end", height: 180, paddingTop: 24 }}>
+            {byWeek.map((w, i) => {
+              if (w.pct == null) {
+                return (
+                  <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
+                    <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "0.78rem", color: "var(--text-faint)", marginBottom: 4 }}>—</div>
+                    <div style={{ width: "70%", height: 30, borderRadius: "6px 6px 0 0", border: "1px dashed var(--border-muted)", background: "transparent" }} />
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: "var(--text-warm)", marginTop: 6, fontWeight: 600 }}>{w.week}</div>
+                  </div>
+                );
+              }
+              const pct = w.pct || 0;
+              const barH = Math.max(20, (pct / maxTrendPct) * 130);
+              const color = coachingPctColor(w.pct);
+              return (
+                <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
+                  <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "1rem", fontWeight: 700, color, marginBottom: 4 }}>
+                    {fmtPct(w.pct)}
+                  </div>
+                  <div style={{ width: "70%", height: barH, borderRadius: "6px 6px 0 0", background: `${color}cc` }} />
+                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: "var(--text-warm)", marginTop: 6, fontWeight: 600 }}>{w.week}</div>
+                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.68rem", color: "var(--text-dim)" }}>{w.x}/{w.y}</div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // SECTION 11b — tNPS DEEP-DIVE SLIDE  (pages/TNPSSlide.jsx)
 // Full tNPS analysis with 4 sub-tabs: Summary, By Campaign, By Supervisor, Customer Voices
 // ══════════════════════════════════════════════════════════════════════════════
