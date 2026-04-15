@@ -10149,6 +10149,110 @@ function CoachingBySupervisorTab({ data, lightMode }) {
   );
 }
 
+function CoachingAllAgentsTab({ data, lightMode }) {
+  const [activeChip, setActiveChip] = useState("all");
+  const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState("pct"); // "pct" | "name" | "sessions"
+  const [sortDir, setSortDir] = useState("asc");
+
+  const filterFn = makeSiteFilter(activeChip);
+
+  const filtered = useMemo(() => {
+    const s = search.trim().toLowerCase();
+    let rows = data.allAgents.filter(a => filterFn(a.region));
+    if (s) rows = rows.filter(a => (a.agentName || "").toLowerCase().includes(s));
+    rows.sort((a, b) => {
+      let av, bv;
+      if (sortBy === "name") { av = (a.agentName || "").toLowerCase(); bv = (b.agentName || "").toLowerCase(); }
+      else if (sortBy === "sessions") { av = a.sessionsX; bv = b.sessionsX; }
+      else { av = a.pct ?? 999; bv = b.pct ?? 999; }
+      if (av < bv) return sortDir === "asc" ? -1 : 1;
+      if (av > bv) return sortDir === "asc" ? 1 : -1;
+      return 0;
+    });
+    return rows;
+  }, [data.allAgents, activeChip, search, sortBy, sortDir]);
+
+  const gappedCount = useMemo(() => filtered.filter(a => (a.pct ?? 0) < 1).length, [filtered]);
+
+  const headerClick = (col) => {
+    if (sortBy === col) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortBy(col); setSortDir(col === "name" ? "asc" : col === "sessions" ? "desc" : "asc"); }
+  };
+
+  const headerCell = (label, col, align = "left") => (
+    <span
+      onClick={col ? () => headerClick(col) : undefined}
+      style={{
+        textAlign: align,
+        cursor: col ? "pointer" : "default",
+        userSelect: "none",
+        color: col === sortBy ? "var(--text-warm)" : "var(--text-muted)",
+      }}
+    >
+      {label}{col === sortBy ? (sortDir === "asc" ? " ▲" : " ▼") : ""}
+    </span>
+  );
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
+        <CoachingSiteChips activeChip={activeChip} onChange={setActiveChip} lightMode={lightMode} />
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search agent name..."
+          style={{
+            background: "var(--bg-secondary)",
+            border: "1px solid var(--border)",
+            borderRadius: "var(--radius-sm, 6px)",
+            padding: "0.4rem 0.7rem",
+            fontFamily: "var(--font-ui, Inter, sans-serif)",
+            fontSize: "0.78rem",
+            color: "var(--text-warm)",
+            minWidth: 200,
+          }}
+        />
+      </div>
+
+      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: "var(--text-dim)", marginBottom: "0.6rem" }}>
+        {filtered.length} agents · <span style={{ color: gappedCount > 0 ? "#dc2626" : "#16a34a", fontWeight: 600 }}>{gappedCount} with gaps</span>
+      </div>
+
+      {/* Header row */}
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: `1.5fr 1.2fr 1.2fr ${data.weekLabels.map(() => "0.5fr").join(" ")} 0.7fr 0.5fr`,
+        gap: 4,
+        padding: "0.5rem",
+        fontFamily: "var(--font-ui, Inter, sans-serif)",
+        fontSize: "0.7rem",
+        textTransform: "uppercase",
+        letterSpacing: "0.06em",
+        borderBottom: "1px solid var(--border)",
+      }}>
+        {headerCell("Agent", "name")}
+        {headerCell("Supervisor")}
+        {headerCell("Site")}
+        {data.weekLabels.map((wk, i) => <span key={i} style={{ textAlign: "center", color: "var(--text-muted)" }}>{wk}</span>)}
+        {headerCell("Sessions", "sessions", "right")}
+        {headerCell("%", "pct", "right")}
+      </div>
+
+      {filtered.length === 0 ? (
+        <div style={{ padding: "2rem 1rem", textAlign: "center", color: "var(--text-faint)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem" }}>
+          No agents match the current filters.
+        </div>
+      ) : (
+        filtered.map((a, i) => (
+          <AgentRow key={`${a.ntid || a.agentName}-${i}`} agent={a} weekLabels={data.weekLabels} lightMode={lightMode} />
+        ))
+      )}
+    </div>
+  );
+}
+
 // SECTION 11b — tNPS DEEP-DIVE SLIDE  (pages/TNPSSlide.jsx)
 // Full tNPS analysis with 4 sub-tabs: Summary, By Campaign, By Supervisor, Customer Voices
 // ══════════════════════════════════════════════════════════════════════════════
