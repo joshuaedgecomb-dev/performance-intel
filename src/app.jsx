@@ -9847,6 +9847,95 @@ function SiteChip({ label, accent, active, onClick }) {
   );
 }
 
+// One row in an agent grid (used by All Agents tab + inside expanded supervisor rows).
+// columns: 1.5fr supervisor 1.2fr site 0.7fr [weeks] sessions 0.6fr pct 0.5fr
+function AgentRow({ agent, weekLabels, lightMode, indented }) {
+  const tint = coachingRowTint(agent.pct);
+  const overIndexed = agent.sessionsX > agent.sessionsY;
+  const sessionsColor = overIndexed ? "#6366f1" : coachingPctColor(agent.pct);
+  const pctColor = sessionsColor;
+  const accent = coachingPctColor(agent.pct);
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: `1.5fr 1.2fr 1.2fr ${weekLabels.map(() => "0.5fr").join(" ")} 0.7fr 0.5fr`,
+        gap: 4,
+        padding: indented ? "0.3rem 0.5rem 0.3rem 0.5rem" : "0.4rem 0.5rem",
+        alignItems: "center",
+        background: lightMode ? tint.light : tint.dark,
+        borderLeft: `${indented ? 2 : 3}px solid ${accent}`,
+        borderRadius: "0 3px 3px 0",
+        marginTop: 3,
+      }}
+    >
+      <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: indented ? "0.78rem" : "0.82rem", color: "var(--text-warm)", fontWeight: 500 }}>{agent.agentName}</span>
+      <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "var(--text-dim)" }}>{agent.supervisor}</span>
+      <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: agent.site === "DR" ? "#ed8936" : "#48bb78" }}>{coachingRegionLabel(agent.region)}</span>
+      {agent.weeks.map((w, i) => (
+        <WeekCell key={i} mode="count" data={w} />
+      ))}
+      <span style={{ textAlign: "right", fontFamily: "var(--font-data, monospace)", fontSize: "0.82rem", fontWeight: 700, color: sessionsColor }}>
+        {agent.sessionsX}/{agent.sessionsY}
+      </span>
+      <span style={{ textAlign: "right", fontFamily: "var(--font-data, monospace)", fontSize: "0.82rem", fontWeight: 700, color: pctColor }}>
+        {agent.pct == null ? "—" : `${Math.round(agent.pct * 100)}%`}
+      </span>
+    </div>
+  );
+}
+
+// One row in the By Supervisor tab. Click toggles expand state held by parent.
+function SupervisorRow({ sup, weekLabels, expanded, onToggle, lightMode }) {
+  const tint = coachingRowTint(sup.pct);
+  const accent = coachingPctColor(sup.pct);
+  const sessionsColor = sup.sessionsX > sup.sessionsY ? "#6366f1" : accent;
+  return (
+    <Fragment>
+      <div
+        onClick={onToggle}
+        style={{
+          display: "grid",
+          gridTemplateColumns: `1.4fr 0.9fr 0.5fr ${weekLabels.map(() => "0.7fr").join(" ")} 0.7fr 0.5fr`,
+          gap: 4,
+          padding: "0.5rem",
+          alignItems: "center",
+          background: lightMode ? tint.light : tint.dark,
+          borderLeft: `3px solid ${accent}`,
+          borderRadius: "0 3px 3px 0",
+          marginTop: 4,
+          cursor: "pointer",
+          userSelect: "none",
+        }}
+      >
+        <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", fontWeight: 600, color: "var(--text-warm)" }}>
+          {expanded ? "▾" : "▸"} {sup.supervisor}
+        </span>
+        <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", color: sup.site === "DR" ? "#ed8936" : "#48bb78" }}>
+          {coachingRegionLabel(sup.region)}
+        </span>
+        <span style={{ textAlign: "center", fontFamily: "var(--font-data, monospace)", fontSize: "0.78rem", color: "var(--text-dim)" }}>{sup.agentCount}</span>
+        {sup.weeks.map((w, i) => (
+          <WeekCell key={i} mode="pct" data={w} />
+        ))}
+        <span style={{ textAlign: "right", fontFamily: "var(--font-data, monospace)", fontSize: "0.85rem", fontWeight: 700, color: sessionsColor }}>
+          {sup.sessionsX}/{sup.sessionsY}
+        </span>
+        <span style={{ textAlign: "right", fontFamily: "var(--font-data, monospace)", fontSize: "0.85rem", fontWeight: 700, color: sessionsColor }}>
+          {sup.pct == null ? "—" : `${Math.round(sup.pct * 100)}%`}
+        </span>
+      </div>
+      {expanded && (
+        <div style={{ background: lightMode ? "#fafafa" : "#0f0f0f", padding: "0.5rem 0.75rem 0.75rem 1.5rem", marginLeft: "0.75rem", borderLeft: `1px dashed ${accent}50`, marginTop: 2 }}>
+          {sup.agents.map((a, i) => (
+            <AgentRow key={i} agent={a} weekLabels={weekLabels} lightMode={lightMode} indented />
+          ))}
+        </div>
+      )}
+    </Fragment>
+  );
+}
+
 // SECTION 11b — tNPS DEEP-DIVE SLIDE  (pages/TNPSSlide.jsx)
 // Full tNPS analysis with 4 sub-tabs: Summary, By Campaign, By Supervisor, Customer Voices
 // ══════════════════════════════════════════════════════════════════════════════
