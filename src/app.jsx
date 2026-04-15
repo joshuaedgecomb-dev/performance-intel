@@ -5189,7 +5189,7 @@ function topNavLinkStyle(active, accent = "#ed8936") {
 }
 function TopNav({
   rawData, currentPage, setCurrentPage, openMenu, setOpenMenu,
-  programsBySite, siteAttainments, fiscalInfo, hasTnps,
+  programsBySite, siteAttainments, fiscalInfo, hasTnps, hasCoaching,
   lightMode, setLightMode, showToday, setShowToday,
   ollamaAvailable, localAI, setLocalAI,
   onExportMbr, onExportVirgilMbr, onOpenCorpDataSources, onRefresh, onUploadGoals, onUploadRoster, onUploadPriorGoals, onUploadCoachingDetails, onUploadCoachingWeekly, onUploadLoginBuckets, onOpenSettings,
@@ -5271,6 +5271,7 @@ function TopNav({
 
           <button onClick={() => navigate("mom")} style={topNavLinkStyle(isActive("mom"))}>MoM</button>
           {hasTnps && <button onClick={() => navigate("tnps")} style={topNavLinkStyle(isActive("tnps"))}>tNPS</button>}
+          {hasCoaching && <button onClick={() => navigate("coaching")} style={topNavLinkStyle(isActive("coaching"))}>Coaching</button>}
         </>
       )}
 
@@ -17597,6 +17598,12 @@ export default function App() {
     try { localStorage.setItem("perf_intel_coaching_weekly_v1", v || ""); } catch(e) {}
   }, []);
 
+  // Parse coaching CSVs once at App scope so both VirgilMbrExportModal and
+  // CoachingPage can consume them. The modal also has its own internal memos —
+  // duplication is intentional to avoid changing the modal's signature.
+  const coachingDetails = useMemo(() => parseCoachingDetails(coachingDetailsRaw), [coachingDetailsRaw]);
+  const coachingWeekly  = useMemo(() => parseCoachingWeekly(coachingWeeklyRaw),  [coachingWeeklyRaw]);
+
   const [loginBucketsRaw, _setLoginBucketsRaw] = useState(() => {
     try { return localStorage.getItem("perf_intel_login_buckets_v1") || ""; } catch(e) { return ""; }
   });
@@ -17882,6 +17889,7 @@ export default function App() {
   const perf = usePerformanceEngine({ rawData, goalsRaw, newHiresRaw, tnpsRaw });
   const { programs, jobTypes, newHireSet, newHires, allAgentNames } = perf;
   const hasTnps = perf.tnpsData && perf.tnpsData.length > 0;
+  const hasCoaching = (coachingWeekly && coachingWeekly.length > 0) || (coachingDetails && Object.keys(coachingDetails).length > 0);
 
   // Prior month derived data (hoisted for app-wide access)
   const priorAgents = useMemo(() => normalizeAgents(priorMonthRaw || []), [priorMonthRaw]);
@@ -18514,6 +18522,7 @@ export default function App() {
         siteAttainments={siteAttainments}
         fiscalInfo={perf.fiscalInfo}
         hasTnps={hasTnps}
+        hasCoaching={hasCoaching}
         lightMode={lightMode}
         setLightMode={setLightMode}
         showToday={showToday}
@@ -18568,6 +18577,13 @@ export default function App() {
           <BusinessOverview perf={perf} onNav={legacyGoToSlide} goToSlide={legacyGoToSlide} tnpsSlideIdx={hasTnps ? programs.length + 2 : -1} localAI={localAI} priorAgents={priorAgents} priorGoalLookup={priorGoalLookup} lightMode={lightMode} />
         ) : currentPage.section === "tnps" && hasTnps ? (
           <TNPSSlide perf={perf} onNav={() => {}} lightMode={lightMode} />
+        ) : currentPage.section === "coaching" && hasCoaching ? (
+          <CoachingPage
+            coachingWeekly={coachingWeekly}
+            coachingDetails={coachingDetails}
+            bpLookup={perf && perf.bpLookup}
+            lightMode={lightMode}
+          />
         ) : currentPage.section === "mom" ? (
           <CampaignComparisonPanel
             currentAgents={perf.agents}
