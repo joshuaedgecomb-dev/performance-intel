@@ -10031,6 +10031,124 @@ function CoachingSummaryTab({ data, lightMode }) {
   );
 }
 
+// Site filter chip set used by both supervisor and all-agents tabs.
+// Returns a predicate (region) → boolean for the active filter.
+function makeSiteFilter(activeChip) {
+  if (activeChip === "all") return () => true;
+  if (activeChip === "dr")  return (r) => !String(r || "").toUpperCase().includes("XOTM");
+  if (activeChip === "bz")  return (r) =>  String(r || "").toUpperCase().includes("XOTM");
+  // sub-region: exact match on the region label (e.g., "Belize City-XOTM")
+  return (r) => coachingRegionLabel(r).toLowerCase() === activeChip.toLowerCase();
+}
+
+function CoachingSiteChips({ activeChip, onChange, lightMode }) {
+  const chips = [
+    { key: "all",          label: "All",         accent: "#d97706" },
+    { key: "dr",           label: "DR",          accent: "#ed8936" },
+    { key: "bz",           label: "BZ (all)",    accent: "#48bb78" },
+    { key: "Belize City",  label: "Belize City", accent: "#48bb78" },
+    { key: "OW",           label: "OW",          accent: "#48bb78" },
+    { key: "San Ignacio",  label: "San Ignacio", accent: "#48bb78" },
+  ];
+  return (
+    <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginBottom: "0.85rem" }}>
+      {chips.map(c => (
+        <SiteChip key={c.key} label={c.label} accent={c.accent} active={activeChip === c.key} onClick={() => onChange(c.key)} />
+      ))}
+    </div>
+  );
+}
+
+function CoachingBySupervisorTab({ data, lightMode }) {
+  const [activeChip, setActiveChip] = useState("all");
+  const [expanded, setExpanded] = useState(() => new Set());
+  const filterFn = makeSiteFilter(activeChip);
+
+  // Filter supervisors and (when expanded) their agents.
+  const filteredSupervisors = useMemo(() => {
+    return data.bySupervisor.map(sup => {
+      const matchedAgents = sup.agents.filter(a => filterFn(a.region));
+      // For chip "all", show every supervisor; for site chips, only show supervisors with matching agents.
+      if (activeChip !== "all" && matchedAgents.length === 0) return null;
+      // Recompute supervisor-level rollup using only matched agents
+      const weeks = data.weekLabels.map((label, i) => {
+        let x = 0, y = 0;
+        for (const a of matchedAgents) {
+          const w = a.weeks[i];
+          if (w.eligible) {
+            y += 1;
+            if ((w.sessions || 0) >= 1) x += 1;
+          }
+        }
+        return { week: label, x, y, pct: y ? x / y : null };
+      });
+      const sessionsX = matchedAgents.reduce((acc, a) => acc + a.sessionsX, 0);
+      const sessionsY = matchedAgents.reduce((acc, a) => acc + a.sessionsY, 0);
+      return {
+        ...sup,
+        agents: matchedAgents,
+        agentCount: matchedAgents.length,
+        weeks,
+        sessionsX,
+        sessionsY,
+        pct: sessionsY ? sessionsX / sessionsY : null,
+      };
+    }).filter(Boolean).sort((a, b) => (a.pct ?? 999) - (b.pct ?? 999));
+  }, [data.bySupervisor, data.weekLabels, activeChip]);
+
+  const toggle = (key) => {
+    setExpanded(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
+  return (
+    <div>
+      <CoachingSiteChips activeChip={activeChip} onChange={setActiveChip} lightMode={lightMode} />
+
+      {/* Header row */}
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: `1.4fr 0.9fr 0.5fr ${data.weekLabels.map(() => "0.7fr").join(" ")} 0.7fr 0.5fr`,
+        gap: 4,
+        padding: "0.5rem",
+        fontFamily: "var(--font-ui, Inter, sans-serif)",
+        fontSize: "0.7rem",
+        textTransform: "uppercase",
+        letterSpacing: "0.06em",
+        color: "var(--text-muted)",
+        borderBottom: "1px solid var(--border)",
+      }}>
+        <span>Supervisor</span>
+        <span>Site</span>
+        <span style={{ textAlign: "center" }}>Agents</span>
+        {data.weekLabels.map((wk, i) => <span key={i} style={{ textAlign: "center" }}>{wk}</span>)}
+        <span style={{ textAlign: "right" }}>Sessions</span>
+        <span style={{ textAlign: "right" }}>%</span>
+      </div>
+
+      {filteredSupervisors.length === 0 ? (
+        <div style={{ padding: "2rem 1rem", textAlign: "center", color: "var(--text-faint)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem" }}>
+          No supervisors match the current site filter.
+        </div>
+      ) : (
+        filteredSupervisors.map((sup, i) => (
+          <SupervisorRow
+            key={`${sup.supervisor}-${i}`}
+            sup={sup}
+            weekLabels={data.weekLabels}
+            expanded={expanded.has(sup.supervisor)}
+            onToggle={() => toggle(sup.supervisor)}
+            lightMode={lightMode}
+          />
+        ))
+      )}
+    </div>
+  );
+}
+
 // SECTION 11b — tNPS DEEP-DIVE SLIDE  (pages/TNPSSlide.jsx)
 // Full tNPS analysis with 4 sub-tabs: Summary, By Campaign, By Supervisor, Customer Voices
 // ══════════════════════════════════════════════════════════════════════════════
