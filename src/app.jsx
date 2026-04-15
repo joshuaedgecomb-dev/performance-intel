@@ -98,11 +98,11 @@ function coachingCellColor(sessions) {
 // Used by Sessions / % cells where over-indexing is meaningful.
 function coachingPctColor(pct) {
   if (pct == null) return "#94a3b8";
-  if (pct > 1)    return "#6366f1";
-  if (pct >= 1)   return "#16a34a";
-  if (pct >= 0.8) return "#2563eb";
-  if (pct > 0)    return "#d97706";
-  return "#dc2626";
+  if (pct > 1)    return "#6366f1";  // over-indexed
+  if (pct >= 1)   return "#16a34a";  // on standard
+  if (pct >= 0.8) return "#2563eb";  // close
+  if (pct >= 0.5) return "#d97706";  // behind
+  return "#dc2626";                  // critical (under 50% or zero)
 }
 
 // Subtle row tint for an attainment percentage.
@@ -112,7 +112,7 @@ function coachingRowTint(pct) {
   if (pct > 1)     return { dark: "#1a1d28",  light: "#eef2ff" };
   if (pct >= 1)    return { dark: "#14241a",  light: "#f0fdf4" };
   if (pct >= 0.8)  return { dark: "#15212a",  light: "#eff6ff" };
-  if (pct > 0)     return { dark: "#2a2014",  light: "#fffbeb" };
+  if (pct >= 0.5)  return { dark: "#2a2014",  light: "#fffbeb" };
   return { dark: "#2a1414", light: "#fef2f2" };
 }
 
