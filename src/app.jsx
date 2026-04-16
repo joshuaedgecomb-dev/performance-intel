@@ -17689,7 +17689,57 @@ const THEMES = {
   },
 };
 
+function LoadingSplash({ onEnded }) {
+  const videoRef = React.useRef(null);
+  const [failed, setFailed] = React.useState(false);
+  const [progress, setProgress] = React.useState(0);
+  React.useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    const fallback = setTimeout(() => { onEnded && onEnded(); }, 15000);
+    const tryPlay = () => { const p = v.play(); if (p && p.catch) p.catch(() => {}); };
+    tryPlay();
+    return () => clearTimeout(fallback);
+  }, [onEnded]);
+  // Page background tracks the video's white → grey → white arc so the
+  // feathered edge blends into the surrounding canvas at every moment.
+  const p = Math.min(1, Math.max(0, progress));
+  const intensity = Math.min(1, Math.sin(p * Math.PI) + 0.35 * p);
+  const g = Math.round(255 - intensity * (255 - 236));
+  const bg = `rgb(${g}, ${g}, ${g})`;
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      {!failed && (
+        <video
+          ref={videoRef}
+          src={`${import.meta.env.BASE_URL}gcs-loading.mp4`}
+          autoPlay
+          muted
+          playsInline
+          preload="auto"
+          onTimeUpdate={e => {
+            const d = e.target.duration;
+            if (d && isFinite(d)) setProgress(Math.min(1, e.target.currentTime / d));
+          }}
+          onEnded={onEnded}
+          onError={() => { setFailed(true); onEnded && onEnded(); }}
+          style={{
+            background: bg,
+            width: "360px",
+            height: "auto",
+            maxWidth: "60vw",
+            maxHeight: "60vh",
+            WebkitMaskImage: "radial-gradient(circle at center, #000 60%, transparent 80%)",
+            maskImage: "radial-gradient(circle at center, #000 60%, transparent 80%)",
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
 export default function App() {
+  const [splashDone, setSplashDone] = useState(false);
   const [rawData,    setRawData]    = useState(null);
   const [lightMode,  setLightMode]  = useState(true);
   const [currentPage, _setCurrentPage] = useState(() => {
@@ -18552,6 +18602,7 @@ export default function App() {
 
   return (
     <div style={wrapStyle}>
+      {!splashDone && <LoadingSplash onEnded={() => setSplashDone(true)} />}
       {showMbrModal && rawData && <MbrExportModal perf={perf} onClose={() => setShowMbrModal(false)} />}
       {showVirgilMbrModal && (
         <VirgilMbrExportModal
