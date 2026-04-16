@@ -6970,17 +6970,25 @@ function buildCoachingPageData(coachingWeekly, coachingDetails, bpLookup, monthF
     return { week: weekLabels[i], x, y, pct: y ? x / y : null };
   });
 
-  // Per-month org trend (used when multi-month is active — keeps chart legible).
-  const byMonth = [...activeMonths].sort((a, b) => monthOrder(a) - monthOrder(b)).map(month => {
+  // Hybrid trend used in multi-month mode: prior months as single bars (chronological),
+  // then current month broken out into its weeks (so the user keeps detail for the active period).
+  // Order reads left-to-right chronologically: [oldest priors..., current month weeks].
+  const monNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const sortedActive = [...activeMonths].sort((a, b) => monthOrder(a) - monthOrder(b));
+  const currentMonthForHybrid = sortedActive[sortedActive.length - 1] || "";
+  const currentAbbrev = currentMonthForHybrid.slice(0, 3);
+  const priorMonths = sortedActive.slice(0, -1);
+
+  // Aggregated bars for prior months
+  const priorBars = priorMonths.map(month => {
+    const monthAbbrev = month.slice(0, 3);
     let x = 0, y = 0;
     for (const a of allAgents) {
       a.weeks.forEach((w, i) => {
         const rawWeekDate = rawWeeks[i];
         const d = new Date(rawWeekDate);
-        const monNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-        const monAbbrev = !isNaN(d.getTime()) ? monNames[d.getMonth()] : null;
-        const monthAbbrev = month.slice(0, 3);
-        if (monAbbrev !== monthAbbrev) return;
+        const wkMon = !isNaN(d.getTime()) ? monNames[d.getMonth()] : null;
+        if (wkMon !== monthAbbrev) return;
         if (w.eligible) {
           y += 1;
           x += w.sessions || 0;
@@ -6990,6 +6998,27 @@ function buildCoachingPageData(coachingWeekly, coachingDetails, bpLookup, monthF
     const label = month.replace(/\s*'?\d{2,4}$/, "").trim();
     return { week: label, x, y, pct: y ? x / y : null };
   });
+
+  // Per-week bars for current month only (within the multi-month window)
+  let currentWeekCounter = 0;
+  const currentWeekBars = rawWeeks.map((rawWeek, i) => {
+    const d = new Date(rawWeek);
+    const wkMon = !isNaN(d.getTime()) ? monNames[d.getMonth()] : null;
+    if (wkMon !== currentAbbrev) return null;
+    currentWeekCounter += 1;
+    let x = 0, y = 0;
+    for (const a of allAgents) {
+      const w = a.weeks[i];
+      if (w.eligible) {
+        y += 1;
+        x += w.sessions || 0;
+      }
+    }
+    const label = `${currentAbbrev} W${currentWeekCounter}`;
+    return { week: label, x, y, pct: y ? x / y : null };
+  }).filter(Boolean);
+
+  const byHybrid = [...priorBars, ...currentWeekBars];
 
   return {
     org: {
@@ -7007,7 +7036,7 @@ function buildCoachingPageData(coachingWeekly, coachingDetails, bpLookup, monthF
     },
     bySite,
     byWeek,
-    byMonth,
+    byHybrid,
     bySupervisor,
     allAgents,
     fiscalMonths,
@@ -9978,9 +10007,9 @@ function SupervisorRow({ sup, weekLabels, expanded, onToggle, lightMode }) {
 }
 
 function CoachingSummaryTab({ data, lightMode }) {
-  const { org, bySiteRollup, bySite, byWeek, byMonth } = data;
+  const { org, bySiteRollup, bySite, byWeek, byHybrid } = data;
   const isMultiMonth = data.activeMonths && data.activeMonths.length > 1;
-  const trendData = isMultiMonth ? byMonth : byWeek;
+  const trendData = isMultiMonth ? byHybrid : byWeek;
 
   const fmtPct = (p) => p == null ? "—" : `${Math.round(p * 100)}%`;
 
