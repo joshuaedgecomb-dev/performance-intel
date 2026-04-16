@@ -6722,10 +6722,20 @@ function buildCoachingStats(coachingDetails, coachingWeekly, bpLookup, reporting
 // Site/sub-site mapping for a region string. Mirrors buildCoachingStats logic
 // but also returns the full region for sub-site filtering.
 function coachingSiteFromRegion(region) {
-  const r = (region || "").trim();
+  let r = (region || "").trim();
   if (!r) return { site: null, region: null };
+  // Normalize the SD-Xfinty typo to canonical SD-Xfinity
+  if (/^SD-Xfin/i.test(r)) r = "SD-Xfinity";
   const isBz = r.toUpperCase().includes("XOTM");
   return { site: isBz ? "BZ" : "DR", region: r };
+}
+
+// Returns true only for the four valid Xfinity coaching regions (DR + 3 BZ sub-sites).
+// Drops SD-Cox, FCC, and any other non-Xfinity region from coaching aggregations.
+function isValidCoachingRegion(region) {
+  if (!region) return false;
+  const r = String(region).trim().toUpperCase();
+  return r.includes("XOTM") || /^SD-XFIN/i.test(region);
 }
 
 // Returns a friendly site label for chips: "DR" → "DR", "Belize City-XOTM" → "Belize City".
@@ -6735,7 +6745,7 @@ function coachingRegionLabel(region) {
   if (r.toUpperCase().includes("XOTM")) {
     return r.replace(/-XOTM$/i, "").trim();
   }
-  if (r === "SD-Xfinity") return "DR";
+  if (/^SD-Xfin/i.test(r)) return "Dom. Republic";
   return r;
 }
 
@@ -6800,8 +6810,9 @@ function buildCoachingPageData(coachingWeekly, coachingDetails, bpLookup, monthF
     if (typeof ka === "number" && typeof kb === "number") return ka - kb;
     return String(a).localeCompare(String(b));
   });
-  // For single-month: label FW1..FWn. For multi-month: prefix with month abbrev + per-month counter.
+  // For single-month: label "Mon W1..Mon Wn". For multi-month: prefix with month abbrev + per-month counter.
   const isMultiMonth = activeMonths.size > 1;
+  const currentMonthShort = currentMonth.replace(/\s*'?\d{2,4}$/, "").trim() || "FW";
   let perMonthCounter = {};
   const weekLabels = rawWeeks.map((raw, i) => {
     if (isMultiMonth) {
@@ -6814,7 +6825,7 @@ function buildCoachingPageData(coachingWeekly, coachingDetails, bpLookup, monthF
       }
       return raw;
     }
-    return `FW${i + 1}`;
+    return `${currentMonthShort} W${i + 1}`;
   });
 
   // Build per-agent week map. Key: ntid|fiscalWeek → {sessions}
@@ -6827,11 +6838,12 @@ function buildCoachingPageData(coachingWeekly, coachingDetails, bpLookup, monthF
     const ntidLower = row.ntid ? String(row.ntid).toLowerCase() : "";
     const bp = ntidLower ? (safeBp[ntidLower] || safeBp[`bp-${ntidLower}`] || safeBp[ntidLower.replace(/^bp-/, "")]) : null;
     const region = bp ? bp.region : "";
-    const { site } = coachingSiteFromRegion(region);
-    if (!site) continue; // skip rows with no roster match (per existing convention)
+    const { site, region: normalizedRegion } = coachingSiteFromRegion(region);
+    if (!site) continue; // skip rows with no roster match
+    if (!isValidCoachingRegion(normalizedRegion)) continue; // drop SD-Cox, FCC, etc.
     const supervisor = (bp && bp.supervisor) || row.supervisor || "Unassigned";
     if (!agentMeta.has(row.ntid)) {
-      agentMeta.set(row.ntid, { ntid: row.ntid, agentName: row.displayName, supervisor, site, region });
+      agentMeta.set(row.ntid, { ntid: row.ntid, agentName: row.displayName, supervisor, site, region: normalizedRegion });
     }
     const key = `${row.ntid}|${row.fiscalWeek}`;
     const existing = agentWeekMap.get(key) || { sessions: 0 };
@@ -6883,7 +6895,7 @@ function buildCoachingPageData(coachingWeekly, coachingDetails, bpLookup, monthF
         const w = a.weeks[i];
         if (w.eligible) {
           y += 1;
-          if ((w.sessions || 0) >= 1) x += 1;
+          x += w.sessions || 0; // uncapped
         }
       }
       return { week: weekLabels[i], x, y, pct: y ? x / y : null };
@@ -6911,7 +6923,7 @@ function buildCoachingPageData(coachingWeekly, coachingDetails, bpLookup, monthF
     a.weeks.forEach(w => {
       if (w.eligible) {
         acc.y += 1;
-        if ((w.sessions || 0) >= 1) acc.x += 1;
+        acc.x += w.sessions || 0; // uncapped sessions matches org methodology
       }
     });
   }
@@ -6952,10 +6964,31 @@ function buildCoachingPageData(coachingWeekly, coachingDetails, bpLookup, monthF
       const w = a.weeks[i];
       if (w.eligible) {
         y += 1;
-        if ((w.sessions || 0) >= 1) x += 1;
+        x += w.sessions || 0; // uncapped
       }
     }
     return { week: weekLabels[i], x, y, pct: y ? x / y : null };
+  });
+
+  // Per-month org trend (used when multi-month is active — keeps chart legible).
+  const byMonth = [...activeMonths].sort((a, b) => monthOrder(a) - monthOrder(b)).map(month => {
+    let x = 0, y = 0;
+    for (const a of allAgents) {
+      a.weeks.forEach((w, i) => {
+        const rawWeekDate = rawWeeks[i];
+        const d = new Date(rawWeekDate);
+        const monNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+        const monAbbrev = !isNaN(d.getTime()) ? monNames[d.getMonth()] : null;
+        const monthAbbrev = month.slice(0, 3);
+        if (monAbbrev !== monthAbbrev) return;
+        if (w.eligible) {
+          y += 1;
+          x += w.sessions || 0;
+        }
+      });
+    }
+    const label = month.replace(/\s*'?\d{2,4}$/, "").trim();
+    return { week: label, x, y, pct: y ? x / y : null };
   });
 
   return {
@@ -6974,6 +7007,7 @@ function buildCoachingPageData(coachingWeekly, coachingDetails, bpLookup, monthF
     },
     bySite,
     byWeek,
+    byMonth,
     bySupervisor,
     allAgents,
     fiscalMonths,
@@ -9944,7 +9978,9 @@ function SupervisorRow({ sup, weekLabels, expanded, onToggle, lightMode }) {
 }
 
 function CoachingSummaryTab({ data, lightMode }) {
-  const { org, bySiteRollup, bySite, byWeek } = data;
+  const { org, bySiteRollup, bySite, byWeek, byMonth } = data;
+  const isMultiMonth = data.activeMonths && data.activeMonths.length > 1;
+  const trendData = isMultiMonth ? byMonth : byWeek;
 
   const fmtPct = (p) => p == null ? "—" : `${Math.round(p * 100)}%`;
 
@@ -9957,7 +9993,7 @@ function CoachingSummaryTab({ data, lightMode }) {
   // Site comparison max for bar scaling (cap at 100% for height; allow >100% as label).
   const maxBarPct = Math.max(1, ...bySite.map(s => s.pct || 0));
   // Weekly trend — same maxBarPct
-  const maxTrendPct = Math.max(1, ...byWeek.map(w => w.pct || 0));
+  const maxTrendPct = Math.max(1, ...trendData.map(w => w.pct || 0));
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
@@ -9998,11 +10034,11 @@ function CoachingSummaryTab({ data, lightMode }) {
       {/* Weekly trend chart */}
       <div style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem 1.5rem" }}>
         <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: "1rem" }}>Weekly Trend</div>
-        {byWeek.length === 0 ? (
+        {trendData.length === 0 ? (
           <div style={{ color: "var(--text-faint)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem" }}>No weekly data for the selected period.</div>
         ) : (
           <div style={{ display: "flex", gap: "1.5rem", alignItems: "flex-end", height: 180, paddingTop: 24 }}>
-            {byWeek.map((w, i) => {
+            {trendData.map((w, i) => {
               if (w.pct == null) {
                 return (
                   <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
@@ -10079,7 +10115,7 @@ function CoachingBySupervisorTab({ data, lightMode }) {
           const w = a.weeks[i];
           if (w.eligible) {
             y += 1;
-            if ((w.sessions || 0) >= 1) x += 1;
+            x += w.sessions || 0; // uncapped
           }
         }
         return { week: label, x, y, pct: y ? x / y : null };
