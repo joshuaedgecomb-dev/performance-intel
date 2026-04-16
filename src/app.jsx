@@ -6797,9 +6797,7 @@ function buildCoachingPageData(coachingWeekly, coachingDetails, bpLookup, monthF
   // Filter weekly to active months.
   const activeRows = safeWeekly.filter(r => activeMonths.has(r.fiscalMonth));
 
-  // Determine fiscal-week labels and ordering.
-  // Use raw fiscalWeek strings, sorted chronologically. If they parse as dates, sort by date.
-  // Otherwise sort lexically. Then label as FW1..FWn within the active period.
+  // Determine raw weekly slots (used for current-month detail and date parsing).
   const rawWeeks = [...new Set(activeRows.map(r => r.fiscalWeek).filter(Boolean))];
   const weekKey = (s) => {
     const d = new Date(s);
@@ -6810,54 +6808,91 @@ function buildCoachingPageData(coachingWeekly, coachingDetails, bpLookup, monthF
     if (typeof ka === "number" && typeof kb === "number") return ka - kb;
     return String(a).localeCompare(String(b));
   });
-  // For single-month: label "Mon W1..Mon Wn". For multi-month: prefix with month abbrev + per-month counter.
+
   const isMultiMonth = activeMonths.size > 1;
   const currentMonthShort = currentMonth.replace(/\s*'?\d{2,4}$/, "").trim() || "FW";
-  let perMonthCounter = {};
-  const weekLabels = rawWeeks.map((raw, i) => {
-    if (isMultiMonth) {
-      // Try to extract the month from the date string itself
-      const d = new Date(raw);
-      if (!isNaN(d.getTime())) {
-        const mon = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()];
-        perMonthCounter[mon] = (perMonthCounter[mon] || 0) + 1;
-        return `${mon} W${perMonthCounter[mon]}`;
-      }
-      return raw;
-    }
-    return `${currentMonthShort} W${i + 1}`;
-  });
+  const currentAbbrev = (currentMonth || "").slice(0, 3);
+  const monNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-  // Build per-agent week map. Key: ntid|fiscalWeek → {sessions}
+  // Build hybrid buckets.
+  //   Single-month: every rawWeek is its own bucket.
+  //   Multi-month: prior months collapse to single buckets; current month stays per-week.
+  let rawBuckets, bucketLabels, bucketKeyForRow;
+
+  if (isMultiMonth) {
+    const sortedActive = [...activeMonths].sort((a, b) => monthOrder(a) - monthOrder(b));
+    const priorMonths = sortedActive.slice(0, -1);
+    // Prior months as MONTH: buckets, in chronological order
+    const priorBucketKeys = priorMonths.map(m => `MONTH:${m}`);
+    const priorBucketLabels = priorMonths.map(m => m.replace(/\s*'?\d{2,4}$/, "").trim());
+    // Current month weeks (filter rawWeeks down to current month only)
+    const currentMonthWeeks = rawWeeks.filter(rw => {
+      const d = new Date(rw);
+      return !isNaN(d.getTime()) && monNames[d.getMonth()] === currentAbbrev;
+    });
+    const currentBucketKeys = currentMonthWeeks.map(rw => `WEEK:${rw}`);
+    const currentBucketLabels = currentMonthWeeks.map((_, i) => `${currentAbbrev} W${i + 1}`);
+    rawBuckets = [...priorBucketKeys, ...currentBucketKeys];
+    bucketLabels = [...priorBucketLabels, ...currentBucketLabels];
+    bucketKeyForRow = (row) => {
+      const d = new Date(row.fiscalWeek);
+      const wkMon = !isNaN(d.getTime()) ? monNames[d.getMonth()] : null;
+      if (wkMon === currentAbbrev) return `WEEK:${row.fiscalWeek}`;
+      return `MONTH:${row.fiscalMonth}`;
+    };
+  } else {
+    rawBuckets = rawWeeks.map(rw => `WEEK:${rw}`);
+    bucketLabels = rawWeeks.map((_, i) => `${currentMonthShort} W${i + 1}`);
+    bucketKeyForRow = (row) => `WEEK:${row.fiscalWeek}`;
+  }
+
+  const weekLabels = bucketLabels;  // alias preserved for downstream code that reads data.weekLabels
+
+  // Build per-agent bucket map. Key: ntid|bucketKey → {sessions, eligibleWeeks}
   // Entry existence signals eligibility; NCR rows are skipped entirely (matches buildCoachingStats).
-  const agentWeekMap = new Map();
+  const agentBucketMap = new Map();
   const agentMeta = new Map(); // ntid → {ntid, agentName, supervisor, site, region}
   for (const row of activeRows) {
     if (!row.ntid) continue;
-    if (row.colorWb === "No Coaching Required") continue;  // skip NCR entirely (matches buildCoachingStats)
+    if (row.colorWb === "No Coaching Required") continue;
     const ntidLower = row.ntid ? String(row.ntid).toLowerCase() : "";
     const bp = ntidLower ? (safeBp[ntidLower] || safeBp[`bp-${ntidLower}`] || safeBp[ntidLower.replace(/^bp-/, "")]) : null;
     const region = bp ? bp.region : "";
     const { site, region: normalizedRegion } = coachingSiteFromRegion(region);
-    if (!site) continue; // skip rows with no roster match
-    if (!isValidCoachingRegion(normalizedRegion)) continue; // drop SD-Cox, FCC, etc.
+    if (!site) continue;
+    if (!isValidCoachingRegion(normalizedRegion)) continue;
     const supervisor = (bp && bp.supervisor) || row.supervisor || "Unassigned";
     if (!agentMeta.has(row.ntid)) {
       agentMeta.set(row.ntid, { ntid: row.ntid, agentName: row.displayName, supervisor, site, region: normalizedRegion });
     }
-    const key = `${row.ntid}|${row.fiscalWeek}`;
-    const existing = agentWeekMap.get(key) || { sessions: 0 };
+    const bucket = bucketKeyForRow(row);
+    const key = `${row.ntid}|${bucket}`;
+    const existing = agentBucketMap.get(key) || { sessions: 0, eligibleWeeks: 0 };
     existing.sessions += row.sessions || 0;
-    agentWeekMap.set(key, existing);
+    existing.eligibleWeeks += 1;
+    agentBucketMap.set(key, existing);
   }
 
-  // Helper: weeks array for one agent across rawWeeks
-  const weeksForAgent = (ntid) => rawWeeks.map((wk, i) => {
-    const v = agentWeekMap.get(`${ntid}|${wk}`);
+  // Helper: weeks array for one agent across rawBuckets (dual-shape entries for count + pct modes)
+  const weeksForAgent = (ntid) => rawBuckets.map((bucket, i) => {
+    const v = agentBucketMap.get(`${ntid}|${bucket}`);
+    if (!v) {
+      return {
+        week: bucketLabels[i],
+        sessions: null,
+        eligible: false,
+        x: 0,
+        y: 0,
+        pct: null,
+      };
+    }
     return {
-      week: weekLabels[i],
-      sessions: v ? v.sessions : null,
-      eligible: !!v,
+      week: bucketLabels[i],
+      sessions: v.sessions,
+      eligible: true,
+      x: v.sessions,
+      y: v.eligibleWeeks,
+      pct: v.eligibleWeeks ? v.sessions / v.eligibleWeeks : null,
     };
   });
 
@@ -6866,7 +6901,7 @@ function buildCoachingPageData(coachingWeekly, coachingDetails, bpLookup, monthF
   for (const [ntid, meta] of agentMeta.entries()) {
     const weeks = weeksForAgent(ntid);
     const sessionsX = weeks.reduce((acc, w) => acc + (w.eligible ? (w.sessions || 0) : 0), 0);
-    const sessionsY = weeks.reduce((acc, w) => acc + (w.eligible ? 1 : 0), 0);
+    const sessionsY = weeks.reduce((acc, w) => acc + (w.eligible ? w.y : 0), 0);
     const pct = sessionsY ? sessionsX / sessionsY : null;
     allAgents.push({ ...meta, weeks, sessionsX, sessionsY, pct });
   }
@@ -6888,17 +6923,17 @@ function buildCoachingPageData(coachingWeekly, coachingDetails, bpLookup, monthF
       regionCounts[b] - regionCounts[a] || a.localeCompare(b)
     )[0] || "";
     const { site } = coachingSiteFromRegion(primaryRegion);
-    // Per-week supervisor stats: agents coached that week / eligible agents that week
-    const weeks = rawWeeks.map((wk, i) => {
+    // Per-bucket supervisor stats: agents coached / eligible agent-weeks in bucket
+    const weeks = rawBuckets.map((bucket, i) => {
       let x = 0, y = 0;
       for (const a of g.agents) {
         const w = a.weeks[i];
         if (w.eligible) {
-          y += 1;
-          x += w.sessions || 0; // uncapped
+          y += w.y;            // sum eligible weeks (= 1 for week buckets, N for month buckets)
+          x += w.sessions || 0;
         }
       }
-      return { week: weekLabels[i], x, y, pct: y ? x / y : null };
+      return { week: bucketLabels[i], x, y, pct: y ? x / y : null };
     });
     const sessionsX = g.agents.reduce((acc, a) => acc + a.sessionsX, 0);
     const sessionsY = g.agents.reduce((acc, a) => acc + a.sessionsY, 0);
@@ -6922,8 +6957,8 @@ function buildCoachingPageData(coachingWeekly, coachingDetails, bpLookup, monthF
     const acc = regionMap.get(a.region);
     a.weeks.forEach(w => {
       if (w.eligible) {
-        acc.y += 1;
-        acc.x += w.sessions || 0; // uncapped sessions matches org methodology
+        acc.y += w.y;        // use bucket's actual eligible-week count
+        acc.x += w.sessions || 0;
       }
     });
   }
@@ -6957,68 +6992,18 @@ function buildCoachingPageData(coachingWeekly, coachingDetails, bpLookup, monthF
   const ackY = orgTotalSessions;
   const ackX = ackPct != null && ackY ? Math.round(ackPct * ackY) : 0;
 
-  // Per-week org trend (sum over all eligible agent-weeks across active months).
-  const byWeek = rawWeeks.map((wk, i) => {
+  // Per-bucket org trend (hybrid in multi-month mode: prior months collapsed, current month per-week).
+  const byWeek = rawBuckets.map((bucket, i) => {
     let x = 0, y = 0;
     for (const a of allAgents) {
       const w = a.weeks[i];
       if (w.eligible) {
-        y += 1;
-        x += w.sessions || 0; // uncapped
-      }
-    }
-    return { week: weekLabels[i], x, y, pct: y ? x / y : null };
-  });
-
-  // Hybrid trend used in multi-month mode: prior months as single bars (chronological),
-  // then current month broken out into its weeks (so the user keeps detail for the active period).
-  // Order reads left-to-right chronologically: [oldest priors..., current month weeks].
-  const monNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  const sortedActive = [...activeMonths].sort((a, b) => monthOrder(a) - monthOrder(b));
-  const currentMonthForHybrid = sortedActive[sortedActive.length - 1] || "";
-  const currentAbbrev = currentMonthForHybrid.slice(0, 3);
-  const priorMonths = sortedActive.slice(0, -1);
-
-  // Aggregated bars for prior months
-  const priorBars = priorMonths.map(month => {
-    const monthAbbrev = month.slice(0, 3);
-    let x = 0, y = 0;
-    for (const a of allAgents) {
-      a.weeks.forEach((w, i) => {
-        const rawWeekDate = rawWeeks[i];
-        const d = new Date(rawWeekDate);
-        const wkMon = !isNaN(d.getTime()) ? monNames[d.getMonth()] : null;
-        if (wkMon !== monthAbbrev) return;
-        if (w.eligible) {
-          y += 1;
-          x += w.sessions || 0;
-        }
-      });
-    }
-    const label = month.replace(/\s*'?\d{2,4}$/, "").trim();
-    return { week: label, x, y, pct: y ? x / y : null };
-  });
-
-  // Per-week bars for current month only (within the multi-month window)
-  let currentWeekCounter = 0;
-  const currentWeekBars = rawWeeks.map((rawWeek, i) => {
-    const d = new Date(rawWeek);
-    const wkMon = !isNaN(d.getTime()) ? monNames[d.getMonth()] : null;
-    if (wkMon !== currentAbbrev) return null;
-    currentWeekCounter += 1;
-    let x = 0, y = 0;
-    for (const a of allAgents) {
-      const w = a.weeks[i];
-      if (w.eligible) {
-        y += 1;
+        y += w.y;
         x += w.sessions || 0;
       }
     }
-    const label = `${currentAbbrev} W${currentWeekCounter}`;
-    return { week: label, x, y, pct: y ? x / y : null };
-  }).filter(Boolean);
-
-  const byHybrid = [...priorBars, ...currentWeekBars];
+    return { week: bucketLabels[i], x, y, pct: y ? x / y : null };
+  });
 
   return {
     org: {
@@ -7036,13 +7021,13 @@ function buildCoachingPageData(coachingWeekly, coachingDetails, bpLookup, monthF
     },
     bySite,
     byWeek,
-    byHybrid,
     bySupervisor,
     allAgents,
     fiscalMonths,
     currentMonth,
     activeMonths: [...activeMonths],
     weekLabels,
+    agentCellMode: isMultiMonth ? "pct" : "count",
   };
 }
 
@@ -9915,7 +9900,7 @@ function SiteChip({ label, accent, active, onClick }) {
 // One row in an agent grid (used by All Agents tab + inside expanded supervisor rows).
 // columns (when not indented): name(1.5fr) supervisor(1.2fr) site(1.2fr) [weeks 0.5fr each] sessions(0.7fr) pct(0.5fr)
 // columns (when indented):     name(1.5fr) site(1.2fr) [weeks 0.5fr each] sessions(0.7fr) pct(0.5fr)
-function AgentRow({ agent, weekLabels, lightMode, indented }) {
+function AgentRow({ agent, weekLabels, lightMode, indented, cellMode = "count" }) {
   const tint = coachingRowTint(agent.pct);
   const overIndexed = agent.sessionsX > agent.sessionsY;
   const sessionsColor = overIndexed ? "#6366f1" : coachingPctColor(agent.pct);
@@ -9943,7 +9928,7 @@ function AgentRow({ agent, weekLabels, lightMode, indented }) {
       )}
       <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: agent.site === "DR" ? "#ed8936" : "#48bb78" }}>{coachingRegionLabel(agent.region)}</span>
       {agent.weeks.map((w, i) => (
-        <WeekCell key={i} mode="count" data={w} />
+        <WeekCell key={i} mode={cellMode} data={w} />
       ))}
       <span style={{ textAlign: "right", fontFamily: "var(--font-data, monospace)", fontSize: "0.82rem", fontWeight: 700, color: sessionsColor }}>
         {agent.sessionsX}/{agent.sessionsY}
@@ -9956,7 +9941,7 @@ function AgentRow({ agent, weekLabels, lightMode, indented }) {
 }
 
 // One row in the By Supervisor tab. Click toggles expand state held by parent.
-function SupervisorRow({ sup, weekLabels, expanded, onToggle, lightMode }) {
+function SupervisorRow({ sup, weekLabels, expanded, onToggle, lightMode, cellMode = "count" }) {
   const tint = coachingRowTint(sup.pct);
   const accent = coachingPctColor(sup.pct);
   const sessionsColor = sup.sessionsX > sup.sessionsY ? "#6366f1" : accent;
@@ -9998,7 +9983,7 @@ function SupervisorRow({ sup, weekLabels, expanded, onToggle, lightMode }) {
       {expanded && (
         <div style={{ background: lightMode ? "#fafafa" : "#0f0f0f", padding: "0.5rem 0.75rem 0.75rem 1.5rem", marginLeft: "0.75rem", borderLeft: `1px dashed ${accent}50`, marginTop: 2 }}>
           {sup.agents.map((a, i) => (
-            <AgentRow key={i} agent={a} weekLabels={weekLabels} lightMode={lightMode} indented />
+            <AgentRow key={i} agent={a} weekLabels={weekLabels} lightMode={lightMode} indented cellMode={cellMode} />
           ))}
         </div>
       )}
@@ -10007,9 +9992,8 @@ function SupervisorRow({ sup, weekLabels, expanded, onToggle, lightMode }) {
 }
 
 function CoachingSummaryTab({ data, lightMode }) {
-  const { org, bySiteRollup, bySite, byWeek, byHybrid } = data;
-  const isMultiMonth = data.activeMonths && data.activeMonths.length > 1;
-  const trendData = isMultiMonth ? byHybrid : byWeek;
+  const { org, bySiteRollup, bySite, byWeek } = data;
+  const trendData = byWeek;  // byWeek is now hybrid in multi-month mode
 
   const fmtPct = (p) => p == null ? "—" : `${Math.round(p * 100)}%`;
 
@@ -10143,8 +10127,8 @@ function CoachingBySupervisorTab({ data, lightMode }) {
         for (const a of matchedAgents) {
           const w = a.weeks[i];
           if (w.eligible) {
-            y += 1;
-            x += w.sessions || 0; // uncapped
+            y += w.y;        // sum eligible weeks (= 1 for week buckets, N for month buckets)
+            x += w.sessions || 0;
           }
         }
         return { week: label, x, y, pct: y ? x / y : null };
@@ -10209,6 +10193,7 @@ function CoachingBySupervisorTab({ data, lightMode }) {
             expanded={expanded.has(sup.supervisor)}
             onToggle={() => toggle(sup.supervisor)}
             lightMode={lightMode}
+            cellMode={data.agentCellMode}
           />
         ))
       )}
@@ -10313,7 +10298,7 @@ function CoachingAllAgentsTab({ data, lightMode }) {
         </div>
       ) : (
         filtered.map((a, i) => (
-          <AgentRow key={`${a.ntid || a.agentName}-${i}`} agent={a} weekLabels={data.weekLabels} lightMode={lightMode} />
+          <AgentRow key={`${a.ntid || a.agentName}-${i}`} agent={a} weekLabels={data.weekLabels} lightMode={lightMode} cellMode={data.agentCellMode} />
         ))
       )}
     </div>
