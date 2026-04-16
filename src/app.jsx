@@ -6545,6 +6545,17 @@ function parseCoachingWeekly(rawCsv) {
   });
 }
 
+// Normalizes a name to "first last" lowercase for comparison.
+// Handles "Last, First" format → "first last" and "First Last" → "first last".
+function normalizeCoachingName(name) {
+  if (!name) return "";
+  const s = String(name).trim().toLowerCase();
+  if (s.includes(",")) {
+    return s.split(",").map(p => p.trim()).reverse().join(" ");
+  }
+  return s;
+}
+
 // Sheets can mis-coerce "4-7" → "7-Apr" and "8-15" → "15-Aug". Map them back.
 // "0-3" and "16-20+" are safe because they aren't valid dates.
 function normalizeLoginBucket(raw) {
@@ -6797,6 +6808,14 @@ function buildCoachingPageData(coachingWeekly, coachingDetails, bpLookup, monthF
   // Filter weekly to active months.
   const activeRows = safeWeekly.filter(r => activeMonths.has(r.fiscalMonth));
 
+  // Build set of manager names from the weekly CSV's Manager column.
+  // Any supervisor whose name matches a manager → excluded from the supervisor grid.
+  const managerNameSet = new Set();
+  for (const row of activeRows) {
+    const mgr = normalizeCoachingName(row.manager);
+    if (mgr) managerNameSet.add(mgr);
+  }
+
   // Determine raw weekly slots (used for current-month detail and date parsing).
   const rawWeeks = [...new Set(activeRows.map(r => r.fiscalWeek).filter(Boolean))];
   const weekKey = (s) => {
@@ -6948,7 +6967,8 @@ function buildCoachingPageData(coachingWeekly, coachingDetails, bpLookup, monthF
       pct: sessionsY ? sessionsX / sessionsY : null,
       agents: g.agents,
     };
-  }).sort((a, b) => (a.pct ?? 999) - (b.pct ?? 999));
+  }).filter(sup => !managerNameSet.has(normalizeCoachingName(sup.supervisor)))
+    .sort((a, b) => (a.pct ?? 999) - (b.pct ?? 999));
 
   // Per-site stats (sub-region granularity).
   const regionMap = new Map(); // region → { x, y } accumulator
