@@ -10064,60 +10064,52 @@ function CoachingSummaryTab({ data, lightMode }) {
         )}
       </div>
 
-      {/* Site Week-over-Week */}
+      {/* Site Week-over-Week Table */}
       {byWeekBySite && byWeekBySite.length > 0 && (() => {
-        // Collect all unique site labels across all weeks
         const allSiteLabels = [...new Set(byWeekBySite.flatMap(w => w.sites.map(s => s.label)))];
-        // Assign distinct colors per site
-        const siteColors = {};
-        const colorPalette = ["#ed8936", "#48bb78", "#0ea5e9", "#8b5cf6", "#f43f5e"];
-        allSiteLabels.forEach((label, i) => { siteColors[label] = colorPalette[i % colorPalette.length]; });
-        const maxPct = Math.max(1, ...byWeekBySite.flatMap(w => w.sites.map(s => s.pct || 0)));
-
+        const siteColors = { "Dom. Republic": "#ed8936", "San Ignacio": "#48bb78", "Belize City": "#0ea5e9" };
         return (
           <div style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem 1.5rem" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)" }}>Site Trend — Week over Week</div>
-              <div style={{ display: "flex", gap: "1rem" }}>
-                {allSiteLabels.map(label => (
-                  <div key={label} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    <div style={{ width: 10, height: 10, borderRadius: 2, background: siteColors[label] }} />
-                    <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "var(--text-secondary)" }}>{label}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div style={{ display: "flex", alignItems: "stretch" }}>
-              {byWeekBySite.map((weekData, wi) => (
-                <Fragment key={wi}>
-                  {wi > 0 && <div style={{ width: 1, background: "var(--border)", margin: "0 0.35rem", flexShrink: 0 }} />}
-                  <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
-                    {/* Bars zone */}
-                    <div style={{ display: "flex", gap: 4, alignItems: "flex-end", height: 160, width: "100%", justifyContent: "center", paddingTop: 20 }}>
-                      {allSiteLabels.map(label => {
-                        const site = weekData.sites.find(s => s.label === label);
-                        const pct = site ? (site.pct || 0) : 0;
-                        const barH = pct > 0 ? Math.max(8, (pct / maxPct) * 130) : 4;
-                        const color = siteColors[label];
-                        return (
-                          <div key={label} style={{ display: "flex", flexDirection: "column", alignItems: "center", width: Math.max(16, Math.floor(60 / allSiteLabels.length)) }}>
-                            <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "0.6rem", fontWeight: 600, color, marginBottom: 2, whiteSpace: "nowrap" }}>
-                              {pct > 0 ? `${Math.round(pct * 100)}%` : ""}
-                            </div>
-                            <div
-                              style={{ width: "100%", height: barH, borderRadius: "3px 3px 0 0", background: `${color}${pct > 0 ? "cc" : "33"}` }}
-                              title={site ? `${label}: ${Math.round(pct * 100)}% (${site.x}/${site.y})` : `${label}: no data`}
-                            />
-                          </div>
-                        );
-                      })}
-                    </div>
-                    {/* Week label */}
-                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "var(--text-warm)", marginTop: 6, fontWeight: 600 }}>{weekData.week}</div>
-                  </div>
-                </Fragment>
-              ))}
-            </div>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: "0.75rem" }}>Site Trend — Week over Week</div>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr>
+                  <th style={{ padding: "0.5rem", textAlign: "left", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: "var(--text-muted)", borderBottom: "1px solid var(--border)", fontWeight: 500, letterSpacing: "0.05em", textTransform: "uppercase" }}>Site</th>
+                  {byWeekBySite.map((w, i) => (
+                    <th key={i} style={{ padding: "0.5rem", textAlign: "center", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: "var(--text-muted)", borderBottom: "1px solid var(--border)", fontWeight: 500, letterSpacing: "0.05em", textTransform: "uppercase" }}>{w.week}</th>
+                  ))}
+                  <th style={{ padding: "0.5rem", textAlign: "right", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: "var(--text-muted)", borderBottom: "1px solid var(--border)", fontWeight: 500, letterSpacing: "0.05em", textTransform: "uppercase" }}>Total</th>
+                  <th style={{ padding: "0.5rem", textAlign: "right", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: "var(--text-muted)", borderBottom: "1px solid var(--border)", fontWeight: 500, letterSpacing: "0.05em", textTransform: "uppercase" }}>%</th>
+                </tr>
+              </thead>
+              <tbody>
+                {allSiteLabels.map(label => {
+                  let totalX = 0, totalY = 0;
+                  const cells = byWeekBySite.map((weekData, wi) => {
+                    const site = weekData.sites.find(s => s.label === label);
+                    if (site) { totalX += site.x; totalY += site.y; }
+                    const pct = site && site.pct != null ? site.pct : null;
+                    const color = coachingPctColor(pct);
+                    return (
+                      <td key={wi} style={{ padding: "0.4rem 0.5rem", textAlign: "center", fontFamily: "var(--font-data, monospace)", fontSize: "0.78rem", fontWeight: 700, color }}>
+                        {site ? `${site.x}/${site.y}` : "—"}
+                      </td>
+                    );
+                  });
+                  const totalPct = totalY ? totalX / totalY : null;
+                  const totalColor = coachingPctColor(totalPct);
+                  const accent = siteColors[label] || "var(--text-warm)";
+                  return (
+                    <tr key={label} style={{ borderBottom: "1px solid var(--bg-tertiary)" }}>
+                      <td style={{ padding: "0.5rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: accent, fontWeight: 600 }}>{label}</td>
+                      {cells}
+                      <td style={{ padding: "0.4rem 0.5rem", textAlign: "right", fontFamily: "var(--font-data, monospace)", fontSize: "0.82rem", fontWeight: 700, color: totalColor }}>{totalX}/{totalY}</td>
+                      <td style={{ padding: "0.4rem 0.5rem", textAlign: "right", fontFamily: "var(--font-data, monospace)", fontSize: "0.82rem", fontWeight: 700, color: totalColor }}>{totalPct != null ? `${Math.round(totalPct * 100)}%` : "—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         );
       })()}
