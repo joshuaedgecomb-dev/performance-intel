@@ -7006,6 +7006,24 @@ function buildCoachingPageData(coachingWeekly, coachingDetails, bpLookup, monthF
     return { week: bucketLabels[i], x, y, pct: y ? x / y : null };
   });
 
+  // Per-site per-bucket trend — for the grouped bar chart on Summary.
+  const byWeekBySite = rawBuckets.map((bucket, i) => {
+    const siteMap = {};
+    for (const a of allAgents) {
+      const w = a.weeks[i];
+      if (w.eligible) {
+        const label = coachingRegionLabel(a.region);
+        if (!siteMap[label]) siteMap[label] = { label, region: a.region, x: 0, y: 0 };
+        siteMap[label].y += w.y;
+        siteMap[label].x += w.sessions || 0;
+      }
+    }
+    return {
+      week: bucketLabels[i],
+      sites: Object.values(siteMap).map(s => ({ ...s, pct: s.y ? s.x / s.y : null })),
+    };
+  });
+
   return {
     org: {
       coachingPct: orgCoachingPct,
@@ -7022,6 +7040,7 @@ function buildCoachingPageData(coachingWeekly, coachingDetails, bpLookup, monthF
     },
     bySite,
     byWeek,
+    byWeekBySite,
     bySupervisor,
     allAgents,
     fiscalMonths,
@@ -9993,7 +10012,7 @@ function SupervisorRow({ sup, weekLabels, expanded, onToggle, lightMode, cellMod
 }
 
 function CoachingSummaryTab({ data, lightMode }) {
-  const { org, bySiteRollup, bySite, byWeek } = data;
+  const { org, bySiteRollup, bySite, byWeek, byWeekBySite } = data;
   const trendData = byWeek;  // byWeek is now hybrid in multi-month mode
 
   const fmtPct = (p) => p == null ? "—" : `${Math.round(p * 100)}%`;
@@ -10044,6 +10063,64 @@ function CoachingSummaryTab({ data, lightMode }) {
           </div>
         )}
       </div>
+
+      {/* Site Week-over-Week */}
+      {byWeekBySite && byWeekBySite.length > 0 && (() => {
+        // Collect all unique site labels across all weeks
+        const allSiteLabels = [...new Set(byWeekBySite.flatMap(w => w.sites.map(s => s.label)))];
+        // Assign distinct colors per site
+        const siteColors = {};
+        const colorPalette = ["#ed8936", "#48bb78", "#0ea5e9", "#8b5cf6", "#f43f5e"];
+        allSiteLabels.forEach((label, i) => { siteColors[label] = colorPalette[i % colorPalette.length]; });
+        const maxPct = Math.max(1, ...byWeekBySite.flatMap(w => w.sites.map(s => s.pct || 0)));
+
+        return (
+          <div style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem 1.5rem" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)" }}>Site Trend — Week over Week</div>
+              <div style={{ display: "flex", gap: "1rem" }}>
+                {allSiteLabels.map(label => (
+                  <div key={label} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <div style={{ width: 10, height: 10, borderRadius: 2, background: siteColors[label] }} />
+                    <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "var(--text-secondary)" }}>{label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div style={{ display: "flex", alignItems: "stretch" }}>
+              {byWeekBySite.map((weekData, wi) => (
+                <Fragment key={wi}>
+                  {wi > 0 && <div style={{ width: 1, background: "var(--border)", margin: "0 0.35rem", flexShrink: 0 }} />}
+                  <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
+                    {/* Bars zone */}
+                    <div style={{ display: "flex", gap: 4, alignItems: "flex-end", height: 160, width: "100%", justifyContent: "center", paddingTop: 20 }}>
+                      {allSiteLabels.map(label => {
+                        const site = weekData.sites.find(s => s.label === label);
+                        const pct = site ? (site.pct || 0) : 0;
+                        const barH = pct > 0 ? Math.max(8, (pct / maxPct) * 130) : 4;
+                        const color = siteColors[label];
+                        return (
+                          <div key={label} style={{ display: "flex", flexDirection: "column", alignItems: "center", width: Math.max(16, Math.floor(60 / allSiteLabels.length)) }}>
+                            <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "0.6rem", fontWeight: 600, color, marginBottom: 2, whiteSpace: "nowrap" }}>
+                              {pct > 0 ? `${Math.round(pct * 100)}%` : ""}
+                            </div>
+                            <div
+                              style={{ width: "100%", height: barH, borderRadius: "3px 3px 0 0", background: `${color}${pct > 0 ? "cc" : "33"}` }}
+                              title={site ? `${label}: ${Math.round(pct * 100)}% (${site.x}/${site.y})` : `${label}: no data`}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {/* Week label */}
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "var(--text-warm)", marginTop: 6, fontWeight: 600 }}>{weekData.week}</div>
+                  </div>
+                </Fragment>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Weekly trend chart */}
       <div style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem 1.5rem" }}>
