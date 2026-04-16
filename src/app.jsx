@@ -10159,6 +10159,38 @@ function CoachingBySupervisorTab({ data, lightMode }) {
     <div>
       <CoachingSiteChips activeChip={activeChip} onChange={setActiveChip} lightMode={lightMode} />
 
+      {/* Supervisor Attainment Chart */}
+      {filteredSupervisors.length > 0 && (() => {
+        const maxPct = Math.max(1, ...filteredSupervisors.map(s => s.pct || 0));
+        return (
+          <div style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem 1.5rem", marginBottom: "1rem" }}>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: "1rem" }}>Supervisor Attainment</div>
+            <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end", height: 200, paddingTop: 24, overflowX: filteredSupervisors.length > 12 ? "auto" : "hidden" }}>
+              {filteredSupervisors.map((sup, i) => {
+                const pct = sup.pct || 0;
+                const barH = Math.max(16, (pct / maxPct) * 150);
+                const color = coachingPctColor(sup.pct);
+                return (
+                  <div key={i} style={{ flex: filteredSupervisors.length <= 12 ? 1 : "0 0 60px", display: "flex", flexDirection: "column", alignItems: "center", minWidth: 40 }}>
+                    <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "0.72rem", fontWeight: 700, color, marginBottom: 2, whiteSpace: "nowrap" }}>
+                      {sup.pct == null ? "—" : `${Math.round(pct * 100)}%`}
+                    </div>
+                    <div style={{ width: "70%", height: barH, borderRadius: "4px 4px 0 0", background: `${color}cc`, minWidth: 20 }}
+                      title={`${sup.supervisor}: ${Math.round(pct * 100)}% (${sup.sessionsX}/${sup.sessionsY})`} />
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.62rem", color: "var(--text-warm)", marginTop: 4, fontWeight: 500, textAlign: "center", lineHeight: 1.2, maxWidth: 60, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {sup.supervisor.split(" ")[0]}
+                    </div>
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.56rem", color: "var(--text-dim)", whiteSpace: "nowrap" }}>
+                      {sup.sessionsX}/{sup.sessionsY}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Header row */}
       <div style={{
         display: "grid",
