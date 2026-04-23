@@ -7250,8 +7250,8 @@ function buildQuartileReport(agentRaw, goalsRaw, newHiresRaw, dateFilter, refere
 
   // Minimum hours threshold — agents below this are excluded from the quartile dispersion
   // (and therefore from unit totals, tenure matrix, and participation). Low-hours agents
-  // skew SPH and distort the distribution; gating to ≥20h keeps quartiles meaningful.
-  const MIN_HOURS = 20;
+  // skew SPH and distort the distribution; gating keeps quartiles meaningful.
+  const MIN_HOURS = 8;
 
   const buildSection = (group) => {
     const agents = Object.values(byAgent).filter(a => a.group === group && a.hours >= MIN_HOURS);
@@ -8496,7 +8496,7 @@ function buildCorpQuartileSlide(pres, agentRaw, goalsRaw, priorAgentRaw, priorGo
   drawQuartileColumn(col1X, `Month Reporting On — ${reportingPeriodLabel}`, reporting);
   drawQuartileColumn(col2X, `MTD — ${mtdLabel}`, mtd);
 
-  slide.addText("All dispersions include only agents with 20+ hours logged.", {
+  slide.addText("All dispersions include only agents with 8+ hours logged.", {
     x: 10, y: 6.89, w: 3.25, h: 0.27,
     fontSize: 6, color: "9CA3AF", italic: true, align: "right",
   });
@@ -18413,9 +18413,15 @@ export default function App() {
   }, [corpPriorMonthGoalsUrl]);
 
   // Auto-load prior month data from Google Sheet (after main data loads, non-blocking)
+  // URL stamp busts the cache on monthly rollover — if the source URL changed since last
+  // fetch, we re-fetch rather than serve stale data.
   const [priorSheetLoading, setPriorSheetLoading] = useState(false);
   useEffect(() => {
-    if (!rawData || (priorMonthRaw && priorMonthRawCsv) || !priorSheetUrl || priorSheetLoading) return;
+    if (!rawData || !priorSheetUrl || priorSheetLoading) return;
+    let stampedUrl = "";
+    try { stampedUrl = localStorage.getItem("perf_intel_prior_month_url_stamp_v1") || ""; } catch(e) {}
+    const cacheFresh = priorMonthRaw && priorMonthRawCsv && stampedUrl === priorSheetUrl;
+    if (cacheFresh) return;
     let cancelled = false;
     (async () => {
       try {
@@ -18426,7 +18432,11 @@ export default function App() {
         if (!res || !res.ok) res = await fetch(proxyP(priorSheetUrl));
         const text = await res.text();
         const rows = parseCSV(text);
-        if (!cancelled && rows.length > 0) { setPriorMonthRawCsv(text); setPriorMonthRaw(rows); }
+        if (!cancelled && rows.length > 0) {
+          setPriorMonthRawCsv(text);
+          setPriorMonthRaw(rows);
+          try { localStorage.setItem("perf_intel_prior_month_url_stamp_v1", priorSheetUrl); } catch(e) {}
+        }
       } catch(e) { /* silent */ }
       finally { if (!cancelled) setPriorSheetLoading(false); }
     })();
@@ -18435,7 +18445,11 @@ export default function App() {
 
   // Auto-load prior month goals from Google Sheet (after prior data loads)
   useEffect(() => {
-    if (!rawData || (priorMonthGoalsRaw && priorMonthGoalsRawCsv) || !priorGoalsSheetUrl) return;
+    if (!rawData || !priorGoalsSheetUrl) return;
+    let stampedUrl = "";
+    try { stampedUrl = localStorage.getItem("perf_intel_prior_month_goals_url_stamp_v1") || ""; } catch(e) {}
+    const cacheFresh = priorMonthGoalsRaw && priorMonthGoalsRawCsv && stampedUrl === priorGoalsSheetUrl;
+    if (cacheFresh) return;
     let cancelled = false;
     (async () => {
       try {
@@ -18445,11 +18459,15 @@ export default function App() {
         if (!res || !res.ok) res = await fetch(proxyP(priorGoalsSheetUrl));
         const text = await res.text();
         const rows = parseCSV(text);
-        if (!cancelled && rows.length > 0) { setPriorMonthGoalsRawCsv(text); setPriorMonthGoalsRaw(rows); }
+        if (!cancelled && rows.length > 0) {
+          setPriorMonthGoalsRawCsv(text);
+          setPriorMonthGoalsRaw(rows);
+          try { localStorage.setItem("perf_intel_prior_month_goals_url_stamp_v1", priorGoalsSheetUrl); } catch(e) {}
+        }
       } catch(e) { /* silent */ }
     })();
     return () => { cancelled = true; };
-  }, [rawData, tnpsSheetUrl, tnpsRaw]);
+  }, [rawData, priorGoalsSheetUrl, priorMonthGoalsRaw, priorMonthGoalsRawCsv]);
 
   // Last-7-days unique agent names for Today attendance comparison
   const recentAgentNames = useMemo(() => {
