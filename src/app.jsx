@@ -4121,7 +4121,7 @@ function RankingAgentTray({ sup, colCount, allAgents }) {
   );
 }
 
-function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, newHireSet, fiscalInfo }) {
+function SiteDrilldown({ siteLabel, regions, allAgents, priorAgents, programs, goalLookup, newHireSet, fiscalInfo, accent = "#ed8936" }) {
   const [subRegion, setSubRegion] = useState(null);
   const [siteRankSort, setSiteRankSort] = useState({ key: "pctToGoal", dir: -1 });
   const [expandedSup, setExpandedSup] = useState(null);
@@ -4129,10 +4129,12 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
   const [rankView, setRankView] = useState("supervisors"); // "supervisors" | "agents"
   const [siteAgentSort, setSiteAgentSort] = useState({ key: "hours", dir: -1 });
   const [siteExpandedAgent, setSiteExpandedAgent] = useState(null);
+  const [tab, setTab] = useState("overview"); // "overview" | "daily" | "trends"
   const hasMultipleRegions = regions.length > 1;
 
   const activeRegions = (subRegion && hasMultipleRegions) ? [subRegion] : regions;
   const agents   = allAgents.filter(a => !a.isSpanishCallback && activeRegions.includes((a.region || "Unknown")));
+  const sitePriorAgents = (priorAgents || []).filter(a => !a.isSpanishCallback && activeRegions.includes((a.region || "Unknown")));
   const totalHrs = agents.reduce((s, a) => s + a.hours, 0);
   const distU    = uniqueQuartileDist(agents);
   const uCount   = uniqueNames(agents).size;
@@ -4310,8 +4312,49 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
 
   const displayLabel = mbrSiteName(subRegion || siteLabel);
 
+  // Hex with 50/12 alpha suffix for active button border/fill
+  const accentBorder = `${accent}80`;
+  const accentFill   = `${accent}1a`;
+  const tabTitle = tab === "daily" ? `${displayLabel} — Daily Performance`
+                  : tab === "trends" ? `${displayLabel} — Week-over-Week Trends`
+                  : `${displayLabel} — Site Overview`;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+
+      {/* Tab header — Overview / Daily / Trends, scoped to this site. Sticky under top nav. */}
+      <div style={{ position: "sticky", top: 48, zIndex: 100, display: "flex", gap: "0.35rem", alignItems: "center", padding: "0.35rem 0.25rem", background: "var(--bg-primary)", borderBottom: "1px solid var(--border-muted)", marginTop: "-0.5rem" }}>
+        {[["overview", "Overview"], ["daily", "Daily"], ["trends", "Trends"]].map(([t, label]) => (
+          <button key={t} onClick={() => setTab(t)}
+            style={{ padding: "0.4rem 0.85rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${tab === t ? accentBorder : "var(--text-faint)"}`, background: tab === t ? accentFill : "transparent", color: tab === t ? accent : "var(--text-muted)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", cursor: "pointer", fontWeight: tab === t ? 600 : 400, transition: "all 200ms cubic-bezier(0.4,0,0.2,1)" }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "daily" && (
+        <DailyBreakdownPanel
+          agents={agents}
+          regions={activeRegions}
+          jobType={`${siteLabel} Site`}
+          sphGoal={null}
+          programs={sitePrograms}
+          goalLookup={goalLookup}
+          priorAgents={sitePriorAgents}
+        />
+      )}
+
+      {tab === "trends" && (
+        <WeeklyTrendsPanel
+          currentAgents={agents}
+          priorAgents={sitePriorAgents}
+          fiscalInfo={fiscalInfo}
+          goalLookup={goalLookup}
+          programs={sitePrograms}
+        />
+      )}
+
+      {tab === "overview" && (<>
 
       {/* Sub-region tabs — only shown when group has multiple regions */}
       {hasMultipleRegions && (
@@ -5011,6 +5054,68 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
           })}
         </div>
       </div>
+
+      {/* Priority Coaching by Campaign — one card per program in this site */}
+      {(() => {
+        const cards = sitePrograms
+          .map(p => {
+            const sitePriority = (p.q4Agents || [])
+              .filter(a => activeRegions.includes((a.region || "Unknown")) && a.hours >= getMinHours())
+              .sort((a, b) => b.hours - a.hours);
+            return { program: p, agents: sitePriority };
+          })
+          .filter(c => c.agents.length > 0);
+        if (cards.length === 0) return null;
+        return (
+          <div>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.9rem", fontWeight: 600 }}>
+              Priority Coaching by Campaign
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))", gap: "1rem" }}>
+              {cards.map(({ program, agents: priAgents }) => (
+                <div key={program.jobType} style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.1rem 1.25rem" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "0.25rem" }}>
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.95rem", color: "var(--text-warm)", fontWeight: 700 }}>
+                      {program.jobType}
+                    </div>
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "#dc2626", letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 600 }}>
+                      {priAgents.length} priority
+                    </div>
+                  </div>
+                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", color: "var(--text-dim)", marginBottom: "0.7rem" }}>
+                    Zero sales · {getMinHours()}+ hrs · ranked by hours invested
+                  </div>
+                  {priAgents.slice(0, 6).map((a, i) => (
+                    <div key={a.agentName + i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.4rem 0", borderBottom: i < Math.min(priAgents.length, 6) - 1 ? "1px solid var(--bg-tertiary)" : "none" }}>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ color: "var(--text-warm)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.agentName}</span>
+                          {newHireSet && newHireSet.has(a.agentName) && (
+                            <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: "var(--nh-color)", background: "var(--nh-bg)", padding: "0.05rem 0.3rem", borderRadius: "2px", flexShrink: 0 }}>NEW</span>
+                          )}
+                        </div>
+                        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "var(--text-dim)" }}>
+                          {mbrSiteName(a.region)}
+                        </div>
+                      </div>
+                      <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.05rem", color: "#6366f1", fontWeight: 700, flexShrink: 0 }}>
+                        {fmt(a.hours, 1)} hrs
+                      </div>
+                    </div>
+                  ))}
+                  {priAgents.length > 6 && (
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "0.5rem", textAlign: "right" }}>
+                      +{priAgents.length - 6} more
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
+      </>)}
     </div>
   );
 }
@@ -11112,6 +11217,279 @@ function TNPSSlide({ perf, onNav, lightMode }) {
 // Consumes engine output directly. No computation inside.
 // ══════════════════════════════════════════════════════════════════════════════
 
+// ── Daily Targets card — Plan/Actual/Per-Day table with Combined/DR/BZ toggle ─
+// Mirrors the per-site Daily Targets table (in SiteDrilldown), but parameterized by view.
+function DailyTargetsCard({ programs, regions, goalLookup, fiscalInfo }) {
+  const [view, setView] = useState("Combined");
+  const [fundingFilter, setFundingFilter] = useState(null);
+
+  // Reset funding filter when switching views (different programs may have different fundings)
+  useEffect(() => { setFundingFilter(null); }, [view]);
+
+  // Site key set for this view: which goalEntry buckets to read from
+  const siteKeys = view === "DR" ? ["DR"] : view === "BZ" ? ["BZ"] : ["DR", "BZ"];
+  // Region predicate for filtering agents
+  const regionMatches = (region) => {
+    const isBz = (region || "").toUpperCase().includes("XOTM");
+    if (view === "DR") return !isBz;
+    if (view === "BZ") return isBz;
+    return true;
+  };
+
+  // Build dtPrograms: one row per (program, ROC breakout)
+  const dtPrograms = useMemo(() => {
+    if (!programs || !goalLookup) return [];
+    const rows = [];
+    programs.forEach(p => {
+      const viewAgents = (p.agents || []).filter(a => regionMatches(a.region));
+      if (viewAgents.length === 0 && !p.goalEntry) return;
+
+      // Combined plan rows from selected siteKeys
+      const planRows = siteKeys.flatMap(k => (p.goalEntry?.[k] || []));
+      if (planRows.length === 0 && viewAgents.length === 0) return;
+
+      const sitePlanGoals = planRows.reduce((s, r) => s + computePlanRow(r).homesGoal, 0) || null;
+      const sitePlanHsd   = planRows.reduce((s, r) => s + computePlanRow(r).hsdGoal,   0) || null;
+      const sitePlanXm    = planRows.reduce((s, r) => s + computePlanRow(r).xmGoal,    0) || null;
+      const sitePlanHours = planRows.reduce((s, r) => s + computePlanRow(r).hoursGoal, 0) || null;
+
+      // Goal breakout per ROC (collapse rows with same ROC)
+      const rocGroups = {};
+      planRows.forEach(r => {
+        const key = r._roc || r._target || "Unknown";
+        if (!rocGroups[key]) rocGroups[key] = { target: r._target || "Unknown", roc: r._roc || "", funding: r._funding || "", rows: [] };
+        rocGroups[key].rows.push(r);
+      });
+      const goalBreakout = Object.values(rocGroups).map(g => {
+        const pr = g.rows.map(r => computePlanRow(r));
+        return {
+          target: g.target, roc: g.roc, funding: g.funding,
+          homes: pr.reduce((s, x) => s + x.homesGoal, 0),
+          hours: pr.reduce((s, x) => s + x.hoursGoal, 0),
+          hsd:   pr.reduce((s, x) => s + x.hsdGoal,   0),
+          xm:    pr.reduce((s, x) => s + x.xmGoal,    0),
+        };
+      });
+
+      const totalHours = viewAgents.reduce((s, a) => s + (a.hours || 0), 0);
+      const totalGoals = viewAgents.reduce((s, a) => s + (a.goals || 0), 0);
+      const hsdAct     = viewAgents.reduce((s, a) => s + (a.newXI || 0), 0);
+      const xmAct      = viewAgents.reduce((s, a) => s + (a.xmLines || 0), 0);
+
+      const base = {
+        jobType: p.jobType,
+        siteAgents: viewAgents,
+        sitePlanHours, sitePlanGoals, sitePlanHsd, sitePlanXm,
+        totalHours, totalGoals, hsdAct, xmAct,
+        goalBreakout,
+      };
+
+      // Split by ROC funding source to mirror the per-site behaviour
+      if (!fundingFilter) {
+        if (goalBreakout.length <= 1) {
+          rows.push(base);
+        } else {
+          goalBreakout.forEach(fb => {
+            const rocAgents = fb.roc ? viewAgents.filter(a => (a.rocCode || "").toUpperCase() === fb.roc.toUpperCase()) : viewAgents;
+            rows.push({
+              ...base,
+              _fundingLabel: fb.funding, _fundingRoc: fb.roc,
+              sitePlanHours: fb.hours || 0, sitePlanGoals: fb.homes || 0,
+              sitePlanHsd: fb.hsd || null,  sitePlanXm:  fb.xm   || null,
+              totalHours: rocAgents.reduce((s, a) => s + (a.hours || 0), 0),
+              totalGoals: rocAgents.reduce((s, a) => s + (a.goals || 0), 0),
+              hsdAct:     rocAgents.reduce((s, a) => s + (a.newXI || 0), 0),
+              xmAct:      rocAgents.reduce((s, a) => s + (a.xmLines || 0), 0),
+              siteAgents: rocAgents,
+            });
+          });
+        }
+      } else {
+        const matching = goalBreakout.filter(g => g.funding === fundingFilter);
+        matching.forEach(fb => {
+          const rocAgents = fb.roc ? viewAgents.filter(a => (a.rocCode || "").toUpperCase() === fb.roc.toUpperCase()) : viewAgents;
+          rows.push({
+            ...base,
+            _fundingLabel: fb.funding, _fundingRoc: fb.roc,
+            sitePlanHours: fb.hours || 0, sitePlanGoals: fb.homes || 0,
+            sitePlanHsd: fb.hsd || null,  sitePlanXm:  fb.xm   || null,
+            totalHours: rocAgents.reduce((s, a) => s + (a.hours || 0), 0),
+            totalGoals: rocAgents.reduce((s, a) => s + (a.goals || 0), 0),
+            hsdAct:     rocAgents.reduce((s, a) => s + (a.newXI || 0), 0),
+            xmAct:      rocAgents.reduce((s, a) => s + (a.xmLines || 0), 0),
+            siteAgents: rocAgents,
+          });
+        });
+      }
+    });
+    return rows.filter(r => r.sitePlanHours || r.sitePlanGoals || r.sitePlanHsd || r.sitePlanXm);
+  }, [programs, goalLookup, view, fundingFilter]);
+
+  // Canonical site-level totals (read directly from goalLookup so we don't double-count
+  // when programs share overlapping TA goal entries)
+  const canon = useMemo(() => {
+    if (!goalLookup) return { hours: 0, goals: 0, hsd: 0, xm: 0 };
+    let hours = 0, goals = 0, hsd = 0, xm = 0;
+    Object.values(goalLookup.byTA || {}).forEach(siteMap => {
+      siteKeys.forEach(k => {
+        (siteMap[k] || []).forEach(r => {
+          const pr = computePlanRow(r);
+          hours += pr.hoursGoal; goals += pr.homesGoal; hsd += pr.hsdGoal; xm += pr.xmGoal;
+        });
+      });
+    });
+    return { hours, goals, hsd, xm };
+  }, [goalLookup, view]);
+
+  if (!fiscalInfo) return null;
+
+  const fundingSources = [...new Set(dtPrograms.flatMap(p => (p.goalBreakout || []).map(g => g.funding)).filter(Boolean))];
+  const dtColors = [
+    { label: "Hours",    color: "#6366f1", bg: "#6366f108" },
+    { label: "Homes",    color: "#16a34a", bg: "#16a34a08" },
+    { label: "HSD",      color: "#2563eb", bg: "#2563eb08" },
+    { label: "XM Lines", color: "#8b5cf6", bg: "#8b5cf608" },
+  ];
+  const gridCols = "2.2fr 3px 1fr 1fr 1fr 3px 1fr 1fr 1fr 3px 1fr 1fr 1fr 3px 1fr 1fr 1fr";
+  const viewLabel = view === "Combined" ? "Combined" : view === "DR" ? "Dom. Republic" : "Belize";
+  const remainingBDays = fiscalInfo.remainingBDays || 0;
+
+  const renderMetricCells = (metrics, isTotal) => metrics.flatMap((m, mi) => {
+    const g = dtColors[mi];
+    const remaining = (m.plan || 0) - (m.actual || 0);
+    const perDay = remainingBDays > 0 && remaining > 0 ? remaining / remainingBDays : null;
+    const cells = [
+      <div key={`d${mi}`} style={{ background: `${g.color}25` }} />,
+      <div key={`p${mi}`} style={{ padding: "0.5rem 0", textAlign: "center", background: g.bg, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: isTotal ? "0.95rem" : "0.88rem", color: m.plan ? "var(--text-secondary)" : "var(--text-faint)", fontWeight: isTotal ? 700 : 400 }}>
+        {m.plan ? m.fmtFn(m.plan) : "—"}
+      </div>,
+      <div key={`a${mi}`} style={{ padding: "0.5rem 0", textAlign: "center", background: g.bg, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: isTotal ? "0.95rem" : "0.88rem", color: "var(--text-warm)", fontWeight: isTotal ? 700 : 500 }}>
+        {m.fmtFn(m.actual || 0)}
+      </div>,
+      <div key={`pd${mi}`} style={{ padding: "0.5rem 0", textAlign: "center", background: g.bg, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: isTotal ? "1.4rem" : "1.15rem", color: perDay != null ? (isTotal ? "#d97706" : "#16a34a") : "var(--text-faint)", fontWeight: 700 }}>
+        {perDay != null ? (perDay < 1 ? perDay.toFixed(1) : Math.ceil(perDay).toLocaleString()) : (m.plan && m.actual >= m.plan ? "—" : "—")}
+      </div>,
+    ];
+    return cells;
+  });
+
+  return (
+    <div style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.5rem" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1rem", gap: "1rem", flexWrap: "wrap" }}>
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <span style={{ fontSize: "1.5rem" }}>🎯</span>
+            <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "#d97706", letterSpacing: "0.12em", textTransform: "uppercase", fontWeight: 700 }}>
+              Daily Targets — {viewLabel}
+            </span>
+          </div>
+          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "1rem", color: "var(--text-faint)", marginTop: "0.2rem" }}>
+            Required per day to finish on goal · {remainingBDays > 0 ? `${remainingBDays} business days remaining` : "No scheduled business days remaining"}
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: "0.3rem" }}>
+          {[["Combined", "Combined"], ["DR", "Dom. Republic"], ["BZ", "Belize"]].map(([key, label]) => (
+            <button key={key} onClick={() => setView(key)}
+              style={{ padding: "0.4rem 0.85rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${view === key ? "#d9770680" : "var(--text-faint)"}`, background: view === key ? "#d977061a" : "transparent", color: view === key ? "#d97706" : "var(--text-muted)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", cursor: "pointer", fontWeight: view === key ? 600 : 400 }}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {fundingSources.length > 1 && (
+        <div style={{ display: "flex", gap: "0.3rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
+          <button onClick={() => setFundingFilter(null)}
+            style={{ padding: "0.2rem 0.6rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${!fundingFilter ? "#d97706" : "var(--border)"}`, background: !fundingFilter ? "#d9770618" : "transparent", color: !fundingFilter ? "#d97706" : "var(--text-dim)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", cursor: "pointer", fontWeight: !fundingFilter ? 700 : 400 }}>
+            All Funding
+          </button>
+          {fundingSources.map(f => {
+            const active = fundingFilter === f;
+            return (
+              <button key={f} onClick={() => setFundingFilter(active ? null : f)}
+                style={{ padding: "0.2rem 0.6rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${active ? "#2563eb" : "var(--border)"}`, background: active ? "#2563eb18" : "transparent", color: active ? "#2563eb" : "var(--text-dim)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", cursor: "pointer", fontWeight: active ? 700 : 400 }}>
+                {f}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {dtPrograms.length === 0 ? (
+        <div style={{ color: "var(--text-dim)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem", padding: "1rem 0" }}>
+          No plan data available for the selected view.
+        </div>
+      ) : (
+        <>
+          {/* Group header row */}
+          <div style={{ display: "grid", gridTemplateColumns: gridCols }}>
+            <div />
+            {dtColors.map((g, gi) => (
+              <Fragment key={g.label}>
+                <div style={{ background: `${g.color}40` }} />
+                <div style={{ gridColumn: "span 3", textAlign: "center", padding: "0.4rem 0", background: `${g.color}18`, borderBottom: `2px solid ${g.color}40`, borderTop: `2px solid ${g.color}30`, borderRadius: gi === 0 ? "6px 0 0 0" : gi === 3 ? "0 6px 0 0" : "0" }}>
+                  <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: g.color, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700 }}>{g.label}</span>
+                </div>
+              </Fragment>
+            ))}
+          </div>
+
+          {/* Sub-header row */}
+          <div style={{ display: "grid", gridTemplateColumns: gridCols, borderBottom: "2px solid var(--border)" }}>
+            <div style={{ padding: "0.35rem 0.75rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Program</div>
+            {dtColors.map((g, gi) => (
+              <Fragment key={gi}>
+                <div style={{ background: `${g.color}25` }} />
+                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: "var(--text-faint)", textAlign: "center", padding: "0.35rem 0", background: g.bg }}>Plan</div>
+                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: "var(--text-faint)", textAlign: "center", padding: "0.35rem 0", background: g.bg }}>Actual</div>
+                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: "#d97706", textAlign: "center", padding: "0.35rem 0", fontWeight: 700, background: g.bg }}>/ Day</div>
+              </Fragment>
+            ))}
+          </div>
+
+          {/* Program rows */}
+          {dtPrograms.map((p, pi) => {
+            const metrics = [
+              { plan: p.sitePlanHours, actual: p.totalHours, fmtFn: v => fmt(v, 0) },
+              { plan: p.sitePlanGoals, actual: p.totalGoals, fmtFn: v => v.toLocaleString() },
+              { plan: p.sitePlanHsd,   actual: p.hsdAct,     fmtFn: v => v.toLocaleString() },
+              { plan: p.sitePlanXm,    actual: p.xmAct,      fmtFn: v => v.toLocaleString() },
+            ];
+            const rocLabel = p._fundingRoc
+              ? `${p._fundingRoc}${p._fundingLabel ? ` · ${p._fundingLabel}` : ""}`
+              : (p.goalBreakout ? p.goalBreakout.map(g => g.roc).filter(Boolean).join(", ") : "");
+            return (
+              <div key={p.jobType + (p._fundingRoc || String(pi))} style={{ display: "grid", gridTemplateColumns: gridCols, borderBottom: "1px solid var(--bg-tertiary)", alignItems: "center" }}>
+                <div style={{ padding: "0.5rem 0.75rem" }}>
+                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem", color: "var(--text-warm)" }}>{p.jobType}</div>
+                  {rocLabel && <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.74rem", color: "var(--text-faint)" }}>{rocLabel}</div>}
+                </div>
+                {renderMetricCells(metrics, false)}
+              </div>
+            );
+          })}
+
+          {/* Totals row */}
+          {(() => {
+            const tots = [
+              { plan: fundingFilter ? dtPrograms.reduce((s, p) => s + (p.sitePlanHours || 0), 0) : canon.hours, actual: dtPrograms.reduce((s, p) => s + (p.totalHours || 0), 0), fmtFn: v => fmt(v, 0) },
+              { plan: fundingFilter ? dtPrograms.reduce((s, p) => s + (p.sitePlanGoals || 0), 0) : canon.goals, actual: dtPrograms.reduce((s, p) => s + (p.totalGoals || 0), 0), fmtFn: v => v.toLocaleString() },
+              { plan: fundingFilter ? dtPrograms.reduce((s, p) => s + (p.sitePlanHsd   || 0), 0) : canon.hsd,   actual: dtPrograms.reduce((s, p) => s + (p.hsdAct     || 0), 0), fmtFn: v => v.toLocaleString() },
+              { plan: fundingFilter ? dtPrograms.reduce((s, p) => s + (p.sitePlanXm    || 0), 0) : canon.xm,    actual: dtPrograms.reduce((s, p) => s + (p.xmAct      || 0), 0), fmtFn: v => v.toLocaleString() },
+            ];
+            return (
+              <div style={{ display: "grid", gridTemplateColumns: gridCols, borderTop: "2px solid var(--border)", marginTop: "0.25rem", alignItems: "center" }}>
+                <div style={{ padding: "0.65rem 0.75rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 700 }}>TOTAL</div>
+                {renderMetricCells(tots, true)}
+              </div>
+            );
+          })()}
+        </>
+      )}
+    </div>
+  );
+}
+
 function BusinessOverview({ perf, onNav, goToSlide, tnpsSlideIdx, localAI, priorAgents, priorGoalLookup, lightMode }) {
   const [tab, setTab] = useState("overview");
 
@@ -11230,30 +11608,18 @@ function BusinessOverview({ perf, onNav, goToSlide, tnpsSlideIdx, localAI, prior
   const qColor = pct => pct >= 100 ? Q.Q1.color : pct >= 80 ? Q.Q2.color : pct > 0 ? Q.Q3.color : Q.Q4.color;
 
   return (
-    <div style={{ minHeight: "100vh", background: `var(--bg-primary)`, display: "flex", flexDirection: "column" }}>
-      <div style={{ background: `var(--glass-bg)`, backdropFilter: "blur(12px) saturate(150%)", WebkitBackdropFilter: "blur(12px) saturate(150%)", borderBottom: "1px solid var(--glass-border)", padding: "1.25rem 2.5rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div>
-          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: `var(--text-muted)`, letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 600, marginBottom: "0.2rem" }}>Business Overview</div>
-          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "2rem", color: `var(--text-warm)`, fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1.15 }}>
-            {tab === "daily" ? "Daily Performance" : tab === "trends" ? "Week-over-Week Trends" : "Highlights & Lowlights"}
-          </div>
-        </div>
-        <div style={{ display: "flex", gap: "0.35rem", alignItems: "center", flexWrap: "wrap" }}>
-          {[["overview","Overview"],["daily","Daily"],["trends","Trends"]].map(([t, label]) => (
-            <button key={t} onClick={() => setTab(t)}
-              style={{ padding: "0.4rem 0.85rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${tab===t?"#d9770650":"var(--text-faint)"}`, background: tab===t?"#d9770612":"transparent", color: tab===t?"#d97706":`var(--text-muted)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", cursor: "pointer", fontWeight: tab===t ? 600 : 400, transition: "all 200ms cubic-bezier(0.4,0,0.2,1)" }}>
-              {label}
-            </button>
-          ))}
-          <div style={{ width: "1px", height: "20px", background: "var(--border-muted)", margin: "0 0.2rem" }} />
-          <button onClick={() => onNav(1)}
-            style={{ padding: "0.45rem 1rem", background: "linear-gradient(135deg, #d9770620, #f59e0b15)", border: "1px solid #d9770640", borderRadius: "var(--radius-sm, 6px)", color: "#d97706", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", cursor: "pointer", fontWeight: 600, letterSpacing: "0.02em" }}>
-            Programs {"\u2192"}
+    <div style={{ background: `var(--bg-primary)`, display: "flex", flexDirection: "column", gap: "1.5rem", padding: "0 0.25rem" }}>
+      {/* Tab strip — matches SiteDrilldown, skinny sticky under top nav */}
+      <div style={{ position: "sticky", top: 48, zIndex: 100, display: "flex", gap: "0.35rem", alignItems: "center", padding: "0.35rem 0.25rem", background: "var(--bg-primary)", borderBottom: "1px solid var(--border-muted)" }}>
+        {[["overview","Overview"],["daily","Daily"],["trends","Trends"]].map(([t, label]) => (
+          <button key={t} onClick={() => setTab(t)}
+            style={{ padding: "0.4rem 0.85rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${tab===t?"#d9770680":"var(--text-faint)"}`, background: tab===t?"#d977061a":"transparent", color: tab===t?"#d97706":"var(--text-muted)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", cursor: "pointer", fontWeight: tab===t ? 600 : 400, transition: "all 200ms cubic-bezier(0.4,0,0.2,1)" }}>
+            {label}
           </button>
-        </div>
+        ))}
       </div>
 
-      <div style={{ flex: 1, overflowY: "auto", padding: "2rem 2.5rem", display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
 
         {!goalLookup && tab === "overview" && (
           <div style={{ background: "#d9770610", border: "1px solid #d9770640", borderLeft: "4px solid #d97706", borderRadius: "var(--radius-md, 10px)", padding: "0.9rem 1.25rem", display: "flex", alignItems: "center", gap: "0.9rem" }}>
@@ -11305,6 +11671,9 @@ function BusinessOverview({ perf, onNav, goToSlide, tnpsSlideIdx, localAI, prior
             ]}
           />
         )}
+
+        {/* Daily Targets — toggle Combined / DR / BZ */}
+        <DailyTargetsCard programs={programs} regions={regions} goalLookup={goalLookup} fiscalInfo={fiscalInfo} />
 
         {/* Gainshare — holistic / company-wide */}
         {goalLookup && (
@@ -18819,13 +19188,16 @@ export default function App() {
           />
         ) : (currentPage.section === "dr" || currentPage.section === "bz") && !currentPage.program ? (
           <SiteDrilldown
+            key={currentPage.section}
             siteLabel={currentPage.section === "dr" ? "Dom. Republic" : "Belize"}
             regions={currentPage.section === "dr" ? siteRegionGroups.dr : siteRegionGroups.bz}
             allAgents={perf.agents}
+            priorAgents={priorAgents}
             programs={programs}
             goalLookup={perf.goalLookup}
             newHireSet={newHireSet}
             fiscalInfo={perf.fiscalInfo}
+            accent={currentPage.section === "dr" ? "#ed8936" : "#48bb78"}
           />
         ) : (currentPage.section === "dr" || currentPage.section === "bz") && filteredProgram ? (
           <Slide
