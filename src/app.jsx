@@ -82,6 +82,40 @@ function attainColor(pct) {
   return Q.Q4.color;
 }
 
+// Maps an agent's per-week session count to a {bg, fg} color pair.
+//   0  → red    (gap)
+//   1  → green  (on standard)
+//  ≥2  → indigo (over-indexed)
+//  null → grey  (future or "No Coaching Required")
+function coachingCellColor(sessions) {
+  if (sessions === null || sessions === undefined) return { bg: "#444", fg: "#888" };
+  if (sessions === 0) return { bg: "#dc2626", fg: "#ffffff" };
+  if (sessions === 1) return { bg: "#16a34a", fg: "#ffffff" };
+  return { bg: "#6366f1", fg: "#ffffff" };
+}
+
+// Same color band as attainColor() but returns indigo when over-indexed (>100%).
+// Used by Sessions / % cells where over-indexing is meaningful.
+function coachingPctColor(pct) {
+  if (pct == null) return "#94a3b8";
+  if (pct > 1)    return "#6366f1";  // over-indexed
+  if (pct >= 1)   return "#16a34a";  // on standard
+  if (pct >= 0.8) return "#2563eb";  // close
+  if (pct >= 0.5) return "#d97706";  // behind
+  return "#dc2626";                  // critical (under 50% or zero)
+}
+
+// Subtle row tint for an attainment percentage.
+// Returned as {dark, light} so consumers pick by lightMode.
+function coachingRowTint(pct) {
+  if (pct == null) return { dark: "transparent", light: "transparent" };
+  if (pct > 1)     return { dark: "#1a1d28",  light: "#eef2ff" };
+  if (pct >= 1)    return { dark: "#14241a",  light: "#f0fdf4" };
+  if (pct >= 0.8)  return { dark: "#15212a",  light: "#eff6ff" };
+  if (pct >= 0.5)  return { dark: "#2a2014",  light: "#fffbeb" };
+  return { dark: "#2a1414", light: "#fef2f2" };
+}
+
 // ── MBR Export Constants ─────────────────────────────────────────────────────
 // Category detection: GL-code prefixes, display name keywords, and exact overrides
 function getMbrCategory(jobType) {
@@ -286,6 +320,41 @@ async function ollamaGenerate(prompt, model = "qwen3:8b") {
   });
 }
 
+async function ollamaGenerateWithImage(prompt, imageDataUrl, model = "llava") {
+  return new Promise((resolve) => {
+    const run = async () => {
+      _aiRunning++;
+      try {
+        // Strip "data:image/...;base64," prefix → raw base64
+        const base64 = String(imageDataUrl || "").replace(/^data:image\/[a-zA-Z]+;base64,/, "");
+        if (!base64) { resolve(null); return; }
+        const res = await fetch("http://localhost:11434/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model,
+            prompt,
+            images: [base64],
+            stream: false,
+            options: { temperature: 0.2, num_predict: 400 },
+          }),
+        });
+        if (!res.ok) { resolve(null); return; }
+        const data = await res.json();
+        let text = (data.response || "").trim();
+        text = text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+        resolve(text || null);
+      } catch(e) { resolve(null); }
+      finally {
+        _aiRunning--;
+        if (_aiQueue.length > 0) _aiQueue.shift()();
+      }
+    };
+    if (_aiRunning < AI_CONCURRENCY) run();
+    else _aiQueue.push(run);
+  });
+}
+
 function buildAIPrompt(type, data) {
   const { jobType, uniqueAgentCount, totalHours, totalGoals, gph, attainment, planGoals, actGoals,
     distUnique, q1Agents, q4Agents, regions, healthScore, totalNewXI, totalXmLines,
@@ -454,12 +523,21 @@ const GOALS_STORAGE_KEY = "perf_intel_goals_v1";
 const NH_STORAGE_KEY    = "perf_intel_newhires_v1";
 const SHEET_URLS_KEY    = "perf_intel_sheet_urls_v1";
 const PRIOR_MONTH_STORAGE_KEY = "perf_intel_prior_month_v1";
-const DEFAULT_AGENT_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRagC_XDSQ84y25onmWs6MUOZcEdWZNA6fVRRDFUzNWQp3ginYLtOIQsSrwmbAERkOJ-daTvbHqEtoy/pub?gid=667346347&single=true&output=csv";
-const DEFAULT_GOALS_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRagC_XDSQ84y25onmWs6MUOZcEdWZNA6fVRRDFUzNWQp3ginYLtOIQsSrwmbAERkOJ-daTvbHqEtoy/pub?gid=1685208822&single=true&output=csv";
-const DEFAULT_NH_SHEET_URL    = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRagC_XDSQ84y25onmWs6MUOZcEdWZNA6fVRRDFUzNWQp3ginYLtOIQsSrwmbAERkOJ-daTvbHqEtoy/pub?gid=25912283&single=true&output=csv";
-const DEFAULT_PRIOR_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTZkBGVIxieyjBKftqL1oecSaUxRkao-gz2B9q4Z8zCY8hEtSy1M28S00RDCS8JVPgPFXJAv2LbsZru/pub?gid=667346347&single=true&output=csv";
-const DEFAULT_PRIOR_GOALS_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTZkBGVIxieyjBKftqL1oecSaUxRkao-gz2B9q4Z8zCY8hEtSy1M28S00RDCS8JVPgPFXJAv2LbsZru/pub?gid=1685208822&single=true&output=csv";
-const DEFAULT_TNPS_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRagC_XDSQ84y25onmWs6MUOZcEdWZNA6fVRRDFUzNWQp3ginYLtOIQsSrwmbAERkOJ-daTvbHqEtoy/pub?gid=2128252142&single=true&output=csv";
+// Data source URLs are loaded from .env.local (gitignored) via Vite's import.meta.env.
+// To configure: copy .env.example to .env.local and fill in your published Google Sheet CSV URLs.
+const DEFAULT_AGENT_SHEET_URL = import.meta.env.VITE_DEFAULT_AGENT_SHEET_URL || "";
+const DEFAULT_GOALS_SHEET_URL = import.meta.env.VITE_DEFAULT_GOALS_SHEET_URL || "";
+const DEFAULT_NH_SHEET_URL = import.meta.env.VITE_DEFAULT_NH_SHEET_URL || "";
+const DEFAULT_PRIOR_SHEET_URL = import.meta.env.VITE_DEFAULT_PRIOR_SHEET_URL || "";
+const DEFAULT_PRIOR_GOALS_SHEET_URL = import.meta.env.VITE_DEFAULT_PRIOR_GOALS_SHEET_URL || "";
+const DEFAULT_TNPS_SHEET_URL = import.meta.env.VITE_DEFAULT_TNPS_SHEET_URL || "";
+const DEFAULT_CORP_COACHING_DETAILS_URL = import.meta.env.VITE_DEFAULT_CORP_COACHING_DETAILS_URL || "";
+const DEFAULT_CORP_COACHING_WEEKLY_URL = import.meta.env.VITE_DEFAULT_CORP_COACHING_WEEKLY_URL || "";
+const DEFAULT_CORP_LOGIN_BUCKETS_URL = import.meta.env.VITE_DEFAULT_CORP_LOGIN_BUCKETS_URL || "";
+const DEFAULT_CORP_PRIOR_QUARTER_AGENT_URL = import.meta.env.VITE_DEFAULT_CORP_PRIOR_QUARTER_AGENT_URL || "";
+const DEFAULT_CORP_PRIOR_QUARTER_GOALS_URL = import.meta.env.VITE_DEFAULT_CORP_PRIOR_QUARTER_GOALS_URL || "";
+const DEFAULT_CORP_PRIOR_MONTH_AGENT_URL = import.meta.env.VITE_DEFAULT_CORP_PRIOR_MONTH_AGENT_URL || "";
+const DEFAULT_CORP_PRIOR_MONTH_GOALS_URL = import.meta.env.VITE_DEFAULT_CORP_PRIOR_MONTH_GOALS_URL || "";
 const TNPS_STORAGE_KEY = "perf_intel_tnps_v1";
 
 
@@ -1251,6 +1329,15 @@ function calculateHealthScore({ attainment, q1Rate, hoursUtilization, stability 
     hoursUtilization * 0.20 +
     stability        * 0.10
   );
+}
+
+// Filter goalEntries down to a single site's plan rows. Used when building a
+// site-scoped program so attainment is site-actual ÷ site-plan, not vs combined.
+function filterGoalEntriesBySite(goalEntries, siteKey) {
+  return (goalEntries || []).map(entry => ({
+    targetAudience: entry.targetAudience,
+    siteMap: entry.siteMap && entry.siteMap[siteKey] ? { [siteKey]: entry.siteMap[siteKey] } : {},
+  }));
 }
 
 function buildProgram(agents, jobType, goalEntries, newHireSet) {
@@ -2726,6 +2813,7 @@ function GainsharePanel({
   costPerActual, costPerPlan,
   sphAttain, sphActual, sphPlan,
   hourAttain, hourActual, hourPlan,
+  projMobileCapped, projHsdCapped, projCostPerCapped, projHourCapped,
   homesActual, homesPlan,
 }) {
 
@@ -2781,11 +2869,12 @@ function GainsharePanel({
   const PACE_COLOR = "#8b5cf6"; // purple — distinct from current tier colors
 
   // Compute projected net bonus from projected tier landings
-  const projMobilePct  = mobileAttain !== null  ? projAttainFn(mobileActual, mobilePlan, false, null) : null;
-  const projHsdPct     = hsdAttain !== null      ? projAttainFn(hsdActual, hsdPlan, false, null) : null;
-  const projCostPerPct = costPerAttain !== null  ? projAttainFn(costPerActual, costPerPlan, false, null) : null;
+  // Use per-funding-source capped projections when available (prevents over-projection beyond budget)
+  const projMobilePct  = projMobileCapped != null ? projMobileCapped : (mobileAttain !== null  ? projAttainFn(mobileActual, mobilePlan, false, null) : null);
+  const projHsdPct     = projHsdCapped != null    ? projHsdCapped    : (hsdAttain !== null      ? projAttainFn(hsdActual, hsdPlan, false, null) : null);
+  const projCostPerPct = projCostPerCapped != null ? projCostPerCapped : (costPerAttain !== null  ? projAttainFn(costPerActual, costPerPlan, false, null) : null);
   const projSphPct     = sphAttain !== null      ? projAttainFn(sphActual, sphPlan, true, hourActual) : null;
-  const projHourPct    = hourAttain !== null      ? projAttainFn(hourActual, hourPlan, false, null) : null;
+  const projHourPct    = projHourCapped != null ? projHourCapped : (hourAttain !== null ? projAttainFn(hourActual, hourPlan, false, null) : null);
 
   const projMobileTier  = projMobilePct !== null  ? getGainshareTier(projMobilePct, siteMode) : null;
   const projHsdTier     = projHsdPct !== null      ? getGainshareTier(projHsdPct, siteMode) : null;
@@ -2803,7 +2892,7 @@ function GainsharePanel({
     + effectiveProjHourPenalty;
   const hasProjBonus = fiscalInfo && fiscalInfo.elapsedBDays > 0;
 
-  const ColDef = ({ label, attain, tierKey, tier, actual, plan, isSph, actualHours }) => {
+  const ColDef = ({ label, attain, tierKey, tier, actual, plan, isSph, actualHours, projOverride }) => {
     // For each tier, compute the target number needed
     // Cumulative metrics: target = (threshold% / 100) * plan
     // SPH: target expressed as sales needed = targetSPH * actualHours (so the user sees homes, not SPH)
@@ -2822,8 +2911,8 @@ function GainsharePanel({
     const nextTarget = nextTierUp ? computeTarget(nextTierUp.min) : null;
     const nextDelta = nextTarget !== null && actual !== null ? Math.max(Math.ceil(nextTarget - (isSph && actualHours > 0 ? actual * actualHours : actual)), 0) : null;
 
-    // Projected EOM tier
-    const projPct = projAttainFn(actual, plan, isSph, actualHours);
+    // Projected EOM tier — use per-funding-source capped projection when available
+    const projPct = projOverride != null ? projOverride : projAttainFn(actual, plan, isSph, actualHours);
     const projTierIdx = getProjTierIdx(projPct);
     const showProj = projPct !== null && projTierIdx !== currentIdx;
 
@@ -2929,9 +3018,9 @@ function GainsharePanel({
         </div>
       </div>
       <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
-        {mobileAttain !== null  && <ColDef label="Mobile Attainment"   attain={mobileAttain}  tierKey="mobile"  tier={mobileTier}  actual={mobileActual}  plan={mobilePlan}  />}
-        {hsdAttain !== null     && <ColDef label="HSD Attainment"      attain={hsdAttain}     tierKey="hsd"     tier={hsdTier}     actual={hsdActual}     plan={hsdPlan}     />}
-        {costPerAttain !== null && <ColDef label="Cost Per Attainment" attain={costPerAttain} tierKey="costPer" tier={costPerTier} actual={costPerActual} plan={costPerPlan} />}
+        {mobileAttain !== null  && <ColDef label="Mobile Attainment"   attain={mobileAttain}  tierKey="mobile"  tier={mobileTier}  actual={mobileActual}  plan={mobilePlan}  projOverride={projMobileCapped} />}
+        {hsdAttain !== null     && <ColDef label="HSD Attainment"      attain={hsdAttain}     tierKey="hsd"     tier={hsdTier}     actual={hsdActual}     plan={hsdPlan}     projOverride={projHsdCapped} />}
+        {costPerAttain !== null && <ColDef label="Cost Per Attainment" attain={costPerAttain} tierKey="costPer" tier={costPerTier} actual={costPerActual} plan={costPerPlan} projOverride={projCostPerCapped} />}
         {sphAttain !== null     && <ColDef label="SPH Attainment"      attain={sphAttain}     tierKey="sph"     tier={sphTier}     actual={sphActual}     plan={sphPlan}     isSph actualHours={hourActual} />}
         {/* Hour Attainment Gate Metric */}
         {hourAttain !== null && hourAttain !== undefined && (() => {
@@ -2945,6 +3034,11 @@ function GainsharePanel({
                 <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)`, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.4rem", textAlign: "center" }}>Hour Gate</div>
                 <div style={{ textAlign: "center", marginBottom: "0.35rem" }}>
                   <span style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "2rem", color: hourAttain >= 100 ? "#16a34a" : "#dc2626", fontWeight: 700 }}>{Math.round(hourAttain)}%</span>
+                  {projHourPct !== null && (
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: PACE_COLOR, marginTop: "0.1rem" }}>
+                      proj. {Math.round(projHourPct)}%
+                    </div>
+                  )}
                 </div>
                 {hoursNeeded > 0 && (
                   <div style={{ textAlign: "center", marginBottom: "0.5rem", padding: "0.25rem 0.4rem", background: "#d9770612", borderRadius: "var(--radius-sm, 6px)", border: "1px solid #d9770630" }}>
@@ -2960,25 +3054,95 @@ function GainsharePanel({
                     </span>
                   </div>
                 )}
-                {HOUR_GATE_SITE_TIERS.map((t, ti) => {
-                  const isActive = hourGateTier === t;
+                {(() => {
+                  const projHourTier = projHourPct !== null ? getHourGateTier(projHourPct) : null;
+                  const showHourProj = projHourTier && projHourTier !== hourGateTier;
+                  return HOUR_GATE_SITE_TIERS.map((t, ti) => {
+                    const isActive = hourGateTier === t;
+                    const isProj = showHourProj && projHourTier === t;
+                    const target = hourPlan ? Math.ceil((t.min / 100) * hourPlan) : null;
+                    const isAbove = target !== null && (hourActual || 0) >= target;
+                    let bg, border;
+                    if (isActive) {
+                      bg = t.penalty < 0 ? "#dc262622" : "#16a34a22";
+                      border = `2px solid ${t.penalty < 0 ? "#dc262670" : "#16a34a70"}`;
+                    } else if (isProj) {
+                      bg = PACE_COLOR + "14";
+                      border = `2px dashed ${PACE_COLOR}60`;
+                    } else {
+                      bg = "transparent"; border = "1px solid transparent";
+                    }
+                    return (
+                      <div key={ti} style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", padding: "0.2rem 0.4rem", borderRadius: "var(--radius-sm, 6px)", marginBottom: "1px", background: bg, border, gap: "0.3rem", position: "relative" }}>
+                        {isProj && <span style={{ position: "absolute", left: "-0.1rem", top: "50%", transform: "translateY(-50%)", fontSize: "0.6rem", color: PACE_COLOR, fontWeight: 700, lineHeight: 1 }}>▸</span>}
+                        <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: isActive ? "1.05rem" : "0.95rem", color: isActive ? `var(--text-primary)` : isProj ? PACE_COLOR : `var(--text-faint)` }}>{t.label}</span>
+                        <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", textAlign: "center", minWidth: "4.5rem", color: isAbove ? "#16a34a" : ti === (HOUR_GATE_SITE_TIERS.indexOf(hourGateTier) - 1) ? "#d97706" : isProj ? PACE_COLOR : `var(--text-faint)`, fontWeight: isActive || isProj || (target && !isAbove && ti === HOUR_GATE_SITE_TIERS.indexOf(hourGateTier) - 1) ? 700 : 400 }}>
+                          {target === null ? "" : isAbove ? "\u2713" : target.toLocaleString()}
+                        </span>
+                        <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: isActive ? "1.25rem" : isProj ? "1.1rem" : "1rem", textAlign: "right", color: isActive ? (t.penalty < 0 ? "#dc2626" : "#16a34a") : isProj ? PACE_COLOR : `var(--text-faint)`, fontWeight: isActive || isProj ? 700 : 400 }}>
+                          {t.penalty === 0 ? "0%" : `${t.penalty.toFixed(2)}%`}
+                          {isProj && <span style={{ fontSize: "0.55rem", display: "block", color: PACE_COLOR, fontWeight: 500 }}>PROJ.</span>}
+                        </span>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+            );
+          }
+
+          // Overall mode: 2-tier display (pass/fail with projected tier)
+          {
+            const overallHourTiers = [
+              { min: 100, max: Infinity, penalty: 0,     label: "\u2265 100%" },
+              { min: 0,   max: 99.99,    penalty: -2.00, label: "< 99.9%" },
+            ];
+            const currentOverallTier = hourAttain >= 100 ? overallHourTiers[0] : overallHourTiers[1];
+            const projOverallTier = projHourPct !== null ? (projHourPct >= 100 ? overallHourTiers[0] : overallHourTiers[1]) : null;
+            const showOverallProj = projOverallTier && projOverallTier !== currentOverallTier;
+            return (
+              <div style={{ flex: "1 1 140px", minWidth: "140px" }}>
+                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)`, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.4rem", textAlign: "center" }}>Hour Gate</div>
+                <div style={{ textAlign: "center", marginBottom: "0.35rem" }}>
+                  <span style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "2rem", color: hourAttain >= 100 ? "#16a34a" : "#dc2626", fontWeight: 700 }}>{Math.round(hourAttain)}%</span>
+                  {projHourPct !== null && (
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: PACE_COLOR, marginTop: "0.1rem" }}>
+                      proj. {Math.round(projHourPct)}%
+                    </div>
+                  )}
+                </div>
+                {hoursNeeded > 0 && (
+                  <div style={{ textAlign: "center", marginBottom: "0.5rem", padding: "0.25rem 0.4rem", background: "#d9770612", borderRadius: "var(--radius-sm, 6px)", border: "1px solid #d9770630" }}>
+                    <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "#d97706" }}>
+                      {hoursNeeded.toLocaleString()} hrs to clear gate
+                    </span>
+                  </div>
+                )}
+                {overallHourTiers.map((t, ti) => {
+                  const isActive = currentOverallTier === t;
+                  const isProj = showOverallProj && projOverallTier === t;
                   const target = hourPlan ? Math.ceil((t.min / 100) * hourPlan) : null;
                   const isAbove = target !== null && (hourActual || 0) >= target;
                   let bg, border;
                   if (isActive) {
                     bg = t.penalty < 0 ? "#dc262622" : "#16a34a22";
                     border = `2px solid ${t.penalty < 0 ? "#dc262670" : "#16a34a70"}`;
+                  } else if (isProj) {
+                    bg = PACE_COLOR + "14";
+                    border = `2px dashed ${PACE_COLOR}60`;
                   } else {
                     bg = "transparent"; border = "1px solid transparent";
                   }
                   return (
-                    <div key={ti} style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", padding: "0.2rem 0.4rem", borderRadius: "var(--radius-sm, 6px)", marginBottom: "1px", background: bg, border, gap: "0.3rem" }}>
-                      <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: isActive ? "1.05rem" : "0.95rem", color: isActive ? `var(--text-primary)` : `var(--text-faint)` }}>{t.label}</span>
-                      <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", textAlign: "center", minWidth: "4.5rem", color: isAbove ? "#16a34a" : ti === (HOUR_GATE_SITE_TIERS.indexOf(hourGateTier) - 1) ? "#d97706" : `var(--text-faint)`, fontWeight: isActive || (target && !isAbove && ti === HOUR_GATE_SITE_TIERS.indexOf(hourGateTier) - 1) ? 700 : 400 }}>
+                    <div key={ti} style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", padding: "0.2rem 0.4rem", borderRadius: "var(--radius-sm, 6px)", marginBottom: "1px", background: bg, border, gap: "0.3rem", position: "relative" }}>
+                      {isProj && <span style={{ position: "absolute", left: "-0.1rem", top: "50%", transform: "translateY(-50%)", fontSize: "0.6rem", color: PACE_COLOR, fontWeight: 700, lineHeight: 1 }}>▸</span>}
+                      <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: isActive ? "1.05rem" : "0.95rem", color: isActive ? `var(--text-primary)` : isProj ? PACE_COLOR : `var(--text-faint)` }}>{t.label}</span>
+                      <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", textAlign: "center", minWidth: "4.5rem", color: isAbove ? "#16a34a" : isProj ? PACE_COLOR : `var(--text-faint)`, fontWeight: isActive || isProj ? 700 : 400 }}>
                         {target === null ? "" : isAbove ? "\u2713" : target.toLocaleString()}
                       </span>
-                      <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: isActive ? "1.25rem" : "1rem", textAlign: "right", color: isActive ? (t.penalty < 0 ? "#dc2626" : "#16a34a") : `var(--text-faint)`, fontWeight: isActive ? 700 : 400 }}>
+                      <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: isActive ? "1.25rem" : isProj ? "1.1rem" : "1rem", textAlign: "right", color: isActive ? (t.penalty < 0 ? "#dc2626" : "#16a34a") : isProj ? PACE_COLOR : `var(--text-faint)`, fontWeight: isActive || isProj ? 700 : 400 }}>
                         {t.penalty === 0 ? "0%" : `${t.penalty.toFixed(2)}%`}
+                        {isProj && <span style={{ fontSize: "0.55rem", display: "block", color: PACE_COLOR, fontWeight: 500 }}>PROJ.</span>}
                       </span>
                     </div>
                   );
@@ -2986,36 +3150,6 @@ function GainsharePanel({
               </div>
             );
           }
-
-          // Overall mode: simple pass/fail
-          return (
-            <div style={{ flex: "0 0 auto", minWidth: "130px", display: "flex", flexDirection: "column", alignItems: "center", padding: "0 0.5rem" }}>
-              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)`, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.4rem", textAlign: "center" }}>Hour Gate</div>
-              <div style={{ textAlign: "center", marginBottom: "0.35rem" }}>
-                <span style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "2rem", color: hourAttain >= 100 ? "#16a34a" : "#dc2626", fontWeight: 700 }}>{Math.round(hourAttain)}%</span>
-              </div>
-              <div style={{ padding: "0.4rem 0.6rem", borderRadius: "6px", background: hourAttain >= 100 ? "#16a34a10" : "#dc262610", border: `1px solid ${hourAttain >= 100 ? "#16a34a30" : "#dc262630"}`, textAlign: "center", marginBottom: "0.35rem", width: "100%" }}>
-                {hourAttain >= 100 ? (
-                  <div>
-                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: "#16a34a", fontWeight: 700 }}>NO PENALTY</div>
-                    {hoursOver > 0 && <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-dim)`, marginTop: "0.15rem" }}>+{hoursOver.toLocaleString()} hrs over</div>}
-                  </div>
-                ) : (
-                  <div>
-                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem", color: "#dc2626", fontWeight: 700 }}>-2.00%</div>
-                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: `var(--text-dim)`, marginTop: "0.15rem" }}>credit of invoiced hrs</div>
-                  </div>
-                )}
-              </div>
-              {hourAttain < 100 && hoursNeeded > 0 && (
-                <div style={{ textAlign: "center", padding: "0.25rem 0.4rem", background: "#d9770612", borderRadius: "var(--radius-sm, 6px)", border: "1px solid #d9770630", width: "100%" }}>
-                  <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "#d97706" }}>
-                    {hoursNeeded.toLocaleString()} hrs to clear gate
-                  </span>
-                </div>
-              )}
-            </div>
-          );
         })()}
       </div>
     </div>
@@ -3724,7 +3858,7 @@ function GoalsRollup({ agents, goalEntries, goalLookup, fiscalInfo }) {
 // SECTION 11 — DROP ZONE  (pages/DropZone.jsx)
 // ══════════════════════════════════════════════════════════════════════════════
 
-function DropZone({ onData, goalsRaw, onGoalsLoad, newHiresRaw, onNewHiresLoad }) {
+function DropZone({ onData, onAgentText, goalsRaw, onGoalsLoad, onGoalsText, newHiresRaw, onNewHiresLoad, onNHText }) {
   const [draggingAgent, setDraggingAgent] = useState(false);
   const [draggingGoals, setDraggingGoals] = useState(false);
   const [draggingNH,    setDraggingNH]    = useState(false);
@@ -3735,14 +3869,14 @@ function DropZone({ onData, goalsRaw, onGoalsLoad, newHiresRaw, onNewHiresLoad }
   const goalsRef = useRef();
   const nhRef    = useRef();
 
-  const readFile = (f, cb) => { const r = new FileReader(); r.onload = e => cb(parseCSV(e.target.result)); r.readAsText(f); };
+  const readFile = (f, cb, textCb) => { const r = new FileReader(); r.onload = e => { const t = e.target.result; if (textCb) textCb(t); cb(parseCSV(t)); }; r.readAsText(f); };
   const handlePasteSubmit = () => {
     if (!pasteText.trim()) return;
     const rows = parseCSV(pasteText);
     if (rows.length === 0) return;
-    if (pasteTarget === "agent") onData(rows);
-    else if (pasteTarget === "goals") onGoalsLoad(rows);
-    else if (pasteTarget === "nh") onNewHiresLoad(rows);
+    if (pasteTarget === "agent") { if (onAgentText) onAgentText(pasteText); onData(rows); }
+    else if (pasteTarget === "goals") { if (onGoalsText) onGoalsText(pasteText); onGoalsLoad(rows); }
+    else if (pasteTarget === "nh") { if (onNHText) onNHText(pasteText); onNewHiresLoad(rows); }
     setPasteMode(false); setPasteText(""); setPasteTarget(null);
   };
 
@@ -3785,7 +3919,7 @@ function DropZone({ onData, goalsRaw, onGoalsLoad, newHiresRaw, onNewHiresLoad }
         <div
           onDragOver={e => { e.preventDefault(); setDraggingAgent(true); }}
           onDragLeave={() => setDraggingAgent(false)}
-          onDrop={e => { e.preventDefault(); setDraggingAgent(false); readFile(e.dataTransfer.files[0], onData); }}
+          onDrop={e => { e.preventDefault(); setDraggingAgent(false); readFile(e.dataTransfer.files[0], onData, onAgentText); }}
           onClick={() => agentRef.current.click()}
           style={{ border: `2px dashed ${draggingAgent ? "#d97706" : `var(--border-muted)`}`, borderRadius: "var(--radius-lg, 16px)", padding: "2.5rem 2rem", textAlign: "center", cursor: "pointer", background: draggingAgent ? "#d9770608" : `var(--glass-bg)`, backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)", transition: "all 250ms cubic-bezier(0.4,0,0.2,1)", boxShadow: draggingAgent ? "0 0 24px rgba(217,119,6,0.15)" : "var(--card-glow)" }}>
           <div style={{ width: "48px", height: "48px", borderRadius: "var(--radius-lg, 16px)", background: "#d9770612", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1rem", border: "1px solid #d9770620" }}>
@@ -3793,7 +3927,7 @@ function DropZone({ onData, goalsRaw, onGoalsLoad, newHiresRaw, onNewHiresLoad }
           </div>
           <div style={{ color: `var(--text-secondary)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", fontWeight: 400 }}>Drop your agent CSV here, or <span style={{ color: "#d97706", fontWeight: 600 }}>click to browse</span></div>
           <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "0.75rem", color: `var(--text-faint)`, marginTop: "0.5rem", letterSpacing: "0.02em" }}>Job Type · Region · AgentName · Hours · Goals · GPH · % to Goal</div>
-          <input ref={agentRef} type="file" accept=".csv" style={{ display: "none" }} onChange={e => readFile(e.target.files[0], onData)} />
+          <input ref={agentRef} type="file" accept=".csv" style={{ display: "none" }} onChange={e => readFile(e.target.files[0], onData, onAgentText)} />
         </div>
       </div>
 
@@ -3803,10 +3937,10 @@ function DropZone({ onData, goalsRaw, onGoalsLoad, newHiresRaw, onNewHiresLoad }
           dragging={draggingGoals}
           onDragOver={e => { e.preventDefault(); setDraggingGoals(true); }}
           onDragLeave={() => setDraggingGoals(false)}
-          onDrop={e => { e.preventDefault(); setDraggingGoals(false); readFile(e.dataTransfer.files[0], onGoalsLoad); }}
+          onDrop={e => { e.preventDefault(); setDraggingGoals(false); readFile(e.dataTransfer.files[0], onGoalsLoad, onGoalsText); }}
           onClick={() => goalsRef.current.click()}
           inputRef={goalsRef}
-          onChange={e => readFile(e.target.files[0], onGoalsLoad)}
+          onChange={e => readFile(e.target.files[0], onGoalsLoad, onGoalsText)}
           loaded={!!goalsRaw}
           loadedLabel={`${goalsRaw?.length || 0} rows · saved locally · click to replace`}
           hint="Unlocks Goals tab per program"
@@ -3816,10 +3950,10 @@ function DropZone({ onData, goalsRaw, onGoalsLoad, newHiresRaw, onNewHiresLoad }
           dragging={draggingNH}
           onDragOver={e => { e.preventDefault(); setDraggingNH(true); }}
           onDragLeave={() => setDraggingNH(false)}
-          onDrop={e => { e.preventDefault(); setDraggingNH(false); readFile(e.dataTransfer.files[0], onNewHiresLoad); }}
+          onDrop={e => { e.preventDefault(); setDraggingNH(false); readFile(e.dataTransfer.files[0], onNewHiresLoad, onNHText); }}
           onClick={() => nhRef.current.click()}
           inputRef={nhRef}
-          onChange={e => readFile(e.target.files[0], onNewHiresLoad)}
+          onChange={e => readFile(e.target.files[0], onNewHiresLoad, onNHText)}
           loaded={!!newHiresRaw}
           loadedLabel={`${newHiresRaw?.length || 0} rows · roster saved`}
           hint="Columns: First Name, Last Name, Hire Date, End Date"
@@ -3987,18 +4121,21 @@ function RankingAgentTray({ sup, colCount, allAgents }) {
   );
 }
 
-function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, newHireSet, fiscalInfo }) {
+function SiteDrilldown({ siteLabel, regions, allAgents, priorAgents, programs, goalLookup, newHireSet, fiscalInfo, accent = "#ed8936" }) {
   const [subRegion, setSubRegion] = useState(null);
   const [siteRankSort, setSiteRankSort] = useState({ key: "pctToGoal", dir: -1 });
   const [expandedSup, setExpandedSup] = useState(null);
   const [dtFundingFilter, setDtFundingFilter] = useState(null);
+  const [dtTierPct, setDtTierPct] = useState(100); // gainshare site tier target: 100=Plan, 107, 118, 129, 139
   const [rankView, setRankView] = useState("supervisors"); // "supervisors" | "agents"
   const [siteAgentSort, setSiteAgentSort] = useState({ key: "hours", dir: -1 });
   const [siteExpandedAgent, setSiteExpandedAgent] = useState(null);
+  const [tab, setTab] = useState("overview"); // "overview" | "daily" | "trends"
   const hasMultipleRegions = regions.length > 1;
 
   const activeRegions = (subRegion && hasMultipleRegions) ? [subRegion] : regions;
   const agents   = allAgents.filter(a => !a.isSpanishCallback && activeRegions.includes((a.region || "Unknown")));
+  const sitePriorAgents = (priorAgents || []).filter(a => !a.isSpanishCallback && activeRegions.includes((a.region || "Unknown")));
   const totalHrs = agents.reduce((s, a) => s + a.hours, 0);
   const distU    = uniqueQuartileDist(agents);
   const uCount   = uniqueNames(agents).size;
@@ -4031,10 +4168,82 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
   const siteActHsd = agents.reduce((s, a) => s + a.newXI,  0);
   const siteActXm  = agents.reduce((s, a) => s + a.xmLines, 0);
 
-  // Gainshare attainments for the site (site-tier table)
+  // Per-funding-source capped actuals for gainshare
+  // Each funding source's unit contribution is capped at 100% of its plan
+  const siteCapped = (() => {
+    if (!goalLookup || !sitePlanMetrics) return null;
+    const fg = {};
+    Object.values(goalLookup.byTA || {}).forEach(siteMap => {
+      (siteMap[sitePlanKey] || []).forEach(r => {
+        const f = r._funding || "Unknown";
+        const roc = (r._roc || "").toUpperCase();
+        if (!fg[f]) fg[f] = { homes: 0, hsd: 0, xm: 0, rgu: 0, hours: 0, rocs: new Set() };
+        const p = computePlanRow(r);
+        fg[f].homes += p.homesGoal; fg[f].hsd += p.hsdGoal;
+        fg[f].xm += p.xmGoal; fg[f].rgu += p.rguGoal;
+        fg[f].hours += p.hoursGoal;
+        if (roc) fg[f].rocs.add(roc);
+      });
+    });
+    const matched = new Set();
+    let cHomes = 0, cHsd = 0, cXm = 0, cRgu = 0;
+    const proj = { homes: [], hsd: [], xm: [], rgu: [], hours: [] };
+    Object.values(fg).forEach(g => {
+      g.rocs.forEach(r => matched.add(r));
+      const fa = agents.filter(a => g.rocs.has((a.rocCode || "").toUpperCase()));
+      const aH = fa.reduce((s, a) => s + a.goals, 0);
+      const aD = fa.reduce((s, a) => s + a.newXI, 0);
+      const aX = fa.reduce((s, a) => s + a.xmLines, 0);
+      const aR = fa.reduce((s, a) => s + a.rgu, 0);
+      const aHrs = fa.reduce((s, a) => s + a.hours, 0);
+      cHomes += g.homes > 0 ? Math.min(aH, g.homes) : aH;
+      cHsd   += g.hsd   > 0 ? Math.min(aD, g.hsd)   : aD;
+      cXm    += g.xm    > 0 ? Math.min(aX, g.xm)    : aX;
+      cRgu   += g.rgu   > 0 ? Math.min(aR, g.rgu)    : aR;
+      proj.homes.push({ actual: aH, plan: g.homes });
+      proj.hsd.push({ actual: aD, plan: g.hsd });
+      proj.xm.push({ actual: aX, plan: g.xm });
+      proj.rgu.push({ actual: aR, plan: g.rgu });
+      proj.hours.push({ actual: aHrs, plan: g.hours });
+    });
+    const um = agents.filter(a => !matched.has((a.rocCode || "").toUpperCase()));
+    if (um.length) {
+      const uH = um.reduce((s, a) => s + a.goals, 0);
+      const uD = um.reduce((s, a) => s + a.newXI, 0);
+      const uX = um.reduce((s, a) => s + a.xmLines, 0);
+      const uR = um.reduce((s, a) => s + a.rgu, 0);
+      const uHrs = um.reduce((s, a) => s + a.hours, 0);
+      cHomes += uH; cHsd += uD; cXm += uX; cRgu += uR;
+      proj.homes.push({ actual: uH, plan: 0 });
+      proj.hsd.push({ actual: uD, plan: 0 });
+      proj.xm.push({ actual: uX, plan: 0 });
+      proj.rgu.push({ actual: uR, plan: 0 });
+      proj.hours.push({ actual: uHrs, plan: 0 });
+    }
+    return { homes: cHomes, hsd: cHsd, xm: cXm, rgu: cRgu, proj };
+  })();
+
+  // Capped projected attainment per funding source
+  const cappedProjAttain = (groups, totalPlan) => {
+    if (!fiscalInfo?.elapsedBDays || !fiscalInfo?.totalBDays || !totalPlan) return null;
+    let cp = 0;
+    groups.forEach(g => {
+      const projected = (g.actual / fiscalInfo.elapsedBDays) * fiscalInfo.totalBDays;
+      cp += g.plan > 0 ? Math.min(projected, g.plan) : projected;
+    });
+    return (cp / totalPlan) * 100;
+  };
+
+  // Gainshare attainments for the site (site-tier table) — uses raw actuals
   const siteMobileAttain  = sitePlanMetrics && sitePlanMetrics.goals > 0 ? (totalG       / sitePlanMetrics.goals) * 100 : null;
   const siteHsdAttain     = sitePlanMetrics && sitePlanMetrics.hsd   > 0 ? (siteActHsd   / sitePlanMetrics.hsd)   * 100 : null;
   const siteCostPerAttain = sitePlanMetrics && sitePlanMetrics.rgu   > 0 ? (siteActRgu   / sitePlanMetrics.rgu)   * 100 : null;
+
+  // Capped projections: each funding source's projected EOM is capped at 100% of its plan
+  const siteProjMobileCapped = siteCapped ? cappedProjAttain(siteCapped.proj.homes, sitePlanMetrics?.goals) : null;
+  const siteProjHsdCapped    = siteCapped ? cappedProjAttain(siteCapped.proj.hsd,   sitePlanMetrics?.hsd)   : null;
+  const siteProjCostPerCapped = siteCapped ? cappedProjAttain(siteCapped.proj.rgu,  sitePlanMetrics?.rgu)   : null;
+  const siteProjHourCapped   = siteCapped ? cappedProjAttain(siteCapped.proj.hours, sitePlanMetrics?.hours) : null;
 
   // SPH Attainment for this site
   const siteActualSph = totalHrs > 0 ? totalG / totalHrs : 0;
@@ -4070,20 +4279,23 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
     const sitePlanXm    = siteRows.reduce((s, r) => s + computePlanRow(r).xmGoal,    0) || null;
     const sitePlanHours = siteRows.reduce((s, r) => s + computePlanRow(r).hoursGoal, 0) || null;
 
-    // Breakout by Target/ROC within this site (preserves NAT vs HQ)
+    // Breakout by ROC within this site (preserves NAT vs HQ even when target names match)
     const goalBreakout = [];
-    const targetGroups = {};
+    const rocGroups = {};
     siteRows.forEach(r => {
-      const t = r._target || "Unknown";
-      if (!targetGroups[t]) targetGroups[t] = { target: t, roc: r._roc || "", funding: r._funding || "", rows: [] };
-      targetGroups[t].rows.push(r);
+      const key = r._roc || r._target || "Unknown";
+      if (!rocGroups[key]) rocGroups[key] = { target: r._target || "Unknown", roc: r._roc || "", funding: r._funding || "", rows: [] };
+      rocGroups[key].rows.push(r);
     });
-    Object.values(targetGroups).forEach(g => {
+    Object.values(rocGroups).forEach(g => {
       const pr = g.rows.map(r => computePlanRow(r));
       goalBreakout.push({
         target: g.target, roc: g.roc, funding: g.funding,
         homes: pr.reduce((s, p2) => s + p2.homesGoal, 0),
         hours: pr.reduce((s, p2) => s + p2.hoursGoal, 0),
+        hsd: pr.reduce((s, p2) => s + p2.hsdGoal, 0),
+        xm: pr.reduce((s, p2) => s + p2.xmGoal, 0),
+        rgu: pr.reduce((s, p2) => s + p2.rguGoal, 0),
         sph: pr.length > 0 ? pr.reduce((s, p2) => s + p2.sphGoal, 0) / pr.length : 0,
       });
     });
@@ -4101,8 +4313,49 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
 
   const displayLabel = mbrSiteName(subRegion || siteLabel);
 
+  // Hex with 50/12 alpha suffix for active button border/fill
+  const accentBorder = `${accent}80`;
+  const accentFill   = `${accent}1a`;
+  const tabTitle = tab === "daily" ? `${displayLabel} — Daily Performance`
+                  : tab === "trends" ? `${displayLabel} — Week-over-Week Trends`
+                  : `${displayLabel} — Site Overview`;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+
+      {/* Tab header — Overview / Daily / Trends, scoped to this site. Sticky under top nav. */}
+      <div style={{ position: "sticky", top: 48, zIndex: 100, display: "flex", gap: "0.35rem", alignItems: "center", padding: "0.35rem 0.25rem", background: "var(--bg-primary)", borderBottom: "1px solid var(--border-muted)", marginTop: "-0.5rem" }}>
+        {[["overview", "Overview"], ["daily", "Daily"], ["trends", "Trends"]].map(([t, label]) => (
+          <button key={t} onClick={() => setTab(t)}
+            style={{ padding: "0.4rem 0.85rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${tab === t ? accentBorder : "var(--text-faint)"}`, background: tab === t ? accentFill : "transparent", color: tab === t ? accent : "var(--text-muted)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", cursor: "pointer", fontWeight: tab === t ? 600 : 400, transition: "all 200ms cubic-bezier(0.4,0,0.2,1)" }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "daily" && (
+        <DailyBreakdownPanel
+          agents={agents}
+          regions={activeRegions}
+          jobType={`${siteLabel} Site`}
+          sphGoal={null}
+          programs={sitePrograms}
+          goalLookup={goalLookup}
+          priorAgents={sitePriorAgents}
+        />
+      )}
+
+      {tab === "trends" && (
+        <WeeklyTrendsPanel
+          currentAgents={agents}
+          priorAgents={sitePriorAgents}
+          fiscalInfo={fiscalInfo}
+          goalLookup={goalLookup}
+          programs={sitePrograms}
+        />
+      )}
+
+      {tab === "overview" && (<>
 
       {/* Sub-region tabs — only shown when group has multiple regions */}
       {hasMultipleRegions && (
@@ -4200,6 +4453,10 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
           sphActual={siteActualSph}  sphPlan={sitePlanSph}
           hourActual={totalHrs}      hourPlan={sitePlanMetrics?.hours || 0}
           homesActual={totalG}       homesPlan={sitePlanMetrics?.goals || 0}
+          projMobileCapped={siteProjMobileCapped}
+          projHsdCapped={siteProjHsdCapped}
+          projCostPerCapped={siteProjCostPerCapped}
+          projHourCapped={siteProjHourCapped}
         />
       )}
 
@@ -4475,7 +4732,40 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
         ];
         const dtPrograms = sitePrograms.filter(p => p.sitePlanHsd || p.sitePlanXm || p.sitePlanGoals || p.sitePlanHours);
         const filteredDtPrograms = (() => {
-          if (!dtFundingFilter) return dtPrograms;
+          if (!dtFundingFilter) {
+            // Split programs with multiple ROC breakouts into separate rows
+            const rows = [];
+            dtPrograms.forEach(p => {
+              const breakouts = p.goalBreakout || [];
+              if (breakouts.length <= 1) {
+                rows.push(p);
+              } else {
+                breakouts.forEach(fb => {
+                  const rocAgents = fb.roc ? p.siteAgents.filter(a => a.rocCode === fb.roc) : p.siteAgents;
+                  const rocGoals = rocAgents.reduce((s, a) => s + a.goals, 0);
+                  const rocHours = rocAgents.reduce((s, a) => s + a.hours, 0);
+                  const rocHsd = rocAgents.reduce((s, a) => s + (a.newXI || 0), 0);
+                  const rocXm = rocAgents.reduce((s, a) => s + (a.xmLines || 0), 0);
+                  rows.push({
+                    ...p,
+                    _fundingLabel: fb.funding,
+                    _fundingRoc: fb.roc,
+                    sitePlanHours: fb.hours || 0,
+                    sitePlanGoals: fb.homes || 0,
+                    sitePlanHsd: fb.hsd || null,
+                    sitePlanXm: fb.xm || null,
+                    totalHours: rocHours,
+                    totalGoals: rocGoals,
+                    hsdAct: rocHsd,
+                    xmAct: rocXm,
+                    siteAgents: rocAgents,
+                    uNames: new Set(rocAgents.map(a => a.agentName).filter(Boolean)).size,
+                  });
+                });
+              }
+            });
+            return rows;
+          }
           // When funding filter active, split programs into per-funding rows
           const rows = [];
           dtPrograms.forEach(p => {
@@ -4583,7 +4873,7 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
                 </span>
               </div>
               <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "1.02rem", color: `var(--text-faint)`, marginTop: "0.2rem" }}>
-                Required per day to finish on goal · {fiscalInfo.remainingBDays > 0 ? `${fiscalInfo.remainingBDays} business days remaining` : "No scheduled business days remaining"}
+                Required per day to finish {dtTierPct === 100 ? "on goal" : `at ${dtTierPct}% (Tier ${dtTierPct >= 139 ? "+4" : dtTierPct >= 129 ? "+3" : dtTierPct >= 118 ? "+2" : "+1"})`} · {fiscalInfo.remainingBDays > 0 ? `${fiscalInfo.remainingBDays} business days remaining` : "No scheduled business days remaining"}
               </div>
             </div>
           </div>
@@ -4611,6 +4901,28 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
             );
           })()}
 
+          {/* Gainshare tier target selector */}
+          <div style={{ display: "flex", gap: "0.3rem", flexWrap: "wrap", marginBottom: "0.75rem", alignItems: "center" }}>
+            <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: `var(--text-faint)`, letterSpacing: "0.06em", marginRight: "0.25rem" }}>TARGET</span>
+            {[
+              { pct: 100, label: "Plan", bonus: null },
+              { pct: 107, label: "107%", bonus: "+1" },
+              { pct: 118, label: "118%", bonus: "+2" },
+              { pct: 129, label: "129%", bonus: "+3" },
+              { pct: 139, label: "139%", bonus: "+4" },
+            ].map(t => {
+              const active = dtTierPct === t.pct;
+              const tierColor = t.pct === 100 ? "#d97706" : t.pct <= 107 ? "#2563eb" : t.pct <= 118 ? "#16a34a" : t.pct <= 129 ? "#8b5cf6" : "#d97706";
+              return (
+                <button key={t.pct} onClick={() => setDtTierPct(t.pct)}
+                  style={{ padding: "0.2rem 0.55rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${active ? tierColor : "var(--border)"}`, background: active ? tierColor + "18" : "transparent", color: active ? tierColor : `var(--text-dim)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", cursor: "pointer", fontWeight: active ? 700 : 400, display: "flex", alignItems: "center", gap: "0.25rem" }}>
+                  {t.label}
+                  {t.bonus && <span style={{ fontSize: "0.7rem", opacity: active ? 0.8 : 0.5 }}>{t.bonus}</span>}
+                </button>
+              );
+            })}
+          </div>
+
           {/* Group header row */}
           <div style={{ display: "grid", gridTemplateColumns: gridCols, marginBottom: "0" }}>
             <div />
@@ -4630,7 +4942,7 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
             {dtColors.map((g, gi) => (
               <React.Fragment key={gi}>
                 <div style={{ background: `${g.color}25` }} />
-                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.96rem", color: `var(--text-faint)`, textAlign: "center", padding: "0.35rem 0", background: g.bg }}>Plan</div>
+                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.96rem", color: dtTierPct !== 100 && gi > 0 ? "#8b5cf6" : `var(--text-faint)`, textAlign: "center", padding: "0.35rem 0", background: g.bg, fontWeight: dtTierPct !== 100 && gi > 0 ? 600 : 400 }}>{dtTierPct !== 100 && gi > 0 ? `${dtTierPct}%` : "Plan"}</div>
                 <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.96rem", color: `var(--text-faint)`, textAlign: "center", padding: "0.35rem 0", background: g.bg }}>Actual</div>
                 <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.96rem", color: "#d97706", textAlign: "center", padding: "0.35rem 0", fontWeight: 700, background: g.bg }}>/ Day</div>
               </React.Fragment>
@@ -4639,13 +4951,16 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
 
           {/* Program data rows */}
           {filteredDtPrograms.map((p, pi) => {
+            const tierMult = dtTierPct / 100;
             const metrics = [
               { plan: p.sitePlanHours, actual: p.totalHours, fmtFn: v => fmt(v, 0) },
-              { plan: p.sitePlanGoals, actual: p.totalGoals, fmtFn: v => v.toLocaleString() },
-              { plan: p.sitePlanHsd,   actual: p.hsdAct,     fmtFn: v => v.toLocaleString() },
-              { plan: p.sitePlanXm,    actual: p.xmAct,      fmtFn: v => v.toLocaleString() },
+              { plan: p.sitePlanGoals ? Math.ceil(p.sitePlanGoals * tierMult) : p.sitePlanGoals, actual: p.totalGoals, fmtFn: v => v.toLocaleString() },
+              { plan: p.sitePlanHsd   ? Math.ceil(p.sitePlanHsd   * tierMult) : p.sitePlanHsd,   actual: p.hsdAct,     fmtFn: v => v.toLocaleString() },
+              { plan: p.sitePlanXm    ? Math.ceil(p.sitePlanXm    * tierMult) : p.sitePlanXm,    actual: p.xmAct,      fmtFn: v => v.toLocaleString() },
             ];
-            const rocLabel = p._fundingRoc || (p.goalBreakout ? p.goalBreakout.map(g => g.roc).filter(Boolean).join(", ") : "");
+            const rocLabel = p._fundingRoc
+              ? `${p._fundingRoc}${p._fundingLabel ? ` \u00b7 ${p._fundingLabel}` : ""}`
+              : (p.goalBreakout ? p.goalBreakout.map(g => g.roc).filter(Boolean).join(", ") : "");
             return (
               <div key={p.jobType + (p._fundingRoc || String(pi))} style={{ display: "grid", gridTemplateColumns: gridCols, borderBottom: "1px solid var(--bg-tertiary)", alignItems: "center" }}>
                 <div style={{ padding: "0.5rem 0.75rem" }}>
@@ -4659,11 +4974,16 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
 
           {/* Totals row */}
           {(() => {
+            const tierMult = dtTierPct / 100;
+            const totHoursPlan = dtFundingFilter ? filteredDtPrograms.reduce((s, p) => s + (p.sitePlanHours || 0), 0) : canonPlanHours;
+            const totGoalsPlan = dtFundingFilter ? filteredDtPrograms.reduce((s, p) => s + (p.sitePlanGoals || 0), 0) : canonPlanGoals;
+            const totHsdPlan   = dtFundingFilter ? filteredDtPrograms.reduce((s, p) => s + (p.sitePlanHsd || 0), 0) : canonPlanHsd;
+            const totXmPlan    = dtFundingFilter ? filteredDtPrograms.reduce((s, p) => s + (p.sitePlanXm || 0), 0) : canonPlanXm;
             const tots = [
-              { plan: dtFundingFilter ? filteredDtPrograms.reduce((s, p) => s + (p.sitePlanHours || 0), 0) : canonPlanHours, actual: filteredDtPrograms.reduce((s, p) => s + p.totalHours, 0), fmtFn: v => fmt(v, 0) },
-              { plan: dtFundingFilter ? filteredDtPrograms.reduce((s, p) => s + (p.sitePlanGoals || 0), 0) : canonPlanGoals, actual: filteredDtPrograms.reduce((s, p) => s + p.totalGoals, 0), fmtFn: v => v.toLocaleString() },
-              { plan: dtFundingFilter ? filteredDtPrograms.reduce((s, p) => s + (p.sitePlanHsd || 0), 0) : canonPlanHsd,   actual: filteredDtPrograms.reduce((s, p) => s + (p.hsdAct || 0), 0), fmtFn: v => v.toLocaleString() },
-              { plan: dtFundingFilter ? filteredDtPrograms.reduce((s, p) => s + (p.sitePlanXm || 0), 0) : canonPlanXm,    actual: filteredDtPrograms.reduce((s, p) => s + (p.xmAct || 0), 0), fmtFn: v => v.toLocaleString() },
+              { plan: totHoursPlan, actual: filteredDtPrograms.reduce((s, p) => s + p.totalHours, 0), fmtFn: v => fmt(v, 0) },
+              { plan: totGoalsPlan ? Math.ceil(totGoalsPlan * tierMult) : totGoalsPlan, actual: filteredDtPrograms.reduce((s, p) => s + p.totalGoals, 0), fmtFn: v => v.toLocaleString() },
+              { plan: totHsdPlan   ? Math.ceil(totHsdPlan   * tierMult) : totHsdPlan,   actual: filteredDtPrograms.reduce((s, p) => s + (p.hsdAct || 0), 0), fmtFn: v => v.toLocaleString() },
+              { plan: totXmPlan    ? Math.ceil(totXmPlan    * tierMult) : totXmPlan,    actual: filteredDtPrograms.reduce((s, p) => s + (p.xmAct || 0), 0), fmtFn: v => v.toLocaleString() },
             ];
             return (
               <div style={{ display: "grid", gridTemplateColumns: gridCols, borderTop: "2px solid var(--border)", marginTop: "0.25rem", alignItems: "center" }}>
@@ -4763,6 +5083,379 @@ function SiteDrilldown({ siteLabel, regions, allAgents, programs, goalLookup, ne
           })}
         </div>
       </div>
+
+      {/* Priority Coaching by Campaign — one card per program in this site */}
+      {(() => {
+        const cards = sitePrograms
+          .map(p => {
+            const sitePriority = (p.q4Agents || [])
+              .filter(a => activeRegions.includes((a.region || "Unknown")) && a.hours >= getMinHours())
+              .sort((a, b) => b.hours - a.hours);
+            return { program: p, agents: sitePriority };
+          })
+          .filter(c => c.agents.length > 0);
+        if (cards.length === 0) return null;
+        return (
+          <div>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "var(--text-muted)", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.9rem", fontWeight: 600 }}>
+              Priority Coaching by Campaign
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))", gap: "1rem" }}>
+              {cards.map(({ program, agents: priAgents }) => (
+                <div key={program.jobType} style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.1rem 1.25rem" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "0.25rem" }}>
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.95rem", color: "var(--text-warm)", fontWeight: 700 }}>
+                      {program.jobType}
+                    </div>
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "#dc2626", letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 600 }}>
+                      {priAgents.length} priority
+                    </div>
+                  </div>
+                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", color: "var(--text-dim)", marginBottom: "0.7rem" }}>
+                    Zero sales · {getMinHours()}+ hrs · ranked by hours invested
+                  </div>
+                  {priAgents.slice(0, 6).map((a, i) => (
+                    <div key={a.agentName + i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.4rem 0", borderBottom: i < Math.min(priAgents.length, 6) - 1 ? "1px solid var(--bg-tertiary)" : "none" }}>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ color: "var(--text-warm)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "0.35rem" }}>
+                          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.agentName}</span>
+                          {newHireSet && newHireSet.has(a.agentName) && (
+                            <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: "var(--nh-color)", background: "var(--nh-bg)", padding: "0.05rem 0.3rem", borderRadius: "2px", flexShrink: 0 }}>NEW</span>
+                          )}
+                        </div>
+                        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "var(--text-dim)" }}>
+                          {mbrSiteName(a.region)}
+                        </div>
+                      </div>
+                      <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.05rem", color: "#6366f1", fontWeight: 700, flexShrink: 0 }}>
+                        {fmt(a.hours, 1)} hrs
+                      </div>
+                    </div>
+                  ))}
+                  {priAgents.length > 6 && (
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "0.5rem", textAlign: "right" }}>
+                      +{priAgents.length - 6} more
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
+      </>)}
+    </div>
+  );
+}
+
+// ── SiteDropdown — categorized program list for DR/BZ menus ─────────────────
+// currentProgram tri-state:
+//   string    → that specific program is the active page (highlight it)
+//   null      → Site Overview is the active page (highlight Site Overview)
+//   undefined → user is not on this site at all (no row is "current")
+function SiteDropdown({ site, programs, attainment, projAttainment, currentProgram, onSelect, accent }) {
+  // Group programs by MBR category, preserve sort-by-attainment within each
+  const categories = useMemo(() => {
+    const map = {};
+    programs.forEach(p => {
+      const cat = p.category || "Other";
+      if (!map[cat]) map[cat] = [];
+      map[cat].push(p);
+    });
+    // Stable category order matching MBR convention
+    const order = ["Acquisition", "Multi-Product Expansion", "Up Tier & Ancillary"];
+    return order.filter(c => map[c]).map(c => [c, map[c]])
+      .concat(Object.keys(map).filter(c => !order.includes(c)).map(c => [c, map[c]]));
+  }, [programs]);
+
+  const headerText = (() => {
+    const a = attainment != null ? `${Math.round(attainment)}% to goal` : "no plan";
+    const p = projAttainment != null ? ` | Proj ${Math.round(projAttainment)}%` : "";
+    return `${site} · ${a}${p}`;
+  })();
+
+  const fmtPct = v => v != null ? `${Math.round(v)}%` : "—";
+
+  return (
+    <div role="menu" aria-label={`${site} navigation`}
+      style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, minWidth: 280, background: "var(--bg-tertiary)", border: "1px solid var(--border)", borderRadius: "var(--radius-md, 10px)", boxShadow: "0 12px 32px rgba(0,0,0,0.35)", padding: "6px 0", zIndex: 250 }}>
+      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: accent, letterSpacing: "0.08em", textTransform: "uppercase", padding: "8px 14px 6px", fontWeight: 600 }}>
+        {headerText}
+      </div>
+      <button onClick={() => onSelect(null)} role="menuitem"
+        onMouseEnter={e => { if (currentProgram !== null) e.currentTarget.style.background = "var(--bg-secondary)"; }}
+        onMouseLeave={e => { if (currentProgram !== null) e.currentTarget.style.background = "transparent"; }}
+        style={{ display: "flex", justifyContent: "space-between", width: "100%", padding: "7px 14px", border: "none", background: currentProgram === null ? `${accent}18` : "transparent", color: currentProgram === null ? accent : "var(--text-primary)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", cursor: "pointer", textAlign: "left", fontWeight: currentProgram === null ? 600 : 400 }}>
+        <span>📊 Site Overview</span>
+      </button>
+      <div style={{ borderTop: "1px solid var(--border-muted)", margin: "4px 0" }} />
+      {categories.map(([cat, items]) => (
+        <Fragment key={cat}>
+          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.65rem", color: "var(--text-dim)", letterSpacing: "0.1em", textTransform: "uppercase", padding: "8px 14px 4px", fontWeight: 600 }}>
+            {cat}
+          </div>
+          {items.map(p => {
+            const isCurrent = p.jobType === currentProgram;
+            return (
+              <button key={p.jobType} onClick={() => onSelect(p.jobType)} role="menuitem"
+                onMouseEnter={e => { if (!isCurrent) e.currentTarget.style.background = "var(--bg-secondary)"; }}
+                onMouseLeave={e => { if (!isCurrent) e.currentTarget.style.background = "transparent"; }}
+                style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", padding: "6px 14px", border: "none", background: isCurrent ? `${accent}18` : "transparent", color: isCurrent ? accent : "var(--text-primary)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", cursor: "pointer", textAlign: "left", fontWeight: isCurrent ? 600 : 400 }}>
+                <span>{p.jobType}</span>
+                <span style={{ fontFamily: "var(--font-data, monospace)", fontSize: "0.72rem", color: isCurrent ? accent : "var(--text-dim)" }}>{fmtPct(p.attainment)}</span>
+              </button>
+            );
+          })}
+        </Fragment>
+      ))}
+    </div>
+  );
+}
+
+// ── SettingsMenu — overflow menu with actions, data, settings ───────────────
+// MenuSection / MenuRow hoisted to module scope so they aren't recreated on
+// every SettingsMenu render (would cause unmount/remount of the subtree).
+function MenuSection({ label }) {
+  return (
+    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.65rem", color: "var(--text-dim)", letterSpacing: "0.1em", textTransform: "uppercase", padding: "8px 14px 4px", fontWeight: 600 }}>
+      {label}
+    </div>
+  );
+}
+function MenuRow({ icon, label, hint, onClick }) {
+  return (
+    <button onClick={onClick} role="menuitem"
+      onMouseEnter={e => { e.currentTarget.style.background = "var(--bg-secondary)"; }}
+      onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+      style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%", padding: "7px 14px", border: "none", background: "transparent", color: "var(--text-primary)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", cursor: "pointer", textAlign: "left" }}>
+      <span>{icon} {label}</span>
+      {hint && <span style={{ fontFamily: "var(--font-data, monospace)", fontSize: "0.7rem", color: "var(--text-dim)" }}>{hint}</span>}
+    </button>
+  );
+}
+function SettingsMenu({ onExportMbr, onExportVirgilMbr, onOpenCorpDataSources, onRefresh, onUploadGoals, onUploadRoster, onUploadPriorGoals, onUploadCoachingDetails, onUploadCoachingWeekly, onUploadLoginBuckets, onOpenSettings, ollamaAvailable, localAI, onToggleLocalAI }) {
+  return (
+    <div role="menu" aria-label="Settings and actions"
+      style={{ position: "absolute", top: "calc(100% + 4px)", right: 0, minWidth: 240, background: "var(--bg-tertiary)", border: "1px solid var(--border)", borderRadius: "var(--radius-md, 10px)", boxShadow: "0 12px 32px rgba(0,0,0,0.35)", padding: "6px 0", zIndex: 250 }}>
+      <MenuSection label="Actions" />
+      <MenuRow icon="📊" label="Export MBR" hint="monthly" onClick={onExportMbr} />
+      <MenuRow icon="🎯" label="Export Corp MBR" hint="monthly" onClick={onExportVirgilMbr} />
+      <MenuRow icon="🔄" label="Refresh from sheet" onClick={onRefresh} />
+      <div style={{ borderTop: "1px solid var(--border-muted)", margin: "4px 0" }} />
+      <MenuSection label="Data" />
+      <MenuRow icon="📁" label="Upload Goals CSV" onClick={onUploadGoals} />
+      <MenuRow icon="📁" label="Upload Roster CSV" onClick={onUploadRoster} />
+      <MenuRow icon="📁" label="Upload Prior Goals" onClick={onUploadPriorGoals} />
+      <MenuRow icon="📘" label="Upload Coaching Details" hint="CSV" onClick={() => document.getElementById("virgil-coaching-details-input").click()} />
+      <MenuRow icon="📗" label="Upload Weekly Breakdown" hint="CSV" onClick={() => document.getElementById("virgil-coaching-weekly-input").click()} />
+      <MenuRow icon="📕" label="Upload Login Buckets" hint="CSV" onClick={() => document.getElementById("virgil-login-buckets-input").click()} />
+      <MenuRow icon="🔌" label="Corp MBR Data Sources" hint="URLs" onClick={onOpenCorpDataSources} />
+      <div style={{ borderTop: "1px solid var(--border-muted)", margin: "4px 0" }} />
+      <MenuSection label="Settings" />
+      <MenuRow icon="⚙" label="Data sources" onClick={onOpenSettings} />
+      {ollamaAvailable && (
+        <MenuRow icon="🤖" label="Local AI" hint={localAI ? "on" : "off"} onClick={onToggleLocalAI} />
+      )}
+      <input id="virgil-coaching-details-input" type="file" accept=".csv" style={{ display: "none" }}
+        onChange={e => { if (e.target.files[0]) onUploadCoachingDetails(e.target.files[0]); e.target.value = ""; }} />
+      <input id="virgil-coaching-weekly-input" type="file" accept=".csv" style={{ display: "none" }}
+        onChange={e => { if (e.target.files[0]) onUploadCoachingWeekly(e.target.files[0]); e.target.value = ""; }} />
+      <input id="virgil-login-buckets-input" type="file" accept=".csv" style={{ display: "none" }}
+        onChange={e => { if (e.target.files[0]) onUploadLoginBuckets(e.target.files[0]); e.target.value = ""; }} />
+    </div>
+  );
+}
+
+// ── Breadcrumb — secondary nav bar showing site › category › program ────────
+// Crumb / CRUMB_SEP hoisted to module scope, matching MenuSection/MenuRow pattern.
+function Crumb({ label, current, accent }) {
+  return (
+    <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: current ? accent : "var(--text-muted)", fontWeight: current ? 600 : 400 }}>
+      {label}
+    </span>
+  );
+}
+const CRUMB_SEP = (
+  <span style={{ color: "var(--text-dim)", opacity: 0.5, fontSize: "0.78rem" }}>›</span>
+);
+function Breadcrumb({ section, program, attainment }) {
+  // Only render for site-scoped pages
+  if (section !== "dr" && section !== "bz") return null;
+  const siteCode = section.toUpperCase();
+  const siteName = section === "dr" ? "Dom. Republic" : "Belize";
+  const accent = section === "dr" ? "#ed8936" : "#48bb78";
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.4rem 1.5rem", background: "var(--glass-bg-subtle)", borderBottom: "1px solid var(--glass-border)", backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)" }}>
+      <Crumb label={`${siteCode} · ${siteName}`} current={false} accent={accent} />
+      {!program && (<>{CRUMB_SEP}<Crumb label="Site Overview" current accent={accent} /></>)}
+      {program && (
+        <>
+          {CRUMB_SEP}
+          <Crumb label={getMbrCategory(program)} current={false} accent={accent} />
+          {CRUMB_SEP}
+          <Crumb label={program} current accent={accent} />
+          {attainment != null && (
+            <span style={{ marginLeft: "auto", fontFamily: "var(--font-data, monospace)", fontSize: "0.72rem", color: "var(--text-dim)" }}>
+              {Math.round(attainment)}% to goal
+            </span>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── TopNav — permanent top navigation bar ───────────────────────────────────
+// topNavLinkStyle hoisted to module scope (matches MenuSection/MenuRow/Crumb pattern)
+// and parameterized by accent color so DR (#ed8936) and BZ (#48bb78) share it.
+function topNavLinkStyle(active, accent = "#ed8936") {
+  return {
+    padding: "0.4rem 0.75rem", borderRadius: "var(--radius-sm, 6px)",
+    border: active ? `1px solid ${accent}50` : "1px solid transparent",
+    background: active ? `${accent}18` : "transparent",
+    color: active ? accent : "var(--text-primary)",
+    fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem",
+    cursor: "pointer", fontWeight: active ? 600 : 400, position: "relative",
+    transition: "all 200ms cubic-bezier(0.4,0,0.2,1)",
+  };
+}
+function TopNav({
+  rawData, currentPage, setCurrentPage, openMenu, setOpenMenu,
+  programsBySite, siteAttainments, fiscalInfo, hasTnps, hasCoaching,
+  lightMode, setLightMode, showToday, setShowToday,
+  ollamaAvailable, localAI, setLocalAI,
+  onExportMbr, onExportVirgilMbr, onOpenCorpDataSources, onRefresh, onUploadGoals, onUploadRoster, onUploadPriorGoals, onUploadCoachingDetails, onUploadCoachingWeekly, onUploadLoginBuckets, onOpenSettings,
+}) {
+  const navRef = useRef(null);
+  const drRef = useRef(null);
+  const bzRef = useRef(null);
+  const settingsRef = useRef(null);
+
+  // Close menus on outside click — explicit map prevents silent fall-through
+  // if a future contributor adds a new openMenu key.
+  useEffect(() => {
+    if (!openMenu) return;
+    const refMap = { dr: drRef, bz: bzRef, settings: settingsRef };
+    const handler = e => {
+      const ref = refMap[openMenu];
+      if (ref?.current && !ref.current.contains(e.target)) setOpenMenu(null);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [openMenu, setOpenMenu]);
+
+  // Close menus on Escape
+  useEffect(() => {
+    if (!openMenu) return;
+    const handler = e => { if (e.key === "Escape") setOpenMenu(null); };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [openMenu, setOpenMenu]);
+
+  const navigate = (section, program) => {
+    setCurrentPage(program ? { section, program } : { section });
+    setOpenMenu(null);
+    if (showToday) setShowToday(false); // navigating from Today exits Today
+  };
+
+  const isActive = section => currentPage.section === section;
+
+  const drCount = programsBySite.DR ? programsBySite.DR.length : 0;
+  const bzCount = programsBySite.BZ ? programsBySite.BZ.length : 0;
+
+  return (
+    <div ref={navRef} style={{ display: "flex", alignItems: "center", gap: "0.35rem", padding: "0.5rem 1.5rem", background: "var(--nav-bg)", backdropFilter: "blur(16px) saturate(180%)", WebkitBackdropFilter: "blur(16px) saturate(180%)", borderBottom: "1px solid var(--glass-border)", position: "fixed", top: 0, left: 0, right: 0, zIndex: 200 }}>
+      <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "var(--text-muted)", letterSpacing: "0.08em", fontWeight: 600, marginRight: "0.5rem" }}>PERF INTEL</span>
+
+      {rawData && (
+        <>
+          <button onClick={() => navigate("overview")} style={topNavLinkStyle(isActive("overview"))}>Overview</button>
+
+          {drCount > 0 && (
+            <div ref={drRef} style={{ position: "relative" }}>
+              <button onClick={() => setOpenMenu(openMenu === "dr" ? null : "dr")}
+                style={topNavLinkStyle(isActive("dr"))}>
+                DR <span style={{ fontSize: "0.6rem", opacity: 0.6, marginLeft: "0.15rem" }}>▼</span>
+              </button>
+              {openMenu === "dr" && (
+                <SiteDropdown site="DR" programs={programsBySite.DR}
+                  attainment={siteAttainments.DR.attainment} projAttainment={siteAttainments.DR.projAttainment}
+                  currentProgram={isActive("dr") ? (currentPage.program || null) : undefined}
+                  onSelect={prog => navigate("dr", prog)} accent="#ed8936" />
+              )}
+            </div>
+          )}
+
+          {bzCount > 0 && (
+            <div ref={bzRef} style={{ position: "relative" }}>
+              <button onClick={() => setOpenMenu(openMenu === "bz" ? null : "bz")}
+                style={topNavLinkStyle(isActive("bz"), "#48bb78")}>
+                BZ <span style={{ fontSize: "0.6rem", opacity: 0.6, marginLeft: "0.15rem" }}>▼</span>
+              </button>
+              {openMenu === "bz" && (
+                <SiteDropdown site="BZ" programs={programsBySite.BZ}
+                  attainment={siteAttainments.BZ.attainment} projAttainment={siteAttainments.BZ.projAttainment}
+                  currentProgram={isActive("bz") ? (currentPage.program || null) : undefined}
+                  onSelect={prog => navigate("bz", prog)} accent="#48bb78" />
+              )}
+            </div>
+          )}
+
+          <button onClick={() => navigate("mom")} style={topNavLinkStyle(isActive("mom"))}>MoM</button>
+          {hasTnps && <button onClick={() => navigate("tnps")} style={topNavLinkStyle(isActive("tnps"))}>tNPS</button>}
+          {hasCoaching && <button onClick={() => navigate("coaching")} style={topNavLinkStyle(isActive("coaching"))}>MyPerformance</button>}
+        </>
+      )}
+
+      <div style={{ flex: 1 }} />
+
+      {rawData && fiscalInfo && (
+        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.3rem 0.65rem", borderRadius: "var(--radius-sm, 6px)", background: "rgba(22,163,74,0.12)", border: "1px solid rgba(22,163,74,0.3)" }}>
+          <span style={{ width: 6, height: 6, borderRadius: 3, background: "#16a34a", boxShadow: "0 0 6px #16a34a80" }} />
+          <span style={{ fontFamily: "var(--font-data, monospace)", fontSize: "0.72rem", color: "#16a34a", fontWeight: 500 }}>
+            Day {fiscalInfo.elapsedBDays} of {fiscalInfo.totalBDays}
+          </span>
+        </div>
+      )}
+
+      <button onClick={() => setLightMode(v => !v)} title="Toggle theme"
+        style={{ width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "var(--radius-sm, 6px)", border: "1px solid var(--border-muted)", background: "transparent", color: "var(--text-muted)", cursor: "pointer", fontSize: "0.95rem" }}>
+        {lightMode ? "\u2600" : "\u263E"}
+      </button>
+
+      {rawData && (
+        <div ref={settingsRef} style={{ position: "relative" }}>
+          <button onClick={() => setOpenMenu(openMenu === "settings" ? null : "settings")} title="Settings & Actions"
+            style={{ width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "var(--radius-sm, 6px)", border: "1px solid var(--border-muted)", background: openMenu === "settings" ? "var(--bg-tertiary)" : "transparent", color: "var(--text-muted)", cursor: "pointer", fontSize: "0.95rem" }}>
+            ⚙
+          </button>
+          {openMenu === "settings" && (
+            <SettingsMenu
+              onExportMbr={() => { onExportMbr(); setOpenMenu(null); }}
+              onExportVirgilMbr={() => { onExportVirgilMbr(); setOpenMenu(null); }}
+              onOpenCorpDataSources={() => { onOpenCorpDataSources(); setOpenMenu(null); }}
+              onRefresh={() => { onRefresh(); setOpenMenu(null); }}
+              onUploadGoals={() => { onUploadGoals(); setOpenMenu(null); }}
+              onUploadRoster={() => { onUploadRoster(); setOpenMenu(null); }}
+              onUploadPriorGoals={() => { onUploadPriorGoals(); setOpenMenu(null); }}
+              onUploadCoachingDetails={onUploadCoachingDetails}
+              onUploadCoachingWeekly={onUploadCoachingWeekly}
+              onUploadLoginBuckets={onUploadLoginBuckets}
+              onOpenSettings={() => { onOpenSettings(); setOpenMenu(null); }}
+              ollamaAvailable={ollamaAvailable}
+              localAI={localAI}
+              onToggleLocalAI={() => { setLocalAI(v => !v); setOpenMenu(null); }}
+            />
+          )}
+        </div>
+      )}
+
+      <button onClick={() => setShowToday(v => !v)} title={showToday ? "Exit live view" : "Open live view"}
+        style={{ padding: "0.4rem 0.85rem", borderRadius: "var(--radius-sm, 6px)", border: showToday ? "1px solid #16a34a" : "1px solid #16a34a", background: showToday ? "transparent" : "#16a34a", color: showToday ? "#16a34a" : "white", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", cursor: "pointer", fontWeight: 600, letterSpacing: "0.04em", transition: "all 200ms cubic-bezier(0.4,0,0.2,1)" }}>
+        {showToday ? "\u2715 EXIT TODAY" : "\u26A1 TODAY"}
+      </button>
     </div>
   );
 }
@@ -5876,6 +6569,3321 @@ async function generateMBR(perf, onProgress, { includeAI = true } = {}) {
   return filename;
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// CORP MBR — Parsers
+// ═══════════════════════════════════════════════════════════════════
+
+// Campaign Slides grouping — consolidates similar Job Types into one slide.
+// Returns the group name (used as campaign.name in the per-slide aggregation), or null to exclude.
+function getCorpMbrCampaignGroup(jobType) {
+  const jt = (jobType || "").trim();
+  if (!jt) return null;
+  const upper = jt.toUpperCase();
+  // Nonsub Localizers — own slide (subset of GLN / Acquisition)
+  if (/LOCALIZ/i.test(upper)) return "Nonsub Localizers";
+  // XM Onboarding — own slide (subset of GLU / Multi-Product Expansion)
+  if (/ONBOARD/i.test(upper)) return "XM Onboarding";
+  // GLN non-Localizers → consolidated Nonsub Acquisition slide
+  if (/^GLN/i.test(jt) || /\b(NONSUB|NON.?SUB|BAU|WR\s*NS)\b/i.test(upper)) return "Nonsub Acquisition";
+  // GLU non-Onboarding → consolidated XM Likely slide (XM, XM Likely, Add A Line, etc.)
+  if (/^GLU/i.test(jt) || /\b(XM\s*UP|ADD.?A.?LINE|LIKELY)\b/i.test(upper) || /^XM$/i.test(upper) || /^XM\s/i.test(upper)) return "XM Likely";
+  // GLB → XMC (Attach, Up-Tier, Ancillary, etc.)
+  if (/^GLB/i.test(jt) || /\b(XMC|ATTACH|UP.?TIER|ANCILLARY)\b/i.test(upper)) return "XMC";
+  return null;
+}
+
+const CORP_MBR_GROUP_CATEGORIES = {
+  "Nonsub Localizers": "Acquisition",
+  "Nonsub Acquisition": "Acquisition",
+  "XM Onboarding": "Multi-Product Expansion",
+  "XM Likely": "Multi-Product Expansion",
+  "XMC": "Up Tier & Ancillary",
+};
+
+// Tolerant buildGoalLookup wrapper — fills in a default "ALL" Site for rows missing Site.
+// The existing `buildGoalLookup` skips any row without both Target Audience AND Site.
+// Corp MBR's prior-month goals sheet can arrive with an empty Site column — we still want
+// those rows indexed so campaign totals populate.
+function buildGoalLookupTolerant(goalsRows) {
+  if (!goalsRows || goalsRows.length === 0) return buildGoalLookup(goalsRows);
+  const patched = goalsRows.map(r => {
+    const site = (findCol(r, "Site") || "").trim();
+    if (site) return r;
+    // Preserve the original row shape but add a synthetic Site key.
+    return { ...r, Site: "ALL" };
+  });
+  return buildGoalLookup(patched);
+}
+
+// Tolerant finder for the "Actual Leads" column in a Goals CSV row.
+// Tries exact name via findCol, then a regex scan of the row's keys for any
+// header containing "actual" + "lead" (handles trailing whitespace, etc.).
+function findAnyLeadsColumn(row) {
+  if (!row) return undefined;
+  const direct = findCol(row, "Actual Leads", "Leads Actual", "Actual Lead Count", "ActualLeads");
+  if (direct !== undefined && direct !== "") return direct;
+  for (const key of Object.keys(row)) {
+    if (/actual.*lead|lead.*actual/i.test(key)) {
+      const v = row[key];
+      if (v !== undefined && v !== "") return v;
+    }
+  }
+  return undefined;
+}
+
+// Parse a possibly formatted numeric cell — strips $, commas, whitespace.
+// "1,234" → 1234, "$5,000.50" → 5000.5, "" → 0, undefined → 0.
+function parseLeadsNumber(v) {
+  if (v === null || v === undefined) return 0;
+  const cleaned = String(v).replace(/[$,\s]/g, "");
+  if (!cleaned) return 0;
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function parseCoachingDetails(rawCsv) {
+  if (!rawCsv || !rawCsv.trim()) return {};
+  const rows = parseCSV(rawCsv);
+  const byMonth = {};
+  for (const r of rows) {
+    const measure = (r["Measure Names"] || "").trim();
+    const month = (r["Fiscal Month"] || "").trim();
+    const rawVal = r["Measure Values"];
+    if (!measure || !month) continue;
+    const n = Number(rawVal);
+    if (!byMonth[month]) byMonth[month] = {};
+    byMonth[month][measure] = Number.isFinite(n) ? n : rawVal;
+  }
+  return byMonth;
+}
+
+function parseCoachingWeekly(rawCsv) {
+  if (!rawCsv || !rawCsv.trim()) return [];
+  const rows = parseCSV(rawCsv);
+  return rows.map(r => {
+    const nameField = (r["Name or NT"] || "").trim();
+    const pipeIdx = nameField.lastIndexOf("|");
+    const displayName = pipeIdx >= 0 ? nameField.slice(0, pipeIdx).trim() : nameField;
+    const bpRaw = pipeIdx >= 0 ? nameField.slice(pipeIdx + 1).trim() : "";
+    const ntid = bpRaw.replace(/^BP-/i, "").trim();
+    return {
+      displayName,
+      ntid,
+      fiscalMonth: (r["Fiscal Month"] || "").trim(),
+      fiscalWeek: (r["new calc"] || "").trim(),
+      sessions: Number(r["Coaching Sessions  (copy)"] ?? r["Coaching Sessions (copy)"] ?? r["Coaching Sessions"]) || 0,
+      colorWb: (r["Color WB"] || "").trim(),
+      manager: (r["Manager"] || "").trim(),
+      supervisor: (r["Supervisor."] || "").trim(),
+    };
+  });
+}
+
+// Sheets can mis-coerce "4-7" → "7-Apr" and "8-15" → "15-Aug". Map them back.
+// "0-3" and "16-20+" are safe because they aren't valid dates.
+function normalizeLoginBucket(raw) {
+  if (!raw) return "";
+  const s = String(raw).trim();
+  if (/^\d+-\d+\+?$/.test(s)) return s; // already canonical
+  // Match patterns like "7-Apr" (DD-MMM), "4/7/2026", or ISO dates
+  // Reconstruct D-M (swapped) as "M-D" string
+  const mmm = s.match(/^(\d+)-([A-Za-z]{3,})$/);
+  if (mmm) {
+    const day = Number(mmm[1]);
+    const mon = mmm[2].slice(0, 3).toLowerCase();
+    const monthIndex = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12 }[mon];
+    if (monthIndex) return `${monthIndex}-${day}`;
+  }
+  const slash = s.match(/^(\d+)\/(\d+)(?:\/\d+)?$/);
+  if (slash) return `${Number(slash[1])}-${Number(slash[2])}`;
+  // Try parsing as a Date
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) return `${d.getMonth() + 1}-${d.getDate()}`;
+  return s;
+}
+
+// "25-Oct" (from Sheets date-coercion) → "Oct 25"; "Oct 25" passes through.
+function normalizeLoginMonth(raw) {
+  if (!raw) return "";
+  const s = String(raw).trim();
+  // Canonical "Oct 25" / "Oct '25" — always strip apostrophe for consistent keys
+  if (/^[A-Za-z]{3,} ?'?\d{2}$/.test(s)) return s.replace(/'/g, "");
+  // "25-Oct" / "25-October"
+  const m = s.match(/^(\d{1,4})-([A-Za-z]{3,})$/);
+  if (m) {
+    const yr = m[1].length === 4 ? m[1].slice(2) : m[1];
+    const mon = m[2].slice(0, 3);
+    const cap = mon.charAt(0).toUpperCase() + mon.slice(1).toLowerCase();
+    return `${cap} ${yr}`;
+  }
+  return s;
+}
+
+function parseLoginBuckets(rawCsv) {
+  if (!rawCsv || !rawCsv.trim()) return {};
+  const rows = parseCSV(rawCsv);
+  const byMonth = {};
+  for (const r of rows) {
+    const bucket = normalizeLoginBucket((r["User Login Bucket (Alternative)"] || "").trim());
+    const month = normalizeLoginMonth((r["Month vs Week View Label"] || "").trim());
+    const measure = (r["Measure Names"] || "").trim();
+    const value = Number(r["Measure Values"]);
+    if (!bucket || !month || !measure) continue;
+    if (!byMonth[month]) byMonth[month] = {};
+    if (!byMonth[month][bucket]) byMonth[month][bucket] = { pct: 0, users: 0 };
+    if (measure === "% of Total") byMonth[month][bucket].pct = value;
+    else if (measure === "Total Users") byMonth[month][bucket].users = value;
+  }
+  return byMonth;
+}
+
+// Extended Agent Stats — per-agent-per-day rows from the richer Extended Agent CSV.
+// Columns used by Campaign Slides: Job (ROC), Date, AgentName, Dials, Contacts, Finals, Goals, Hours.
+// Other columns are tolerated but unused (e.g. XMSales, NewVideo, etc.).
+// NOTE: Column names are a hard dependency on Comcast's export. A rename upstream would
+// cause Number(undefined)→NaN→0 fallthrough and silently zero the Campaign Slides metrics.
+function parseExtendedAgentStats(rawCsv) {
+  if (!rawCsv || !rawCsv.trim()) return [];
+  const rows = parseCSV(rawCsv);
+  return rows.map(r => ({
+    roc: (r["Job"] || "").trim(),
+    jobType: (r["Job Type"] || "").trim(),
+    date: (r["Date"] || "").trim(),
+    agentName: (r["AgentName"] || "").trim(),
+    dials: Number(r["Dials"]) || 0,
+    contacts: Number(r["Contacts"]) || 0,
+    finals: Number(r["Finals"]) || 0,
+    goals: Number(r["Goals"]) || 0,
+    hours: Number(r["Hours"]) || 0,
+  })).filter(r => r.roc || r.agentName);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// CORP MBR — Aggregators
+// ═══════════════════════════════════════════════════════════════════
+
+// Converts a "Mar '26" / "Mar 26" style fiscal-month label to a canonical form.
+function normalizeVirgilMonthKey(s) {
+  if (!s) return "";
+  return s.replace(/['"`]/g, "").replace(/\s+/g, " ").trim();
+}
+
+function getPriorMonthLabel(label) {
+  if (!label) return "";
+  const m = String(label).trim().match(/^([A-Za-z]{3,})\s*'?(\d{2,4})$/);
+  if (!m) return "";
+  const mon = m[1].slice(0, 3).toLowerCase();
+  const monIdx = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12 }[mon];
+  if (!monIdx) return "";
+  const year = Number(m[2].length === 4 ? m[2].slice(2) : m[2]);
+  let pMon = monIdx - 1, pYear = year;
+  if (pMon === 0) { pMon = 12; pYear = year - 1; }
+  const monNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  return `${monNames[pMon - 1]} '${String(pYear).padStart(2, "0")}`;
+}
+
+function getNextMonthLabel(label) {
+  if (!label) return "";
+  const m = String(label).trim().match(/^([A-Za-z]{3,})\s*'?(\d{2,4})$/);
+  if (!m) return "";
+  const mon = m[1].slice(0, 3).toLowerCase();
+  const monIdx = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12 }[mon];
+  if (!monIdx) return "";
+  const year = Number(m[2].length === 4 ? m[2].slice(2) : m[2]);
+  let nMon = monIdx + 1, nYear = year;
+  if (nMon === 13) { nMon = 1; nYear = year + 1; }
+  const monNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  return `${monNames[nMon - 1]} '${String(nYear).padStart(2, "0")}`;
+}
+
+function endOfMonthDate(label) {
+  if (!label) return new Date();
+  const m = String(label).trim().match(/^([A-Za-z]{3,})\s*'?(\d{2,4})$/);
+  if (!m) return new Date();
+  const mon = m[1].slice(0, 3).toLowerCase();
+  const monIdx = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12 }[mon];
+  const yr = Number(m[2].length === 4 ? m[2] : `20${m[2]}`);
+  return new Date(yr, monIdx, 0);
+}
+
+// Returns { org: {coachingPct, acknowledgePct, totalSessions}, dr: {...}, bz: {...} }
+// Org values come from coachingDetails (authoritative monthly totals).
+// DR/BZ splits come from weekly rows joined to bpLookup.
+function buildCoachingStats(coachingDetails, coachingWeekly, bpLookup, reportingMonthLabel) {
+  const key = normalizeVirgilMonthKey(reportingMonthLabel);
+  const monthBucket = coachingDetails[reportingMonthLabel] || coachingDetails[key] || {};
+  const org = {
+    coachingPct: Number(monthBucket["Completed %"]) || (Number(monthBucket["Coaching Sessions"]) && Number(monthBucket["Coachings Due"]) ? Number(monthBucket["Coaching Sessions"]) / Number(monthBucket["Coachings Due"]) : 0),
+    acknowledgePct: Number(monthBucket["Acknowledged %"] || monthBucket["Acknowledged % "]) || 0,
+    totalSessions: Number(monthBucket["Total Sessions"]) || 0,
+  };
+  const dr = { eligible: 0, attained: 0, sessions: 0 };
+  const bz = { eligible: 0, attained: 0, sessions: 0 };
+  for (const row of coachingWeekly || []) {
+    if (normalizeVirgilMonthKey(row.fiscalMonth) !== key) continue;
+    if (row.colorWb === "No Coaching Required") continue;
+    const bp = bpLookup && row.ntid ? bpLookup[row.ntid] : null;
+    const region = bp ? (bp.region || "").toUpperCase() : "";
+    const site = region.includes("XOTM") ? "BZ" : (region ? "DR" : null);
+    if (!site) continue;
+    const target = site === "DR" ? dr : bz;
+    target.eligible += 1;
+    if (row.sessions >= 1) target.attained += 1;
+    target.sessions += row.sessions;
+  }
+  const siteSummary = (s) => ({
+    coachingPct: s.eligible ? s.attained / s.eligible : 0,
+    acknowledgePct: 0, // weekly CSV has no acknowledgement signal — blank for site split
+    totalSessions: s.sessions,
+  });
+  const priorKey = getPriorMonthLabel(reportingMonthLabel);
+  const priorBucket = (coachingDetails[priorKey] || coachingDetails[normalizeVirgilMonthKey(priorKey)]) || {};
+  const orgPrior = {
+    coachingPct: Number(priorBucket["Completed %"]) || (Number(priorBucket["Coaching Sessions"]) && Number(priorBucket["Coachings Due"]) ? Number(priorBucket["Coaching Sessions"]) / Number(priorBucket["Coachings Due"]) : 0),
+    acknowledgePct: Number(priorBucket["Acknowledged %"] || priorBucket["Acknowledged % "]) || 0,
+    totalSessions: Number(priorBucket["Total Sessions"]) || 0,
+  };
+  const priorPriorKey = getPriorMonthLabel(priorKey);
+  const priorPriorBucket = (coachingDetails[priorPriorKey] || coachingDetails[normalizeVirgilMonthKey(priorPriorKey)]) || {};
+  const orgPriorPrior = {
+    coachingPct: Number(priorPriorBucket["Completed %"]) || (Number(priorPriorBucket["Coaching Sessions"]) && Number(priorPriorBucket["Coachings Due"]) ? Number(priorPriorBucket["Coaching Sessions"]) / Number(priorPriorBucket["Coachings Due"]) : 0),
+    acknowledgePct: Number(priorPriorBucket["Acknowledged %"] || priorPriorBucket["Acknowledged % "]) || 0,
+    totalSessions: Number(priorPriorBucket["Total Sessions"]) || 0,
+  };
+  return { org, orgPrior, orgPriorPrior, dr: siteSummary(dr), bz: siteSummary(bz) };
+}
+
+// Site/sub-site mapping for a region string. Mirrors buildCoachingStats logic
+// but also returns the full region for sub-site filtering.
+function coachingSiteFromRegion(region) {
+  let r = (region || "").trim();
+  if (!r) return { site: null, region: null };
+  // Normalize the SD-Xfinty typo to canonical SD-Xfinity
+  if (/^SD-Xfin/i.test(r)) r = "SD-Xfinity";
+  const isBz = r.toUpperCase().includes("XOTM");
+  return { site: isBz ? "BZ" : "DR", region: r };
+}
+
+// Returns true only for the four valid Xfinity coaching regions (DR + 3 BZ sub-sites).
+// Drops SD-Cox, FCC, and any other non-Xfinity region from coaching aggregations.
+function isValidCoachingRegion(region) {
+  if (!region) return false;
+  const r = String(region).trim().toUpperCase();
+  return r.includes("XOTM") || /^SD-XFIN/i.test(region);
+}
+
+// Returns a friendly site label for chips: "DR" → "DR", "Belize City-XOTM" → "Belize City".
+function coachingRegionLabel(region) {
+  if (!region) return "—";
+  const r = String(region).trim();
+  if (r.toUpperCase().includes("XOTM")) {
+    return r.replace(/-XOTM$/i, "").trim();
+  }
+  if (/^SD-Xfin/i.test(r)) return "Dom. Republic";
+  return r;
+}
+
+// Reads "Acknowledged %" / "Completed %" defensively — handles both 0.84 and 84 conventions.
+function coachingNormalizedPct(rawVal) {
+  const n = Number(rawVal);
+  if (!Number.isFinite(n)) return 0;
+  return n > 1 ? n / 100 : n;
+}
+
+// Heart of the page. Returns the structured data for all three tabs.
+//
+// monthFilter: { mode: "current" | "select" | "all", months: Set<string> }
+//   "current" → use the most recent fiscalMonth in coachingWeekly
+//   "select"  → use only fiscalMonths in months (or all if months is empty)
+//   "all"     → no filter
+//
+// See spec §3 for full output shape.
+function buildCoachingPageData(coachingWeekly, coachingDetails, bpLookup, monthFilter) {
+  const safeWeekly = Array.isArray(coachingWeekly) ? coachingWeekly : [];
+  const safeDetails = coachingDetails || {};
+  const safeBp = bpLookup || {};
+  const filter = monthFilter || { mode: "current", months: new Set() };
+
+  // Sorted list of fiscal months present in weekly data (chronological, oldest first).
+  const monthNames = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
+  const monthOrder = (label) => {
+    const m = String(label || "").trim().match(/^([A-Za-z]{3,})\s*'?(\d{2,4})$/);
+    if (!m) return 0;
+    const mIdx = monthNames.indexOf(m[1].slice(0, 3).toLowerCase());
+    if (mIdx < 0) return 0;
+    const yr = Number(m[2].length === 4 ? m[2] : `20${m[2]}`);
+    return yr * 12 + mIdx;
+  };
+  const fiscalMonths = [...new Set(safeWeekly.map(r => r.fiscalMonth).filter(Boolean))]
+    .sort((a, b) => monthOrder(a) - monthOrder(b));
+
+  // Resolve which months are active per filter mode.
+  const currentMonth = fiscalMonths.length ? fiscalMonths[fiscalMonths.length - 1] : "";
+  let activeMonths;
+  if (filter.mode === "all") {
+    activeMonths = new Set(fiscalMonths);
+  } else if (filter.mode === "select") {
+    activeMonths = filter.months && filter.months.size > 0 ? new Set(filter.months) : new Set(fiscalMonths);
+  } else {
+    activeMonths = new Set(currentMonth ? [currentMonth] : []);
+  }
+
+  // Filter weekly to active months.
+  const activeRows = safeWeekly.filter(r => activeMonths.has(r.fiscalMonth));
+
+  // Determine raw weekly slots (used for current-month detail and date parsing).
+  const rawWeeks = [...new Set(activeRows.map(r => r.fiscalWeek).filter(Boolean))];
+  const weekKey = (s) => {
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? String(s) : d.getTime();
+  };
+  rawWeeks.sort((a, b) => {
+    const ka = weekKey(a), kb = weekKey(b);
+    if (typeof ka === "number" && typeof kb === "number") return ka - kb;
+    return String(a).localeCompare(String(b));
+  });
+
+  const isMultiMonth = activeMonths.size > 1;
+  const currentMonthShort = currentMonth.replace(/\s*'?\d{2,4}$/, "").trim() || "FW";
+  const currentAbbrev = (currentMonth || "").slice(0, 3);
+  const monNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+  // Build hybrid buckets.
+  //   Single-month: every rawWeek is its own bucket.
+  //   Multi-month: prior months collapse to single buckets; current month stays per-week.
+  let rawBuckets, bucketLabels, bucketKeyForRow;
+
+  if (isMultiMonth) {
+    const sortedActive = [...activeMonths].sort((a, b) => monthOrder(a) - monthOrder(b));
+    const priorMonths = sortedActive.slice(0, -1);
+    // Prior months as MONTH: buckets, in chronological order
+    const priorBucketKeys = priorMonths.map(m => `MONTH:${m}`);
+    const priorBucketLabels = priorMonths.map(m => m.replace(/\s*'?\d{2,4}$/, "").trim());
+    // Current month weeks (filter rawWeeks down to current month only)
+    const currentMonthWeeks = rawWeeks.filter(rw => {
+      const d = new Date(rw);
+      return !isNaN(d.getTime()) && monNames[d.getMonth()] === currentAbbrev;
+    });
+    const currentBucketKeys = currentMonthWeeks.map(rw => `WEEK:${rw}`);
+    const currentBucketLabels = currentMonthWeeks.map((_, i) => `${currentAbbrev} W${i + 1}`);
+    rawBuckets = [...priorBucketKeys, ...currentBucketKeys];
+    bucketLabels = [...priorBucketLabels, ...currentBucketLabels];
+    bucketKeyForRow = (row) => {
+      const d = new Date(row.fiscalWeek);
+      const wkMon = !isNaN(d.getTime()) ? monNames[d.getMonth()] : null;
+      if (wkMon === currentAbbrev) return `WEEK:${row.fiscalWeek}`;
+      return `MONTH:${row.fiscalMonth}`;
+    };
+  } else {
+    rawBuckets = rawWeeks.map(rw => `WEEK:${rw}`);
+    bucketLabels = rawWeeks.map((_, i) => `${currentMonthShort} W${i + 1}`);
+    bucketKeyForRow = (row) => `WEEK:${row.fiscalWeek}`;
+  }
+
+  const weekLabels = bucketLabels;  // alias preserved for downstream code that reads data.weekLabels
+
+  // Build per-agent bucket map. Key: ntid|bucketKey → {sessions, eligibleWeeks}
+  // Entry existence signals eligibility; NCR rows are skipped entirely (matches buildCoachingStats).
+  const agentBucketMap = new Map();
+  const agentMeta = new Map(); // ntid → {ntid, agentName, supervisor, site, region}
+  for (const row of activeRows) {
+    if (!row.ntid) continue;
+    if (row.colorWb === "No Coaching Required") continue;
+    const ntidLower = row.ntid ? String(row.ntid).toLowerCase() : "";
+    const bp = ntidLower ? (safeBp[ntidLower] || safeBp[`bp-${ntidLower}`] || safeBp[ntidLower.replace(/^bp-/, "")]) : null;
+    const region = bp ? bp.region : "";
+    const { site, region: normalizedRegion } = coachingSiteFromRegion(region);
+    if (!site) continue;
+    if (!isValidCoachingRegion(normalizedRegion)) continue;
+    const supervisor = (bp && bp.supervisor) || row.supervisor || "Unassigned";
+    if (!agentMeta.has(row.ntid)) {
+      agentMeta.set(row.ntid, { ntid: row.ntid, agentName: row.displayName, supervisor, site, region: normalizedRegion });
+    }
+    const bucket = bucketKeyForRow(row);
+    const key = `${row.ntid}|${bucket}`;
+    const existing = agentBucketMap.get(key) || { sessions: 0, eligibleWeeks: 0 };
+    existing.sessions += row.sessions || 0;
+    existing.eligibleWeeks += 1;
+    agentBucketMap.set(key, existing);
+  }
+
+  // Helper: weeks array for one agent across rawBuckets (dual-shape entries for count + pct modes)
+  const weeksForAgent = (ntid) => rawBuckets.map((bucket, i) => {
+    const v = agentBucketMap.get(`${ntid}|${bucket}`);
+    if (!v) {
+      return {
+        week: bucketLabels[i],
+        sessions: null,
+        eligible: false,
+        x: 0,
+        y: 0,
+        pct: null,
+      };
+    }
+    return {
+      week: bucketLabels[i],
+      sessions: v.sessions,
+      eligible: true,
+      x: v.sessions,
+      y: v.eligibleWeeks,
+      pct: v.eligibleWeeks ? v.sessions / v.eligibleWeeks : null,
+    };
+  });
+
+  // Build per-agent rollups
+  const allAgents = [];
+  for (const [ntid, meta] of agentMeta.entries()) {
+    const weeks = weeksForAgent(ntid);
+    const sessionsX = weeks.reduce((acc, w) => acc + (w.eligible ? (w.sessions || 0) : 0), 0);
+    const sessionsY = weeks.reduce((acc, w) => acc + (w.eligible ? w.y : 0), 0);
+    const pct = sessionsY ? sessionsX / sessionsY : null;
+    allAgents.push({ ...meta, weeks, sessionsX, sessionsY, pct });
+  }
+  allAgents.sort((a, b) => (a.pct ?? 999) - (b.pct ?? 999));
+
+  // Group agents by supervisor
+  const supMap = new Map();
+  for (const ag of allAgents) {
+    if (!supMap.has(ag.supervisor)) {
+      supMap.set(ag.supervisor, { supervisor: ag.supervisor, agents: [] });
+    }
+    supMap.get(ag.supervisor).agents.push(ag);
+  }
+  const bySupervisor = [...supMap.values()].map(g => {
+    // primary site = mode of agent regions; ties broken alphabetically
+    const regionCounts = {};
+    g.agents.forEach(a => { regionCounts[a.region] = (regionCounts[a.region] || 0) + 1; });
+    const primaryRegion = Object.keys(regionCounts).sort((a, b) =>
+      regionCounts[b] - regionCounts[a] || a.localeCompare(b)
+    )[0] || "";
+    const { site } = coachingSiteFromRegion(primaryRegion);
+    // Per-bucket supervisor stats: agents coached / eligible agent-weeks in bucket
+    const weeks = rawBuckets.map((bucket, i) => {
+      let x = 0, y = 0;
+      for (const a of g.agents) {
+        const w = a.weeks[i];
+        if (w.eligible) {
+          y += w.y;            // sum eligible weeks (= 1 for week buckets, N for month buckets)
+          x += w.sessions || 0;
+        }
+      }
+      return { week: bucketLabels[i], x, y, pct: y ? x / y : null };
+    });
+    const sessionsX = g.agents.reduce((acc, a) => acc + a.sessionsX, 0);
+    const sessionsY = g.agents.reduce((acc, a) => acc + a.sessionsY, 0);
+    return {
+      supervisor: g.supervisor,
+      site,
+      region: primaryRegion,
+      agentCount: g.agents.length,
+      weeks,
+      sessionsX,
+      sessionsY,
+      pct: sessionsY ? sessionsX / sessionsY : null,
+      agents: g.agents,
+    };
+  }).filter(sup => sup.agents.length >= 2)
+    .sort((a, b) => (a.pct ?? 999) - (b.pct ?? 999));
+
+  // Per-site stats (sub-region granularity).
+  const regionMap = new Map(); // region → { x, y } accumulator
+  for (const a of allAgents) {
+    if (!regionMap.has(a.region)) regionMap.set(a.region, { x: 0, y: 0 });
+    const acc = regionMap.get(a.region);
+    a.weeks.forEach(w => {
+      if (w.eligible) {
+        acc.y += w.y;        // use bucket's actual eligible-week count
+        acc.x += w.sessions || 0;
+      }
+    });
+  }
+  const bySite = [...regionMap.entries()].map(([region, s]) => {
+    const { site } = coachingSiteFromRegion(region);
+    return { site, region, x: s.x, y: s.y, pct: s.y ? s.x / s.y : null };
+  });
+
+  // Aggregated DR / BZ totals (for the summary tile + comparison chart).
+  const drRollup = bySite.filter(s => s.site === "DR")
+    .reduce((acc, s) => ({ x: acc.x + s.x, y: acc.y + s.y }), { x: 0, y: 0 });
+  const bzRollup = bySite.filter(s => s.site === "BZ")
+    .reduce((acc, s) => ({ x: acc.x + s.x, y: acc.y + s.y }), { x: 0, y: 0 });
+
+  // Org-level KPIs from coachingDetails (Comcast authoritative). Sum across active months.
+  let orgCoachingX = 0, orgCoachingY = 0, orgTotalSessions = 0;
+  let ackPctSum = 0, ackPctCount = 0;
+  for (const month of activeMonths) {
+    const bucket = safeDetails[month] || {};
+    orgCoachingX += Number(bucket["Coaching Sessions"]) || 0;
+    orgCoachingY += Number(bucket["Coachings Due"]) || 0;
+    orgTotalSessions += Number(bucket["Total Sessions"]) || 0;
+    const ackRaw = bucket["Acknowledged %"] || bucket["Acknowledged % "];
+    if (ackRaw !== undefined && ackRaw !== "") {
+      ackPctSum += coachingNormalizedPct(ackRaw);
+      ackPctCount += 1;
+    }
+  }
+  const orgCoachingPct = orgCoachingY ? orgCoachingX / orgCoachingY : null;
+  const ackPct = ackPctCount ? ackPctSum / ackPctCount : null;
+  const ackY = orgTotalSessions;
+  const ackX = ackPct != null && ackY ? Math.round(ackPct * ackY) : 0;
+
+  // Per-bucket org trend (hybrid in multi-month mode: prior months collapsed, current month per-week).
+  const byWeek = rawBuckets.map((bucket, i) => {
+    let x = 0, y = 0;
+    for (const a of allAgents) {
+      const w = a.weeks[i];
+      if (w.eligible) {
+        y += w.y;
+        x += w.sessions || 0;
+      }
+    }
+    return { week: bucketLabels[i], x, y, pct: y ? x / y : null };
+  });
+
+  // Per-site per-bucket trend — for the grouped bar chart on Summary.
+  const byWeekBySite = rawBuckets.map((bucket, i) => {
+    const siteMap = {};
+    for (const a of allAgents) {
+      const w = a.weeks[i];
+      if (w.eligible) {
+        const label = coachingRegionLabel(a.region);
+        if (!siteMap[label]) siteMap[label] = { label, region: a.region, x: 0, y: 0 };
+        siteMap[label].y += w.y;
+        siteMap[label].x += w.sessions || 0;
+      }
+    }
+    return {
+      week: bucketLabels[i],
+      sites: Object.values(siteMap).map(s => ({ ...s, pct: s.y ? s.x / s.y : null })),
+    };
+  });
+
+  return {
+    org: {
+      coachingPct: orgCoachingPct,
+      coachingX: orgCoachingX,
+      coachingY: orgCoachingY,
+      ackPct,
+      ackX,
+      ackY,
+      totalSessions: orgTotalSessions,
+    },
+    bySiteRollup: {
+      dr: { x: drRollup.x, y: drRollup.y, pct: drRollup.y ? drRollup.x / drRollup.y : null },
+      bz: { x: bzRollup.x, y: bzRollup.y, pct: bzRollup.y ? bzRollup.x / bzRollup.y : null },
+    },
+    bySite,
+    byWeek,
+    byWeekBySite,
+    bySupervisor,
+    allAgents,
+    fiscalMonths,
+    currentMonth,
+    activeMonths: [...activeMonths],
+    weekLabels,
+    agentCellMode: isMultiMonth ? "pct" : "count",
+  };
+}
+
+// Returns an array of { bucket, pct, users } for the reporting month, in canonical bucket order.
+function buildLoginDistribution(loginBuckets, reportingMonthLabel) {
+  const order = ["0-3", "4-7", "8-15", "16-20+"];
+  const monthBucket = loginBuckets[normalizeVirgilMonthKey(reportingMonthLabel)] || loginBuckets[reportingMonthLabel] || {};
+  return order.map(b => ({
+    bucket: b,
+    pct: (monthBucket[b] && monthBucket[b].pct) || 0,
+    users: (monthBucket[b] && monthBucket[b].users) || 0,
+  }));
+}
+
+// Approximates "% of users with 1+ login" by treating the "0-3" bucket as mostly zero-loggers.
+// Caveat: true 1+ login rate would be finer — this is the closest we can get from the 4-bucket CSV.
+function buildLoginActivitySingle(loginBuckets, monthLabel) {
+  const bucket = loginBuckets[normalizeVirgilMonthKey(monthLabel)] || loginBuckets[monthLabel] || {};
+  const total = (bucket["0-3"]?.users || 0) + (bucket["4-7"]?.users || 0) + (bucket["8-15"]?.users || 0) + (bucket["16-20+"]?.users || 0);
+  if (!total) return 0;
+  const nonZero = (bucket["4-7"]?.users || 0) + (bucket["8-15"]?.users || 0) + (bucket["16-20+"]?.users || 0);
+  return nonZero / total;
+}
+
+// Returns a predicate accepting a YYYY-MM-DD (or M/D/Y, etc.) date string.
+// monthLabel like "Mar '26" / "Mar 26" / "March 2026" → matches year 2026, month 3.
+function makeMonthFilter(monthLabel) {
+  // Fiscal-month filter (22nd of prior month through 21st of current month).
+  // Comcast's fiscal calendar: Fiscal Mar = Feb 22 - Mar 21, Fiscal Apr = Mar 22 - Apr 21, etc.
+  const m = String(monthLabel || "").trim().match(/^([A-Za-z]{3,})\s*'?(\d{2,4})$/);
+  if (!m) return () => true;
+  const mon = m[1].slice(0, 3).toLowerCase();
+  const monIdx = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12 }[mon];
+  if (!monIdx) return () => false;
+  const yr = Number(m[2].length === 4 ? m[2] : `20${m[2]}`);
+  // Compute fiscal window: prior-month-22 to current-month-21
+  let startYr = yr, startMon = monIdx - 1;
+  if (startMon === 0) { startMon = 12; startYr = yr - 1; }
+  const fiscalStart = new Date(startYr, startMon - 1, 22); // JS months are 0-indexed
+  const fiscalEnd = new Date(yr, monIdx - 1, 21);
+  fiscalEnd.setHours(23, 59, 59, 999);
+  return (dateStr) => {
+    if (!dateStr) return false;
+    const parts = String(dateStr).trim().split(/[-\/]/);
+    if (parts.length < 3) return false;
+    let y, mo, d;
+    if (parts[0].length === 4) { y = Number(parts[0]); mo = Number(parts[1]); d = Number(parts[2]); }
+    else { y = Number(parts[2].length === 4 ? parts[2] : `20${parts[2]}`); mo = Number(parts[0]); d = Number(parts[1]); }
+    if (!y || !mo || !d) return false;
+    const t = new Date(y, mo - 1, d).getTime();
+    return t >= fiscalStart.getTime() && t <= fiscalEnd.getTime();
+  };
+}
+
+// Predicate for a fiscal-year quarter. year = 2025, qNum = 4 → Oct–Dec 2025.
+function makeQuarterFilter(year, qNum) {
+  const startMon = (qNum - 1) * 3 + 1;
+  return (dateStr) => {
+    if (!dateStr) return false;
+    const parts = String(dateStr).trim().split(/[-\/]/);
+    if (parts.length < 3) return false;
+    let y, mo;
+    if (parts[0].length === 4) { y = Number(parts[0]); mo = Number(parts[1]); }
+    else { y = Number(parts[2].length === 4 ? parts[2] : `20${parts[2]}`); mo = Number(parts[0]); }
+    return y === year && mo >= startMon && mo <= startMon + 2;
+  };
+}
+
+// Returns a predicate for filtering goals-CSV rows by their "Month" column.
+// monthLabel like "Mar '26" / "March 2026" → matches rows where Month starts with "Mar".
+function makeGoalsMonthFilter(monthLabel) {
+  const m = String(monthLabel || "").trim().match(/^([A-Za-z]{3,})/);
+  if (!m) return () => true;
+  const mon3 = m[1].slice(0, 3).toLowerCase();
+  return (row) => {
+    const rowMon = String(row["Month"] || "").trim().slice(0, 3).toLowerCase();
+    if (!rowMon) return true; // no Month column — include row (file is already month-scoped)
+    return rowMon === mon3;
+  };
+}
+
+// Returns a predicate for filtering goals-CSV rows by Quarter column (Q1-Q4).
+function makeGoalsQuarterFilter(qStr) {
+  // Q4 goals file may label rows as "Q3" (fiscal offset) or have no Quarter column.
+  // We assume the file itself is already quarter-scoped, so include all rows.
+  return () => true;
+}
+
+// Compute org-wide XI attainment %, XM attainment %, SPH, CPS for a filtered agent dataset.
+// agentRaw / goalsRaw are the full CSVs; dateFilter(dateStr) → boolean tells which rows to include.
+// goalsMonthFilter(row) → boolean filters goals rows by month (prevents multi-month over-counting).
+// Returns numeric metrics (fractions for % fields, e.g. 0.943 = 94.3%).
+function computeCorpAttainment(agentRaw, goalsRaw, dateFilter, goalsMonthFilter, agentRocFilter, goalsRocFilter) {
+  if (!agentRaw || !agentRaw.trim()) {
+    return { xiPct: 0, xmPct: 0, sph: 0, cps: 0, planSph: 0, planCps: 0, sales: 0, hours: 0, xiPlan: 0, xmPlan: 0, hoursPlan: 0, homesPlan: 0 };
+  }
+  const agentRows = parseCSV(agentRaw);
+  const goalsRows = goalsRaw && goalsRaw.trim() ? parseCSV(goalsRaw) : [];
+  let hours = 0, sales = 0, xi = 0, xm = 0;
+  for (const r of agentRows) {
+    const d = (r["Date"] || "").trim();
+    if (dateFilter && !dateFilter(d)) continue;
+    const roc = (r["Job"] || "").trim();
+    if (agentRocFilter && !agentRocFilter(roc)) continue;
+    hours += Number(r["Hours"]) || 0;
+    sales += Number(r["Goals"]) || 0;
+    // Pick by existence, not truthiness
+    const pickCol = (...cols) => { for (const c of cols) if (r[c] !== undefined && r[c] !== "") return r[c]; return 0; };
+    xi += Number(pickCol("NewData", "New XI", "HSD RGUs")) || 0;
+    xm += Number(pickCol("XMLines", "XM Lines", "NewXM")) || 0;
+  }
+  let xiPlan = 0, xmPlan = 0, hoursPlan = 0, homesPlan = 0;
+  for (const r of goalsRows) {
+    // Apply goals month filter if provided — goals CSV has a "Month" column like "March"/"April"
+    if (goalsMonthFilter && !goalsMonthFilter(r)) continue;
+    // Apply ROC filter to exclude campaigns like GLB (XMC) from plan if requested
+    if (goalsRocFilter) {
+      const roc = String(r["ROC Numbers"] || r["ROC Number"] || "").trim();
+      if (!goalsRocFilter(roc)) continue;
+    }
+    const parseNum = (v) => {
+      const s = String(v == null ? "" : v).replace(/,/g, "").replace(/%/g, "");
+      const n = Number(s);
+      return Number.isFinite(n) ? n : 0;
+    };
+    hoursPlan += parseNum(r["Hours Goal"] || r["Hours per ROC"]);
+    xiPlan += parseNum(r["HSD GOAL"] || r["HSD Unit Goal"]);
+    xmPlan += parseNum(r["XM GOAL"] || r["XM Unit Goal"]);
+    homesPlan += parseNum(r["HOMES GOAL"] || r["Homes Sold Goal"]);
+  }
+  const sph = hours ? sales / hours : 0;
+  const cps = sales ? (hours * 19.77) / sales : (hours * 19.77);
+  const planSph = hoursPlan ? homesPlan / hoursPlan : 0;
+  const planCps = homesPlan ? (hoursPlan * 19.77) / homesPlan : 0;
+  return {
+    xiPct: xiPlan ? xi / xiPlan : 0,
+    xmPct: xmPlan ? xm / xmPlan : 0,
+    sph, cps, planSph, planCps,
+    sales, hours, xi, xm, xiPlan, xmPlan, hoursPlan, homesPlan,
+  };
+}
+
+// Groups qualified agents by campaign type (ROC prefix GLU = XM, GLN = XI),
+// sorts each group by % to Goal and splits into 4 equal-sized quartiles,
+// then cross-tabs by tenure bucket. Participation % = agents with ≥1 unit sold / total in bucket.
+// Returns { xm: { quartileSummary, tenureMatrix } | null, xi: { quartileSummary, tenureMatrix } | null }.
+function buildQuartileReport(agentRaw, goalsRaw, newHiresRaw, dateFilter, referenceDate) {
+  if (!agentRaw || !agentRaw.trim()) return { xm: null, xi: null };
+  const agentRows = parseCSV(agentRaw);
+  const goalsRows = goalsRaw && goalsRaw.trim() ? parseCSV(goalsRaw) : [];
+  const newHireRows = newHiresRaw && newHiresRaw.trim() ? parseCSV(newHiresRaw) : [];
+
+  // Hire-date lookup by agent name (case-insensitive)
+  const hireByName = {};
+  for (const r of newHireRows) {
+    const first = (r["First Name"] || "").trim();
+    const last = (r["Last Name"] || "").trim();
+    const name = `${first} ${last}`.toLowerCase();
+    const hd = (r["Hire Date"] || "").trim();
+    if (name && hd) hireByName[name] = hd;
+  }
+
+  // Per-campaign goals lookup by ROC
+  const goalByRoc = {};
+  for (const r of goalsRows) {
+    const rocList = (r["ROC Numbers"] || "").split(",").map(s => s.trim()).filter(Boolean);
+    for (const roc of rocList) {
+      goalByRoc[roc] = r;
+    }
+  }
+
+  // Aggregate per-agent for the filtered period, split by XM/XI group
+  const byAgent = {};
+  for (const r of agentRows) {
+    if (dateFilter && !dateFilter((r["Date"] || "").trim())) continue;
+    const name = (r["AgentName"] || "").trim();
+    if (!name) continue;
+    const roc = (r["Job"] || "").trim();
+    const isGLU = roc.startsWith("GLU");
+    const isGLN = roc.startsWith("GLN");
+    if (!isGLU && !isGLN) continue;
+    const key = `${name}|${isGLU ? "XM" : "XI"}`;
+    if (!byAgent[key]) {
+      byAgent[key] = { name, group: isGLU ? "XM" : "XI", hours: 0, sales: 0, xi: 0, xm: 0, roc };
+    }
+    const a = byAgent[key];
+    a.hours += Number(r["Hours"]) || 0;
+    a.sales += Number(r["Goals"]) || 0;
+    // Pick by existence, not truthiness — "0" is truthy as a string and would never fall through
+    const pickCol = (...cols) => { for (const c of cols) if (r[c] !== undefined && r[c] !== "") return r[c]; return 0; };
+    a.xi += Number(pickCol("NewData", "New XI", "HSD RGUs")) || 0;
+    a.xm += Number(pickCol("XMLines", "XM Lines", "NewXM")) || 0;
+  }
+
+  const refDate = referenceDate ? new Date(referenceDate) : new Date();
+  const tenureBuckets = [
+    [0, 30], [31, 60], [61, 90], [91, 120], [121, 150], [151, 180], [181, 360], [361, Infinity]
+  ];
+  const bucketLabel = (lo, hi) => hi === Infinity ? "361+" : `${lo}-${hi}`;
+
+  // Minimum hours threshold — agents below this are excluded from the quartile dispersion
+  // (and therefore from unit totals, tenure matrix, and participation). Low-hours agents
+  // skew SPH and distort the distribution; gating keeps quartiles meaningful.
+  const MIN_HOURS = 8;
+
+  const buildSection = (group) => {
+    const agents = Object.values(byAgent).filter(a => a.group === group && a.hours >= MIN_HOURS);
+    const withMetrics = agents.map(a => {
+      const goal = goalByRoc[a.roc];
+      let unitGoal = 0, planSph = 0;
+      if (goal) {
+        if (group === "XM") unitGoal = Number(goal["XM GOAL"] || goal["XM Sell In Goal"] || goal["XM Unit Goal"]) || 0;
+        else unitGoal = Number(goal["HSD GOAL"] || goal["HSD Sell In Goal"] || goal["HSD Unit Goal"]) || 0;
+        planSph = Number(String(goal["SPH GOAL"] || goal["SPH Goal"] || "").replace(/,/g, "").replace(/%/g, "")) || 0;
+      }
+      const unitsMade = group === "XM" ? a.xm : a.xi;
+      const sph = a.hours > 0 ? a.sales / a.hours : 0;
+      const sphExpected = planSph * a.hours;
+      const hireStr = hireByName[a.name.toLowerCase()] || "";
+      let tenureDays = 0;
+      if (hireStr) {
+        try {
+          const hd = new Date(hireStr);
+          tenureDays = Math.floor((refDate - hd) / (1000 * 60 * 60 * 24));
+        } catch(e) {}
+      }
+      return { ...a, unitsMade, unitGoal, sph, planSph, sphExpected, tenureDays };
+    });
+
+    // Sort by SPH descending, split into 4 equal quartiles
+    withMetrics.sort((x, y) => y.sph - x.sph);
+    const n = withMetrics.length;
+    if (n === 0) return { quartileSummary: [], tenureMatrix: [] };
+    const qSize = Math.ceil(n / 4);
+    const quartiles = [[], [], [], []];
+    for (let i = 0; i < n; i++) {
+      const q = Math.min(3, Math.floor(i / qSize));
+      quartiles[q].push(withMetrics[i]);
+    }
+
+    const quartileSummary = quartiles.map((qAgents, i) => {
+      const unitsTotal = qAgents.reduce((s, a) => s + a.unitsMade, 0);
+      const salesTotal = qAgents.reduce((s, a) => s + a.sales, 0);
+      const expectedTotal = qAgents.reduce((s, a) => s + a.sphExpected, 0);
+      const qPct = expectedTotal > 0 ? salesTotal / expectedTotal : 0;
+      return { quartile: i + 1, agents: qAgents.length, units: unitsTotal, pctToGoal: qPct, agentCount: qAgents.length };
+    });
+
+    const tenureMatrix = tenureBuckets.map(([lo, hi]) => {
+      const inBucket = withMetrics.filter(a => a.tenureDays >= lo && a.tenureDays <= hi);
+      const counts = [0, 0, 0, 0];
+      inBucket.forEach(a => {
+        const q = quartiles.findIndex(qa => qa.includes(a));
+        if (q >= 0) counts[q] += 1;
+      });
+      const anySale = inBucket.filter(a => a.unitsMade >= 1).length;
+      const total = inBucket.length;
+      const participation = total ? anySale / total : 0;
+      return { label: bucketLabel(lo, hi), A: counts[0], B: counts[1], C: counts[2], D: counts[3], participation, total };
+    });
+
+    // Overall totals row
+    const totalA = tenureMatrix.reduce((s, r) => s + r.A, 0);
+    const totalB = tenureMatrix.reduce((s, r) => s + r.B, 0);
+    const totalC = tenureMatrix.reduce((s, r) => s + r.C, 0);
+    const totalD = tenureMatrix.reduce((s, r) => s + r.D, 0);
+    const totalAny = withMetrics.filter(a => a.unitsMade >= 1).length;
+    const totalAgents = withMetrics.length;
+    tenureMatrix.push({
+      label: "Total", A: totalA, B: totalB, C: totalC, D: totalD,
+      participation: totalAgents ? totalAny / totalAgents : 0,
+      total: totalAgents,
+      isTotal: true,
+    });
+
+    return { quartileSummary, tenureMatrix };
+  };
+
+  return { xm: buildSection("XM"), xi: buildSection("XI") };
+}
+
+// Roll hours up per funding type for a given month-filtered agent dataset.
+// Returns { byFunding: {Growth,National,Marketing,HQ}: {plan, actual}, totalPlan, totalActual, campaigns: [{name, funding, hoursGoal, hoursActual, par, roc}] }
+function buildCampaignHoursByFunding(agentRaw, goalsRaw, monthFilter) {
+  const goalsRows = goalsRaw && goalsRaw.trim() ? parseCSV(goalsRaw) : [];
+  const agentRows = agentRaw && agentRaw.trim() ? parseCSV(agentRaw) : [];
+
+  const rocMeta = {};
+  for (const r of goalsRows) {
+    const funding = (r["Funding"] || "").trim();
+    const name = (r["Target Audience"] || r["Target"] || "").trim();
+    const rocList = (r["ROC Numbers"] || r["ROC Number"] || "").split(",").map(s => s.trim()).filter(Boolean);
+    const par = (r["PAR?"] || "").trim().toUpperCase() === "Y";
+    const hoursGoal = Number(String(r["Hours Goal"] || r["Hours per ROC"] || "").replace(/,/g, "").replace(/%/g, "")) || 0;
+    for (const roc of rocList) {
+      // Accumulate across site rows (DR + BZ) — same ROC in multiple rows means their plan hours SUM.
+      if (!rocMeta[roc]) {
+        rocMeta[roc] = { funding, name, hoursGoal: 0, par };
+      }
+      rocMeta[roc].hoursGoal += hoursGoal;
+    }
+  }
+
+  const actualByRoc = {};
+  for (const r of agentRows) {
+    if (monthFilter && !monthFilter((r["Date"] || "").trim())) continue;
+    const roc = (r["Job"] || "").trim();
+    if (!roc) continue;
+    actualByRoc[roc] = (actualByRoc[roc] || 0) + (Number(r["Hours"]) || 0);
+  }
+
+  const byFunding = {
+    Growth: { plan: 0, actual: 0 },
+    National: { plan: 0, actual: 0 },
+    Marketing: { plan: 0, actual: 0 },
+    HQ: { plan: 0, actual: 0 },
+  };
+  const campaigns = [];
+  let totalPlan = 0, totalActual = 0;
+  for (const roc in rocMeta) {
+    const meta = rocMeta[roc];
+    const act = actualByRoc[roc] || 0;
+    if (byFunding[meta.funding]) {
+      byFunding[meta.funding].plan += meta.hoursGoal;
+      byFunding[meta.funding].actual += act;
+      totalPlan += meta.hoursGoal;
+      totalActual += act;
+    }
+    // Rows with funding = "Other" or blank are intentionally excluded from totals so the
+    // Total bar equals the sum of the 4 displayed funding buckets.
+    if (meta.name) {
+      campaigns.push({ name: meta.name, funding: meta.funding, hoursGoal: meta.hoursGoal, hoursActual: act, par: meta.par, roc });
+    }
+  }
+  return { byFunding, totalPlan, totalActual, campaigns };
+}
+
+// Roll up Extended Agent Stats into per-ROC totals filtered to a month.
+// Returns { [roc]: { dials, contacts, finals } } for each ROC present in the filtered rows.
+// If the CSV is empty, returns {} — downstream callers render "—" for Contact Rate / Lead Penetration.
+// goals/hours are intentionally NOT rolled up here — hours come from buildCampaignHoursByFunding
+// and goals are handled via the main Goals CSV per Campaign Slides spec.
+// Returns { [jobType]: { dials, contacts, finals } } for the given month filter.
+function buildExtendedAgentLookup(extendedRows, monthFilter) {
+  if (!Array.isArray(extendedRows) || extendedRows.length === 0) return {};
+  const out = {};
+  for (const r of extendedRows) {
+    if (monthFilter && !monthFilter(r.date)) continue;
+    // Key by Campaign Slides campaign group so multiple Job Types within a group merge.
+    const key = getCorpMbrCampaignGroup(r.jobType);
+    if (!key) continue;
+    if (!out[key]) out[key] = { dials: 0, contacts: 0, finals: 0 };
+    out[key].dials += r.dials;
+    out[key].contacts += r.contacts;
+    out[key].finals += r.finals;
+  }
+  return out;
+}
+
+// Produce the list of GL campaigns (Job Types matching an MBR category) active in reporting or MTD month.
+// Returns an array of { name, category, hoursReporting, hoursMtd, goalReporting, goalMtd }.
+// Sorted alphabetically by campaign name for stable, review-friendly slide order.
+function buildCampaignUniverse(priorAgentRaw, priorGoalsRaw, agentRaw, goalsRaw, priorMonthLabel, reportingMonthLabel) {
+  const agentsPrior = priorAgentRaw && priorAgentRaw.trim() ? parseCSV(priorAgentRaw) : [];
+  const agentsCurr = agentRaw && agentRaw.trim() ? parseCSV(agentRaw) : [];
+  const priorFilter = makeMonthFilter(priorMonthLabel);
+  const reportingFilter = makeMonthFilter(reportingMonthLabel);
+
+  // Group Job Types into consolidated Campaign Slides buckets
+  const byGroup = {};
+  const ensure = (group) => {
+    if (!byGroup[group]) {
+      byGroup[group] = {
+        name: group,
+        category: CORP_MBR_GROUP_CATEGORIES[group] || group,
+        hoursPrior: 0, hoursReporting: 0, goalPrior: 0, goalReporting: 0,
+      };
+    }
+    return byGroup[group];
+  };
+
+  const accumulate = (rows, filter, hoursField) => {
+    for (const r of rows) {
+      const jobType = (r["Job Type"] || "").trim();
+      const group = getCorpMbrCampaignGroup(jobType);
+      if (!group) continue;
+      if (filter && !filter((r["Date"] || "").trim())) continue;
+      ensure(group)[hoursField] += Number(r["Hours"]) || 0;
+    }
+  };
+  accumulate(agentsPrior, priorFilter, "hoursPrior");
+  accumulate(agentsCurr, reportingFilter, "hoursReporting");
+
+  // Goal hours from each month's goals CSV — sum across all Target Audiences in the same group
+  const accumulateGoals = (goalsRawStr, key) => {
+    if (!goalsRawStr || !goalsRawStr.trim()) return;
+    const goalsRows = parseCSV(goalsRawStr);
+    const lookup = buildGoalLookupTolerant(goalsRows);
+    if (!lookup) return;
+    Object.keys(lookup.byTA || {}).forEach(ta => {
+      const group = getCorpMbrCampaignGroup(ta);
+      if (!group) return;
+      const hoursGoal = getPlanForKey(lookup.byTA[ta], "Hours Goal") || 0;
+      ensure(group)[key] += hoursGoal;
+    });
+  };
+  accumulateGoals(priorGoalsRaw, "goalPrior");
+  accumulateGoals(goalsRaw, "goalReporting");
+
+  return Object.values(byGroup)
+    .filter(c => c.hoursPrior > 0 || c.hoursReporting > 0 || c.goalPrior > 0 || c.goalReporting > 0)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// Compute the full Campaign Slides column (GOALS, BUDGET, ACTUAL, VARIANCE, % GOAL) for a single campaign + month.
+// Inputs:
+//   campaign:   { name, rocs: [string, ...] }
+//   agentRaw:   raw agent CSV text for the month
+//   goalsRaw:   raw goals CSV text for the month
+//   monthFilter: (dateStr) => boolean (or null to accept all rows in agentRaw)
+//   extendedLookup: { [roc]: { dials, contacts, finals } } (empty object if unavailable)
+//   totalsForMonth: { sumActualLeads, sumHoursActual } — used for % of Total Leads / % of Total Hours
+// Returns an object of raw values; downstream formatter turns it into table cells.
+function buildCampaignMonthDetail(campaign, agentRaw, goalsRaw, monthFilter, extendedLookup, totalsForMonth) {
+  const HOURLY_COST = MBR_BILLING_RATE;
+  const result = {
+    hoursActual: 0, hoursGoal: 0,
+    salesActual: 0, salesGoal: 0,
+    xiActual: 0, xiGoal: 0,
+    xmActual: 0, xmGoal: 0,
+    videoActual: 0, videoGoal: 0,
+    xhActual: 0, xhGoal: 0,
+    phoneActual: 0, phoneGoal: 0,
+    actualLeads: 0,
+    dials: 0, contacts: 0, finals: 0,
+  };
+  if (!agentRaw || !agentRaw.trim()) return result;
+
+  const targetGroup = campaign.name;
+  const agentRows = parseCSV(agentRaw);
+  for (const r of agentRows) {
+    if (monthFilter && !monthFilter((r["Date"] || "").trim())) continue;
+    const jobType = (r["Job Type"] || "").trim();
+    if (getCorpMbrCampaignGroup(jobType) !== targetGroup) continue;
+    result.hoursActual += Number(r["Hours"]) || 0;
+    result.salesActual += Number(r["Goals"]) || 0;
+    result.xiActual += Number(r["NewData"]) || 0;
+    result.xmActual += Number(r["XMLines"]) || 0;
+    result.videoActual += Number(r["NewVideo"]) || 0;
+    // XH = XFinity Home / security
+    result.xhActual += Number(r["NewSecurity"]) || 0;
+    result.phoneActual += Number(r["NewVoice"]) || 0;
+  }
+
+  if (goalsRaw && goalsRaw.trim()) {
+    const goalRows = parseCSV(goalsRaw);
+    const goalLookup = buildGoalLookupTolerant(goalRows);
+    if (goalLookup) {
+      // Merge ALL Target Audiences whose group matches this campaign's group
+      // (e.g. campaign.name = "XM Expansion" merges "XM Likely" + "Add A Line" + "XM Up" + ...)
+      const combinedSiteMap = {};
+      Object.entries(goalLookup.byTA || {}).forEach(([ta, siteMap]) => {
+        if (getCorpMbrCampaignGroup(ta) !== campaign.name) return;
+        Object.entries(siteMap).forEach(([site, rows]) => {
+          if (!combinedSiteMap[site]) combinedSiteMap[site] = [];
+          combinedSiteMap[site].push(...rows);
+        });
+      });
+      result.hoursGoal = getPlanForKey(combinedSiteMap, "Hours Goal") || 0;
+      result.salesGoal = getPlanForKey(combinedSiteMap, "HOMES GOAL") || 0;
+      result.xiGoal = getPlanForKey(combinedSiteMap, "HSD Sell In Goal") || 0;
+      result.xmGoal = getPlanForKey(combinedSiteMap, "XM GOAL") || 0;
+      result.videoGoal = getPlanForKey(combinedSiteMap, "VIDEO GOAL") || 0;
+      result.xhGoal = getPlanForKey(combinedSiteMap, "XH GOAL") || 0;
+      result.phoneGoal = getPlanForKey(combinedSiteMap, "Projected Phone") || 0;
+      // Actual Leads — sum across all unique goal rows
+      const uniqueRows = [];
+      Object.values(combinedSiteMap).forEach(rows => uniqueRows.push(...rows));
+      for (const r of uniqueRows) {
+        const leadsVal = findAnyLeadsColumn(r);
+        result.actualLeads += parseLeadsNumber(leadsVal);
+      }
+    }
+  }
+
+  // Extended stats rollup (keyed by Job Type)
+  const ext = extendedLookup[campaign.name];
+  if (ext) {
+    result.dials += ext.dials;
+    result.contacts += ext.contacts;
+    result.finals += ext.finals;
+  }
+
+  // Derived
+  result.budget = result.hoursActual * HOURLY_COST;
+  result.budgetGoal = result.hoursGoal * HOURLY_COST;
+  result.rgusActual = result.xiActual + result.xmActual + result.videoActual + result.xhActual + result.phoneActual;
+  result.rgusGoal = result.xiGoal + result.xmGoal + result.videoGoal + result.xhGoal + result.phoneGoal;
+  result.cps = result.salesActual ? result.budget / result.salesActual : 0;
+  result.cprgu = result.rgusActual ? result.budget / result.rgusActual : 0;
+  result.sph = result.hoursActual ? result.salesActual / result.hoursActual : 0;
+  result.rguph = result.hoursActual ? result.rgusActual / result.hoursActual : 0;
+  result.rguPerSale = result.salesActual ? result.rgusActual / result.salesActual : 0;
+  result.salesPer1000Leads = result.actualLeads ? (result.salesActual / result.actualLeads) * 1000 : 0;
+  result.pctTotalLeads = totalsForMonth && totalsForMonth.sumActualLeads ? result.actualLeads / totalsForMonth.sumActualLeads : 0;
+  result.pctTotalHours = totalsForMonth && totalsForMonth.sumHoursActual ? result.hoursActual / totalsForMonth.sumHoursActual : 0;
+  result.contactRate = result.actualLeads ? (result.contacts / result.actualLeads) * 100 : null;
+  result.leadPenetration = result.actualLeads ? (result.finals / result.actualLeads) * 100 : null;
+  return result;
+}
+
+// Pre-compute sums used as denominators for % of Total Leads / % of Total Hours on the Campaign Slides.
+// Returns { sumActualLeads, sumHoursActual } from the full month of data (all campaigns combined).
+// NOTE: goalsRaw is expected to be month-segregated (one CSV per month). sumActualLeads does
+// NOT apply monthFilter — every row in goalsRaw is summed. Pass a combined goals CSV at your peril.
+function buildCampaignMonthTotals(agentRaw, goalsRaw, monthFilter) {
+  let sumActualLeads = 0, sumHoursActual = 0;
+  if (agentRaw && agentRaw.trim()) {
+    const rows = parseCSV(agentRaw);
+    for (const r of rows) {
+      if (monthFilter && !monthFilter((r["Date"] || "").trim())) continue;
+      sumHoursActual += Number(r["Hours"]) || 0;
+    }
+  }
+  if (goalsRaw && goalsRaw.trim()) {
+    const rows = parseCSV(goalsRaw);
+    for (const g of rows) {
+      const leadsVal = findAnyLeadsColumn(g);
+      sumActualLeads += parseLeadsNumber(leadsVal);
+    }
+  }
+  return { sumActualLeads, sumHoursActual };
+}
+
+// Filter tNPS survey rows to a picker-driven reporting month ("Mar '26" / "Mar 26").
+// tNPS rows carry a `.month` field like "2026-03" — convert label → YYYY-MM and string-compare.
+function filterTnpsToMonth(surveys, monthLabel) {
+  if (!Array.isArray(surveys) || surveys.length === 0) return [];
+  const m = String(monthLabel || "").trim().match(/^([A-Za-z]{3,})\s*'?(\d{2,4})$/);
+  if (!m) return surveys;
+  const monMap = { jan:"01", feb:"02", mar:"03", apr:"04", may:"05", jun:"06", jul:"07", aug:"08", sep:"09", oct:"10", nov:"11", dec:"12" };
+  const monKey = monMap[m[1].slice(0, 3).toLowerCase()];
+  if (!monKey) return surveys;
+  const yr = m[2].length === 4 ? m[2] : `20${m[2]}`;
+  const targetKey = `${yr}-${monKey}`;
+  return surveys.filter(s => s.month === targetKey);
+}
+
+// For Slide 8: compute hires, departures, and retention for a given reporting month.
+// rosterRaw MUST be the raw CSV text (not the 180-day-filtered parseNewHires output).
+// bpLookup is the existing BP→site map (perf.bpLookup).
+function buildPartnerExperienceStats(rosterRaw, bpLookup, reportingMonthLabel) {
+  const empty = { hires: [], departures: [], activeAtStart: 0, retentionRate: null, monthStart: null, monthEnd: null };
+  if (!rosterRaw || !rosterRaw.trim()) return empty;
+
+  // Parse reporting month label to a {year, month} pair
+  const m = String(reportingMonthLabel || "").trim().match(/^([A-Za-z]{3,})\s*'?(\d{2,4})$/);
+  if (!m) return empty;
+  const monKey = { jan:0, feb:1, mar:2, apr:3, may:4, jun:5, jul:6, aug:7, sep:8, oct:9, nov:10, dec:11 }[m[1].slice(0, 3).toLowerCase()];
+  if (monKey === undefined) return empty;
+  const yr = Number(m[2].length === 4 ? m[2] : `20${m[2]}`);
+  const monthStart = new Date(yr, monKey, 1);
+  const monthEnd = new Date(yr, monKey + 1, 0); // last day of month
+  const inMonth = (dateStr) => {
+    if (!dateStr) return false;
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return false;
+    return d >= monthStart && d <= monthEnd;
+  };
+
+  const rows = parseCSV(rosterRaw);
+  const siteOfBp = (bp) => {
+    if (!bp || !bpLookup) return "Unknown";
+    const rec = bpLookup[bp.toLowerCase()] || bpLookup[bp];
+    if (!rec) return "Unknown";
+    // bpLookup returns NTID→site in some builds; infer from region field if present
+    return rec.site || rec.region || "Unknown";
+  };
+
+  const hires = [];
+  const departures = [];
+  let activeAtStart = 0;
+
+  for (const r of rows) {
+    const first = (r["First Name"] || r["First"] || "").trim();
+    const last = (r["Last Name"] || r["Last"] || "").trim();
+    const name = [first, last].filter(Boolean).join(" ") || (r["AgentName"] || r["Name"] || "").trim();
+    if (!name) continue;
+    const bp = (r["BP"] || "").trim();
+    const site = siteOfBp(bp);
+    const hireDateStr = (r["Hire Date"] || r["StartDate"] || r["Start Date"] || "").trim();
+    const endDateStr = (r["End Date"] || r["EndDate"] || "").trim();
+    const hireDate = hireDateStr ? new Date(hireDateStr) : null;
+    const endDate = endDateStr ? new Date(endDateStr) : null;
+
+    // Active at month start: hired before month, not ended before month
+    const hiredBeforeStart = hireDate && !isNaN(hireDate.getTime()) && hireDate < monthStart;
+    const endedBeforeStart = endDate && !isNaN(endDate.getTime()) && endDate < monthStart;
+    if (hiredBeforeStart && !endedBeforeStart) activeAtStart++;
+
+    if (hireDate && inMonth(hireDateStr)) {
+      hires.push({ name, site, hireDate: hireDateStr });
+    }
+    if (endDate && inMonth(endDateStr)) {
+      departures.push({ name, site, endDate: endDateStr });
+    }
+  }
+
+  const retentionRate = activeAtStart > 0 ? ((activeAtStart - departures.length) / activeAtStart) * 100 : null;
+  return { hires, departures, activeAtStart, retentionRate, monthStart, monthEnd };
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// CORP MBR — Brand Helpers
+// ═══════════════════════════════════════════════════════════════════
+
+const virgilTheme = {
+  gradientLeft: "0B5F7A",   // teal
+  gradientMid: "3B3F8F",    // deep blue
+  gradientRight: "7C3AED",  // purple
+  bodyText: "1F2937",
+  subtle: "6B7280",
+  eyebrow: "4F46E5",
+  footerText: "9CA3AF",
+  slideBg: "FFFFFF",
+};
+
+const virgilFundingColors = {
+  Growth: "0E7490",     // teal
+  National: "1E293B",   // near-black navy
+  Marketing: "8B5CF6",  // violet
+  HQ: "374151",         // slate
+  Total: "7C3AED",      // purple
+};
+
+const corpPalette = {
+  // Brand
+  navy: "1E3A8A",       // dominant — reporting month bars, headers, table accents
+  purple: "7C3AED",     // MTD / current-month highlight, section pills
+  lavender: "A78BFA",   // prior-month (older comparative), secondary
+  green: "16A34A",      // goal lines, positive, Q1
+  // Quartile rank
+  q1: "16A34A",
+  q2: "F59E0B",
+  q3: "F97316",
+  q4: "DC2626",
+  // Funding (Slide 5 categories; semantic distinct)
+  fundGrowth: "7C3AED",
+  fundNational: "1E3A8A",
+  fundHQ: "2563EB",
+  fundMarketing: "16A34A",
+  fundTotal: "9CA3AF",
+  // Neutrals
+  ink: "1F2937",
+  inkSubtle: "6B7280",
+  border: "E5E7EB",
+  surface: "FFFFFF",
+  cardBorder: "E5E7EB",
+  gridline: "F3F4F6",
+  muted: "F9FAFB",
+};
+
+// Unified slide frame — applied to every Corp MBR slide.
+// Options: { categoryLabel, pageNumber, reportingMonthLabel, gcsLogoDataUrl, title, eyebrow, showTitle=true }
+// If showTitle is false, caller renders its own title (for custom slides).
+function virgilSlideFrame(pres, slide, options) {
+  const w = 13.333;
+  const opts = options || {};
+
+  // --- TOP: thin teal→purple gradient bar ---
+  slide.addShape("rect", {
+    x: 0, y: 0, w: w * 0.5, h: 0.1,
+    fill: { color: virgilTheme.gradientLeft },
+    line: { color: virgilTheme.gradientLeft, width: 0 },
+  });
+  slide.addShape("rect", {
+    x: w * 0.5, y: 0, w: w * 0.5, h: 0.1,
+    fill: { color: virgilTheme.gradientRight },
+    line: { color: virgilTheme.gradientRight, width: 0 },
+  });
+
+  // --- Eyebrow + title (optional; caller can skip with showTitle: false) ---
+  if (opts.showTitle !== false) {
+    const eyebrowText = opts.eyebrow || "OPERATIONAL PERFORMANCE";
+    slide.addText(eyebrowText, {
+      x: 0.5, y: 0.22, w: 9, h: 0.22,
+      fontSize: 10, fontFace: "Segoe UI", color: virgilTheme.eyebrow, bold: true, charSpacing: 2,
+    });
+    if (opts.title) {
+      slide.addText(opts.title, {
+        x: 0.5, y: 0.40, w: 9, h: 0.55,
+        fontSize: 24, fontFace: "Segoe UI", color: virgilTheme.bodyText, bold: true,
+      });
+    }
+    // Accent line below title
+    slide.addShape("rect", {
+      x: 0.5, y: 0.92, w: 8.0, h: 0.03,
+      fill: { color: virgilTheme.gradientLeft },
+      line: { color: virgilTheme.gradientLeft, width: 0 },
+    });
+  }
+
+  // --- Top-right: category badge + GCS logo ---
+  if (opts.categoryLabel) {
+    slide.addShape("roundRect", {
+      x: 10.2, y: 0.22, w: 2.4, h: 0.4,
+      fill: { color: corpPalette.navy },
+      line: { color: corpPalette.navy, width: 0 },
+      rectRadius: 0.08,
+    });
+    slide.addText(opts.categoryLabel.toUpperCase(), {
+      x: 10.2, y: 0.22, w: 2.4, h: 0.4,
+      fontSize: 8, fontFace: "Segoe UI", color: "FFFFFF", bold: true, align: "center", valign: "middle", charSpacing: 1,
+    });
+  }
+  if (opts.gcsLogoDataUrl) {
+    slide.addImage({
+      data: opts.gcsLogoDataUrl,
+      x: 10.08, y: 0.21, w: 1.1, h: 0.55,
+    });
+  }
+
+  // --- BOTTOM: dark gradient footer bar with review label / title / xfinity ---
+  const footerY = 7.2;
+  const footerH = 0.3;
+  slide.addShape("rect", {
+    x: 0, y: footerY, w: w * 0.5, h: footerH,
+    fill: { color: virgilTheme.gradientLeft },
+    line: { color: virgilTheme.gradientLeft, width: 0 },
+  });
+  slide.addShape("rect", {
+    x: w * 0.5, y: footerY, w: w * 0.5, h: footerH,
+    fill: { color: virgilTheme.gradientRight },
+    line: { color: virgilTheme.gradientRight, width: 0 },
+  });
+  const reviewLabel = (() => {
+    if (!opts.reportingMonthLabel) return "REVIEW";
+    const MONTH_FULL = { jan:"JANUARY", feb:"FEBRUARY", mar:"MARCH", apr:"APRIL", may:"MAY", jun:"JUNE", jul:"JULY", aug:"AUGUST", sep:"SEPTEMBER", oct:"OCTOBER", nov:"NOVEMBER", dec:"DECEMBER" };
+    const first = String(opts.reportingMonthLabel).trim().split(/\s+/)[0];
+    const key = first.slice(0, 3).toLowerCase();
+    const full = MONTH_FULL[key] || first.toUpperCase();
+    return `${full} REVIEW`;
+  })();
+  slide.addText(reviewLabel, {
+    x: 0.4, y: footerY + 0.04, w: 3, h: 0.25,
+    fontSize: 10, fontFace: "Segoe UI", color: "FFFFFF", bold: true, charSpacing: 2,
+  });
+  slide.addText("GLOBAL CALLCENTER SOLUTIONS", {
+    x: 4.5, y: footerY + 0.04, w: 4.5, h: 0.25,
+    fontSize: 10, fontFace: "Segoe UI", color: "FFFFFF", bold: true, align: "center", charSpacing: 2,
+  });
+  if (opts.pageNumber !== undefined) {
+    slide.addText(`xfinity  |  ${opts.pageNumber}`, {
+      x: 11.0, y: footerY + 0.04, w: 2.0, h: 0.25,
+      fontSize: 10, fontFace: "Segoe UI", color: "FFFFFF", align: "right",
+    });
+  } else {
+    slide.addText("xfinity", {
+      x: 11.0, y: footerY + 0.04, w: 2.0, h: 0.25,
+      fontSize: 10, fontFace: "Segoe UI", color: "FFFFFF", align: "right",
+    });
+  }
+}
+
+// Rounded white card with thin light-gray border — unified container motif for data panels.
+function drawCorpCard(slide, x, y, w, h) {
+  slide.addShape("roundRect", {
+    x, y, w, h,
+    fill: { color: corpPalette.surface },
+    line: { color: corpPalette.cardBorder, width: 0.75 },
+    rectRadius: 0.1,
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// CORP MBR — Slide Builders
+// ═══════════════════════════════════════════════════════════════════
+
+// "Mar '26" / "Mar 26" / "March 2026" → "March 2026".
+function expandMonthLabel(label) {
+  if (!label) return "";
+  const s = String(label).trim();
+  const full = { jan:"January", feb:"February", mar:"March", apr:"April", may:"May", jun:"June", jul:"July", aug:"August", sep:"September", oct:"October", nov:"November", dec:"December" };
+  const m = s.match(/^([A-Za-z]{3,})\s*'?(\d{2,4})$/);
+  if (!m) return s;
+  const monKey = m[1].slice(0, 3).toLowerCase();
+  const monName = full[monKey] || m[1];
+  const yr = m[2];
+  const year = yr.length === 4 ? yr : (Number(yr) >= 50 ? `19${yr}` : `20${yr}`);
+  return `${monName} ${year}`;
+}
+
+function buildVirgilTitleSlide(pres, reportingMonthLabel, fiscalInfo, virgilLastName, frameOptions) {
+  const slide = pres.addSlide();
+  const w = 13.333;
+  const h = 7.5;
+
+  // --- Pre-rendered title background (gradient + X + title + xfinity all baked in) ---
+  // Image covers y=0..7.0; footer bar at y=7.0 is added by virgilSlideFrame on top.
+  slide.addImage({
+    path: `${import.meta.env.BASE_URL}corp-mbr-title-bg.png`,
+    x: 0, y: 0, w, h,
+  });
+
+  // Apply unified frame AFTER image so footer bar and logo sit on top
+  virgilSlideFrame(pres, slide, {
+    showTitle: false,
+    reportingMonthLabel: (frameOptions && frameOptions.reportingMonthLabel) || reportingMonthLabel,
+    gcsLogoDataUrl: (frameOptions || {}).gcsLogoDataUrl,
+    pageNumber: (frameOptions || {}).pageNumber,
+  });
+
+  // --- Dynamic date (below the baked-in title) ---
+  const ord = (d) => {
+    const s = ["th", "st", "nd", "rd"];
+    const v = d % 100;
+    return s[(v - 20) % 10] || s[v] || s[0];
+  };
+  const today = new Date();
+  const monthFull = today.toLocaleDateString("en-US", { month: "long" }).toUpperCase();
+  const day = today.getDate();
+  const year = today.getFullYear();
+  const dateText = `${monthFull} ${day}${ord(day).toUpperCase()}, ${year}`;
+  slide.addText(dateText, {
+    x: 0.5, y: 3.55, w: 12.33, h: 0.35,
+    fontSize: 11, color: "FFFFFF", bold: true,
+    charSpacing: 5, align: "center",
+  });
+
+  // --- Business partner line ---
+  slide.addText("GLOBAL CALLCENTER SOLUTIONS", {
+    x: 0.5, y: 3.95, w: 12.33, h: 0.35,
+    fontSize: 11, color: "FFFFFF", bold: true,
+    charSpacing: 4, align: "center",
+  });
+
+  // --- Presenters ---
+  slide.addText("Presented by Joshua Edgecomb, Frank Daley, Jasmine Mendoza", {
+    x: 0.5, y: 4.35, w: 12.33, h: 0.3,
+    fontSize: 10, color: "FFFFFF", italic: true,
+    align: "center",
+  });
+}
+
+function buildVirgilMyPerformanceSlide(pres, stats, loginBuckets, priorPriorMonthLabel, priorMonthLabel, reportingMonthLabel, insightsText, frameOptions) {
+  const slide = pres.addSlide();
+  slide.background = { color: virgilTheme.slideBg };
+  virgilSlideFrame(pres, slide, {
+    eyebrow: "MY PERFORMANCE / QUALITY",
+    title: `My Performance / Quality — ${reportingMonthLabel}`,
+    categoryLabel: "PERFORMANCE",
+    reportingMonthLabel: (frameOptions && frameOptions.reportingMonthLabel) || reportingMonthLabel,
+    pageNumber: (frameOptions || {}).pageNumber,
+    gcsLogoDataUrl: (frameOptions || {}).gcsLogoDataUrl,
+  });
+
+  // Month abbreviation helpers
+  const monAbbrev = (label) => {
+    if (!label) return "";
+    const m = String(label).trim().match(/^([A-Za-z]{3,})/);
+    return m ? m[1].slice(0, 3) : label;
+  };
+  const priorPriorAbbrev = monAbbrev(priorPriorMonthLabel) || "";
+  const priorAbbrev = monAbbrev(priorMonthLabel) || "Prior";
+  const currAbbrev = monAbbrev(reportingMonthLabel) || "Current";
+
+  // Legend (top right) — 3 months + goal line; nudged down to clear category badge (badge ends ~y=0.82)
+  const legendY = 0.9;
+  slide.addShape("rect", { x: 9.3, y: legendY, w: 0.22, h: 0.18, fill: { color: corpPalette.lavender } });
+  slide.addText(priorPriorAbbrev, { x: 9.58, y: legendY - 0.03, w: 0.7, h: 0.25, fontSize: 10, color: virgilTheme.bodyText });
+  slide.addShape("rect", { x: 10.35, y: legendY, w: 0.22, h: 0.18, fill: { color: corpPalette.purple } });
+  slide.addText(priorAbbrev, { x: 10.63, y: legendY - 0.03, w: 0.7, h: 0.25, fontSize: 10, color: virgilTheme.bodyText });
+  slide.addShape("rect", { x: 11.4, y: legendY, w: 0.22, h: 0.18, fill: { color: corpPalette.navy } });
+  slide.addText(currAbbrev, { x: 11.68, y: legendY - 0.03, w: 0.75, h: 0.25, fontSize: 10, color: virgilTheme.bodyText });
+  slide.addText("---  Goal (75%)", { x: 9.3, y: legendY + 0.22, w: 3.3, h: 0.2, fontSize: 9, color: virgilTheme.subtle, italic: true });
+
+  // Full-month-name helper
+  const monFull = (label) => {
+    if (!label) return "";
+    const m = String(label).trim().match(/^([A-Za-z]{3,})/);
+    const full = { jan:"January", feb:"February", mar:"March", apr:"April", may:"May", jun:"June", jul:"July", aug:"August", sep:"September", oct:"October", nov:"November", dec:"December" };
+    return m ? (full[m[1].slice(0, 3).toLowerCase()] || m[1]) : label;
+  };
+  const priorPriorFull = monFull(priorPriorMonthLabel);
+  const priorFull = monFull(priorMonthLabel);
+  const currFull = monFull(reportingMonthLabel);
+
+  // 2-column layout constants
+  const leftColX = 0.5;
+  const leftColW = 5.3;
+  const chartTopY = 1.3;
+  const chartTopH = 2.7;
+  const chartBotY = 4.15;
+  const chartBotH = 2.7;
+  const rightColX = 6.2;
+  const rightColW = 6.6;
+
+  // Bar chart helper — parameterized x, y, width, height
+  const drawBarChart = (x, y, width, height, title, priorPriorPct, priorPct, currPct) => {
+    // Title
+    slide.addText(title, {
+      x, y, w: width, h: 0.3,
+      fontSize: 13, color: virgilTheme.bodyText, bold: true, align: "center",
+    });
+    // Axis area
+    const axisX = x + 0.4;
+    const axisY = y + 0.4;
+    const axisW = width - 0.6;
+    const axisH = height - 0.8;
+    // Y-axis gridlines with % labels
+    const ticks = [0, 0.25, 0.5, 0.75, 1.0];
+    ticks.forEach(t => {
+      const ty = axisY + axisH * (1 - t);
+      slide.addShape("line", {
+        x: axisX, y: ty, w: axisW, h: 0,
+        line: { color: "E5E7EB", width: 0.5 },
+      });
+      slide.addText(`${(t * 100).toFixed(0)}%`, {
+        x: x + 0.02, y: ty - 0.1, w: 0.38, h: 0.2,
+        fontSize: 7, color: virgilTheme.subtle, align: "right",
+      });
+    });
+    // 75% goal line (dashed)
+    const goalY = axisY + axisH * (1 - 0.75);
+    slide.addShape("line", {
+      x: axisX, y: goalY, w: axisW, h: 0,
+      line: { color: "9CA3AF", width: 1.2, dashType: "dash" },
+    });
+    // Three bars (priorPrior, prior, current) at 20/50/80% of axisW
+    const barW = axisW * 0.18;
+    const barPositions = [0.20, 0.50, 0.80];
+    const barColors = [corpPalette.lavender, corpPalette.purple, corpPalette.navy];
+    const barValues = [priorPriorPct, priorPct, currPct];
+    const barLabels = [priorPriorAbbrev, priorAbbrev, currAbbrev];
+    barValues.forEach((v, i) => {
+      const barX = axisX + axisW * barPositions[i] - barW / 2;
+      const barHpx = axisH * Math.max(0, Math.min(1, v));
+      slide.addShape("rect", {
+        x: barX, y: axisY + axisH - barHpx, w: barW, h: barHpx,
+        fill: { color: barColors[i] },
+      });
+      slide.addText(`${(v * 100).toFixed(1)}%`, {
+        x: barX - 0.2, y: axisY + axisH - barHpx + 0.05, w: barW + 0.4, h: 0.25,
+        fontSize: 10, color: "FFFFFF", bold: true, align: "center",
+      });
+      slide.addText(barLabels[i], {
+        x: barX - 0.3, y: axisY + axisH + 0.05, w: barW + 0.6, h: 0.22,
+        fontSize: 9, color: virgilTheme.subtle, align: "center",
+      });
+    });
+  };
+
+  // Left column — two stacked bar charts
+  drawCorpCard(slide, leftColX, chartTopY, leftColW, chartTopH);
+  drawBarChart(leftColX, chartTopY, leftColW, chartTopH, "Coaching Standard Attainment",
+    stats.orgPriorPrior.coachingPct || 0, stats.orgPrior.coachingPct || 0, stats.org.coachingPct || 0);
+  drawCorpCard(slide, leftColX, chartBotY, leftColW, chartBotH);
+  drawBarChart(leftColX, chartBotY, leftColW, chartBotH, "Acknowledge %",
+    stats.orgPriorPrior.acknowledgePct || 0, stats.orgPrior.acknowledgePct || 0, stats.org.acknowledgePct || 0);
+
+  // Right column — Login Activity table
+  const bucketOrder = ["16-20+", "8-15", "4-7", "0-3"];
+  const loginTable = bucketOrder.map(b => {
+    const pickMonth = (label) => loginBuckets[normalizeVirgilMonthKey(label)] || loginBuckets[label] || {};
+    const priorPriorMonth = pickMonth(priorPriorMonthLabel);
+    const priorMonth = pickMonth(priorMonthLabel);
+    const currMonth = pickMonth(reportingMonthLabel);
+    const priorPriorCell = priorPriorMonth[b] || { users: 0, pct: 0 };
+    const priorCell = priorMonth[b] || { users: 0, pct: 0 };
+    const currCell = currMonth[b] || { users: 0, pct: 0 };
+    return {
+      bucket: b,
+      ppUsers: priorPriorCell.users, ppPct: priorPriorCell.pct,
+      pUsers: priorCell.users, pPct: priorCell.pct,
+      cUsers: currCell.users, cPct: currCell.pct,
+    };
+  });
+  drawCorpCard(slide, rightColX, chartTopY, rightColW, chartTopH);
+  slide.addText("myPerformance Login Activity", {
+    x: rightColX, y: chartTopY, w: rightColW, h: 0.3,
+    fontSize: 13, color: virgilTheme.bodyText, bold: true, align: "center",
+  });
+  const tableRows = [
+    [
+      { text: "", options: { fill: { color: "F3F4F6" } } },
+      { text: priorPriorFull, options: { fill: { color: "EDE9FE" }, color: "1F2937", bold: true, colspan: 2, align: "center" } },
+      { text: priorFull, options: { fill: { color: "E9D5FF" }, color: "1F2937", bold: true, colspan: 2, align: "center" } },
+      { text: currFull, options: { fill: { color: "DBEAFE" }, color: "1F2937", bold: true, colspan: 2, align: "center" } },
+    ],
+    [
+      { text: "Bucket", options: { fill: { color: "F3F4F6" }, bold: true, align: "center" } },
+      { text: "Users", options: { fill: { color: "F5F3FF" }, bold: true, align: "center" } },
+      { text: "% Users", options: { fill: { color: "F5F3FF" }, bold: true, align: "center" } },
+      { text: "Users", options: { fill: { color: "F3E8FF" }, bold: true, align: "center" } },
+      { text: "% Users", options: { fill: { color: "F3E8FF" }, bold: true, align: "center" } },
+      { text: "Users", options: { fill: { color: "EFF6FF" }, bold: true, align: "center" } },
+      { text: "% Users", options: { fill: { color: "EFF6FF" }, bold: true, align: "center" } },
+    ],
+    ...loginTable.map(row => ([
+      { text: row.bucket, options: { bold: true, align: "center" } },
+      { text: String(row.ppUsers), options: { align: "center" } },
+      { text: `${(row.ppPct * 100).toFixed(1)}%`, options: { align: "center" } },
+      { text: String(row.pUsers), options: { align: "center" } },
+      { text: `${(row.pPct * 100).toFixed(1)}%`, options: { align: "center" } },
+      { text: String(row.cUsers), options: { align: "center" } },
+      { text: `${(row.cPct * 100).toFixed(1)}%`, options: { align: "center" } },
+    ])),
+  ];
+  slide.addTable(tableRows, {
+    x: rightColX, y: chartTopY + 0.35, w: rightColW,
+    colW: [0.85, 0.78, 0.90, 0.78, 0.90, 0.78, 0.90],
+    rowH: 0.38,
+    fontSize: 10,
+    color: virgilTheme.bodyText,
+    border: { type: "solid", pt: 0.5, color: "D1D5DB" },
+    autoPage: false,
+  });
+
+  // Insights — right column, below the table
+  const insY = 4.25;
+  const insH = 2.6;
+  drawCorpCard(slide, rightColX, insY, rightColW, insH);
+  slide.addShape("rect", {
+    x: rightColX, y: insY + 0.05, w: rightColW, h: 0.4,
+    fill: { color: corpPalette.navy },
+  });
+  slide.addText("Insights", {
+    x: rightColX, y: insY + 0.08, w: rightColW, h: 0.35,
+    fontSize: 14, color: "FFFFFF", bold: true, align: "center",
+  });
+  const bullets = (insightsText || "").split(/\n+/).map(s => s.trim()).filter(Boolean);
+  if (bullets.length === 0) {
+    slide.addText("Provide insights in the export modal", {
+      x: rightColX + 0.2, y: insY + 0.55, w: rightColW - 0.4, h: insH - 0.6,
+      fontSize: 11, color: virgilTheme.subtle, italic: true, valign: "top",
+    });
+  } else {
+    slide.addText(
+      bullets.map(t => ({ text: t, options: { bullet: { code: "2022" } } })),
+      {
+        x: rightColX + 0.2, y: insY + 0.55, w: rightColW - 0.4, h: insH - 0.6,
+        fontSize: 11, color: virgilTheme.bodyText, valign: "top", paraSpaceAfter: 4,
+      }
+    );
+  }
+}
+
+function buildCorpOpPerformanceSlide(pres, agentRaw, goalsRaw, priorAgentRaw, priorGoalsRaw, priorQuarterAgentRaw, priorQuarterGoalsRaw, reportingMonthLabel, scorecardDataUrl, vendorScores, corpPriorMonthAgentRaw, corpPriorMonthGoalsRaw, frameOptions) {
+  const slide = pres.addSlide();
+  slide.background = { color: virgilTheme.slideBg };
+  virgilSlideFrame(pres, slide, {
+    eyebrow: "OPERATIONAL PERFORMANCE",
+    title: `All-in Attainment — ${reportingMonthLabel}`,
+    categoryLabel: "OPERATIONS",
+    reportingMonthLabel: (frameOptions && frameOptions.reportingMonthLabel) || reportingMonthLabel,
+    pageNumber: (frameOptions || {}).pageNumber,
+    gcsLogoDataUrl: (frameOptions || {}).gcsLogoDataUrl,
+  });
+
+  // Time periods: Q4 / (R-2) / (R-1) / R as MTD
+  const prior1 = getPriorMonthLabel(reportingMonthLabel);   // R-1
+  const prior2 = getPriorMonthLabel(prior1);                 // R-2
+  const yrMatch = String(reportingMonthLabel || "").trim().match(/^([A-Za-z]{3,})\s*'?(\d{2,4})$/);
+  const reportYear = yrMatch ? Number(yrMatch[2].length === 4 ? yrMatch[2] : `20${yrMatch[2]}`) : new Date().getFullYear();
+  const q4Label = `Q4 ${reportYear - 1}`;
+
+  // Compute all 4 periods
+  // Q4 file is already quarter-scoped (fiscal months, Sep 22 - Dec 21).
+  // Pass null filters to include every row without date restriction.
+  // XI/XM: exclude Cox (GS*) only — keep GLB (XMC) since it contributes to XM attainment
+  const excludeCox = (roc) => !String(roc || "").toUpperCase().startsWith("GS");
+  const q4 = computeCorpAttainment(priorQuarterAgentRaw, priorQuarterGoalsRaw, null, null, excludeCox, excludeCox);
+  const colP2 = computeCorpAttainment(corpPriorMonthAgentRaw, corpPriorMonthGoalsRaw,
+    makeMonthFilter(prior2), makeGoalsMonthFilter(prior2), excludeCox, excludeCox);
+  const colP1 = computeCorpAttainment(priorAgentRaw, priorGoalsRaw,
+    makeMonthFilter(prior1), makeGoalsMonthFilter(prior1), excludeCox, excludeCox);
+  const colMtd = computeCorpAttainment(agentRaw, goalsRaw,
+    makeMonthFilter(reportingMonthLabel), makeGoalsMonthFilter(reportingMonthLabel), excludeCox, excludeCox);
+
+  // SPH-only computations excluding GLB-prefix ROCs (Add XMC campaigns)
+  // Exclude GLB (XMC) and GS* (Cox) — keep only GL-prefixed Xfinity campaigns (except GLB)
+  const excludeGLB = (roc) => {
+    const r = String(roc || "").toUpperCase();
+    return !r.startsWith("GLB") && !r.startsWith("GS");
+  };
+  const q4Sph = computeCorpAttainment(priorQuarterAgentRaw, priorQuarterGoalsRaw, null, null, excludeGLB, excludeGLB);
+  const p2Sph = computeCorpAttainment(corpPriorMonthAgentRaw, corpPriorMonthGoalsRaw, makeMonthFilter(prior2), makeGoalsMonthFilter(prior2), excludeGLB, excludeGLB);
+  const p1Sph = computeCorpAttainment(priorAgentRaw, priorGoalsRaw, makeMonthFilter(prior1), makeGoalsMonthFilter(prior1), excludeGLB, excludeGLB);
+  const mtdSph = computeCorpAttainment(agentRaw, goalsRaw, makeMonthFilter(reportingMonthLabel), makeGoalsMonthFilter(reportingMonthLabel), excludeGLB, excludeGLB);
+
+  // Colors
+  const barCol = corpPalette.navy;       // navy for first 3
+  const barColMtd = corpPalette.purple;  // purple for MTD
+  const goalCol = corpPalette.green;     // green goal line
+  const plotBg = "FAFAFA";
+  const plotBorder = "E5E7EB";
+  const labels = [q4Label, prior2, prior1, `${reportingMonthLabel} MTD`];
+  const fmtPctCapped = v => `${Math.min(125, Math.round(v * 100))}%`;
+
+  // Chart-drawing helper
+  const drawChart = (x, y, w, h, title, values, format, goals, yFormat, fixedNiceMax) => {
+    // Title
+    slide.addText(title, {
+      x, y: y + 0.08, w, h: 0.3,
+      fontSize: 12, color: virgilTheme.bodyText, bold: true, align: "center",
+    });
+    // Plot area (now has room on the left for Y-axis labels)
+    const yAxisW = 0.55;
+    const axisX = x + 0.4 + yAxisW;
+    const axisY = y + 0.4;
+    const axisW = w - 0.55 - yAxisW;
+    const axisH = h - 0.9;
+    // Scale
+    const presentVals = values.filter(v => v !== null && v !== undefined && !isNaN(v));
+    const presentGoals = (goals || []).filter(v => v !== null && v !== undefined && !isNaN(v));
+    const effMax = Math.max(...presentVals, ...presentGoals, 0.001);
+    // Round up to a "clean" scale max, OR use a fixed cap if caller provided one
+    const niceMax = fixedNiceMax != null ? fixedNiceMax : (() => {
+      if (effMax <= 0.12) return Math.ceil(effMax / 0.02) * 0.02;
+      if (effMax <= 1.0) return Math.ceil(effMax / 0.1) * 0.1;
+      if (effMax <= 10) return Math.ceil(effMax / 1) * 1;
+      if (effMax <= 100) return Math.ceil(effMax / 10) * 10;
+      if (effMax <= 500) return Math.ceil(effMax / 50) * 50;
+      return Math.ceil(effMax / 100) * 100;
+    })();
+    const scaleMax = fixedNiceMax != null ? niceMax : niceMax * 1.15;
+    // Clamp values to scaleMax so bars don't overflow the plot area
+    const clampToScale = (v) => Math.min(v, scaleMax);
+    const valToY = (v) => axisY + axisH - (Math.max(0, clampToScale(v)) / scaleMax) * axisH;
+    // Y-axis tick labels + gridlines
+    const numTicks = 7;
+    for (let i = 0; i <= numTicks; i++) {
+      const t = (i / numTicks) * niceMax;
+      const ty = valToY(t);
+      // Gridline
+      slide.addShape("line", {
+        x: axisX, y: ty, w: axisW, h: 0,
+        line: { color: "F3F4F6", width: 0.5 },
+      });
+      // Label
+      slide.addText(yFormat(t), {
+        x: x + 0.1, y: ty - 0.1, w: yAxisW + 0.25, h: 0.2,
+        fontSize: 7, color: virgilTheme.subtle, align: "right",
+      });
+    }
+    // Bars
+    const barW = axisW * 0.16;
+    const slotW = axisW / values.length;
+    values.forEach((v, i) => {
+      if (v === null || v === undefined || isNaN(v)) return;
+      const barX = axisX + slotW * i + (slotW - barW) / 2;
+      const barY = valToY(v);
+      const barH = axisY + axisH - barY;
+      const color = i === values.length - 1 ? barColMtd : barCol;
+      slide.addShape("rect", {
+        x: barX, y: barY, w: barW, h: barH,
+        fill: { color },
+      });
+      slide.addText(format(v), {
+        x: barX - 0.1, y: barY + 0.05, w: barW + 0.2, h: 0.25,
+        fontSize: 9, color: "FFFFFF", bold: true, align: "center",
+      });
+    });
+    // X-axis labels
+    labels.forEach((lbl, i) => {
+      const lblX = axisX + slotW * i;
+      slide.addText(lbl, {
+        x: lblX, y: axisY + axisH + 0.05, w: slotW, h: 0.22,
+        fontSize: 8, color: virgilTheme.subtle, align: "center",
+      });
+    });
+    // Goal line — connect bar-center points across the chart, drawn AFTER bars.
+    // Lines that go upward have negative dy; we use flipV to avoid negative h in XML.
+    if (goals && goals.length === values.length) {
+      const goalSlotW = axisW / values.length;
+      const points = goals.map((g, i) => {
+        if (g === null || g === undefined || isNaN(g)) return null;
+        return { x: axisX + goalSlotW * i + goalSlotW / 2, y: valToY(g) };
+      });
+      // Leading tail from plot's left edge to first point
+      const firstIdx = points.findIndex(p => p !== null);
+      if (firstIdx >= 0) {
+        const p = points[firstIdx];
+        slide.addShape("line", {
+          x: axisX + goalSlotW * firstIdx, y: p.y, w: goalSlotW / 2, h: 0,
+          line: { color: goalCol, width: 1.5, dashType: "dash" },
+        });
+      }
+      // Connecting segments between consecutive points
+      for (let i = 0; i < points.length - 1; i++) {
+        const p1 = points[i], p2 = points[i + 1];
+        if (!p1 || !p2) continue;
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        if (dx <= 0) continue;
+        if (dy >= 0) {
+          // Downward slope — use positive h directly
+          slide.addShape("line", {
+            x: p1.x, y: p1.y, w: dx, h: dy,
+            line: { color: goalCol, width: 1.5, dashType: "dash" },
+          });
+        } else {
+          // Upward slope — flip vertically to keep h positive
+          slide.addShape("line", {
+            x: p1.x, y: p2.y, w: dx, h: -dy,
+            line: { color: goalCol, width: 1.5, dashType: "dash" },
+            flipV: true,
+          });
+        }
+      }
+      // Trailing tail from last point to plot's right edge
+      let lastIdx = -1;
+      for (let i = points.length - 1; i >= 0; i--) {
+        if (points[i]) { lastIdx = i; break; }
+      }
+      if (lastIdx >= 0) {
+        const p = points[lastIdx];
+        slide.addShape("line", {
+          x: p.x, y: p.y, w: goalSlotW / 2, h: 0,
+          line: { color: goalCol, width: 1.5, dashType: "dash" },
+        });
+      }
+    }
+  };
+
+  // Top row — 3 charts
+  const topY = 1.35;
+  const chartH = 2.4;
+  const chartW = 4.1;
+  const col1X = 0.5;
+  const col2X = 4.7;
+  const col3X = 8.9;
+
+  // XI
+  drawCorpCard(slide, col1X, topY, chartW, chartH);
+  drawChart(col1X, topY, chartW, chartH, "XI Attainment",
+    [q4.xiPct, colP2.xiPct, colP1.xiPct, colMtd.xiPct].map(v => v || 0),
+    fmtPctCapped,
+    [1.0, 1.0, 1.0, 1.0],
+    v => `${(v * 100).toFixed(0)}%`,
+    1.2);
+
+  // XM
+  drawCorpCard(slide, col2X, topY, chartW, chartH);
+  drawChart(col2X, topY, chartW, chartH, "XM Attainment",
+    [q4.xmPct, colP2.xmPct, colP1.xmPct, colMtd.xmPct].map(v => v || 0),
+    fmtPctCapped,
+    [1.0, 1.0, 1.0, 1.0],
+    v => `${(v * 100).toFixed(0)}%`,
+    1.2);
+  // SPH — per-period plan SPH goal line (excluding GLB)
+  drawCorpCard(slide, col3X, topY, chartW, chartH);
+  drawChart(col3X, topY, chartW, chartH, "SPH Attainment",
+    [q4Sph.sph, p2Sph.sph, p1Sph.sph, mtdSph.sph],
+    v => v.toFixed(2),
+    [q4Sph.planSph, p2Sph.planSph, p1Sph.planSph, mtdSph.planSph],
+    v => v.toFixed(2));
+
+  // Bottom row — 3 panels (CPS, Scorecard, Insights)
+  const botY = 4.0;
+  const botH = 2.4;
+
+  drawCorpCard(slide, col1X, botY, chartW, botH);
+  drawChart(col1X, botY, chartW, botH, "CPS Attainment",
+    [q4Sph.cps, p2Sph.cps, p1Sph.cps, mtdSph.cps],
+    v => `$${v.toFixed(0)}`,
+    [q4Sph.planCps, p2Sph.planCps, p1Sph.planCps, mtdSph.planCps],
+    v => `$${v.toFixed(0)}`);
+
+  // Scorecard by BP (4-bar chart from manual vendor scores)
+  const vendors = ["Results", "GTCX", "GCS", "Avantive"];
+  const vendorVals = vendors.map(v => {
+    const n = Number((vendorScores || {})[v]);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  });
+  {
+    const x = col2X, y = botY, w = chartW, h = botH;
+    const title = "Scorecard by BP";
+    drawCorpCard(slide, x, y, w, h);
+    slide.addText(title, {
+      x, y: y + 0.08, w, h: 0.3,
+      fontSize: 12, color: virgilTheme.bodyText, bold: true, align: "center",
+    });
+    const axisX = x + 0.35;
+    const axisY = y + 0.4;
+    const axisW = w - 0.5;
+    const axisH = h - 0.9;
+    const present = vendorVals.filter(v => v > 0);
+    const effMax = Math.max(...present, 0.001);
+    const scaleMax = effMax * 1.15;
+    const barW = axisW * 0.16;
+    const slotW = axisW / vendorVals.length;
+    vendorVals.forEach((v, i) => {
+      if (!v) return;
+      const barX = axisX + slotW * i + (slotW - barW) / 2;
+      const barY = axisY + axisH - (v / scaleMax) * axisH;
+      const h2 = axisY + axisH - barY;
+      const color = vendors[i] === "GCS" ? barColMtd : barCol;
+      slide.addShape("rect", {
+        x: barX, y: barY, w: barW, h: h2,
+        fill: { color },
+      });
+      slide.addText(v.toFixed(3), {
+        x: barX - 0.1, y: barY + 0.05, w: barW + 0.2, h: 0.25,
+        fontSize: 9, color: "FFFFFF", bold: true, align: "center",
+      });
+    });
+    vendors.forEach((lbl, i) => {
+      const lblX = axisX + slotW * i;
+      slide.addText(lbl, {
+        x: lblX, y: axisY + axisH + 0.05, w: slotW, h: 0.22,
+        fontSize: 8, color: virgilTheme.subtle, align: "center",
+      });
+    });
+  }
+
+  // Insights panel (right)
+  const insX = col3X;
+  drawCorpCard(slide, insX, botY, chartW, botH);
+  slide.addShape("rect", {
+    x: insX, y: botY + 0.05, w: chartW, h: 0.4,
+    fill: { color: corpPalette.navy },
+  });
+  slide.addText("Insights", {
+    x: insX, y: botY + 0.08, w: chartW, h: 0.35,
+    fontSize: 14, color: "FFFFFF", bold: true, align: "center",
+  });
+  slide.addText("Provide insights in the export modal", {
+    x: insX + 0.2, y: botY + 0.55, w: chartW - 0.4, h: botH - 0.6,
+    fontSize: 11, color: virgilTheme.subtle, italic: true, valign: "top",
+  });
+
+  // Footer legend
+  const legY = 6.55;
+  slide.addShape("rect", { x: 4.2, y: legY + 0.05, w: 0.25, h: 0.15, fill: { color: barCol } });
+  slide.addText("Company", { x: 4.5, y: legY, w: 1.0, h: 0.25, fontSize: 10, color: virgilTheme.bodyText });
+  slide.addText("---  Goal", { x: 5.6, y: legY, w: 1.0, h: 0.25, fontSize: 10, color: goalCol, italic: true });
+  slide.addShape("rect", { x: 6.7, y: legY + 0.05, w: 0.25, h: 0.15, fill: { color: barColMtd } });
+  slide.addText("MTD", { x: 7.0, y: legY, w: 1.0, h: 0.25, fontSize: 10, color: virgilTheme.bodyText });
+}
+
+function buildCorpQuartileSlide(pres, agentRaw, goalsRaw, priorAgentRaw, priorGoalsRaw, newHiresRaw, reportingMonthLabel, frameOptions) {
+  const slide = pres.addSlide();
+  slide.background = { color: virgilTheme.slideBg };
+  virgilSlideFrame(pres, slide, {
+    eyebrow: "OPERATIONAL PERFORMANCE",
+    title: `Quartile Reporting — ${reportingMonthLabel}`,
+    categoryLabel: "OPERATIONS",
+    reportingMonthLabel: (frameOptions && frameOptions.reportingMonthLabel) || reportingMonthLabel,
+    pageNumber: (frameOptions || {}).pageNumber,
+    gcsLogoDataUrl: (frameOptions || {}).gcsLogoDataUrl,
+  });
+
+  const reportingPeriodLabel = getPriorMonthLabel(reportingMonthLabel);
+  const mtdLabel = reportingMonthLabel;
+  // Reporting month (Mar) data lives in priorAgentRaw/priorGoalsRaw; MTD (Apr) in agentRaw/goalsRaw
+  const reporting = buildQuartileReport(priorAgentRaw, priorGoalsRaw, newHiresRaw,
+    makeMonthFilter(reportingPeriodLabel), endOfMonthDate(reportingPeriodLabel));
+  const mtd = buildQuartileReport(agentRaw, goalsRaw, newHiresRaw,
+    makeMonthFilter(mtdLabel), new Date());
+
+  const colW = 6.25;
+  const col1X = 0.5;
+  const col2X = 6.9;
+
+  const drawQuartileColumn = (xBase, header, report) => {
+    slide.addText(header, {
+      x: xBase, y: 1.02, w: colW, h: 0.3,
+      fontSize: 13, color: virgilTheme.eyebrow, bold: true,
+    });
+    if (!report || !report.xm) {
+      slide.addText("No data", {
+        x: xBase, y: 1.6, w: colW, h: 0.3,
+        fontSize: 11, color: virgilTheme.subtle, italic: true,
+      });
+      return;
+    }
+    const drawSection = (y, label, section) => {
+      drawCorpCard(slide, xBase - 0.02, y - 0.1, colW + 0.04, 2.75);
+      slide.addText(label, {
+        x: xBase, y, w: colW, h: 0.25,
+        fontSize: 11, color: virgilTheme.bodyText, bold: true,
+      });
+      if (!section || !section.quartileSummary || section.quartileSummary.length === 0) {
+        slide.addText("(no data)", {
+          x: xBase, y: y + 0.25, w: colW, h: 0.25,
+          fontSize: 9, color: virgilTheme.subtle, italic: true,
+        });
+        return;
+      }
+      const qColors = [corpPalette.q1, corpPalette.q2, corpPalette.q3, corpPalette.q4];
+      const summaryRows = [
+        [{ text: "Q", options: { bold: true, align: "center", fill: { color: "F3F4F6" } } },
+         { text: "Units", options: { bold: true, align: "center", fill: { color: "F3F4F6" } } },
+         { text: "% to Goal", options: { bold: true, align: "center", fill: { color: "F3F4F6" } } }],
+        ...section.quartileSummary.map((q, i) => ([
+          { text: String(q.quartile), options: { align: "center", fill: { color: qColors[i] }, color: "FFFFFF", bold: true } },
+          { text: String(q.units), options: { align: "center" } },
+          { text: `${(q.pctToGoal * 100).toFixed(1)}%`, options: { align: "center" } },
+        ])),
+      ];
+      slide.addTable(summaryRows, {
+        x: xBase, y: y + 0.25, w: 2.6,
+        colW: [0.5, 1.0, 1.1],
+        rowH: 0.28,
+        fontSize: 9,
+        border: { type: "solid", pt: 0.5, color: "D1D5DB" },
+        autoPage: false,
+      });
+
+      const matrixRows = [
+        [
+          { text: "Tenure", options: { bold: true, align: "center", fill: { color: "F3F4F6" } } },
+          { text: "A", options: { bold: true, align: "center", fill: { color: corpPalette.q1 }, color: "FFFFFF" } },
+          { text: "B", options: { bold: true, align: "center", fill: { color: corpPalette.q2 }, color: "FFFFFF" } },
+          { text: "C", options: { bold: true, align: "center", fill: { color: corpPalette.q3 }, color: "FFFFFF" } },
+          { text: "D", options: { bold: true, align: "center", fill: { color: corpPalette.q4 }, color: "FFFFFF" } },
+          { text: "Part %", options: { bold: true, align: "center", fill: { color: "F3F4F6" } } },
+        ],
+        ...section.tenureMatrix.map(row => {
+          const totalFill = row.isTotal ? { fill: { color: "F3F4F6" } } : {};
+          return [
+            { text: row.label, options: { bold: true, align: "center", ...totalFill } },
+            { text: String(row.A), options: { align: "center", bold: !!row.isTotal, ...totalFill } },
+            { text: String(row.B), options: { align: "center", bold: !!row.isTotal, ...totalFill } },
+            { text: String(row.C), options: { align: "center", bold: !!row.isTotal, ...totalFill } },
+            { text: String(row.D), options: { align: "center", bold: !!row.isTotal, ...totalFill } },
+            { text: `${(row.participation * 100).toFixed(1)}%`, options: { align: "center", bold: !!row.isTotal, ...totalFill } },
+          ];
+        }),
+      ];
+      slide.addTable(matrixRows, {
+        x: xBase + 2.7, y: y + 0.25, w: 3.5,
+        colW: [0.75, 0.45, 0.45, 0.45, 0.45, 0.95],
+        rowH: 0.24,
+        fontSize: 8,
+        border: { type: "solid", pt: 0.5, color: "D1D5DB" },
+        autoPage: false,
+      });
+    };
+
+    drawSection(1.40, "XM Participation (GLU)", report.xm);
+    drawSection(4.15, "XI Participation (GLN)", report.xi);
+  };
+
+  drawQuartileColumn(col1X, `Month Reporting On — ${reportingPeriodLabel}`, reporting);
+  drawQuartileColumn(col2X, `MTD — ${mtdLabel}`, mtd);
+
+  slide.addText("All dispersions include only agents with 8+ hours logged.", {
+    x: 10, y: 6.89, w: 3.25, h: 0.27,
+    fontSize: 6, color: "9CA3AF", italic: true, align: "right",
+  });
+
+  // Dividers — vertical between columns, horizontal between XM and XI within each column
+  const dividerColor = corpPalette.navy;
+  // Vertical divider (between the two columns)
+  slide.addShape("line", {
+    x: (col1X + colW + col2X) / 2, y: 1.4, w: 0, h: 5.85,
+    line: { color: dividerColor, width: 1 },
+  });
+  // Horizontal divider in left column (between XM and XI sections)
+  slide.addShape("line", {
+    x: col1X, y: 4.375, w: colW, h: 0,
+    line: { color: dividerColor, width: 1 },
+  });
+  // Horizontal divider in right column
+  slide.addShape("line", {
+    x: col2X, y: 4.375, w: colW, h: 0,
+    line: { color: dividerColor, width: 1 },
+  });
+}
+
+function buildCorpCampaignHoursSlide(pres, agentRaw, goalsRaw, priorAgentRaw, priorGoalsRaw, reportingMonthLabel, corpPriorMonthAgentRaw, corpPriorMonthGoalsRaw, frameOptions) {
+  const slide = pres.addSlide();
+  slide.background = { color: virgilTheme.slideBg };
+  virgilSlideFrame(pres, slide, {
+    eyebrow: "OPERATIONAL PERFORMANCE",
+    title: `Campaign Hours — ${reportingMonthLabel}`,
+    categoryLabel: "OPERATIONS",
+    reportingMonthLabel: (frameOptions && frameOptions.reportingMonthLabel) || reportingMonthLabel,
+    pageNumber: (frameOptions || {}).pageNumber,
+    gcsLogoDataUrl: (frameOptions || {}).gcsLogoDataUrl,
+  });
+
+  const reportingPeriodLabel = getPriorMonthLabel(reportingMonthLabel); // Current − 1 (e.g., Mar)
+  const mtdLabel = reportingMonthLabel; // Current fiscal (e.g., Apr)
+  const reporting = buildCampaignHoursByFunding(priorAgentRaw, priorGoalsRaw, makeMonthFilter(reportingPeriodLabel));
+  const mtd = buildCampaignHoursByFunding(agentRaw, goalsRaw, makeMonthFilter(mtdLabel));
+
+  const fundingOrder = ["Growth", "National", "HQ", "Marketing"];
+  const fundingColors = {
+    Growth: corpPalette.fundGrowth,
+    National: corpPalette.fundNational,
+    HQ: corpPalette.fundHQ,
+    Marketing: corpPalette.fundMarketing,
+    Total: corpPalette.fundTotal,
+  };
+
+  // Full month names
+  const monFull = (label) => {
+    if (!label) return "";
+    const m = String(label).trim().match(/^([A-Za-z]{3,})/);
+    const full = { jan:"January", feb:"February", mar:"March", apr:"April", may:"May", jun:"June", jul:"July", aug:"August", sep:"September", oct:"October", nov:"November", dec:"December" };
+    return m ? (full[m[1].slice(0, 3).toLowerCase()] || m[1]) : label;
+  };
+
+  // Fiscal-month bounds for pacing calc (22nd of prior → 21st of current)
+  const fiscalBounds = (label) => {
+    const m = String(label || "").trim().match(/^([A-Za-z]{3,})\s*'?(\d{2,4})$/);
+    if (!m) return null;
+    const mon = m[1].slice(0, 3).toLowerCase();
+    const monIdx = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12 }[mon];
+    const yr = Number(m[2].length === 4 ? m[2] : `20${m[2]}`);
+    if (!monIdx) return null;
+    let startYr = yr, startMon = monIdx - 1;
+    if (startMon === 0) { startMon = 12; startYr = yr - 1; }
+    return { start: new Date(startYr, startMon - 1, 22), end: new Date(yr, monIdx - 1, 21) };
+  };
+  const drawMonthBlock = (yTop, label, data, isMtd) => {
+    const blockH = 1.85;
+    const containerX = 0.5;
+    const containerW = 12.3;
+    // Rounded container
+    slide.addShape("roundRect", {
+      x: containerX, y: yTop, w: containerW, h: blockH,
+      fill: { color: corpPalette.surface }, line: { color: corpPalette.cardBorder, width: 1 },
+      rectRadius: 0.12,
+    });
+    // Header
+    slide.addText(`Total ${monFull(label)} Monthly Budgeted Hours = ${Math.round(data.totalPlan).toLocaleString()}`, {
+      x: containerX, y: yTop + 0.02, w: containerW, h: 0.3,
+      fontSize: 12, color: virgilTheme.bodyText, bold: true, align: "center",
+    });
+    // Legend
+    const legendY = yTop + 0.4;
+    const buckets = [...fundingOrder, "Total"];
+    const barsStartX = containerX + 1.3;
+    const barsTotalW = containerW - 1.5;
+    const barSlotW = barsTotalW / buckets.length;
+    buckets.forEach((f, i) => {
+      const slotX = barsStartX + i * barSlotW;
+      slide.addShape("rect", {
+        x: slotX + 0.1, y: legendY, w: 0.2, h: 0.18,
+        fill: { color: fundingColors[f] },
+      });
+      slide.addText(f === "Total" ? "Total" : `${f} Funding`, {
+        x: slotX + 0.35, y: legendY - 0.03, w: barSlotW - 0.4, h: 0.25,
+        fontSize: 10, color: corpPalette.ink,
+      });
+    });
+    // Bars section
+    const barsLabelX = containerX + 0.1;
+    const barsLabelW = 1.1;
+    const barW = barsTotalW / buckets.length;
+    const barGap = 0.05;
+    // Row 1: % to Hours Goal
+    const row1Y = yTop + 0.85;
+    slide.addText("% to Hours Goal", {
+      x: barsLabelX, y: row1Y + 0.05, w: barsLabelW, h: 0.3,
+      fontSize: 9, color: virgilTheme.subtle,
+    });
+    // For MTD month, project actuals to full-month run rate before computing %
+    let paceFactor = 1;
+    if (isMtd) {
+      const b = fiscalBounds(label);
+      if (b) {
+        // Count business days (Mon-Fri) — Comcast paces on business days only
+        const bizDaysBetween = (start, end) => {
+          const s = new Date(start); s.setHours(0, 0, 0, 0);
+          const e = new Date(end); e.setHours(0, 0, 0, 0);
+          if (s > e) return 0;
+          let count = 0;
+          const d = new Date(s);
+          while (d <= e) {
+            const dow = d.getDay();
+            if (dow !== 0 && dow !== 6) count++;
+            d.setDate(d.getDate() + 1);
+          }
+          return count;
+        };
+        const totalBiz = Math.max(1, bizDaysBetween(b.start, b.end));
+        const now = new Date();
+        const effectiveEnd = now < b.start ? b.start : (now > b.end ? b.end : now);
+        const elapsedBiz = Math.max(1, bizDaysBetween(b.start, effectiveEnd));
+        paceFactor = totalBiz / elapsedBiz;
+      }
+    }
+    buckets.forEach((f, i) => {
+      const bx = barsStartX + i * barW + barGap / 2;
+      const bw = barW - barGap;
+      const seg = f === "Total"
+        ? { plan: data.totalPlan, actual: data.totalActual }
+        : (data.byFunding[f] || { plan: 0, actual: 0 });
+      const projectedActual = seg.actual * paceFactor;
+      const pct = seg.plan > 0 ? (projectedActual / seg.plan) * 100 : 0;
+      slide.addShape("rect", {
+        x: bx, y: row1Y, w: bw, h: 0.32,
+        fill: { color: fundingColors[f] },
+      });
+      if (seg.plan > 0) {
+        slide.addText(`${pct.toFixed(0)}%`, {
+          x: bx, y: row1Y + 0.05, w: bw, h: 0.3,
+          fontSize: 10, color: "FFFFFF", bold: true, align: "center",
+        });
+      }
+    });
+    // Row 2: Hours Actual
+    const row2Y = yTop + 1.35;
+    slide.addText("Hours Actual", {
+      x: barsLabelX, y: row2Y + 0.05, w: barsLabelW, h: 0.3,
+      fontSize: 9, color: virgilTheme.subtle,
+    });
+    buckets.forEach((f, i) => {
+      const bx = barsStartX + i * barW + barGap / 2;
+      const bw = barW - barGap;
+      const seg = f === "Total"
+        ? { plan: data.totalPlan, actual: data.totalActual }
+        : (data.byFunding[f] || { plan: 0, actual: 0 });
+      slide.addShape("rect", {
+        x: bx, y: row2Y, w: bw, h: 0.32,
+        fill: { color: fundingColors[f] },
+      });
+      if (seg.actual > 0) {
+        slide.addText(Math.round(seg.actual).toLocaleString(), {
+          x: bx, y: row2Y + 0.05, w: bw, h: 0.3,
+          fontSize: 10, color: "FFFFFF", bold: true, align: "center",
+        });
+      }
+    });
+  };
+
+  drawMonthBlock(1.25, reportingPeriodLabel, reporting, false);
+  drawMonthBlock(3.2, mtdLabel, mtd, true);
+
+  // Bottom: Campaign Outlook / Base Management breakout
+  const breakoutY = 5.1;
+  // Section labels with dividing line (matches reference)
+  slide.addText("Campaign Outlook", {
+    x: 0.5, y: breakoutY, w: 2.95, h: 0.22,
+    fontSize: 11, color: corpPalette.navy, bold: true, align: "center",
+  });
+  slide.addText("Base Management", {
+    x: 5.4, y: breakoutY, w: 5.4, h: 0.22,
+    fontSize: 11, color: corpPalette.navy, bold: true, align: "center",
+  });
+  // Horizontal line below the labels spanning the full slide width
+  slide.addShape("line", {
+    x: 0.5, y: breakoutY + 0.26, w: 12.3, h: 0,
+    line: { color: corpPalette.ink, width: 1 },
+  });
+  // Pills (bucket headers)
+  const pillY = breakoutY + 0.38;
+  const pillH = 0.4;
+  const drawPill = (x, w, label, color) => {
+    slide.addShape("roundRect", {
+      x, y: pillY, w, h: pillH,
+      fill: { color }, line: { color, width: 0 },
+      rectRadius: 0.2,
+    });
+    slide.addText(label, {
+      x, y: pillY + 0.03, w, h: pillH - 0.06,
+      fontSize: 12, color: "FFFFFF", bold: true, align: "center",
+    });
+  };
+  const drawCampaignList = (x, w, funding, campaigns) => {
+    // Deduplicate by (name + roc) — sometimes campaign name repeats across sites
+    const seen = {};
+    const byFund = campaigns.filter(c => c.funding === funding);
+    for (const c of byFund) {
+      const key = c.name;
+      if (!seen[key]) seen[key] = { name: c.name, hours: 0 };
+      seen[key].hours += c.hoursActual;
+    }
+    const rows = Object.values(seen).sort((a, b) => b.hours - a.hours).slice(0, 4);
+    if (rows.length === 0) {
+      slide.addText("(no data)", {
+        x, y: pillY + pillH + 0.1, w, h: 1.2,
+        fontSize: 9, color: corpPalette.inkSubtle, italic: true, valign: "top",
+      });
+      return;
+    }
+    const bulletItems = rows.map((r, i) => ({
+      text: `${r.name} - ${Math.round(r.hours).toLocaleString()} hrs`,
+      options: { bullet: { code: "2022" }, breakLine: i < rows.length - 1 },
+    }));
+    slide.addText(bulletItems, {
+      x: x + 0.05, y: pillY + pillH + 0.1, w: w - 0.05, h: 1.45,
+      fontSize: 10, color: corpPalette.ink, valign: "top", paraSpaceAfter: 4,
+    });
+  };
+  // Campaign Outlook = Growth Funded only
+  // 4 equal-width pills across the slide: Growth, HQ, Marketing, National
+  const pillsCols = [
+    { funding: "Growth",    label: "Growth Funded",    x: 0.5 },
+    { funding: "HQ",        label: "HQ Funded",        x: 3.6 },
+    { funding: "Marketing", label: "Marketing Funded", x: 6.7 },
+    { funding: "National",  label: "National Funded",  x: 9.8 },
+  ];
+  const pillW = 2.95;
+  pillsCols.forEach(col => {
+    drawPill(col.x, pillW, col.label, fundingColors[col.funding]);
+    drawCampaignList(col.x + 0.1, pillW - 0.2, col.funding, reporting.campaigns);
+  });
+  // (Legacy bmCols block below is unreachable; kept for removal)
+}
+
+// Format a single (campaign × month) detail object into the 6-column table rows for the Campaign Slides.
+// Returns an array of pptxgenjs table rows including a header row.
+// Each row has 6 cells: [ROW LABEL, GOALS, BUDGET, ACTUAL, VARIANCE, % GOAL].
+// For derived ratio rows (CPS, SPH, etc.) and "Total Leads"-style rows, the GOALS / BUDGET / VARIANCE / % GOAL cells are blank — only ACTUAL has data (per spec §6.6).
+// Render a single per-campaign slide for the Campaign Slides fan-out.
+// Two columns (PREVIOUS MONTH | MONTH OF DISCUSSION); each column has three stacked tables.
+function buildCorpCampaignDetailSlide(pres, campaign, detailPrior, detailReporting, priorMonthLabel, reportingMonthLabel, notes, frameOptions) {
+  const slide = pres.addSlide();
+  slide.background = { color: virgilTheme.slideBg };
+  const categoryLabel = (campaign.category || "OPERATIONAL PERFORMANCE").toUpperCase();
+  virgilSlideFrame(pres, slide, {
+    eyebrow: "OPERATIONAL PERFORMANCE",
+    title: `Actual to Goal – ${campaign.name}`,
+    categoryLabel,
+    reportingMonthLabel: (frameOptions && frameOptions.reportingMonthLabel) || reportingMonthLabel,
+    pageNumber: (frameOptions || {}).pageNumber,
+    gcsLogoDataUrl: (frameOptions || {}).gcsLogoDataUrl,
+  });
+
+  // Column sub-titles
+  slide.addText("PREVIOUS MONTH", {
+    x: 0.5, y: 1.12, w: 6, h: 0.25,
+    fontSize: 9, color: virgilTheme.subtle, bold: true, align: "center", charSpacing: 2,
+  });
+  slide.addText("MONTH OF DISCUSSION", {
+    x: 6.8, y: 1.12, w: 6, h: 0.25,
+    fontSize: 9, color: virgilTheme.subtle, bold: true, align: "center", charSpacing: 2,
+  });
+
+  // Render the three tables for each column
+  renderCorpCampaignColumn(slide, 0.5, 1.35, detailPrior, priorMonthLabel);
+  renderCorpCampaignColumn(slide, 6.8, 1.35, detailReporting, reportingMonthLabel);
+
+}
+
+// Renders the three stacked tables (Volume / Cost-Efficiency / Leads-Extended) for one column.
+function renderCorpCampaignColumn(slide, x, y, detail, columnLabel) {
+  const tableW = 6.0;
+  const colW = [1.55, 0.89, 0.89, 0.89, 0.89, 0.89]; // 6 cols: Label | Goals | Budget | Actual | Variance | % Goal
+  const rowH = 0.235;
+
+  const hdrBase = { fill: { color: corpPalette.purple }, color: "FFFFFF", bold: true, align: "center", fontSize: 9 };
+  const labelBase = { bold: true, color: corpPalette.ink, fontSize: 8, align: "left" };
+  const mkCell = (text, ri, align = "center") => ({
+    text: text || "",
+    options: { fontSize: 8, color: corpPalette.ink, align, fill: { color: ri % 2 === 1 ? "F5F5FA" : "FFFFFF" } },
+  });
+  const mkLabel = (text, ri) => ({
+    text, options: { ...labelBase, fill: { color: ri % 2 === 1 ? "F5F5FA" : "FFFFFF" } },
+  });
+
+  // Formatters
+  const fmtInt = n => (n === null || n === undefined || Number.isNaN(n)) ? "" : Math.round(n).toLocaleString();
+  const fmtIntSigned = n => (n === null || n === undefined || Number.isNaN(n) || n === 0) ? "" : `${n > 0 ? "+" : ""}${Math.round(n).toLocaleString()}`;
+  const fmtMoney = n => (n === null || n === undefined || Number.isNaN(n)) ? "" : `$${Math.round(n).toLocaleString()}`;
+  const fmtMoneySigned = n => (n === null || n === undefined || Number.isNaN(n) || n === 0) ? "" : `${n > 0 ? "+" : "-"}$${Math.round(Math.abs(n)).toLocaleString()}`;
+  const fmtMoney2 = n => (n === null || n === undefined || Number.isNaN(n)) ? "—" : `$${n.toFixed(2)}`;
+  const fmtRatio = n => (n === null || n === undefined || Number.isNaN(n)) ? "—" : n.toFixed(3);
+  const fmtPct = n => (n === null || n === undefined || Number.isNaN(n)) ? "" : `${(n * 100).toFixed(1)}%`;
+  const pctOf = (act, plan) => (plan > 0 ? act / plan : null);
+
+  // ── Table 1: Volume ──
+  let cy = y;
+  const volHdr = [
+    { text: columnLabel, options: hdrBase },
+    { text: "GOALS", options: hdrBase },
+    { text: "BUDGET", options: hdrBase },
+    { text: "ACTUAL", options: hdrBase },
+    { text: "VARIANCE", options: hdrBase },
+    { text: "% GOAL", options: hdrBase },
+  ];
+  const volRows = [];
+  const pushVol = (ri, label, goalsPct, budgetNum, actualNum, { money = false } = {}) => {
+    const plan = budgetNum;
+    const actual = actualNum;
+    const variance = (plan != null && actual != null) ? actual - plan : null;
+    const pct = pctOf(actual, plan);
+    volRows.push([
+      mkLabel(label, ri),
+      mkCell(goalsPct != null ? fmtPct(goalsPct) : "", ri),
+      mkCell(plan == null ? "" : (money ? fmtMoney(plan) : fmtInt(plan)), ri),
+      mkCell(actual == null ? "" : (money ? fmtMoney(actual) : fmtInt(actual)), ri),
+      mkCell(money ? fmtMoneySigned(variance) : fmtIntSigned(variance), ri),
+      mkCell(pct == null ? "" : fmtPct(pct), ri),
+    ]);
+  };
+  // Top block (no GOALS %)
+  pushVol(0, "BUDGET ($)", null, detail.budgetGoal, detail.budget, { money: true });
+  pushVol(1, "HOURS", null, detail.hoursGoal, detail.hoursActual);
+  pushVol(2, "SALES", null, detail.salesGoal, detail.salesActual);
+  pushVol(3, "RGUs", null, detail.rgusGoal, detail.rgusActual);
+  // Product block (has GOALS % = productGoal / salesGoal)
+  pushVol(4, "HSD RGUs", pctOf(detail.xiGoal, detail.salesGoal), detail.xiGoal, detail.xiActual);
+  pushVol(5, "XM RGUs",  pctOf(detail.xmGoal, detail.salesGoal), detail.xmGoal, detail.xmActual);
+  pushVol(6, "VIDEO RGUs", pctOf(detail.videoGoal, detail.salesGoal), detail.videoGoal, detail.videoActual);
+  pushVol(7, "XH RGUs",  pctOf(detail.xhGoal, detail.salesGoal), detail.xhGoal, detail.xhActual);
+  pushVol(8, "PHONE RGUs", null, detail.phoneGoal, detail.phoneActual);
+
+  slide.addTable([volHdr, ...volRows], {
+    x, y: cy, w: tableW, colW, rowH,
+    border: { type: "solid", pt: 0.5, color: corpPalette.cardBorder },
+    autoPage: false,
+  });
+  cy += rowH * (volRows.length + 1);
+
+  // ── Table 2: Cost & Efficiency ──
+  // 5 cols: Label | Budget | Actual | Variance | % Goal
+  const costColW = [2.44, 0.89, 0.89, 0.89, 0.89]; // aligns Cost/Eff cols with Volume BUDGET/ACTUAL/VAR/%GOAL
+  const costHdr = [
+    { text: "", options: hdrBase },
+    { text: "BUDGET", options: hdrBase },
+    { text: "ACTUAL", options: hdrBase },
+    { text: "VARIANCE", options: hdrBase },
+    { text: "% GOAL", options: hdrBase },
+  ];
+  const costRows = [];
+  // Derived plan values
+  const cpsPlan = (detail.salesGoal > 0) ? (detail.budgetGoal / detail.salesGoal) : null;
+  const cprguPlan = (detail.rgusGoal > 0) ? (detail.budgetGoal / detail.rgusGoal) : null;
+  const cpxiPlan = (detail.xiGoal > 0) ? (detail.budgetGoal / detail.xiGoal) : null;
+  const sphPlan = (detail.hoursGoal > 0) ? (detail.salesGoal / detail.hoursGoal) : null;
+  const rguphPlan = (detail.hoursGoal > 0) ? (detail.rgusGoal / detail.hoursGoal) : null;
+  const rguPerSalePlan = (detail.salesGoal > 0) ? (detail.rgusGoal / detail.salesGoal) : null;
+
+  const pushCostRow = (ri, label, plan, actual, { money = false, inverted = false } = {}) => {
+    // inverted=true → lower is better (cost metrics). % Goal = plan / actual.
+    // Skip row entirely if plan == null AND actual == null/zero
+    if (plan == null && (actual == null || actual === 0)) return;
+    const variance = (plan != null && actual != null) ? actual - plan : null;
+    const pct = (plan != null && actual > 0)
+      ? (inverted ? (plan / actual) : (actual / plan))
+      : null;
+    costRows.push([
+      mkLabel(label, ri),
+      mkCell(plan == null ? "—" : (money ? fmtMoney2(plan) : fmtRatio(plan)), ri),
+      mkCell(actual == null ? "—" : (money ? fmtMoney2(actual) : fmtRatio(actual)), ri),
+      mkCell(variance == null ? "" : (money ? fmtMoneySigned(variance) : (variance === 0 ? "" : `${variance > 0 ? "+" : ""}${variance.toFixed(3)}`)), ri),
+      mkCell(pct == null ? "" : fmtPct(pct), ri),
+    ]);
+  };
+  pushCostRow(0, "CPS", cpsPlan, detail.cps, { money: true, inverted: true });
+  pushCostRow(1, "CPRGU", cprguPlan, detail.cprgu, { money: true, inverted: true });
+  pushCostRow(2, "CPXI", cpxiPlan, (detail.xiActual > 0 ? detail.budget / detail.xiActual : null), { money: true, inverted: true });
+  pushCostRow(3, "SPH", sphPlan, detail.sph);
+  pushCostRow(4, "RGUPH", rguphPlan, detail.rguph);
+  pushCostRow(5, "RGU/HOME", rguPerSalePlan, detail.rguPerSale);
+
+  if (costRows.length > 0) {
+    slide.addTable([costHdr, ...costRows], {
+      x, y: cy, w: tableW, colW: costColW, rowH,
+      border: { type: "solid", pt: 0.5, color: corpPalette.cardBorder },
+      autoPage: false,
+    });
+    cy += rowH * (costRows.length + 1) + 0.12;
+  }
+
+  // ── Table 3: Leads & Extended ──
+  // 2 cols: Label | Value
+  const leadsColW = [3.0, 3.0];
+  const leadsHdr = [
+    { text: "LEADS & EXTENDED", options: hdrBase },
+    { text: "", options: hdrBase },
+  ];
+  const leadsRows = [];
+  const pushLead = (ri, label, val) => {
+    leadsRows.push([
+      mkLabel(label, ri),
+      mkCell(val, ri, "right"),
+    ]);
+  };
+  pushLead(0, "Total Leads", detail.actualLeads ? fmtInt(detail.actualLeads) : "0");
+  pushLead(1, "Sales per 1000 Leads", detail.actualLeads > 0 ? detail.salesPer1000Leads.toFixed(2) : "—");
+  pushLead(2, "% of Total Leads", fmtPct(detail.pctTotalLeads));
+  pushLead(3, "% of Total Hours", fmtPct(detail.pctTotalHours));
+  pushLead(4, "Contact Rate", detail.contactRate === null ? "—" : `${detail.contactRate.toFixed(1)}%`);
+  pushLead(5, "Lead Penetration", detail.leadPenetration === null ? "—" : `${detail.leadPenetration.toFixed(1)}%`);
+
+  // Side-by-side: narrow Leads table on left, Comments box on right
+  const leadsW = 2.1;
+  const commentsX = x + leadsW + 0.15;
+  const commentsW = tableW - leadsW - 0.15;
+  const sectionH = 1.65;
+  slide.addTable([leadsHdr, ...leadsRows], {
+    x, y: cy, w: leadsW, colW: [1.3, 0.8], rowH: 0.235,
+    border: { type: "solid", pt: 0.5, color: corpPalette.cardBorder },
+    autoPage: false,
+  });
+  slide.addShape("rect", {
+    x: commentsX, y: cy, w: commentsW, h: sectionH,
+    fill: { color: corpPalette.muted },
+    line: { color: corpPalette.cardBorder, width: 0.5 },
+  });
+  slide.addText("Comments", {
+    x: commentsX + 0.08, y: cy + 0.04, w: commentsW - 0.16, h: 0.2,
+    fontSize: 9, fontFace: "Segoe UI", color: virgilTheme.eyebrow, bold: true, charSpacing: 1.5,
+  });
+}
+
+function buildCorpTnpsSlide(pres, perf, reportingMonthLabel, insightText, frameOptions) {
+  if (!perf || !perf.tnpsData || perf.tnpsData.length === 0) {
+    // Render an empty placeholder so the slide count is predictable
+    const slide = pres.addSlide();
+    slide.background = { color: virgilTheme.slideBg };
+    virgilSlideFrame(pres, slide, {
+      eyebrow: "CUSTOMER EXPERIENCE",
+      title: `tNPS — ${reportingMonthLabel}`,
+      categoryLabel: "CUSTOMER EXPERIENCE",
+      reportingMonthLabel: (frameOptions && frameOptions.reportingMonthLabel) || reportingMonthLabel,
+      pageNumber: (frameOptions || {}).pageNumber,
+      gcsLogoDataUrl: (frameOptions || {}).gcsLogoDataUrl,
+    });
+    slide.addText("No tNPS data loaded.", {
+      x: 0.5, y: 3.5, w: 12, h: 0.4,
+      fontSize: 14, color: virgilTheme.subtle, italic: true, align: "center",
+    });
+    return;
+  }
+  const slide = pres.addSlide();
+  slide.background = { color: virgilTheme.slideBg };
+  virgilSlideFrame(pres, slide, {
+    eyebrow: "CUSTOMER EXPERIENCE",
+    title: `tNPS — ${reportingMonthLabel}`,
+    categoryLabel: "CUSTOMER EXPERIENCE",
+    reportingMonthLabel: (frameOptions && frameOptions.reportingMonthLabel) || reportingMonthLabel,
+    pageNumber: (frameOptions || {}).pageNumber,
+    gcsLogoDataUrl: (frameOptions || {}).gcsLogoDataUrl,
+  });
+
+  // Filter ALL data sources to the picker-driven month.
+  const monthSurveysAll = filterTnpsToMonth(perf.tnpsData, reportingMonthLabel);
+  const monthSurveysGcs = filterTnpsToMonth(perf.tnpsGCS || [], reportingMonthLabel);
+  if (monthSurveysGcs.length === 0) {
+    slide.addText(`No GCS tNPS surveys recorded for ${reportingMonthLabel}.`, {
+      x: 0.5, y: 1.5, w: 12, h: 0.4,
+      fontSize: 14, color: virgilTheme.subtle, italic: true, align: "center",
+    });
+    return;
+  }
+  const monthOverall = calcTnpsScore(monthSurveysGcs);
+
+  // KPI cards (GCS tNPS, Promoter%, Passive%, Detractor%)
+  const kpiY = 1.25;
+  const kpiW = 2.95;
+  const kpiCards = [
+    { label: `GCS tNPS (${monthOverall.total} surveys)`, value: `${monthOverall.score > 0 ? "+" : ""}${monthOverall.score}`, color: monthOverall.score >= 50 ? corpPalette.green : monthOverall.score >= 20 ? corpPalette.q2 : corpPalette.q4 },
+    { label: "PROMOTER", value: `${Math.round(monthOverall.promoterPct)}%`, color: corpPalette.green },
+    { label: "PASSIVE", value: `${Math.round(monthOverall.passivePct)}%`, color: corpPalette.q2 },
+    { label: "DETRACTOR", value: `${Math.round(monthOverall.detractorPct)}%`, color: corpPalette.q4 },
+  ];
+  kpiCards.forEach((k, i) => {
+    const kx = 0.5 + i * (kpiW + 0.15);
+    slide.addShape("roundRect", { x: kx, y: kpiY, w: kpiW, h: 0.85, fill: { color: corpPalette.muted }, line: { color: corpPalette.cardBorder, width: 0.5 }, rectRadius: 0.06 });
+    slide.addShape("rect", { x: kx, y: kpiY, w: kpiW, h: 0.06, fill: { color: k.color }, line: { color: k.color, width: 0 } });
+    slide.addText(k.label, { x: kx, y: kpiY + 0.12, w: kpiW, h: 0.2, fontSize: 9, color: virgilTheme.subtle, align: "center" });
+    slide.addText(k.value, { x: kx, y: kpiY + 0.34, w: kpiW, h: 0.45, fontSize: 24, color: k.color, bold: true, align: "center" });
+  });
+
+  // Partner Ranking table (left 60%)
+  const tableY = 2.5;
+  const leftTableW = 7.0;
+  slide.addText("PARTNER RANKING", { x: 0.5, y: tableY - 0.25, w: leftTableW, h: 0.2, fontSize: 9, color: virgilTheme.eyebrow, bold: true, charSpacing: 1.5 });
+
+  const siteGroupsAll = {};
+  monthSurveysAll.forEach(s => {
+    if (!siteGroupsAll[s.siteLabel]) siteGroupsAll[s.siteLabel] = [];
+    siteGroupsAll[s.siteLabel].push(s);
+  });
+  const fiscalBySite = Object.entries(siteGroupsAll).map(([label, surveys]) => ({
+    label, isGCS: surveys[0].isGCS, ...calcTnpsScore(surveys),
+  })).sort((a, b) => (b.score ?? -999) - (a.score ?? -999));
+  const knownVendors = ["GCS", "Avantive", "Global Telesourcing", "Results"];
+  const gcsAgg = { label: "GCS (All Sites)", isGCS: true, isAgg: true, ...monthOverall };
+  const partnerSites = fiscalBySite.filter(s => !s.isGCS && knownVendors.includes(s.label));
+  const gcsSites = fiscalBySite.filter(s => s.isGCS);
+  const ranked = [gcsAgg, ...partnerSites].sort((a, b) => (b.score ?? -999) - (a.score ?? -999));
+  const aggIdx = ranked.findIndex(s => s.isAgg);
+  const allRanked = [...ranked.slice(0, aggIdx + 1), ...gcsSites, ...ranked.slice(aggIdx + 1)];
+
+  const hdrBase = { fill: { color: corpPalette.purple }, color: "FFFFFF", bold: true, align: "center", fontSize: 9 };
+  const rankHdr = [
+    { text: "#", options: { ...hdrBase, align: "center" } },
+    { text: "Site / Partner", options: { ...hdrBase, align: "left" } },
+    { text: "tNPS", options: hdrBase },
+    { text: "Surveys", options: hdrBase },
+    { text: "Prom%", options: hdrBase },
+    { text: "Det%", options: hdrBase },
+  ];
+  let rank = 0;
+  const rankRows = allRanked.map((s, i) => {
+    const isSub = s.isGCS && !s.isAgg;
+    if (!isSub) rank++;
+    const rowBg = s.isGCS ? "FFFBEB" : (i % 2 === 0 ? "FFFFFF" : "F5F5FA");
+    const base = { fontSize: 8, color: corpPalette.ink, valign: "middle", fill: { color: rowBg } };
+    const scoreColor = (s.score ?? 0) >= 50 ? corpPalette.green : (s.score ?? 0) >= 20 ? corpPalette.q2 : corpPalette.q4;
+    return [
+      { text: isSub ? "" : String(rank), options: { ...base, align: "center", color: virgilTheme.subtle } },
+      { text: isSub ? `  ${s.label}` : s.label, options: { ...base, align: "left", bold: s.isAgg, color: isSub ? virgilTheme.subtle : corpPalette.ink, fontSize: isSub ? 7.5 : 8.5 } },
+      { text: `${(s.score ?? 0) > 0 ? "+" : ""}${s.score ?? 0}`, options: { ...base, align: "center", bold: true, color: scoreColor, fontSize: 9 } },
+      { text: String(s.total || 0), options: { ...base, align: "center", color: virgilTheme.subtle } },
+      { text: `${Math.round(s.promoterPct || 0)}%`, options: { ...base, align: "center", color: corpPalette.green } },
+      { text: `${Math.round(s.detractorPct || 0)}%`, options: { ...base, align: "center", color: corpPalette.q4 } },
+    ];
+  });
+  slide.addTable([rankHdr, ...rankRows], {
+    x: 0.5, y: tableY, w: leftTableW,
+    colW: [0.4, 3.5, 0.8, 0.9, 0.7, 0.7],
+    rowH: 0.3,
+    border: { type: "solid", pt: 0.5, color: corpPalette.cardBorder },
+    autoPage: false,
+  });
+
+  // tNPS by Campaign — GCS (right side)
+  const rightX = 7.85;
+  const rightW = 4.95;
+  slide.addText("tNPS BY CAMPAIGN — GCS", { x: rightX, y: tableY - 0.25, w: rightW, h: 0.2, fontSize: 9, color: virgilTheme.eyebrow, bold: true, charSpacing: 1.5 });
+  const campGroups = {};
+  monthSurveysGcs.forEach(s => {
+    const key = s.campaign || "(unspecified)";
+    if (!campGroups[key]) campGroups[key] = { campaign: key, program: s.program, surveys: [] };
+    campGroups[key].surveys.push(s);
+  });
+  const camps = Object.values(campGroups).map(g => ({ ...g, ...calcTnpsScore(g.surveys) })).sort((a, b) => (b.score ?? -999) - (a.score ?? -999));
+  const campHdr = [
+    { text: "Campaign", options: { ...hdrBase, align: "left" } },
+    { text: "Program", options: { ...hdrBase, align: "left" } },
+    { text: "tNPS", options: hdrBase },
+    { text: "Surveys", options: hdrBase },
+    { text: "Prom%", options: hdrBase },
+    { text: "Det%", options: hdrBase },
+  ];
+  const campRows = camps.map((c, i) => {
+    const rowBg = i % 2 === 0 ? "FFFFFF" : "F5F5FA";
+    const base = { fontSize: 8, color: corpPalette.ink, valign: "middle", fill: { color: rowBg } };
+    const scoreColor = (c.score ?? 0) >= 50 ? corpPalette.green : (c.score ?? 0) >= 20 ? corpPalette.q2 : corpPalette.q4;
+    return [
+      { text: c.campaign, options: { ...base, align: "left" } },
+      { text: c.program || "", options: { ...base, align: "left", color: corpPalette.q2, bold: !!c.program } },
+      { text: `${(c.score ?? 0) > 0 ? "+" : ""}${c.score ?? 0}`, options: { ...base, align: "center", bold: true, color: scoreColor } },
+      { text: String(c.total || 0), options: { ...base, align: "center", color: virgilTheme.subtle } },
+      { text: `${Math.round(c.promoterPct || 0)}%`, options: { ...base, align: "center", color: corpPalette.green } },
+      { text: `${Math.round(c.detractorPct || 0)}%`, options: { ...base, align: "center", color: corpPalette.q4 } },
+    ];
+  });
+  slide.addTable([campHdr, ...campRows], {
+    x: rightX, y: tableY, w: rightW,
+    colW: [1.6, 0.85, 0.65, 0.75, 0.6, 0.5],
+    rowH: 0.26,
+    border: { type: "solid", pt: 0.5, color: corpPalette.cardBorder },
+    autoPage: false,
+  });
+
+  // Monthly Vendor Ranking trend — 4-month trailing across GCS / Avantive / Global Telesourcing / Results
+  const trendY = 5.30;
+  slide.addText("MONTHLY VENDOR RANKING", { x: 0.5, y: trendY - 0.25, w: 12.3, h: 0.2, fontSize: 9, color: virgilTheme.eyebrow, bold: true, charSpacing: 1.5 });
+  const vendorColors = { "GCS": corpPalette.q2, "Avantive": corpPalette.navy, "Global Telesourcing": corpPalette.fundHQ, "Results": corpPalette.purple };
+  const vendorNames = ["GCS", "Avantive", "Global Telesourcing", "Results"];
+  const months = [...new Set((perf.tnpsData || []).filter(s => s.month).map(s => s.month))].sort().slice(-4);
+  const vendorMap = {};
+  (perf.tnpsData || []).forEach(s => {
+    if (!s.month) return;
+    if (!months.includes(s.month)) return;
+    const vendor = s.isGCS ? "GCS" : s.siteLabel;
+    if (!vendorNames.includes(vendor)) return;
+    if (!vendorMap[s.month]) vendorMap[s.month] = {};
+    if (!vendorMap[s.month][vendor]) vendorMap[s.month][vendor] = [];
+    vendorMap[s.month][vendor].push(s);
+  });
+  vendorNames.forEach((v, i) => {
+    slide.addShape("rect", { x: 0.5 + i * 1.8, y: trendY + 0.0, w: 0.15, h: 0.12, fill: { color: vendorColors[v] }, line: { color: vendorColors[v], width: 0 } });
+    slide.addText(v, { x: 0.75 + i * 1.8, y: trendY - 0.03, w: 1.55, h: 0.18, fontSize: 7, color: virgilTheme.subtle });
+  });
+  const trendHdr = [
+    { text: "", options: hdrBase },
+    ...months.map(m => {
+      const [y, mo] = m.split("-").map(Number);
+      return { text: new Date(y, mo - 1, 1).toLocaleString("en-US", { month: "short", year: "2-digit" }), options: hdrBase };
+    })
+  ];
+  const trendRows = vendorNames.map(v => {
+    const cells = [{ text: v, options: { fontSize: 8, bold: true, color: vendorColors[v], align: "left" } }];
+    for (const m of months) {
+      const surveys = (vendorMap[m] && vendorMap[m][v]) || [];
+      const score = calcTnpsScore(surveys);
+      cells.push({ text: surveys.length ? `${score.score > 0 ? "+" : ""}${score.score} (${surveys.length})` : "—", options: { fontSize: 8, align: "center", color: corpPalette.ink } });
+    }
+    return cells;
+  });
+  slide.addTable([trendHdr, ...trendRows], {
+    x: 0.5, y: trendY + 0.2, w: 12.3,
+    colW: [2.3, ...months.map(() => (12.3 - 2.3) / Math.max(1, months.length))],
+    rowH: 0.22,
+    border: { type: "solid", pt: 0.5, color: corpPalette.cardBorder },
+    autoPage: false,
+  });
+
+  // Insights text panel (bottom)
+  const insightY = 6.7;
+  slide.addShape("roundRect", {
+    x: 0.5, y: insightY, w: 12.3, h: 0.5,
+    fill: { color: corpPalette.muted },
+    line: { color: corpPalette.cardBorder, width: 0.5 },
+    rectRadius: 0.06,
+  });
+  slide.addText("INSIGHTS", {
+    x: 0.6, y: insightY + 0.04, w: 12, h: 0.18,
+    fontSize: 8, color: virgilTheme.eyebrow, bold: true, charSpacing: 1.5,
+  });
+  slide.addText(insightText || "(no insights entered)", {
+    x: 0.6, y: insightY + 0.22, w: 12, h: 0.26,
+    fontSize: 9, color: insightText ? virgilTheme.bodyText : virgilTheme.subtle,
+    italic: !insightText, valign: "top",
+  });
+}
+
+function buildCorpPartnerExperienceSlide(pres, stats, reportingMonthLabel, supportText, incentivesText, frameOptions) {
+  const slide = pres.addSlide();
+  slide.background = { color: virgilTheme.slideBg };
+  virgilSlideFrame(pres, slide, {
+    eyebrow: "PEOPLE & OPERATIONS",
+    title: `Partner Experience — ${reportingMonthLabel}`,
+    categoryLabel: "PEOPLE & OPERATIONS",
+    reportingMonthLabel: (frameOptions && frameOptions.reportingMonthLabel) || reportingMonthLabel,
+    pageNumber: (frameOptions || {}).pageNumber,
+    gcsLogoDataUrl: (frameOptions || {}).gcsLogoDataUrl,
+  });
+
+  // Top row — two text panels with purple gradient headers
+  const topY = 1.4;
+  const panelH = 2.2;
+  const drawTextPanel = (x, w, title, body, bullets) => {
+    slide.addShape("roundRect", {
+      x, y: topY, w, h: panelH,
+      fill: { color: corpPalette.surface },
+      line: { color: corpPalette.cardBorder, width: 0.75 },
+      rectRadius: 0.1,
+    });
+    // Purple gradient header bar (approximation via solid)
+    slide.addShape("rect", {
+      x, y: topY, w, h: 0.4,
+      fill: { color: corpPalette.purple },
+      line: { color: corpPalette.purple, width: 0 },
+    });
+    slide.addText(title, {
+      x: x + 0.15, y: topY + 0.06, w: w - 0.3, h: 0.28,
+      fontSize: 11, color: "FFFFFF", bold: true, charSpacing: 1,
+    });
+    let contentText;
+    if (bullets) {
+      const items = String(body || "")
+        .split(/\r?\n/)
+        .map(s => s.trim())
+        .filter(Boolean);
+      contentText = items.length ? items.map(s => `• ${s}`).join("\n") : "(no entries)";
+    } else {
+      contentText = body || "(no text entered)";
+    }
+    slide.addText(contentText, {
+      x: x + 0.15, y: topY + 0.5, w: w - 0.3, h: panelH - 0.6,
+      fontSize: 10, color: (body ? virgilTheme.bodyText : virgilTheme.subtle),
+      italic: !body, valign: "top",
+    });
+  };
+  drawTextPanel(0.5, 6.1, "HOW CAN WE SUPPORT YOU?", supportText, false);
+  drawTextPanel(6.75, 6.1, "CURRENT INCENTIVES", incentivesText, true);
+
+  // Bottom row — two KPI panels (hires + attrition)
+  const kpiY = 3.9;
+  const kpiH = 3.1;
+  const drawKpiPanel = (x, w, title, bigCount, bigLabel, items, extraSubline) => {
+    slide.addShape("roundRect", {
+      x, y: kpiY, w, h: kpiH,
+      fill: { color: corpPalette.surface },
+      line: { color: corpPalette.cardBorder, width: 0.75 },
+      rectRadius: 0.1,
+    });
+    slide.addText(title, {
+      x: x + 0.2, y: kpiY + 0.12, w: w - 0.4, h: 0.25,
+      fontSize: 10, color: virgilTheme.eyebrow, bold: true, charSpacing: 1.5,
+    });
+    slide.addText(String(bigCount), {
+      x: x + 0.2, y: kpiY + 0.4, w: w - 0.4, h: 0.8,
+      fontSize: 48, color: corpPalette.navy, bold: true, align: "left",
+    });
+    slide.addText(bigLabel, {
+      x: x + 0.2, y: kpiY + 1.2, w: w - 0.4, h: 0.2,
+      fontSize: 9, color: virgilTheme.subtle,
+    });
+
+    // Site split bar (DR orange, BZ green, Unknown gray)
+    const drCount = items.filter(it => it.site === "DR" || it.site === "Dominican Republic").length;
+    const bzCount = items.filter(it => it.site === "BZ" || it.site === "Belize" || /Belize|Ignaco/.test(it.site || "")).length;
+    const otherCount = Math.max(0, items.length - drCount - bzCount);
+    const barY = kpiY + 1.45;
+    const barW = w - 0.4;
+    const barH = 0.22;
+    let xCursor = x + 0.2;
+    const drW = items.length ? (drCount / items.length) * barW : 0;
+    const bzW = items.length ? (bzCount / items.length) * barW : 0;
+    const otherW = items.length ? (otherCount / items.length) * barW : 0;
+    if (drW > 0) {
+      slide.addShape("rect", { x: xCursor, y: barY, w: drW, h: barH, fill: { color: corpPalette.q3 }, line: { color: corpPalette.q3, width: 0 } });
+      slide.addText(`DR ${drCount}`, { x: xCursor, y: barY, w: drW, h: barH, fontSize: 9, color: "FFFFFF", bold: true, align: "center", valign: "middle" });
+      xCursor += drW;
+    }
+    if (bzW > 0) {
+      slide.addShape("rect", { x: xCursor, y: barY, w: bzW, h: barH, fill: { color: corpPalette.green }, line: { color: corpPalette.green, width: 0 } });
+      slide.addText(`BZ ${bzCount}`, { x: xCursor, y: barY, w: bzW, h: barH, fontSize: 9, color: "FFFFFF", bold: true, align: "center", valign: "middle" });
+      xCursor += bzW;
+    }
+    if (otherW > 0) {
+      slide.addShape("rect", { x: xCursor, y: barY, w: otherW, h: barH, fill: { color: corpPalette.inkSubtle }, line: { color: corpPalette.inkSubtle, width: 0 } });
+      slide.addText(`Other ${otherCount}`, { x: xCursor, y: barY, w: otherW, h: barH, fontSize: 9, color: "FFFFFF", bold: true, align: "center", valign: "middle" });
+    }
+
+    // Up to 5 rows
+    const preview = items.slice(0, 5);
+    const listY = kpiY + 1.8;
+    if (preview.length === 0) {
+      slide.addText("(none)", { x: x + 0.2, y: listY, w: w - 0.4, h: 0.3, fontSize: 10, color: virgilTheme.subtle, italic: true });
+    } else {
+      const listText = preview.map(it => `${it.name} — ${it.hireDate || it.endDate} — ${it.site}`).join("\n");
+      slide.addText(listText, {
+        x: x + 0.2, y: listY, w: w - 0.4, h: kpiH - 1.9,
+        fontSize: 9, color: corpPalette.ink, valign: "top",
+      });
+    }
+
+    if (extraSubline) {
+      slide.addText(extraSubline, {
+        x: x + 0.2, y: kpiY + kpiH - 0.3, w: w - 0.4, h: 0.22,
+        fontSize: 9, color: virgilTheme.eyebrow, bold: true,
+      });
+    }
+  };
+  drawKpiPanel(0.5, 6.1, "NEW HIRES & TRAINING", stats.hires.length, `Hires in ${reportingMonthLabel}`, stats.hires, null);
+  const retentionLabel = stats.retentionRate === null ? "Retention: —" : `Retention: ${stats.retentionRate.toFixed(1)}%`;
+  drawKpiPanel(6.75, 6.1, "ATTRITION", stats.departures.length, `Departures in ${reportingMonthLabel}`, stats.departures, retentionLabel);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// CORP MBR — Orchestrator
+// ═══════════════════════════════════════════════════════════════════
+
+// options: { reportingMonthLabel, virgilLastName, coachingDetails, coachingWeekly, loginBuckets, insights, gcsLogoDataUrl }
+function buildVirgilMbrPresentation(perf, options) {
+  const pres = new pptxgen();
+  pres.layout = "LAYOUT_WIDE"; // 13.333 x 7.5
+
+  const gcsLogoDataUrl = options.gcsLogoDataUrl || "";
+  let pageNumber = 1;
+
+  const stats = buildCoachingStats(
+    options.coachingDetails || {},
+    options.coachingWeekly || [],
+    perf && perf.bpLookup,
+    options.reportingMonthLabel
+  );
+  const priorMonthKey = getPriorMonthLabel(options.reportingMonthLabel);
+  const priorPriorMonthKey = getPriorMonthLabel(priorMonthKey);
+
+  // Slide 1 — Title
+  buildVirgilTitleSlide(pres, options.reportingMonthLabel, perf && perf.fiscalInfo, options.virgilLastName,
+    { pageNumber: pageNumber++, gcsLogoDataUrl, reportingMonthLabel: options.reportingMonthLabel });
+
+  // Slide 2 — My Performance / Quality
+  buildVirgilMyPerformanceSlide(
+    pres,
+    stats,
+    options.loginBuckets || {},
+    priorPriorMonthKey,
+    priorMonthKey,
+    options.reportingMonthLabel,
+    (options.insights && options.insights.slide2) || "",
+    { pageNumber: pageNumber++, gcsLogoDataUrl }
+  );
+
+  // Slide 3 — All-in Attainment + Scorecard
+  buildCorpOpPerformanceSlide(pres,
+    options.agentRaw || "", options.goalsRaw || "",
+    options.priorAgentRaw || "", options.priorGoalsRaw || "",
+    options.priorQuarterAgentRaw || "", options.priorQuarterGoalsRaw || "",
+    options.reportingMonthLabel, options.scorecardDataUrl || "",
+    options.vendorScores || {},
+    options.corpPriorMonthAgentRaw || "", options.corpPriorMonthGoalsRaw || "",
+    { pageNumber: pageNumber++, gcsLogoDataUrl, reportingMonthLabel: options.reportingMonthLabel });
+
+  // Slide 4 — Quartile Reporting
+  buildCorpQuartileSlide(pres,
+    options.agentRaw || "", options.goalsRaw || "",
+    options.priorAgentRaw || "", options.priorGoalsRaw || "",
+    options.newHiresRaw || "", options.reportingMonthLabel,
+    { pageNumber: pageNumber++, gcsLogoDataUrl, reportingMonthLabel: options.reportingMonthLabel });
+
+  // Slide 5 — Campaign Hours Info
+  buildCorpCampaignHoursSlide(pres,
+    options.agentRaw || "", options.goalsRaw || "",
+    options.priorAgentRaw || "", options.priorGoalsRaw || "",
+    options.reportingMonthLabel,
+    options.corpPriorMonthAgentRaw || "", options.corpPriorMonthGoalsRaw || "",
+    { pageNumber: pageNumber++, gcsLogoDataUrl, reportingMonthLabel: options.reportingMonthLabel });
+
+  // Campaign Slides — Per-Campaign Actual-to-Goal (N slides, one per campaign)
+  // With picker = current fiscal month (e.g. Apr), spec columns are:
+  //   LEFT  = Previous Month       = picker − 2 (Feb) ← corpPriorMonthAgentRaw / corpPriorMonthGoalsRaw
+  //   RIGHT = Month of Discussion  = picker − 1 (Mar) ← priorAgentRaw / priorGoalsRaw (Phase 1 "current − 1")
+  // NOTE: priorPriorMonthKey already declared above for Slide 2 — reuse.
+  const prevFilter = makeMonthFilter(priorPriorMonthKey);
+  const discussionFilter = makeMonthFilter(priorMonthKey);
+  const prevAgent = options.corpPriorMonthAgentRaw || "";
+  const prevGoals = options.corpPriorMonthGoalsRaw || "";
+  const discussionAgent = options.priorAgentRaw || "";
+  const discussionGoals = options.priorGoalsRaw || "";
+  const campaignUniverse = buildCampaignUniverse(
+    prevAgent, prevGoals,
+    discussionAgent, discussionGoals,
+    priorPriorMonthKey, priorMonthKey
+  );
+  const prevTotals = buildCampaignMonthTotals(prevAgent, prevGoals, prevFilter);
+  const discussionTotals = buildCampaignMonthTotals(discussionAgent, discussionGoals, discussionFilter);
+  // Extended Agent stats per month — Feb from corpPriorMonthAgentRaw, Mar from priorAgentRaw.
+  // Both CSVs include Dials/Contacts/Finals columns; parse each independently.
+  const extPrevRows = parseExtendedAgentStats(prevAgent);
+  const extDiscussionRows = parseExtendedAgentStats(discussionAgent);
+  const extPrevLookup = buildExtendedAgentLookup(extPrevRows, prevFilter);
+  const extDiscussionLookup = buildExtendedAgentLookup(extDiscussionRows, discussionFilter);
+  const perCampaignNotes = (options.insights && options.insights.slide6Notes) || {};
+  for (const campaign of campaignUniverse) {
+    const detailPrior = buildCampaignMonthDetail(campaign, prevAgent, prevGoals, prevFilter, extPrevLookup, prevTotals);
+    const detailReporting = buildCampaignMonthDetail(campaign, discussionAgent, discussionGoals, discussionFilter, extDiscussionLookup, discussionTotals);
+    const notes = perCampaignNotes[campaign.name] || { prior: "", reporting: "" };
+    // Each campaign gets its own incrementing page number
+    buildCorpCampaignDetailSlide(pres, campaign, detailPrior, detailReporting, priorPriorMonthKey, priorMonthKey, notes,
+      { pageNumber: pageNumber++, gcsLogoDataUrl, reportingMonthLabel: options.reportingMonthLabel });
+  }
+
+  // Slide 7 — Customer Experience (tNPS)
+  buildCorpTnpsSlide(pres, perf, options.reportingMonthLabel, (options.insights && options.insights.slide7) || "",
+    { pageNumber: pageNumber++, gcsLogoDataUrl, reportingMonthLabel: options.reportingMonthLabel });
+
+  // Slide 8 — Partner Experience
+  const partnerStats = buildPartnerExperienceStats(options.newHiresRaw || "", perf && perf.bpLookup, options.reportingMonthLabel);
+  buildCorpPartnerExperienceSlide(pres, partnerStats,
+    options.reportingMonthLabel,
+    (options.insights && options.insights.slide8Support) || "",
+    (options.insights && options.insights.slide8Incentives) || "",
+    { pageNumber: pageNumber++, gcsLogoDataUrl, reportingMonthLabel: options.reportingMonthLabel });
+
+  return pres;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// CORP MBR — Export Modal
+// ═══════════════════════════════════════════════════════════════════
+
+// CORP MBR — Data Sources Modal
+function CorpMbrDataSourcesModal({
+  coachingDetailsSheetUrl, setCoachingDetailsSheetUrl,
+  coachingWeeklySheetUrl, setCoachingWeeklySheetUrl,
+  loginBucketsSheetUrl, setLoginBucketsSheetUrl,
+  corpPriorMonthAgentUrl, setCorpPriorMonthAgentUrl,
+  corpPriorMonthGoalsUrl, setCorpPriorMonthGoalsUrl,
+  priorQuarterAgentUrl, setPriorQuarterAgentUrl,
+  priorQuarterGoalsUrl, setPriorQuarterGoalsUrl,
+  onClose
+}) {
+  const UrlRow = ({ label, value, setValue, hint }) => (
+    <label style={{ display: "block", marginTop: 14, fontSize: 13, fontWeight: 600 }}>
+      {label}
+      <input type="text" value={value || ""} onChange={e => setValue(e.target.value)}
+        placeholder="https://docs.google.com/spreadsheets/d/e/.../pub?gid=...&output=csv"
+        style={{ display: "block", marginTop: 4, width: "100%", padding: 8, border: "1px solid #d1d5db", borderRadius: 6, fontFamily: "monospace", fontSize: 12 }} />
+      {hint && <small style={{ color: "#6b7280" }}>{hint}</small>}
+    </label>
+  );
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 400, display: "flex", alignItems: "center", justifyContent: "center" }}
+         onClick={onClose}>
+      <div style={{ width: 640, maxHeight: "85vh", overflow: "auto", background: "#fff", borderRadius: 10, padding: 24 }}
+           onClick={e => e.stopPropagation()}>
+        <h2 style={{ margin: 0, fontSize: 20 }}>Corp MBR Data Sources</h2>
+        <p style={{ color: "#6b7280", fontSize: 13, marginTop: 4 }}>
+          Google Sheet URLs auto-fetched into localStorage and consumed by the Corp MBR export. Leave blank to fall back to the bundled defaults.
+        </p>
+        <UrlRow label="Coaching Details (org totals)" value={coachingDetailsSheetUrl} setValue={setCoachingDetailsSheetUrl}
+          hint="Monthly Acknowledged %, % Coached, Total Sessions, etc." />
+        <UrlRow label="Weekly Breakdown (per-agent coaching)" value={coachingWeeklySheetUrl} setValue={setCoachingWeeklySheetUrl}
+          hint="Enables DR/BZ split via NTID → bpLookup." />
+        <UrlRow label="Login Buckets (myPerformance login frequency)" value={loginBucketsSheetUrl} setValue={setLoginBucketsSheetUrl}
+          hint="Monthly distribution across 0-3 / 4-7 / 8-15 / 16-20+ login buckets." />
+        <UrlRow label="Prior Month — Agent Stats" value={corpPriorMonthAgentUrl} setValue={setCorpPriorMonthAgentUrl}
+          hint="Current fiscal month − 2 agent stats. For Slide 3 col 2 + Slide 5 first bar group." />
+        <UrlRow label="Prior Month — Goals" value={corpPriorMonthGoalsUrl} setValue={setCorpPriorMonthGoalsUrl}
+          hint="Current fiscal month − 2 goals. Paired with Prior Month agent stats." />
+        <UrlRow label="Prior Quarter — Agent Data" value={priorQuarterAgentUrl} setValue={setPriorQuarterAgentUrl}
+          hint="Q4 2025 agent-level stats. Used by Slide 3 comparison table." />
+        <UrlRow label="Prior Quarter — Goals" value={priorQuarterGoalsUrl} setValue={setPriorQuarterGoalsUrl}
+          hint="Q4 2025 goals CSV. Needed to compute Q4 attainment." />
+        <div style={{ display: "flex", gap: 8, marginTop: 20, justifyContent: "flex-end" }}>
+          <button onClick={onClose} style={{ padding: "8px 14px", border: "none", background: "#7C3AED", color: "#fff", borderRadius: 6, cursor: "pointer", fontWeight: 600 }}>Close</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function VirgilMbrExportModal({
+  perf,
+  coachingDetailsRaw, coachingWeeklyRaw, loginBucketsRaw,
+  rawAgentCsv, goalsRaw, priorMonthRaw, priorMonthGoalsRaw, newHiresRaw,
+  priorQuarterAgentRaw, priorQuarterGoalsRaw,
+  corpPriorMonthAgentRaw, corpPriorMonthGoalsRaw,
+  insights, setInsights, ollamaAvailable, onClose
+}) {
+  const [reportingMonth, setReportingMonth] = useState(() => {
+    try {
+      const end = perf && perf.fiscalInfo && perf.fiscalInfo.fiscalEnd;
+      if (end) {
+        const dt = new Date(end);
+        const mo = dt.toLocaleDateString("en-US", { month: "short" });
+        const yr = String(dt.getFullYear()).slice(2);
+        return `${mo} '${yr}`;
+      }
+    } catch(e) {}
+    return "";
+  });
+
+  const [useAiInsights, setUseAiInsights] = useState(() => {
+    try { return localStorage.getItem("perf_intel_corp_ai_insights_v1") === "true"; } catch(e) { return false; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("perf_intel_corp_ai_insights_v1", useAiInsights ? "true" : "false"); } catch(e) {}
+  }, [useAiInsights]);
+
+  const [scorecardDataUrl, setScorecardDataUrl] = useState("");
+  const [scorecardExtractLoading, setScorecardExtractLoading] = useState(false);
+  const [scorecardExtractError, setScorecardExtractError] = useState("");
+  const [vendorScores, setVendorScores] = useState({ Results: "", GTCX: "", GCS: "", Avantive: "" });
+
+  const handleAutoExtractScorecard = useCallback(async () => {
+    if (!scorecardDataUrl) return;
+    setScorecardExtractLoading(true);
+    setScorecardExtractError("");
+    try {
+      const prompt = `This image is a Comcast BP scorecard. It has a table called "SCORING" near the bottom with rows for 4 vendors: Avantive, GCS, GTCX (or GTS), Results. For each vendor there's a column called "TTL SCR" (total score) with a decimal number like 1.087 or 0.973.
+
+Extract ONLY the TTL SCR value for each vendor. Respond with ONLY a valid JSON object in this exact format (no other text, no markdown fences):
+
+{"Avantive": 1.087, "GCS": 0.973, "GTCX": 1.24, "Results": 1.41}
+
+If any vendor is missing or unreadable, use null for that value.`;
+      const raw = await ollamaGenerateWithImage(prompt, scorecardDataUrl);
+      if (!raw) {
+        setScorecardExtractError("Ollama did not respond. Is a vision model (e.g. `ollama pull llava`) installed?");
+        return;
+      }
+      // Try to parse the raw response as JSON. Fall back to regex extraction.
+      let parsed = null;
+      try {
+        const jsonMatch = raw.match(/\{[\s\S]*\}/);
+        if (jsonMatch) parsed = JSON.parse(jsonMatch[0]);
+      } catch(e) {}
+      if (!parsed) {
+        // Regex fallback: look for "Vendor: number" or "Vendor - number"
+        parsed = {};
+        const nameMap = { avantive: "Avantive", gcs: "GCS", gtcx: "GTCX", gts: "GTCX", results: "Results" };
+        for (const key of Object.keys(nameMap)) {
+          const re = new RegExp(`${key}[^0-9\\-]*([\\-]?\\d*\\.?\\d+)`, "i");
+          const m = raw.match(re);
+          if (m) parsed[nameMap[key]] = Number(m[1]);
+        }
+      }
+      // Merge into vendorScores, preserving anything already typed
+      const nextScores = { ...vendorScores };
+      for (const key of ["Results", "GTCX", "GCS", "Avantive"]) {
+        const v = parsed[key];
+        if (typeof v === "number" && !isNaN(v)) {
+          nextScores[key] = String(v);
+        }
+      }
+      setVendorScores(nextScores);
+    } catch(e) {
+      setScorecardExtractError(`Extract failed: ${e.message || e}`);
+    } finally {
+      setScorecardExtractLoading(false);
+    }
+  }, [scorecardDataUrl, vendorScores]);
+
+  const scorecardInputRef = useRef(null);
+  const handleScorecardUpload = useCallback((file) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => setScorecardDataUrl(String(e.target?.result || ""));
+    reader.readAsDataURL(file);
+  }, []);
+
+  const coachingDetails = useMemo(() => parseCoachingDetails(coachingDetailsRaw), [coachingDetailsRaw]);
+  const coachingWeekly = useMemo(() => parseCoachingWeekly(coachingWeeklyRaw), [coachingWeeklyRaw]);
+  const loginBuckets = useMemo(() => parseLoginBuckets(loginBucketsRaw), [loginBucketsRaw]);
+  const corpExtendedAgent = useMemo(() => parseExtendedAgentStats(rawAgentCsv), [rawAgentCsv]);
+
+  // Campaign Slides column labels: picker=Apr → previous=Feb (picker-2), discussion=Mar (picker-1)
+  const priorMonthLabelDisplay = useMemo(() => getPriorMonthLabel(reportingMonth), [reportingMonth]);
+  const priorPriorMonthLabelDisplay = useMemo(() => getPriorMonthLabel(priorMonthLabelDisplay), [priorMonthLabelDisplay]);
+  const campaignUniverse = useMemo(() => {
+    return buildCampaignUniverse(
+      corpPriorMonthAgentRaw || "", corpPriorMonthGoalsRaw || "",
+      priorMonthRaw || "", priorMonthGoalsRaw || "",
+      priorPriorMonthLabelDisplay, priorMonthLabelDisplay
+    );
+  }, [corpPriorMonthAgentRaw, corpPriorMonthGoalsRaw, priorMonthRaw, priorMonthGoalsRaw, priorPriorMonthLabelDisplay, priorMonthLabelDisplay]);
+
+  const hasCoachingDetails = !!(coachingDetailsRaw && coachingDetailsRaw.trim());
+  const hasCoachingWeekly = !!(coachingWeeklyRaw && coachingWeeklyRaw.trim());
+  const hasLoginBuckets = !!(loginBucketsRaw && loginBucketsRaw.trim());
+
+  const setSlide2Insight = useCallback((v) => {
+    setInsights({ ...(insights || {}), slide2: v });
+  }, [insights, setInsights]);
+
+  const handleDownload = useCallback(async () => {
+    let slide2Insights = "";
+    if (useAiInsights && ollamaAvailable) {
+      try {
+        const stats = buildCoachingStats(coachingDetails, coachingWeekly, perf && perf.bpLookup, reportingMonth);
+        const priorKey = getPriorMonthLabel(reportingMonth);
+        const priorPriorKey = getPriorMonthLabel(priorKey);
+        const loginPrior = buildLoginActivitySingle(loginBuckets, priorKey);
+        const loginCurr = buildLoginActivitySingle(loginBuckets, reportingMonth);
+        const prompt = `Write 2–3 short bullet points for a monthly performance slide.
+
+Reporting Month: ${reportingMonth}   (Prior Month: ${priorKey || "unknown"})
+
+Coaching Standard Attainment: ${priorPriorKey} ${(stats.orgPriorPrior.coachingPct * 100).toFixed(1)}% → ${priorKey} ${(stats.orgPrior.coachingPct * 100).toFixed(1)}% → ${reportingMonth} ${(stats.org.coachingPct * 100).toFixed(1)}%
+Acknowledgement %: ${priorPriorKey} ${(stats.orgPriorPrior.acknowledgePct * 100).toFixed(1)}% → ${priorKey} ${(stats.orgPrior.acknowledgePct * 100).toFixed(1)}% → ${reportingMonth} ${(stats.org.acknowledgePct * 100).toFixed(1)}%
+myPerformance Login Activity (% of users w/ 1+ login): Prior ${(loginPrior * 100).toFixed(1)}% → Reporting ${(loginCurr * 100).toFixed(1)}%
+Total Coaching Sessions (reporting month): ${stats.org.totalSessions}
+Goal line across all three metrics: 75%
+
+Write bullet-point style insights focused on movement vs prior, gaps vs 75% goal, and whether momentum is positive or concerning. One sentence per bullet. No intro, just bullets separated by newlines.`;
+        slide2Insights = await ollamaGenerate(prompt) || "";
+      } catch(e) {
+        console.error("AI insights generation failed:", e);
+      }
+    }
+    // Load GCS logo (white transparent PNG served from public/)
+    let gcsLogoDataUrl = "";
+    try {
+      const logoRes = await fetch("/gcs-logo.png");
+      if (logoRes.ok) {
+        const blob = await logoRes.blob();
+        gcsLogoDataUrl = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(String(reader.result || ""));
+          reader.readAsDataURL(blob);
+        });
+      }
+    } catch(e) { console.warn("GCS logo load failed:", e); }
+    const pres = buildVirgilMbrPresentation(perf, {
+      reportingMonthLabel: reportingMonth,
+      coachingDetails,
+      coachingWeekly,
+      loginBuckets,
+      agentRaw: rawAgentCsv || "",
+      goalsRaw: goalsRaw || "",
+      priorAgentRaw: priorMonthRaw || "",
+      priorGoalsRaw: priorMonthGoalsRaw || "",
+      newHiresRaw: newHiresRaw || "",
+      priorQuarterAgentRaw: priorQuarterAgentRaw || "",
+      priorQuarterGoalsRaw: priorQuarterGoalsRaw || "",
+      corpPriorMonthAgentRaw: corpPriorMonthAgentRaw || "",
+      corpPriorMonthGoalsRaw: corpPriorMonthGoalsRaw || "",
+      corpExtendedAgent,
+      scorecardDataUrl,
+      vendorScores,
+      gcsLogoDataUrl,
+      insights: { ...(insights || {}), slide2: slide2Insights },
+    });
+    const safeMonth = (reportingMonth || "Virgil").replace(/[^A-Za-z0-9 _-]+/g, "");
+    await pres.writeFile({ fileName: `Corp MBR - ${safeMonth}.pptx` });
+  }, [perf, reportingMonth, coachingDetails, coachingWeekly, loginBuckets, rawAgentCsv, goalsRaw, priorMonthRaw, priorMonthGoalsRaw, newHiresRaw, priorQuarterAgentRaw, priorQuarterGoalsRaw, corpPriorMonthAgentRaw, corpPriorMonthGoalsRaw, corpExtendedAgent, scorecardDataUrl, vendorScores, insights, useAiInsights, ollamaAvailable]);
+
+  const StatusRow = ({ label, ok }) => (
+    <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", fontSize: 13 }}>
+      <span>{label}</span>
+      <span style={{ color: ok ? "#16a34a" : "#d97706" }}>{ok ? "Loaded" : "Missing"}</span>
+    </div>
+  );
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 400, display: "flex", alignItems: "center", justifyContent: "center" }}
+         onClick={onClose}>
+      <div style={{ width: 560, maxHeight: "85vh", overflow: "auto", background: "#fff", borderRadius: 10, padding: 24 }}
+           onClick={e => e.stopPropagation()}>
+        <h2 style={{ margin: 0, fontSize: 20 }}>Export Corp MBR</h2>
+        <p style={{ color: "#6b7280", fontSize: 13, marginTop: 4 }}>
+          Comcast-facing monthly deck. Phase 1: Title + My Performance / Quality.
+        </p>
+
+        <label style={{ display: "block", marginTop: 16, fontSize: 13, fontWeight: 600 }}>
+          Current Fiscal Month Label
+          <input type="text" value={reportingMonth} onChange={e => setReportingMonth(e.target.value)}
+            placeholder="Apr '26"
+            style={{ display: "block", marginTop: 4, width: "100%", padding: 8, border: "1px solid #d1d5db", borderRadius: 6 }} />
+          <small style={{ color: "#6b7280" }}>The current in-progress fiscal month (MTD). Must match format like "Apr '26". Campaign Slides previous month auto-derives as (this − 2), month of discussion as (this − 1).</small>
+        </label>
+
+        <div style={{ marginTop: 16, padding: 12, background: "#f9fafb", borderRadius: 6 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 6 }}>Data Readiness</div>
+          <StatusRow label="Coaching Details CSV" ok={hasCoachingDetails} />
+          <StatusRow label="Weekly Breakdown CSV" ok={hasCoachingWeekly} />
+          <StatusRow label="Login Buckets CSV" ok={hasLoginBuckets} />
+          <StatusRow label="Prior Month Agent (Current − 2)" ok={!!(corpPriorMonthAgentRaw && corpPriorMonthAgentRaw.trim())} />
+          <StatusRow label="Prior Month Goals (Current − 2)" ok={!!(corpPriorMonthGoalsRaw && corpPriorMonthGoalsRaw.trim())} />
+          <StatusRow label="Prior Quarter Agent (Q4 2025)" ok={!!(priorQuarterAgentRaw && priorQuarterAgentRaw.trim())} />
+          <StatusRow label="Prior Quarter Goals (Q4 2025)" ok={!!(priorQuarterGoalsRaw && priorQuarterGoalsRaw.trim())} />
+          <StatusRow label="Scorecard PNG (Slide 3)" ok={!!scorecardDataUrl} />
+        </div>
+
+        <div style={{ marginTop: 16, padding: 12, background: "#fafafa", borderRadius: 6, border: "1px solid #d1d5db" }}>
+          <div style={{ fontSize: 13, fontWeight: 600 }}>Scorecard PNG (Slide 3)</div>
+          <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>
+            {scorecardDataUrl
+              ? (ollamaAvailable ? "Loaded. Click Auto-extract to OCR vendor TTL SCR values, or enter them manually below." : "Loaded — vendor scores must be entered manually.")
+              : "Optional. Upload the Comcast scorecard screenshot for the reporting month."}
+          </div>
+          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+            <button onClick={() => scorecardInputRef.current?.click()}
+              style={{ padding: "6px 12px", border: "1px solid #d1d5db", background: "#fff", borderRadius: 6, cursor: "pointer", fontSize: 12 }}>
+              {scorecardDataUrl ? "Replace" : "Upload PNG"}
+            </button>
+            {scorecardDataUrl && (
+              <button onClick={() => setScorecardDataUrl("")}
+                style={{ padding: "6px 12px", border: "1px solid #d1d5db", background: "#fff", borderRadius: 6, cursor: "pointer", fontSize: 12 }}>
+                Remove
+              </button>
+            )}
+            {scorecardDataUrl && ollamaAvailable && (
+              <button onClick={handleAutoExtractScorecard}
+                disabled={scorecardExtractLoading}
+                style={{ padding: "6px 12px", border: "none", background: "#7C3AED", color: "#fff", borderRadius: 6, cursor: scorecardExtractLoading ? "wait" : "pointer", fontSize: 12, fontWeight: 600 }}>
+                {scorecardExtractLoading ? "Extracting…" : "✨ Auto-extract scores"}
+              </button>
+            )}
+          </div>
+          <input ref={scorecardInputRef} type="file" accept=".png,.jpg,.jpeg" style={{ display: "none" }}
+            onChange={e => { if (e.target.files[0]) handleScorecardUpload(e.target.files[0]); e.target.value = ""; }} />
+          {scorecardExtractError && (
+            <div style={{ marginTop: 6, fontSize: 11, color: "#dc2626" }}>{scorecardExtractError}</div>
+          )}
+        </div>
+
+        <div style={{ marginTop: 12, padding: 12, background: "#fafafa", borderRadius: 6, border: "1px solid #d1d5db" }}>
+          <div style={{ fontSize: 13, fontWeight: 600 }}>BP Scorecard Totals (Slide 3 chart)</div>
+          <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>
+            Type each vendor's TTL SCR from the Comcast scorecard. Empty = no bar rendered.
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, marginTop: 8 }}>
+            {["Results", "GTCX", "GCS", "Avantive"].map(v => (
+              <label key={v} style={{ fontSize: 11, color: "#374151" }}>
+                {v}
+                <input type="number" step="0.001"
+                  value={vendorScores[v]}
+                  onChange={e => setVendorScores({ ...vendorScores, [v]: e.target.value })}
+                  style={{ display: "block", width: "100%", padding: 6, border: "1px solid #d1d5db", borderRadius: 4, marginTop: 2, fontSize: 12 }} />
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 16, padding: "10px 12px", border: "1px solid #d1d5db", borderRadius: 6, background: "#fafafa" }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>AI Insights (Slide 2)</div>
+            <div style={{ fontSize: 12, color: "#6b7280" }}>
+              {ollamaAvailable
+                ? "On — AI will generate a 2–3 sentence summary at download time."
+                : "AI is unavailable (Ollama not detected). Slide will render with an empty insights section."}
+            </div>
+          </div>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: ollamaAvailable ? "pointer" : "not-allowed", opacity: ollamaAvailable ? 1 : 0.5 }}>
+            <input type="checkbox"
+              checked={useAiInsights}
+              disabled={!ollamaAvailable}
+              onChange={e => setUseAiInsights(e.target.checked)} />
+            <span style={{ fontSize: 13 }}>{useAiInsights ? "On" : "Off"}</span>
+          </label>
+        </div>
+
+        <div style={{ display: "flex", gap: 8, marginTop: 20, justifyContent: "flex-end" }}>
+          <button onClick={onClose} style={{ padding: "8px 14px", border: "1px solid #d1d5db", background: "#fff", borderRadius: 6, cursor: "pointer" }}>Cancel</button>
+          <button onClick={handleDownload} style={{ padding: "8px 14px", border: "none", background: "#7C3AED", color: "#fff", borderRadius: 6, cursor: "pointer", fontWeight: 600 }}>Download .pptx</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MbrExportModal({ perf, onClose }) {
   const [state, setState] = useState("confirm");
   const [progress, setProgress] = useState("");
@@ -5976,6 +9984,708 @@ function MbrExportModal({ perf, onClose }) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
+// COACHING PAGE — Module-scope sub-components
+// ═══════════════════════════════════════════════════════════════════
+
+function KpiTile({ label, value, sub, accent }) {
+  return (
+    <div style={{ background: "var(--glass-bg)", border: `1px solid ${accent}18`, borderTop: `3px solid ${accent}`, borderRadius: "var(--radius-md, 10px)", padding: "1rem" }}>
+      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: "var(--text-muted)", letterSpacing: "0.06em", textTransform: "uppercase" }}>{label}</div>
+      <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "2.25rem", color: accent, fontWeight: 800, lineHeight: 1.1 }}>{value}</div>
+      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "var(--text-dim)" }}>{sub}</div>
+    </div>
+  );
+}
+
+// Renders one fiscal-week cell.
+// mode = "count": shows raw session count, color from coachingCellColor
+// mode = "pct":   shows "X/Y", color from coachingPctColor band
+function WeekCell({ mode, data }) {
+  if (!data || (mode === "count" && !data.eligible)) {
+    return (
+      <span style={{ display: "block", textAlign: "center", background: "#444", color: "#888", fontSize: "0.72rem", fontWeight: 700, padding: "0.25rem 0", borderRadius: 3 }}>—</span>
+    );
+  }
+  if (mode === "count") {
+    const c = coachingCellColor(data.sessions);
+    return (
+      <span style={{ display: "block", textAlign: "center", background: c.bg, color: c.fg, fontSize: "0.78rem", fontWeight: 700, padding: "0.25rem 0", borderRadius: 3 }}>
+        {data.sessions}
+      </span>
+    );
+  }
+  // mode === "pct"
+  if (data.y == null || data.y === 0 || data.pct == null) {
+    return (
+      <span style={{ display: "block", textAlign: "center", background: "#444", color: "#888", fontSize: "0.72rem", fontWeight: 700, padding: "0.25rem 0", borderRadius: 3 }}>—</span>
+    );
+  }
+  const bg = coachingPctColor(data.pct);
+  return (
+    <span style={{ display: "block", textAlign: "center", background: bg, color: "#fff", fontSize: "0.78rem", fontWeight: 700, padding: "0.25rem 0", borderRadius: 3 }}>
+      {data.x}/{data.y}
+    </span>
+  );
+}
+
+function SiteChip({ label, accent, active, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        padding: "0.3rem 0.75rem",
+        borderRadius: "var(--radius-sm, 6px)",
+        border: `1px solid ${active ? accent : "var(--border-muted)"}`,
+        background: active ? `${accent}18` : "transparent",
+        color: active ? accent : "var(--text-dim)",
+        fontFamily: "var(--font-ui, Inter, sans-serif)",
+        fontSize: "0.78rem",
+        fontWeight: active ? 600 : 400,
+        cursor: "pointer",
+        transition: "all 150ms",
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+// One row in an agent grid (used by All Agents tab + inside expanded supervisor rows).
+// columns (when not indented): name(1.5fr) supervisor(1.2fr) site(1.2fr) [weeks 0.5fr each] sessions(0.7fr) pct(0.5fr)
+// columns (when indented):     name(1.5fr) site(1.2fr) [weeks 0.5fr each] sessions(0.7fr) pct(0.5fr)
+function AgentRow({ agent, weekLabels, lightMode, indented, cellMode = "count" }) {
+  const tint = coachingRowTint(agent.pct);
+  const overIndexed = agent.sessionsX > agent.sessionsY;
+  const sessionsColor = overIndexed ? "#6366f1" : coachingPctColor(agent.pct);
+  const accent = coachingPctColor(agent.pct);
+  const colsBase = indented
+    ? `1.5fr 1.2fr ${weekLabels.map(() => "0.5fr").join(" ")} 0.7fr 0.5fr`
+    : `1.5fr 1.2fr 1.2fr ${weekLabels.map(() => "0.5fr").join(" ")} 0.7fr 0.5fr`;
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: colsBase,
+        gap: 4,
+        padding: indented ? "0.3rem 0.5rem 0.3rem 0.5rem" : "0.4rem 0.5rem",
+        alignItems: "center",
+        background: lightMode ? tint.light : tint.dark,
+        borderLeft: `${indented ? 2 : 3}px solid ${accent}`,
+        borderRadius: "0 3px 3px 0",
+        marginTop: 3,
+      }}
+    >
+      <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: indented ? "0.78rem" : "0.82rem", color: "var(--text-warm)", fontWeight: 500 }}>{agent.agentName}</span>
+      {!indented && (
+        <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "var(--text-dim)" }}>{agent.supervisor}</span>
+      )}
+      <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: agent.site === "DR" ? "#ed8936" : "#48bb78" }}>{coachingRegionLabel(agent.region)}</span>
+      {agent.weeks.map((w, i) => (
+        <WeekCell key={i} mode={cellMode} data={w} />
+      ))}
+      <span style={{ textAlign: "right", fontFamily: "var(--font-data, monospace)", fontSize: "0.82rem", fontWeight: 700, color: sessionsColor }}>
+        {agent.sessionsX}/{agent.sessionsY}
+      </span>
+      <span style={{ textAlign: "right", fontFamily: "var(--font-data, monospace)", fontSize: "0.82rem", fontWeight: 700, color: sessionsColor }}>
+        {agent.pct == null ? "—" : `${Math.round(agent.pct * 100)}%`}
+      </span>
+    </div>
+  );
+}
+
+// One row in the By Supervisor tab. Click toggles expand state held by parent.
+function SupervisorRow({ sup, weekLabels, expanded, onToggle, lightMode, cellMode = "count" }) {
+  const tint = coachingRowTint(sup.pct);
+  const accent = coachingPctColor(sup.pct);
+  const sessionsColor = sup.sessionsX > sup.sessionsY ? "#6366f1" : accent;
+  return (
+    <Fragment>
+      <div
+        onClick={onToggle}
+        style={{
+          display: "grid",
+          gridTemplateColumns: `1.4fr 0.9fr 0.5fr ${weekLabels.map(() => "0.7fr").join(" ")} 0.7fr 0.5fr`,
+          gap: 4,
+          padding: "0.5rem",
+          alignItems: "center",
+          background: lightMode ? tint.light : tint.dark,
+          borderLeft: `3px solid ${accent}`,
+          borderRadius: "0 3px 3px 0",
+          marginTop: 4,
+          cursor: "pointer",
+          userSelect: "none",
+        }}
+      >
+        <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", fontWeight: 600, color: "var(--text-warm)" }}>
+          {expanded ? "▾" : "▸"} {sup.supervisor}
+        </span>
+        <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", color: sup.site === "DR" ? "#ed8936" : "#48bb78" }}>
+          {coachingRegionLabel(sup.region)}
+        </span>
+        <span style={{ textAlign: "center", fontFamily: "var(--font-data, monospace)", fontSize: "0.78rem", color: "var(--text-dim)" }}>{sup.agentCount}</span>
+        {sup.weeks.map((w, i) => (
+          <WeekCell key={i} mode="pct" data={w} />
+        ))}
+        <span style={{ textAlign: "right", fontFamily: "var(--font-data, monospace)", fontSize: "0.85rem", fontWeight: 700, color: sessionsColor }}>
+          {sup.sessionsX}/{sup.sessionsY}
+        </span>
+        <span style={{ textAlign: "right", fontFamily: "var(--font-data, monospace)", fontSize: "0.85rem", fontWeight: 700, color: sessionsColor }}>
+          {sup.pct == null ? "—" : `${Math.round(sup.pct * 100)}%`}
+        </span>
+      </div>
+      {expanded && (
+        <div style={{ background: lightMode ? "#fafafa" : "#0f0f0f", padding: "0.5rem 0.75rem 0.75rem 1.5rem", marginLeft: "0.75rem", borderLeft: `1px dashed ${accent}50`, marginTop: 2 }}>
+          {sup.agents.map((a, i) => (
+            <AgentRow key={i} agent={a} weekLabels={weekLabels} lightMode={lightMode} indented cellMode={cellMode} />
+          ))}
+        </div>
+      )}
+    </Fragment>
+  );
+}
+
+function CoachingSummaryTab({ data, lightMode }) {
+  const { org, bySiteRollup, bySite, byWeek, byWeekBySite } = data;
+  const trendData = byWeek;  // byWeek is now hybrid in multi-month mode
+
+  const fmtPct = (p) => p == null ? "—" : `${Math.round(p * 100)}%`;
+
+  // Tile color picks
+  const orgAccent  = coachingPctColor(org.coachingPct);
+  const drAccent   = coachingPctColor(bySiteRollup.dr.pct);
+  const bzAccent   = coachingPctColor(bySiteRollup.bz.pct);
+  const ackAccent  = coachingPctColor(org.ackPct);
+
+  // Site comparison max for bar scaling (cap at 100% for height; allow >100% as label).
+  const maxBarPct = Math.max(1, ...bySite.map(s => s.pct || 0));
+  // Weekly trend — same maxBarPct
+  const maxTrendPct = Math.max(1, ...trendData.map(w => w.pct || 0));
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+      {/* KPI tiles */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.75rem" }}>
+        <KpiTile label="Org Coaching" value={fmtPct(org.coachingPct)} sub={`${org.coachingX} / ${org.coachingY} sessions`} accent={orgAccent} />
+        <KpiTile label="DR Coaching" value={fmtPct(bySiteRollup.dr.pct)} sub={`${bySiteRollup.dr.x} / ${bySiteRollup.dr.y} agent-weeks`} accent={drAccent} />
+        <KpiTile label="BZ Coaching" value={fmtPct(bySiteRollup.bz.pct)} sub={`${bySiteRollup.bz.x} / ${bySiteRollup.bz.y} agent-weeks`} accent={bzAccent} />
+        <KpiTile label="Acknowledgement" value={fmtPct(org.ackPct)} sub={`${org.ackX} / ${org.ackY} sessions`} accent={ackAccent} />
+      </div>
+
+      {/* Site comparison bar chart */}
+      <div style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem 1.5rem" }}>
+        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: "1rem" }}>Site Comparison</div>
+        {bySite.length === 0 ? (
+          <div style={{ color: "var(--text-faint)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem" }}>No site data for the selected period.</div>
+        ) : (
+          <div style={{ display: "flex", gap: "1rem", alignItems: "flex-end", height: 220, paddingTop: 24 }}>
+            {bySite.map((s, i) => {
+              const pct = s.pct || 0;
+              const barH = Math.max(20, (pct / maxBarPct) * 160);
+              const color = coachingPctColor(s.pct);
+              return (
+                <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
+                  <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "1.05rem", fontWeight: 700, color, marginBottom: 4 }}>
+                    {fmtPct(s.pct)}
+                  </div>
+                  <div style={{ width: "60%", height: barH, borderRadius: "6px 6px 0 0", background: `${color}cc` }} />
+                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: "var(--text-warm)", marginTop: 6, fontWeight: 600 }}>{coachingRegionLabel(s.region)}</div>
+                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.68rem", color: "var(--text-dim)" }}>{s.x}/{s.y}</div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Site Week-over-Week Table */}
+      {byWeekBySite && byWeekBySite.length > 0 && (() => {
+        const allSiteLabels = [...new Set(byWeekBySite.flatMap(w => w.sites.map(s => s.label)))];
+        const siteColors = { "Dom. Republic": "#ed8936", "San Ignacio": "#48bb78", "Belize City": "#0ea5e9" };
+        return (
+          <div style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem 1.5rem" }}>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: "0.75rem" }}>Site Trend — Week over Week</div>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr>
+                  <th style={{ padding: "0.5rem", textAlign: "left", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: "var(--text-muted)", borderBottom: "1px solid var(--border)", fontWeight: 500, letterSpacing: "0.05em", textTransform: "uppercase" }}>Site</th>
+                  {byWeekBySite.map((w, i) => (
+                    <th key={i} style={{ padding: "0.5rem", textAlign: "center", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: "var(--text-muted)", borderBottom: "1px solid var(--border)", fontWeight: 500, letterSpacing: "0.05em", textTransform: "uppercase" }}>{w.week}</th>
+                  ))}
+                  <th style={{ padding: "0.5rem", textAlign: "right", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: "var(--text-muted)", borderBottom: "1px solid var(--border)", fontWeight: 500, letterSpacing: "0.05em", textTransform: "uppercase" }}>Total</th>
+                  <th style={{ padding: "0.5rem", textAlign: "right", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: "var(--text-muted)", borderBottom: "1px solid var(--border)", fontWeight: 500, letterSpacing: "0.05em", textTransform: "uppercase" }}>%</th>
+                </tr>
+              </thead>
+              <tbody>
+                {allSiteLabels.map(label => {
+                  let totalX = 0, totalY = 0;
+                  const cells = byWeekBySite.map((weekData, wi) => {
+                    const site = weekData.sites.find(s => s.label === label);
+                    if (site) { totalX += site.x; totalY += site.y; }
+                    const pct = site && site.pct != null ? site.pct : null;
+                    const color = coachingPctColor(pct);
+                    return (
+                      <td key={wi} style={{ padding: "0.4rem 0.5rem", textAlign: "center", fontFamily: "var(--font-data, monospace)", fontSize: "0.78rem", fontWeight: 700, color }}>
+                        {site ? `${site.x}/${site.y}` : "—"}
+                      </td>
+                    );
+                  });
+                  const totalPct = totalY ? totalX / totalY : null;
+                  const totalColor = coachingPctColor(totalPct);
+                  const accent = siteColors[label] || "var(--text-warm)";
+                  return (
+                    <tr key={label} style={{ borderBottom: "1px solid var(--bg-tertiary)" }}>
+                      <td style={{ padding: "0.5rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: accent, fontWeight: 600 }}>{label}</td>
+                      {cells}
+                      <td style={{ padding: "0.4rem 0.5rem", textAlign: "right", fontFamily: "var(--font-data, monospace)", fontSize: "0.82rem", fontWeight: 700, color: totalColor }}>{totalX}/{totalY}</td>
+                      <td style={{ padding: "0.4rem 0.5rem", textAlign: "right", fontFamily: "var(--font-data, monospace)", fontSize: "0.82rem", fontWeight: 700, color: totalColor }}>{totalPct != null ? `${Math.round(totalPct * 100)}%` : "—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        );
+      })()}
+
+      {/* Weekly trend chart */}
+      <div style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem 1.5rem" }}>
+        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: "1rem" }}>Weekly Trend</div>
+        {trendData.length === 0 ? (
+          <div style={{ color: "var(--text-faint)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem" }}>No weekly data for the selected period.</div>
+        ) : (
+          <div style={{ display: "flex", gap: "1.5rem", alignItems: "flex-end", height: 180, paddingTop: 24 }}>
+            {trendData.map((w, i) => {
+              if (w.pct == null) {
+                return (
+                  <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
+                    <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "0.78rem", color: "var(--text-faint)", marginBottom: 4 }}>—</div>
+                    <div style={{ width: "70%", height: 30, borderRadius: "6px 6px 0 0", border: "1px dashed var(--border-muted)", background: "transparent" }} />
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: "var(--text-warm)", marginTop: 6, fontWeight: 600 }}>{w.week}</div>
+                  </div>
+                );
+              }
+              const pct = w.pct || 0;
+              const barH = Math.max(20, (pct / maxTrendPct) * 130);
+              const color = coachingPctColor(w.pct);
+              return (
+                <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
+                  <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "1rem", fontWeight: 700, color, marginBottom: 4 }}>
+                    {fmtPct(w.pct)}
+                  </div>
+                  <div style={{ width: "70%", height: barH, borderRadius: "6px 6px 0 0", background: `${color}cc` }} />
+                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: "var(--text-warm)", marginTop: 6, fontWeight: 600 }}>{w.week}</div>
+                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.68rem", color: "var(--text-dim)" }}>{w.x}/{w.y}</div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Site filter chip set used by both supervisor and all-agents tabs.
+// Returns a predicate (region) → boolean for the active filter.
+function makeSiteFilter(activeChip) {
+  if (activeChip === "all") return () => true;
+  if (activeChip === "dr")  return (r) => !String(r || "").toUpperCase().includes("XOTM");
+  if (activeChip === "bz")  return (r) =>  String(r || "").toUpperCase().includes("XOTM");
+  // sub-region: exact match on the region label (e.g., "Belize City-XOTM")
+  return (r) => coachingRegionLabel(r).toLowerCase() === activeChip.toLowerCase();
+}
+
+function CoachingSiteChips({ activeChip, onChange, lightMode }) {
+  const chips = [
+    { key: "all",          label: "All",         accent: "#d97706" },
+    { key: "dr",           label: "DR",          accent: "#ed8936" },
+    { key: "bz",           label: "BZ (all)",    accent: "#48bb78" },
+    { key: "Belize City",  label: "Belize City", accent: "#48bb78" },
+    { key: "OW",           label: "OW",          accent: "#48bb78" },
+    { key: "San Ignacio",  label: "San Ignacio", accent: "#48bb78" },
+  ];
+  return (
+    <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginBottom: "0.85rem" }}>
+      {chips.map(c => (
+        <SiteChip key={c.key} label={c.label} accent={c.accent} active={activeChip === c.key} onClick={() => onChange(c.key)} />
+      ))}
+    </div>
+  );
+}
+
+function CoachingBySupervisorTab({ data, lightMode }) {
+  const [activeChip, setActiveChip] = useState("all");
+  const [expanded, setExpanded] = useState(() => new Set());
+  const filterFn = makeSiteFilter(activeChip);
+
+  // Filter supervisors and (when expanded) their agents.
+  const filteredSupervisors = useMemo(() => {
+    return data.bySupervisor.map(sup => {
+      const matchedAgents = sup.agents.filter(a => filterFn(a.region));
+      // For chip "all", show every supervisor; for site chips, only show supervisors with matching agents.
+      if (activeChip !== "all" && matchedAgents.length === 0) return null;
+      // Recompute supervisor-level rollup using only matched agents
+      const weeks = data.weekLabels.map((label, i) => {
+        let x = 0, y = 0;
+        for (const a of matchedAgents) {
+          const w = a.weeks[i];
+          if (w.eligible) {
+            y += w.y;        // sum eligible weeks (= 1 for week buckets, N for month buckets)
+            x += w.sessions || 0;
+          }
+        }
+        return { week: label, x, y, pct: y ? x / y : null };
+      });
+      const sessionsX = matchedAgents.reduce((acc, a) => acc + a.sessionsX, 0);
+      const sessionsY = matchedAgents.reduce((acc, a) => acc + a.sessionsY, 0);
+      return {
+        ...sup,
+        agents: matchedAgents,
+        agentCount: matchedAgents.length,
+        weeks,
+        sessionsX,
+        sessionsY,
+        pct: sessionsY ? sessionsX / sessionsY : null,
+      };
+    }).filter(Boolean).sort((a, b) => (a.pct ?? 999) - (b.pct ?? 999));
+  }, [data.bySupervisor, data.weekLabels, activeChip]);
+
+  const toggle = (key) => {
+    setExpanded(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+
+  return (
+    <div>
+      <CoachingSiteChips activeChip={activeChip} onChange={setActiveChip} lightMode={lightMode} />
+
+      {/* Supervisor Attainment Chart */}
+      {filteredSupervisors.length > 0 && (() => {
+        const maxPct = Math.max(1, ...filteredSupervisors.map(s => s.pct || 0));
+        return (
+          <div style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem 1.5rem", marginBottom: "1rem" }}>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: "1rem" }}>Supervisor Attainment</div>
+            <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-end", height: 200, paddingTop: 24, overflowX: filteredSupervisors.length > 12 ? "auto" : "hidden" }}>
+              {filteredSupervisors.map((sup, i) => {
+                const pct = sup.pct || 0;
+                const barH = Math.max(16, (pct / maxPct) * 150);
+                const color = coachingPctColor(sup.pct);
+                return (
+                  <div key={i} style={{ flex: filteredSupervisors.length <= 12 ? 1 : "0 0 60px", display: "flex", flexDirection: "column", alignItems: "center", minWidth: 40 }}>
+                    <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "0.72rem", fontWeight: 700, color, marginBottom: 2, whiteSpace: "nowrap" }}>
+                      {sup.pct == null ? "—" : `${Math.round(pct * 100)}%`}
+                    </div>
+                    <div style={{ width: "70%", height: barH, borderRadius: "4px 4px 0 0", background: `${color}cc`, minWidth: 20 }}
+                      title={`${sup.supervisor}: ${Math.round(pct * 100)}% (${sup.sessionsX}/${sup.sessionsY})`} />
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.62rem", color: "var(--text-warm)", marginTop: 4, fontWeight: 500, textAlign: "center", lineHeight: 1.2, maxWidth: 60, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {sup.supervisor.split(" ")[0]}
+                    </div>
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.56rem", color: "var(--text-dim)", whiteSpace: "nowrap" }}>
+                      {sup.sessionsX}/{sup.sessionsY}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Header row */}
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: `1.4fr 0.9fr 0.5fr ${data.weekLabels.map(() => "0.7fr").join(" ")} 0.7fr 0.5fr`,
+        gap: 4,
+        padding: "0.5rem",
+        fontFamily: "var(--font-ui, Inter, sans-serif)",
+        fontSize: "0.7rem",
+        textTransform: "uppercase",
+        letterSpacing: "0.06em",
+        color: "var(--text-muted)",
+        borderBottom: "1px solid var(--border)",
+      }}>
+        <span>Supervisor</span>
+        <span>Site</span>
+        <span style={{ textAlign: "center" }}>Agents</span>
+        {data.weekLabels.map((wk, i) => <span key={i} style={{ textAlign: "center" }}>{wk}</span>)}
+        <span style={{ textAlign: "right" }}>Sessions</span>
+        <span style={{ textAlign: "right" }}>%</span>
+      </div>
+
+      {filteredSupervisors.length === 0 ? (
+        <div style={{ padding: "2rem 1rem", textAlign: "center", color: "var(--text-faint)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem" }}>
+          No supervisors match the current site filter.
+        </div>
+      ) : (
+        filteredSupervisors.map((sup, i) => (
+          <SupervisorRow
+            key={`${sup.supervisor}-${i}`}
+            sup={sup}
+            weekLabels={data.weekLabels}
+            expanded={expanded.has(sup.supervisor)}
+            onToggle={() => toggle(sup.supervisor)}
+            lightMode={lightMode}
+            cellMode={data.agentCellMode}
+          />
+        ))
+      )}
+    </div>
+  );
+}
+
+function CoachingAllAgentsTab({ data, lightMode }) {
+  const [activeChip, setActiveChip] = useState("all");
+  const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState("pct"); // "pct" | "name" | "sessions"
+  const [sortDir, setSortDir] = useState("asc");
+
+  const filterFn = makeSiteFilter(activeChip);
+
+  const filtered = useMemo(() => {
+    const s = search.trim().toLowerCase();
+    let rows = data.allAgents.filter(a => filterFn(a.region));
+    if (s) rows = rows.filter(a => (a.agentName || "").toLowerCase().includes(s));
+    rows.sort((a, b) => {
+      let av, bv;
+      if (sortBy === "name") { av = (a.agentName || "").toLowerCase(); bv = (b.agentName || "").toLowerCase(); }
+      else if (sortBy === "sessions") { av = a.sessionsX; bv = b.sessionsX; }
+      else { av = a.pct ?? 999; bv = b.pct ?? 999; }
+      if (av < bv) return sortDir === "asc" ? -1 : 1;
+      if (av > bv) return sortDir === "asc" ? 1 : -1;
+      return (a.agentName || "").localeCompare(b.agentName || "");
+    });
+    return rows;
+  }, [data.allAgents, activeChip, search, sortBy, sortDir]);
+
+  const gappedCount = useMemo(() => filtered.filter(a => (a.pct ?? 0) < 1).length, [filtered]);
+
+  const headerClick = (col) => {
+    if (sortBy === col) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortBy(col); setSortDir(col === "name" ? "asc" : col === "sessions" ? "desc" : "asc"); }
+  };
+
+  const headerCell = (label, col, align = "left") => (
+    <span
+      onClick={col ? () => headerClick(col) : undefined}
+      style={{
+        textAlign: align,
+        cursor: col ? "pointer" : "default",
+        userSelect: "none",
+        color: col === sortBy ? "var(--text-warm)" : "var(--text-muted)",
+      }}
+    >
+      {label}{col === sortBy ? (sortDir === "asc" ? " ▲" : " ▼") : ""}
+    </span>
+  );
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
+        <CoachingSiteChips activeChip={activeChip} onChange={setActiveChip} lightMode={lightMode} />
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search agent name..."
+          style={{
+            background: "var(--bg-secondary)",
+            border: "1px solid var(--border)",
+            borderRadius: "var(--radius-sm, 6px)",
+            padding: "0.4rem 0.7rem",
+            fontFamily: "var(--font-ui, Inter, sans-serif)",
+            fontSize: "0.78rem",
+            color: "var(--text-warm)",
+            minWidth: 200,
+          }}
+        />
+      </div>
+
+      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: "var(--text-dim)", marginBottom: "0.6rem" }}>
+        {filtered.length} agents · <span style={{ color: gappedCount > 0 ? "#dc2626" : "#16a34a", fontWeight: 600 }}>{gappedCount} with gaps</span>
+      </div>
+
+      {/* Header row */}
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: `1.5fr 1.2fr 1.2fr ${data.weekLabels.map(() => "0.5fr").join(" ")} 0.7fr 0.5fr`,
+        gap: 4,
+        padding: "0.5rem",
+        fontFamily: "var(--font-ui, Inter, sans-serif)",
+        fontSize: "0.7rem",
+        textTransform: "uppercase",
+        letterSpacing: "0.06em",
+        borderBottom: "1px solid var(--border)",
+      }}>
+        {headerCell("Agent", "name")}
+        {headerCell("Supervisor")}
+        {headerCell("Site")}
+        {data.weekLabels.map((wk, i) => <span key={i} style={{ textAlign: "center", color: "var(--text-muted)" }}>{wk}</span>)}
+        {headerCell("Sessions", "sessions", "right")}
+        {headerCell("%", "pct", "right")}
+      </div>
+
+      {filtered.length === 0 ? (
+        <div style={{ padding: "2rem 1rem", textAlign: "center", color: "var(--text-faint)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem" }}>
+          No agents match the current filters.
+        </div>
+      ) : (
+        filtered.map((a, i) => (
+          <AgentRow key={`${a.ntid || a.agentName}-${i}`} agent={a} weekLabels={data.weekLabels} lightMode={lightMode} cellMode={data.agentCellMode} />
+        ))
+      )}
+    </div>
+  );
+}
+
+function CoachingPage({ coachingWeekly, coachingDetails, bpLookup, lightMode }) {
+  const [tab, setTab] = useState("summary");
+  const [timeMode, setTimeMode] = useState("current"); // "current" | "select" | "all"
+  const [selectedMonths, setSelectedMonths] = useState(() => new Set());
+
+  // Build the page data with the active filter
+  const monthFilter = useMemo(() => ({ mode: timeMode, months: selectedMonths }), [timeMode, selectedMonths]);
+  const data = useMemo(
+    () => buildCoachingPageData(coachingWeekly, coachingDetails, bpLookup, monthFilter),
+    [coachingWeekly, coachingDetails, bpLookup, monthFilter]
+  );
+
+  const hasWeekly = Array.isArray(coachingWeekly) && coachingWeekly.length > 0;
+  const hasDetails = coachingDetails && Object.keys(coachingDetails).length > 0;
+
+  // Empty state: nothing loaded
+  if (!hasWeekly && !hasDetails) {
+    return (
+      <div style={{ minHeight: "60vh", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-faint)", fontFamily: "var(--font-ui, Inter, sans-serif)", textAlign: "center", padding: "2rem" }}>
+        <div>
+          <div style={{ fontSize: "1rem", marginBottom: "0.5rem", color: "var(--text-warm)" }}>No coaching data loaded</div>
+          <div style={{ fontSize: "0.85rem" }}>Upload Coaching Details and Weekly Breakdown via Settings ⚙ → Data sources.</div>
+        </div>
+      </div>
+    );
+  }
+
+  const toggleMonth = (m) => setSelectedMonths(prev => {
+    const next = new Set(prev);
+    if (next.has(m)) next.delete(m); else next.add(m);
+    return next;
+  });
+
+  const tabs = [
+    { key: "summary",    label: "Summary" },
+    { key: "supervisor", label: "By Supervisor" },
+    { key: "agents",     label: "All Agents" },
+  ];
+
+  // Subtitle: count of agent-weeks in active period
+  const totalAgentWeeks = data.allAgents.reduce(
+    (acc, a) => acc + a.weeks.reduce((s, w) => s + (w.eligible ? 1 : 0), 0),
+    0
+  );
+  const periodLabel = timeMode === "current"
+    ? data.currentMonth || "—"
+    : timeMode === "all"
+      ? "All Time"
+      : (selectedMonths.size === 0 ? "All months" : `${selectedMonths.size} month${selectedMonths.size > 1 ? "s" : ""}`);
+
+  return (
+    <div style={{ maxWidth: 1100, margin: "0 auto", padding: "0 2.5rem 2rem" }}>
+      {/* Header */}
+      <div style={{ marginBottom: "0.75rem" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "0.5rem" }}>
+          <div>
+            <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.5rem", fontWeight: 700, color: "var(--text-warm)" }}>
+              Coaching Standard Attainment — myPerformance
+            </div>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: "var(--text-dim)" }}>
+              {totalAgentWeeks} agent-weeks · {periodLabel}
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: "0.25rem" }}>
+            {[{ key: "current", label: "Current Month" }, { key: "select", label: "Select Month" }, { key: "all", label: "All Time" }].map(opt => (
+              <button
+                key={opt.key}
+                onClick={() => setTimeMode(opt.key)}
+                style={{
+                  padding: "0.35rem 0.75rem",
+                  borderRadius: "var(--radius-sm, 6px)",
+                  border: `1px solid ${timeMode === opt.key ? "#d9770650" : "var(--border-muted)"}`,
+                  background: timeMode === opt.key ? "#d9770612" : "transparent",
+                  color: timeMode === opt.key ? "#d97706" : "var(--text-dim)",
+                  fontFamily: "var(--font-ui, Inter, sans-serif)",
+                  fontSize: "0.78rem",
+                  cursor: "pointer",
+                  fontWeight: timeMode === opt.key ? 600 : 400,
+                }}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {timeMode === "select" && (
+          <div style={{ display: "flex", gap: "0.3rem", marginTop: "0.5rem", flexWrap: "wrap" }}>
+            {data.fiscalMonths.map(m => {
+              const selected = selectedMonths.has(m);
+              return (
+                <button
+                  key={m}
+                  onClick={() => toggleMonth(m)}
+                  style={{
+                    padding: "0.3rem 0.65rem",
+                    borderRadius: "var(--radius-sm, 6px)",
+                    border: `1px solid ${selected ? "#6366f150" : "var(--border-muted)"}`,
+                    background: selected ? "#6366f118" : "transparent",
+                    color: selected ? "#6366f1" : "var(--text-dim)",
+                    fontFamily: "var(--font-ui, Inter, sans-serif)",
+                    fontSize: "0.75rem",
+                    cursor: "pointer",
+                    fontWeight: selected ? 600 : 400,
+                  }}
+                >
+                  {m}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Sub-tab navigation */}
+      <div style={{ display: "flex", gap: "0.35rem", marginBottom: "1.25rem", borderBottom: "1px solid var(--border)" }}>
+        {tabs.map(t => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            style={{
+              padding: "0.55rem 1rem",
+              border: "none",
+              borderBottom: tab === t.key ? "2px solid #d97706" : "2px solid transparent",
+              background: "transparent",
+              color: tab === t.key ? "var(--text-warm)" : "var(--text-dim)",
+              fontFamily: "var(--font-ui, Inter, sans-serif)",
+              fontSize: "0.82rem",
+              fontWeight: tab === t.key ? 600 : 400,
+              cursor: "pointer",
+              transition: "all 150ms",
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "summary"    && <CoachingSummaryTab       data={data} lightMode={lightMode} />}
+      {tab === "supervisor" && <CoachingBySupervisorTab  data={data} lightMode={lightMode} />}
+      {tab === "agents"     && <CoachingAllAgentsTab     data={data} lightMode={lightMode} />}
+    </div>
+  );
+}
+
 // SECTION 11b — tNPS DEEP-DIVE SLIDE  (pages/TNPSSlide.jsx)
 // Full tNPS analysis with 4 sub-tabs: Summary, By Campaign, By Supervisor, Customer Voices
 // ══════════════════════════════════════════════════════════════════════════════
@@ -6536,6 +11246,333 @@ function TNPSSlide({ perf, onNav, lightMode }) {
 // Consumes engine output directly. No computation inside.
 // ══════════════════════════════════════════════════════════════════════════════
 
+// ── Daily Targets card — Plan/Actual/Per-Day table with Combined/DR/BZ toggle ─
+// Mirrors the per-site Daily Targets table (in SiteDrilldown), but parameterized by view.
+function DailyTargetsCard({ programs, regions, goalLookup, fiscalInfo }) {
+  const [view, setView] = useState("Combined");
+  const [fundingFilter, setFundingFilter] = useState(null);
+  const [dtcTierPct, setDtcTierPct] = useState(100); // gainshare tier target: 100=Plan, 106, 113, 120, 126
+
+  // Reset funding filter when switching views (different programs may have different fundings)
+  useEffect(() => { setFundingFilter(null); }, [view]);
+
+  // Site key set for this view: which goalEntry buckets to read from
+  const siteKeys = view === "DR" ? ["DR"] : view === "BZ" ? ["BZ"] : ["DR", "BZ"];
+  // Region predicate for filtering agents
+  const regionMatches = (region) => {
+    const isBz = (region || "").toUpperCase().includes("XOTM");
+    if (view === "DR") return !isBz;
+    if (view === "BZ") return isBz;
+    return true;
+  };
+
+  // Build dtPrograms: one row per (program, ROC breakout)
+  const dtPrograms = useMemo(() => {
+    if (!programs || !goalLookup) return [];
+    const rows = [];
+    programs.forEach(p => {
+      const viewAgents = (p.agents || []).filter(a => regionMatches(a.region));
+      if (viewAgents.length === 0 && !p.goalEntry) return;
+
+      // Combined plan rows from selected siteKeys
+      const planRows = siteKeys.flatMap(k => (p.goalEntry?.[k] || []));
+      if (planRows.length === 0 && viewAgents.length === 0) return;
+
+      const sitePlanGoals = planRows.reduce((s, r) => s + computePlanRow(r).homesGoal, 0) || null;
+      const sitePlanHsd   = planRows.reduce((s, r) => s + computePlanRow(r).hsdGoal,   0) || null;
+      const sitePlanXm    = planRows.reduce((s, r) => s + computePlanRow(r).xmGoal,    0) || null;
+      const sitePlanHours = planRows.reduce((s, r) => s + computePlanRow(r).hoursGoal, 0) || null;
+
+      // Goal breakout per ROC (collapse rows with same ROC)
+      const rocGroups = {};
+      planRows.forEach(r => {
+        const key = r._roc || r._target || "Unknown";
+        if (!rocGroups[key]) rocGroups[key] = { target: r._target || "Unknown", roc: r._roc || "", funding: r._funding || "", rows: [] };
+        rocGroups[key].rows.push(r);
+      });
+      const goalBreakout = Object.values(rocGroups).map(g => {
+        const pr = g.rows.map(r => computePlanRow(r));
+        return {
+          target: g.target, roc: g.roc, funding: g.funding,
+          homes: pr.reduce((s, x) => s + x.homesGoal, 0),
+          hours: pr.reduce((s, x) => s + x.hoursGoal, 0),
+          hsd:   pr.reduce((s, x) => s + x.hsdGoal,   0),
+          xm:    pr.reduce((s, x) => s + x.xmGoal,    0),
+        };
+      });
+
+      const totalHours = viewAgents.reduce((s, a) => s + (a.hours || 0), 0);
+      const totalGoals = viewAgents.reduce((s, a) => s + (a.goals || 0), 0);
+      const hsdAct     = viewAgents.reduce((s, a) => s + (a.newXI || 0), 0);
+      const xmAct      = viewAgents.reduce((s, a) => s + (a.xmLines || 0), 0);
+
+      const base = {
+        jobType: p.jobType,
+        siteAgents: viewAgents,
+        sitePlanHours, sitePlanGoals, sitePlanHsd, sitePlanXm,
+        totalHours, totalGoals, hsdAct, xmAct,
+        goalBreakout,
+      };
+
+      // Split by ROC funding source to mirror the per-site behaviour
+      if (!fundingFilter) {
+        if (goalBreakout.length <= 1) {
+          rows.push(base);
+        } else {
+          goalBreakout.forEach(fb => {
+            const rocAgents = fb.roc ? viewAgents.filter(a => (a.rocCode || "").toUpperCase() === fb.roc.toUpperCase()) : viewAgents;
+            rows.push({
+              ...base,
+              _fundingLabel: fb.funding, _fundingRoc: fb.roc,
+              sitePlanHours: fb.hours || 0, sitePlanGoals: fb.homes || 0,
+              sitePlanHsd: fb.hsd || null,  sitePlanXm:  fb.xm   || null,
+              totalHours: rocAgents.reduce((s, a) => s + (a.hours || 0), 0),
+              totalGoals: rocAgents.reduce((s, a) => s + (a.goals || 0), 0),
+              hsdAct:     rocAgents.reduce((s, a) => s + (a.newXI || 0), 0),
+              xmAct:      rocAgents.reduce((s, a) => s + (a.xmLines || 0), 0),
+              siteAgents: rocAgents,
+            });
+          });
+        }
+      } else {
+        const matching = goalBreakout.filter(g => g.funding === fundingFilter);
+        matching.forEach(fb => {
+          const rocAgents = fb.roc ? viewAgents.filter(a => (a.rocCode || "").toUpperCase() === fb.roc.toUpperCase()) : viewAgents;
+          rows.push({
+            ...base,
+            _fundingLabel: fb.funding, _fundingRoc: fb.roc,
+            sitePlanHours: fb.hours || 0, sitePlanGoals: fb.homes || 0,
+            sitePlanHsd: fb.hsd || null,  sitePlanXm:  fb.xm   || null,
+            totalHours: rocAgents.reduce((s, a) => s + (a.hours || 0), 0),
+            totalGoals: rocAgents.reduce((s, a) => s + (a.goals || 0), 0),
+            hsdAct:     rocAgents.reduce((s, a) => s + (a.newXI || 0), 0),
+            xmAct:      rocAgents.reduce((s, a) => s + (a.xmLines || 0), 0),
+            siteAgents: rocAgents,
+          });
+        });
+      }
+    });
+    return rows.filter(r => r.sitePlanHours || r.sitePlanGoals || r.sitePlanHsd || r.sitePlanXm);
+  }, [programs, goalLookup, view, fundingFilter]);
+
+  // Canonical site-level totals (read directly from goalLookup so we don't double-count
+  // when programs share overlapping TA goal entries)
+  const canon = useMemo(() => {
+    if (!goalLookup) return { hours: 0, goals: 0, hsd: 0, xm: 0 };
+    let hours = 0, goals = 0, hsd = 0, xm = 0;
+    Object.values(goalLookup.byTA || {}).forEach(siteMap => {
+      siteKeys.forEach(k => {
+        (siteMap[k] || []).forEach(r => {
+          const pr = computePlanRow(r);
+          hours += pr.hoursGoal; goals += pr.homesGoal; hsd += pr.hsdGoal; xm += pr.xmGoal;
+        });
+      });
+    });
+    return { hours, goals, hsd, xm };
+  }, [goalLookup, view]);
+
+  if (!fiscalInfo) return null;
+
+  const fundingSources = [...new Set(dtPrograms.flatMap(p => (p.goalBreakout || []).map(g => g.funding)).filter(Boolean))];
+  const dtColors = [
+    { label: "Hours",    color: "#6366f1", bg: "#6366f108" },
+    { label: "Homes",    color: "#16a34a", bg: "#16a34a08" },
+    { label: "HSD",      color: "#2563eb", bg: "#2563eb08" },
+    { label: "XM Lines", color: "#8b5cf6", bg: "#8b5cf608" },
+  ];
+  // Grid: Program | div | Hours(Plan,Actual,/Day) | div | Homes(Plan,Actual,/Day,GPH) | div | HSD(Plan,Actual,/Day) | div | XM(Plan,Actual,/Day)
+  const gridCols = "2.2fr 3px 1fr 1fr 1fr 3px 1fr 1fr 1fr 0.8fr 3px 1fr 1fr 1fr 3px 1fr 1fr 1fr";
+  const viewLabel = view === "Combined" ? "Combined" : view === "DR" ? "Dom. Republic" : "Belize";
+  const remainingBDays = fiscalInfo.remainingBDays || 0;
+
+  const renderMetricCells = (metrics, isTotal, gphVal) => {
+    const cells = [];
+    metrics.forEach((m, mi) => {
+      const g = dtColors[mi];
+      const remaining = (m.plan || 0) - (m.actual || 0);
+      const perDay = remainingBDays > 0 && remaining > 0 ? remaining / remainingBDays : null;
+      cells.push(<div key={`d${mi}`} style={{ background: `${g.color}25` }} />);
+      cells.push(
+        <div key={`p${mi}`} style={{ padding: "0.5rem 0", textAlign: "center", background: g.bg, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: isTotal ? "0.95rem" : "0.88rem", color: m.plan ? "var(--text-secondary)" : "var(--text-faint)", fontWeight: isTotal ? 700 : 400 }}>
+          {m.plan ? m.fmtFn(m.plan) : "—"}
+        </div>
+      );
+      cells.push(
+        <div key={`a${mi}`} style={{ padding: "0.5rem 0", textAlign: "center", background: g.bg, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: isTotal ? "0.95rem" : "0.88rem", color: "var(--text-warm)", fontWeight: isTotal ? 700 : 500 }}>
+          {m.fmtFn(m.actual || 0)}
+        </div>
+      );
+      cells.push(
+        <div key={`pd${mi}`} style={{ padding: "0.5rem 0", textAlign: "center", background: g.bg, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: isTotal ? "1.4rem" : "1.15rem", color: perDay != null ? (isTotal ? "#d97706" : "#16a34a") : "var(--text-faint)", fontWeight: 700 }}>
+          {perDay != null ? (perDay < 1 ? perDay.toFixed(1) : Math.ceil(perDay).toLocaleString()) : (m.plan && m.actual >= m.plan ? "—" : "—")}
+        </div>
+      );
+      // Insert GPH cell after Homes /Day (index 1)
+      if (mi === 1) {
+        const gphColor = gphVal != null ? "#d97706" : "var(--text-faint)";
+        cells.push(
+          <div key="gph" style={{ padding: "0.5rem 0", textAlign: "center", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: isTotal ? "1.15rem" : "0.92rem", color: gphColor, fontWeight: 700 }}>
+            {gphVal != null ? gphVal.toFixed(3) : "—"}
+          </div>
+        );
+      }
+    });
+    return cells;
+  };
+
+  return (
+    <div style={{ background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.5rem" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "1rem", gap: "1rem", flexWrap: "wrap" }}>
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <span style={{ fontSize: "1.5rem" }}>🎯</span>
+            <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "#d97706", letterSpacing: "0.12em", textTransform: "uppercase", fontWeight: 700 }}>
+              Daily Targets — {viewLabel}
+            </span>
+          </div>
+          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "1rem", color: "var(--text-faint)", marginTop: "0.2rem" }}>
+            Required per day to finish {dtcTierPct === 100 ? "on goal" : `at ${dtcTierPct}% (Tier ${dtcTierPct >= 126 ? "+4" : dtcTierPct >= 120 ? "+3" : dtcTierPct >= 113 ? "+2" : "+1"})`} · {remainingBDays > 0 ? `${remainingBDays} business days remaining` : "No scheduled business days remaining"}
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: "0.3rem" }}>
+          {[["Combined", "Combined"], ["DR", "Dom. Republic"], ["BZ", "Belize"]].map(([key, label]) => (
+            <button key={key} onClick={() => setView(key)}
+              style={{ padding: "0.4rem 0.85rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${view === key ? "#d9770680" : "var(--text-faint)"}`, background: view === key ? "#d977061a" : "transparent", color: view === key ? "#d97706" : "var(--text-muted)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", cursor: "pointer", fontWeight: view === key ? 600 : 400 }}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {fundingSources.length > 1 && (
+        <div style={{ display: "flex", gap: "0.3rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
+          <button onClick={() => setFundingFilter(null)}
+            style={{ padding: "0.2rem 0.6rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${!fundingFilter ? "#d97706" : "var(--border)"}`, background: !fundingFilter ? "#d9770618" : "transparent", color: !fundingFilter ? "#d97706" : "var(--text-dim)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", cursor: "pointer", fontWeight: !fundingFilter ? 700 : 400 }}>
+            All Funding
+          </button>
+          {fundingSources.map(f => {
+            const active = fundingFilter === f;
+            return (
+              <button key={f} onClick={() => setFundingFilter(active ? null : f)}
+                style={{ padding: "0.2rem 0.6rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${active ? "#2563eb" : "var(--border)"}`, background: active ? "#2563eb18" : "transparent", color: active ? "#2563eb" : "var(--text-dim)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", cursor: "pointer", fontWeight: active ? 700 : 400 }}>
+                {f}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Gainshare tier target selector */}
+      <div style={{ display: "flex", gap: "0.3rem", flexWrap: "wrap", marginBottom: "0.75rem", alignItems: "center" }}>
+        <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: "var(--text-faint)", letterSpacing: "0.06em", marginRight: "0.25rem" }}>TARGET</span>
+        {[
+          { pct: 100, label: "Plan", bonus: null },
+          { pct: 106, label: "106%", bonus: "+1" },
+          { pct: 113, label: "113%", bonus: "+2" },
+          { pct: 120, label: "120%", bonus: "+3" },
+          { pct: 126, label: "126%", bonus: "+4" },
+        ].map(t => {
+          const active = dtcTierPct === t.pct;
+          const tierColor = t.pct === 100 ? "#d97706" : t.pct <= 106 ? "#2563eb" : t.pct <= 113 ? "#16a34a" : t.pct <= 120 ? "#8b5cf6" : "#d97706";
+          return (
+            <button key={t.pct} onClick={() => setDtcTierPct(t.pct)}
+              style={{ padding: "0.2rem 0.55rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${active ? tierColor : "var(--border)"}`, background: active ? tierColor + "18" : "transparent", color: active ? tierColor : "var(--text-dim)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", cursor: "pointer", fontWeight: active ? 700 : 400, display: "flex", alignItems: "center", gap: "0.25rem" }}>
+              {t.label}
+              {t.bonus && <span style={{ fontSize: "0.7rem", opacity: active ? 0.8 : 0.5 }}>{t.bonus}</span>}
+            </button>
+          );
+        })}
+      </div>
+
+      {dtPrograms.length === 0 ? (
+        <div style={{ color: "var(--text-dim)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem", padding: "1rem 0" }}>
+          No plan data available for the selected view.
+        </div>
+      ) : (
+        <>
+          {/* Group header row */}
+          <div style={{ display: "grid", gridTemplateColumns: gridCols }}>
+            <div />
+            {dtColors.map((g, gi) => (
+              <Fragment key={g.label}>
+                <div style={{ background: `${g.color}40` }} />
+                <div style={{ gridColumn: gi === 1 ? "span 4" : "span 3", textAlign: "center", padding: "0.4rem 0", background: `${g.color}18`, borderBottom: `2px solid ${g.color}40`, borderTop: `2px solid ${g.color}30`, borderRadius: gi === 0 ? "6px 0 0 0" : gi === 3 ? "0 6px 0 0" : "0" }}>
+                  <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: g.color, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700 }}>{g.label}</span>
+                </div>
+              </Fragment>
+            ))}
+          </div>
+
+          {/* Sub-header row */}
+          <div style={{ display: "grid", gridTemplateColumns: gridCols, borderBottom: "2px solid var(--border)" }}>
+            <div style={{ padding: "0.35rem 0.75rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Program</div>
+            {dtColors.map((g, gi) => (
+              <Fragment key={gi}>
+                <div style={{ background: `${g.color}25` }} />
+                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: dtcTierPct !== 100 && gi > 0 ? "#8b5cf6" : "var(--text-faint)", textAlign: "center", padding: "0.35rem 0", background: g.bg, fontWeight: dtcTierPct !== 100 && gi > 0 ? 600 : 400 }}>{dtcTierPct !== 100 && gi > 0 ? `${dtcTierPct}%` : "Plan"}</div>
+                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: "var(--text-faint)", textAlign: "center", padding: "0.35rem 0", background: g.bg }}>Actual</div>
+                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: "#d97706", textAlign: "center", padding: "0.35rem 0", fontWeight: 700, background: g.bg }}>/ Day</div>
+                {gi === 1 && <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: "#d97706", textAlign: "center", padding: "0.35rem 0", fontWeight: 700, background: g.bg }}>GPH</div>}
+              </Fragment>
+            ))}
+          </div>
+
+          {/* Program rows */}
+          {dtPrograms.map((p, pi) => {
+            const tierMult = dtcTierPct / 100;
+            const metrics = [
+              { plan: p.sitePlanHours, actual: p.totalHours, fmtFn: v => fmt(v, 0) },
+              { plan: p.sitePlanGoals ? Math.ceil(p.sitePlanGoals * tierMult) : p.sitePlanGoals, actual: p.totalGoals, fmtFn: v => v.toLocaleString() },
+              { plan: p.sitePlanHsd   ? Math.ceil(p.sitePlanHsd   * tierMult) : p.sitePlanHsd,   actual: p.hsdAct,     fmtFn: v => v.toLocaleString() },
+              { plan: p.sitePlanXm    ? Math.ceil(p.sitePlanXm    * tierMult) : p.sitePlanXm,    actual: p.xmAct,      fmtFn: v => v.toLocaleString() },
+            ];
+            const rocLabel = p._fundingRoc
+              ? `${p._fundingRoc}${p._fundingLabel ? ` · ${p._fundingLabel}` : ""}`
+              : (p.goalBreakout ? p.goalBreakout.map(g => g.roc).filter(Boolean).join(", ") : "");
+            // GPH = homes remaining / hours remaining (per day cancels out)
+            const hrsRemain = Math.max((metrics[0].plan || 0) - (metrics[0].actual || 0), 0);
+            const homesRemain = Math.max((metrics[1].plan || 0) - (metrics[1].actual || 0), 0);
+            const rowGph = hrsRemain > 0 && homesRemain > 0 ? homesRemain / hrsRemain : null;
+            return (
+              <div key={p.jobType + (p._fundingRoc || String(pi))} style={{ display: "grid", gridTemplateColumns: gridCols, borderBottom: "1px solid var(--bg-tertiary)", alignItems: "center" }}>
+                <div style={{ padding: "0.5rem 0.75rem" }}>
+                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem", color: "var(--text-warm)" }}>{p.jobType}</div>
+                  {rocLabel && <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.74rem", color: "var(--text-faint)" }}>{rocLabel}</div>}
+                </div>
+                {renderMetricCells(metrics, false, rowGph)}
+              </div>
+            );
+          })}
+
+          {/* Totals row */}
+          {(() => {
+            const tierMult = dtcTierPct / 100;
+            const totHoursPlan = fundingFilter ? dtPrograms.reduce((s, p) => s + (p.sitePlanHours || 0), 0) : canon.hours;
+            const totGoalsPlan = fundingFilter ? dtPrograms.reduce((s, p) => s + (p.sitePlanGoals || 0), 0) : canon.goals;
+            const totHsdPlan   = fundingFilter ? dtPrograms.reduce((s, p) => s + (p.sitePlanHsd   || 0), 0) : canon.hsd;
+            const totXmPlan    = fundingFilter ? dtPrograms.reduce((s, p) => s + (p.sitePlanXm    || 0), 0) : canon.xm;
+            const tots = [
+              { plan: totHoursPlan, actual: dtPrograms.reduce((s, p) => s + (p.totalHours || 0), 0), fmtFn: v => fmt(v, 0) },
+              { plan: totGoalsPlan ? Math.ceil(totGoalsPlan * tierMult) : totGoalsPlan, actual: dtPrograms.reduce((s, p) => s + (p.totalGoals || 0), 0), fmtFn: v => v.toLocaleString() },
+              { plan: totHsdPlan   ? Math.ceil(totHsdPlan   * tierMult) : totHsdPlan,   actual: dtPrograms.reduce((s, p) => s + (p.hsdAct     || 0), 0), fmtFn: v => v.toLocaleString() },
+              { plan: totXmPlan    ? Math.ceil(totXmPlan    * tierMult) : totXmPlan,    actual: dtPrograms.reduce((s, p) => s + (p.xmAct      || 0), 0), fmtFn: v => v.toLocaleString() },
+            ];
+            const totHrsRemain = Math.max((tots[0].plan || 0) - (tots[0].actual || 0), 0);
+            const totHomesRemain = Math.max((tots[1].plan || 0) - (tots[1].actual || 0), 0);
+            const totGph = totHrsRemain > 0 && totHomesRemain > 0 ? totHomesRemain / totHrsRemain : null;
+            return (
+              <div style={{ display: "grid", gridTemplateColumns: gridCols, borderTop: "2px solid var(--border)", marginTop: "0.25rem", alignItems: "center" }}>
+                <div style={{ padding: "0.65rem 0.75rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 700 }}>TOTAL</div>
+                {renderMetricCells(tots, true, totGph)}
+              </div>
+            );
+          })()}
+        </>
+      )}
+    </div>
+  );
+}
+
 function BusinessOverview({ perf, onNav, goToSlide, tnpsSlideIdx, localAI, priorAgents, priorGoalLookup, lightMode }) {
   const [tab, setTab] = useState("overview");
 
@@ -6565,20 +11602,6 @@ function BusinessOverview({ perf, onNav, goToSlide, tnpsSlideIdx, localAI, prior
     })).sort((a, b) => (b.score ?? -999) - (a.score ?? -999));
   }, [tnpsData, tnpsBySiteAll, fiscalInfo]);
 
-  // Group regions: XOTM = BZ, everything else = individual DR sites
-  const siteGroups = useMemo(() => {
-    const allRegions = [...new Set(agents.map(a => (a.region || "Unknown")))].filter(r => r !== "Unknown").sort();
-    const bzRegions  = allRegions.filter(r => r.toUpperCase().includes("XOTM"));
-    const drRegions  = allRegions.filter(r => !r.toUpperCase().includes("XOTM"));
-    const groups = [];
-    if (drRegions.length > 0) groups.push({ label: drRegions.length === 1 ? mbrSiteName(drRegions[0]) : "DR", regions: drRegions });
-    if (bzRegions.length > 0) groups.push({ label: "BZ", regions: bzRegions });
-    return groups;
-  }, [agents]);
-
-  const [selectedGroup, setSelectedGroup] = useState(null);
-  const activeGroup = selectedGroup || siteGroups[0] || null;
-
   const wins = insights.filter(i => i.type === "win");
   const opps = insights.filter(i => i.type === "opp");
 
@@ -6592,6 +11615,63 @@ function BusinessOverview({ perf, onNav, goToSlide, tnpsSlideIdx, localAI, prior
   // Holistic gainshare attainments (overall table)
   const globalHsdAttain    = globalPlanNewXI  ? (globalNewXI  / globalPlanNewXI)  * 100 : null;
   const globalCostPerAttain = globalPlanRgu ? (globalRgu / globalPlanRgu) * 100 : null;
+
+  // Per-funding-source capped projections (global / all sites)
+  const globalCapped = useMemo(() => {
+    if (!goalLookup || !planTotal) return null;
+    const fg = {};
+    Object.values(goalLookup.byTA || {}).forEach(siteMap => {
+      Object.values(siteMap).flat().forEach(r => {
+        const f = r._funding || "Unknown";
+        const roc = (r._roc || "").toUpperCase();
+        if (!fg[f]) fg[f] = { homes: 0, hsd: 0, xm: 0, rgu: 0, hours: 0, rocs: new Set() };
+        const p = computePlanRow(r);
+        fg[f].homes += p.homesGoal; fg[f].hsd += p.hsdGoal;
+        fg[f].xm += p.xmGoal; fg[f].rgu += p.rguGoal;
+        fg[f].hours += p.hoursGoal;
+        if (roc) fg[f].rocs.add(roc);
+      });
+    });
+    const matched = new Set();
+    const proj = { homes: [], hsd: [], xm: [], rgu: [], hours: [] };
+    Object.values(fg).forEach(g => {
+      g.rocs.forEach(r => matched.add(r));
+      const fa = agents.filter(a => g.rocs.has((a.rocCode || "").toUpperCase()));
+      const aH = fa.reduce((s, a) => s + a.goals, 0);
+      const aD = fa.reduce((s, a) => s + a.newXI, 0);
+      const aX = fa.reduce((s, a) => s + a.xmLines, 0);
+      const aR = fa.reduce((s, a) => s + a.rgu, 0);
+      const aHrs = fa.reduce((s, a) => s + a.hours, 0);
+      proj.homes.push({ actual: aH, plan: g.homes });
+      proj.hsd.push({ actual: aD, plan: g.hsd });
+      proj.xm.push({ actual: aX, plan: g.xm });
+      proj.rgu.push({ actual: aR, plan: g.rgu });
+      proj.hours.push({ actual: aHrs, plan: g.hours });
+    });
+    const um = agents.filter(a => !matched.has((a.rocCode || "").toUpperCase()));
+    if (um.length) {
+      proj.homes.push({ actual: um.reduce((s, a) => s + a.goals, 0), plan: 0 });
+      proj.hsd.push({ actual: um.reduce((s, a) => s + a.newXI, 0), plan: 0 });
+      proj.xm.push({ actual: um.reduce((s, a) => s + a.xmLines, 0), plan: 0 });
+      proj.rgu.push({ actual: um.reduce((s, a) => s + a.rgu, 0), plan: 0 });
+      proj.hours.push({ actual: um.reduce((s, a) => s + a.hours, 0), plan: 0 });
+    }
+    return proj;
+  }, [goalLookup, planTotal, agents]);
+
+  const cappedProjGlobal = (groups, totalPlan) => {
+    if (!fiscalInfo?.elapsedBDays || !fiscalInfo?.totalBDays || !totalPlan) return null;
+    let cp = 0;
+    groups.forEach(g => {
+      const projected = (g.actual / fiscalInfo.elapsedBDays) * fiscalInfo.totalBDays;
+      cp += g.plan > 0 ? Math.min(projected, g.plan) : projected;
+    });
+    return (cp / totalPlan) * 100;
+  };
+  const globalProjMobileCapped  = globalCapped ? cappedProjGlobal(globalCapped.homes, planTotal) : null;
+  const globalProjHsdCapped     = globalCapped ? cappedProjGlobal(globalCapped.hsd, globalPlanNewXI) : null;
+  const globalProjCostPerCapped = globalCapped ? cappedProjGlobal(globalCapped.rgu, globalPlanRgu) : null;
+  const globalProjHourCapped    = globalCapped ? cappedProjGlobal(globalCapped.hours, globalPlanHours) : null;
 
   // SPH Attainment: (actual SPH / plan SPH) * 100
   const actualGlobalSph = totalHours > 0 ? globalGoals / totalHours : 0;
@@ -6611,30 +11691,18 @@ function BusinessOverview({ perf, onNav, goToSlide, tnpsSlideIdx, localAI, prior
   const qColor = pct => pct >= 100 ? Q.Q1.color : pct >= 80 ? Q.Q2.color : pct > 0 ? Q.Q3.color : Q.Q4.color;
 
   return (
-    <div style={{ minHeight: "100vh", background: `var(--bg-primary)`, display: "flex", flexDirection: "column" }}>
-      <div style={{ background: `var(--glass-bg)`, backdropFilter: "blur(12px) saturate(150%)", WebkitBackdropFilter: "blur(12px) saturate(150%)", borderBottom: "1px solid var(--glass-border)", padding: "1.25rem 2.5rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div>
-          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: `var(--text-muted)`, letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 600, marginBottom: "0.2rem" }}>Business Overview</div>
-          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "2rem", color: `var(--text-warm)`, fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1.15 }}>
-            {tab === "bysite" && activeGroup ? activeGroup.label : tab === "daily" ? "Daily Performance" : tab === "trends" ? "Week-over-Week Trends" : "Highlights & Lowlights"}
-          </div>
-        </div>
-        <div style={{ display: "flex", gap: "0.35rem", alignItems: "center", flexWrap: "wrap" }}>
-          {[["overview","Overview"],["bysite","By Site"],["daily","Daily"],["trends","Trends"]].map(([t, label]) => (
-            <button key={t} onClick={() => setTab(t)}
-              style={{ padding: "0.4rem 0.85rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${tab===t?"#d9770650":"var(--text-faint)"}`, background: tab===t?"#d9770612":"transparent", color: tab===t?"#d97706":`var(--text-muted)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", cursor: "pointer", fontWeight: tab===t ? 600 : 400, transition: "all 200ms cubic-bezier(0.4,0,0.2,1)" }}>
-              {label}
-            </button>
-          ))}
-          <div style={{ width: "1px", height: "20px", background: "var(--border-muted)", margin: "0 0.2rem" }} />
-          <button onClick={() => onNav(1)}
-            style={{ padding: "0.45rem 1rem", background: "linear-gradient(135deg, #d9770620, #f59e0b15)", border: "1px solid #d9770640", borderRadius: "var(--radius-sm, 6px)", color: "#d97706", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", cursor: "pointer", fontWeight: 600, letterSpacing: "0.02em" }}>
-            Programs {"\u2192"}
+    <div style={{ background: `var(--bg-primary)`, display: "flex", flexDirection: "column", gap: "1.5rem", padding: "0 0.25rem" }}>
+      {/* Tab strip — matches SiteDrilldown, skinny sticky under top nav */}
+      <div style={{ position: "sticky", top: 48, zIndex: 100, display: "flex", gap: "0.35rem", alignItems: "center", padding: "0.35rem 0.25rem", background: "var(--bg-primary)", borderBottom: "1px solid var(--border-muted)" }}>
+        {[["overview","Overview"],["daily","Daily"],["trends","Trends"]].map(([t, label]) => (
+          <button key={t} onClick={() => setTab(t)}
+            style={{ padding: "0.4rem 0.85rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${tab===t?"#d9770680":"var(--text-faint)"}`, background: tab===t?"#d977061a":"transparent", color: tab===t?"#d97706":"var(--text-muted)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", cursor: "pointer", fontWeight: tab===t ? 600 : 400, transition: "all 200ms cubic-bezier(0.4,0,0.2,1)" }}>
+            {label}
           </button>
-        </div>
+        ))}
       </div>
 
-      <div style={{ flex: 1, overflowY: "auto", padding: "2rem 2.5rem", display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
 
         {!goalLookup && tab === "overview" && (
           <div style={{ background: "#d9770610", border: "1px solid #d9770640", borderLeft: "4px solid #d97706", borderRadius: "var(--radius-md, 10px)", padding: "0.9rem 1.25rem", display: "flex", alignItems: "center", gap: "0.9rem" }}>
@@ -6645,39 +11713,6 @@ function BusinessOverview({ perf, onNav, goToSlide, tnpsSlideIdx, localAI, prior
                 Upload your goals CSV to unlock Goals vs Plan comparisons and a Goals tab on every program slide. Until then, metrics reflect performance distribution only.
               </div>
             </div>
-          </div>
-        )}
-
-        {/* ── BY SITE TAB ── */}
-        {tab === "bysite" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-            {/* Site group selector */}
-            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-              {siteGroups.map(g => (
-                <button key={g.label} onClick={() => setSelectedGroup(g)}
-                  style={{ padding: "0.4rem 1rem", borderRadius: "6px", border: `1px solid ${activeGroup?.label===g.label?"#d97706":`var(--border)`}`, background: activeGroup?.label===g.label?"#d9770618":"transparent", color: activeGroup?.label===g.label?"#d97706":`var(--text-muted)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", cursor: "pointer" }}>
-                  {g.label}
-                  {g.regions.length > 1 && (
-                    <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-dim)`, marginLeft: "0.4rem" }}>
-                      ({g.regions.length} sites)
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
-            {activeGroup && (
-              <ErrorBoundary>
-              <SiteDrilldown
-                siteLabel={activeGroup.label}
-                regions={activeGroup.regions}
-                allAgents={agents}
-                programs={programs}
-                goalLookup={goalLookup}
-                newHireSet={newHireSet}
-                fiscalInfo={fiscalInfo}
-              />
-              </ErrorBoundary>
-            )}
           </div>
         )}
 
@@ -6735,8 +11770,15 @@ function BusinessOverview({ perf, onNav, goToSlide, tnpsSlideIdx, localAI, prior
             sphActual={actualGlobalSph}  sphPlan={planGlobalSph}
             hourActual={totalHours}      hourPlan={globalPlanHours}
             homesActual={globalGoals}    homesPlan={planTotal}
+            projMobileCapped={globalProjMobileCapped}
+            projHsdCapped={globalProjHsdCapped}
+            projCostPerCapped={globalProjCostPerCapped}
+            projHourCapped={globalProjHourCapped}
           />
         )}
+
+        {/* Daily Targets — toggle Combined / DR / BZ */}
+        <DailyTargetsCard programs={programs} regions={regions} goalLookup={goalLookup} fiscalInfo={fiscalInfo} />
 
         {/* Quartile distribution */}
         <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem 1.5rem" }}>
@@ -9590,328 +14632,7 @@ function CampaignComparisonPanel({ currentAgents, onNav, localAI, priorAgents, p
 }
 
 
-// SECTION 12d — PROGRAM BY-SITE DRILLDOWN
-// For programs that have agents in multiple sites (e.g. DR + BZ), shows
-// per-site campaign KPIs, quartile distribution, goals vs plan, and agent lists.
-
-// ══════════════════════════════════════════════════════════════════════════════
-// SECTION 12d — PROGRAM BY-SITE DRILLDOWN
-// For programs that have agents in multiple sites (e.g. DR + BZ), shows
-// per-site campaign KPIs, quartile distribution, goals vs plan, and agent lists.
-// ══════════════════════════════════════════════════════════════════════════════
-
-function ProgramBySiteTab({ agents, regions, siteBuckets, jobType, goalEntry, goalLookup, fiscalInfo, newHireSet, localAI }) {
-  const [activeSite, setActiveSite] = useState(null);
-
-  // Build per-site stats
-  const siteStats = useMemo(() => {
-    return siteBuckets.map(bucket => {
-      const siteAgents = agents.filter(a => bucket.regions.includes(a.region));
-      const uniqueAgents = collapseToUniqueAgents(siteAgents);
-      const totalHours = siteAgents.reduce((s, a) => s + a.hours, 0);
-      const totalGoals = siteAgents.reduce((s, a) => s + a.goals, 0);
-      const gph = totalHours > 0 ? totalGoals / totalHours : 0;
-      const distU = uniqueQuartileDist(siteAgents);
-      const uCount = uniqueNames(siteAgents).size;
-      const q1Rate = uCount > 0 ? (distU.Q1 / uCount) * 100 : 0;
-      const totalRgu = siteAgents.reduce((s, a) => s + a.rgu, 0);
-      const totalNewXI = siteAgents.reduce((s, a) => s + a.newXI, 0);
-      const totalXmLines = siteAgents.reduce((s, a) => s + a.xmLines, 0);
-
-      // Site-specific plan from goals CSV
-      const sitePlanKey = bucket.regions.some(r => r.toUpperCase().includes("XOTM")) ? "BZ" : "DR";
-      const siteRows = goalEntry ? (goalEntry[sitePlanKey] || []) : [];
-      const sitePlanGoals = siteRows.reduce((s, r) => s + computePlanRow(r).homesGoal, 0) || null;
-      const sitePlanRgu = siteRows.reduce((s, r) => s + computePlanRow(r).rguGoal, 0) || null;
-      const sitePlanHsd = siteRows.reduce((s, r) => s + computePlanRow(r).hsdGoal, 0) || null;
-      const sitePlanXm = siteRows.reduce((s, r) => s + computePlanRow(r).xmGoal, 0) || null;
-      const sitePlanHours = siteRows.reduce((s, r) => s + computePlanRow(r).hoursGoal, 0) || null;
-      const attain = sitePlanGoals ? (totalGoals / sitePlanGoals) * 100 : null;
-
-      // Gainshare attainments
-      const hsdAttain = sitePlanHsd ? (totalNewXI / sitePlanHsd) * 100 : null;
-      const rguAttain = sitePlanRgu ? (totalRgu / sitePlanRgu) * 100 : null;
-
-      // Top/bottom agents
-      const q1List = uniqueAgents.filter(a => a.quartile === "Q1" && a.hours >= getMinHours()).sort((a, b) => b.hours - a.hours);
-      const q4List = uniqueAgents.filter(a => a.quartile === "Q4").sort((a, b) => b.hours - a.hours);
-
-      return {
-        ...bucket,
-        siteAgents, uniqueAgents, totalHours, totalGoals, gph, distU, uCount, q1Rate,
-        totalRgu, totalNewXI, totalXmLines,
-        sitePlanKey, sitePlanGoals, sitePlanRgu, sitePlanHsd, sitePlanXm, sitePlanHours,
-        attain, hsdAttain, rguAttain,
-        q1List, q4List,
-      };
-    });
-  }, [agents, siteBuckets, goalEntry]);
-
-  const activeStats = activeSite !== null ? siteStats.find(s => s.label === activeSite) : null;
-  const displayStats = activeStats ? [activeStats] : siteStats;
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-
-      {/* Site selector tabs */}
-      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-        <button onClick={() => setActiveSite(null)}
-          style={{ padding: "0.4rem 1rem", borderRadius: "6px", border: `1px solid ${activeSite===null?"#d97706":`var(--border)`}`, background: activeSite===null?"#d9770618":"transparent", color: activeSite===null?"#d97706":`var(--text-muted)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", cursor: "pointer" }}>
-          All Sites
-        </button>
-        {siteStats.map(s => (
-          <button key={s.label} onClick={() => setActiveSite(activeSite === s.label ? null : s.label)}
-            style={{ padding: "0.4rem 1rem", borderRadius: "6px", border: `1px solid ${activeSite===s.label?"#6366f1":`var(--border)`}`, background: activeSite===s.label?"#6366f118":"transparent", color: activeSite===s.label?"#818cf8":`var(--text-muted)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", cursor: "pointer" }}>
-            {mbrSiteName(s.label)}
-            <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)`, marginLeft: "0.4rem" }}>
-              ({s.uCount} agents)
-            </span>
-          </button>
-        ))}
-      </div>
-
-      {/* Comparison strip when showing all */}
-      {activeSite === null && siteStats.length > 1 && (
-        <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.5rem" }}>
-          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "#d97706", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "1.25rem" }}>
-            Site Comparison — {jobType}
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: `repeat(${siteStats.length}, 1fr)`, gap: "1rem" }}>
-            {siteStats.map(s => {
-              const color = s.attain !== null ? attainColor(s.attain) : attainColor(s.q1Rate);
-              return (
-                <div key={s.label} onClick={() => setActiveSite(s.label)}
-                  style={{ cursor: "pointer", padding: "1.25rem", background: `var(--bg-primary)`, borderRadius: "var(--radius-md, 10px)", border: `1px solid ${color}25`, borderTop: `3px solid ${color}`, transition: "all 0.2s" }}>
-                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "1.5rem", color: `var(--text-warm)`, marginBottom: "0.75rem", fontWeight: 600 }}>{mbrSiteName(s.label)}</div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem 1rem" }}>
-                    {[
-                      { l: "Agents", v: s.uCount, c: `var(--text-secondary)` },
-                      { l: "Hours", v: fmt(s.totalHours, 0), c: "#6366f1" },
-                      { l: "Goals", v: s.totalGoals.toLocaleString(), c: "#16a34a" },
-                      { l: "GPH", v: fmt(s.gph, 3), c: s.gph > 0 ? "#16a34a" : `var(--text-faint)` },
-                      { l: "Q1 Rate", v: `${s.q1Rate.toFixed(0)}%`, c: "#d97706" },
-                      { l: "Attainment", v: s.attain !== null ? `${Math.round(s.attain)}%` : "—", c: color },
-                    ].map(({ l, v, c }) => (
-                      <div key={l}>
-                        <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.88rem", color: c, fontWeight: 700, lineHeight: 1 }}>{v}</div>
-                        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem", color: `var(--text-dim)`, marginTop: "0.1rem" }}>{l}</div>
-                      </div>
-                    ))}
-                  </div>
-                  {/* Quartile bar */}
-                  <div style={{ display: "flex", height: "6px", borderRadius: "3px", overflow: "hidden", marginTop: "0.75rem" }}>
-                    {["Q1","Q2","Q3","Q4"].map(q => s.distU[q] > 0 && (
-                      <div key={q} style={{ flex: s.distU[q], background: Q[q].color }} />
-                    ))}
-                  </div>
-                  <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.3rem" }}>
-                    {["Q1","Q2","Q3","Q4"].map(q => (
-                      <span key={q} style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem", color: Q[q].color }}>{q}: {s.distU[q]}</span>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Combined Goals vs Plan + Pacing when showing All Sites */}
-      {activeSite === null && siteStats.length > 1 && (() => {
-        const combHours   = siteStats.reduce((s, x) => s + x.totalHours, 0);
-        const combGoals   = siteStats.reduce((s, x) => s + x.totalGoals, 0);
-        const combRgu     = siteStats.reduce((s, x) => s + x.totalRgu, 0);
-        const combNewXI   = siteStats.reduce((s, x) => s + x.totalNewXI, 0);
-        const combXm      = siteStats.reduce((s, x) => s + x.totalXmLines, 0);
-        const combPlanHrs = siteStats.reduce((s, x) => s + (x.sitePlanHours || 0), 0) || null;
-        const combPlanG   = siteStats.reduce((s, x) => s + (x.sitePlanGoals || 0), 0) || null;
-        const combPlanRgu = siteStats.reduce((s, x) => s + (x.sitePlanRgu || 0), 0) || null;
-        const combPlanHsd = siteStats.reduce((s, x) => s + (x.sitePlanHsd || 0), 0) || null;
-        const combPlanXm  = siteStats.reduce((s, x) => s + (x.sitePlanXm || 0), 0) || null;
-        const hasXM       = combXm > 0;
-        if (!combPlanG && !combPlanHrs) return null;
-        return (
-          <MetricComparePanel
-            title={`Goals vs Plan — ${jobType} (Combined)`}
-            fiscalInfo={fiscalInfo}
-            metrics={[
-              { label: "Total Hours",  actual: combHours, plan: combPlanHrs },
-              { label: "Total Goals",  actual: combGoals, plan: combPlanG   },
-              { label: "Total RGU",    actual: combRgu,   plan: combPlanRgu },
-              { label: "New XI (HSD)", actual: combNewXI, plan: combPlanHsd },
-              { label: "XM Lines",     actual: combXm,    plan: hasXM ? combPlanXm : null },
-            ]}
-          />
-        );
-      })()}
-
-      {/* Per-site detail cards */}
-      {displayStats.map(s => {
-        const color = s.attain !== null ? attainColor(s.attain) : attainColor(s.q1Rate);
-        return (
-          <div key={s.label} style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-            {/* KPI strip */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "0.75rem" }}>
-              <StatCard label="Q1 Rate" value={`${s.q1Rate.toFixed(1)}%`} sub={`${s.distU.Q1} of ${s.uCount} agents`} accent="#d97706" />
-              <StatCard label="GPH" value={fmt(s.gph, 3)} sub="sum goals / sum hours" accent="#2563eb" />
-              <StatCard label="Goals" value={s.totalGoals.toLocaleString()} sub={s.sitePlanGoals ? `of ${s.sitePlanGoals.toLocaleString()} plan` : "conversions"} accent="#16a34a" />
-              <StatCard label="Hours" value={fmt(s.totalHours, 0)} sub={`${s.uniqueAgents.filter(a=>a.hours>=getMinHours()).length} at ${getMinHours()}+ hrs`} accent="#6366f1" />
-              <StatCard label="Attainment" value={s.attain !== null ? `${Math.round(s.attain)}%` : "—"} sub={s.sitePlanKey + " site plan"} accent={color} />
-            </div>
-
-            {/* Goals vs Plan — site-specific (with hours + pacing) */}
-            {(s.sitePlanGoals || s.sitePlanHours) && (
-              <MetricComparePanel
-                title={`Goals vs Plan — ${mbrSiteName(s.label)}`}
-                fiscalInfo={fiscalInfo}
-                metrics={[
-                  { label: "Hours", actual: s.totalHours, plan: s.sitePlanHours },
-                  { label: "Goals", actual: s.totalGoals, plan: s.sitePlanGoals },
-                  { label: "RGU", actual: s.totalRgu, plan: s.sitePlanRgu },
-                  { label: "HSD", actual: s.totalNewXI, plan: s.sitePlanHsd },
-                  { label: "XM Lines", actual: s.totalXmLines, plan: s.sitePlanXm },
-                ]}
-              />
-            )}
-
-            {/* Quartile breakdown */}
-            <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem" }}>
-              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.75rem" }}>
-                Quartile Mix — {mbrSiteName(s.label)}
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.5rem", marginBottom: "0.75rem" }}>
-                {["Q1","Q2","Q3","Q4"].map(q => (
-                  <div key={q} style={{ padding: "0.75rem", borderRadius: "var(--radius-md, 10px)", background: Q[q].color+"12", border: `1px solid ${Q[q].color}30`, textAlign: "center" }}>
-                    <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "3rem", color: Q[q].color, fontWeight: 700 }}>{s.distU[q]}</div>
-                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: Q[q].color }}>{q} · unique</div>
-                  </div>
-                ))}
-              </div>
-              <div style={{ display: "flex", height: "8px", borderRadius: "var(--radius-sm, 6px)", overflow: "hidden" }}>
-                {["Q1","Q2","Q3","Q4"].map(q => (
-                  <div key={q} style={{ flex: s.distU[q] || 0, background: Q[q].color, transition: "flex 0.5s" }} />
-                ))}
-              </div>
-            </div>
-
-            {/* Top performers + Priority coaching side by side */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.25rem" }}>
-              <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem" }}>
-                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "#16a34a", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.35rem" }}>Top Performers — {mbrSiteName(s.label)}</div>
-                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)`, marginBottom: "0.9rem" }}>Q1 {getMinHours()}+ hours</div>
-                {s.q1List.length === 0
-                  ? <div style={{ color: `var(--text-faint)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem" }}>No Q1 agents with {getMinHours()}+ hours at this site</div>
-                  : s.q1List.slice(0, 5).map((a, i) => {
-                    const agph = a.hours > 0 ? (a.goals / a.hours).toFixed(3) : "0.000";
-                    return (
-                      <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.5rem 0", borderBottom: i < Math.min(s.q1List.length, 5) - 1 ? "1px solid var(--bg-tertiary)" : "none" }}>
-                        <div>
-                          <div style={{ color: `var(--text-warm)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem" }}>
-                            {a.agentName}
-                            {newHireSet.has(a.agentName) && <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "var(--nh-color)", background: "var(--nh-bg)", padding: "0.05rem 0.3rem", borderRadius: "2px", marginLeft: "0.35rem" }}>NEW</span>}
-                          </div>
-                          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)` }}>{fmt(a.hours, 1)} hrs · {agph} GPH</div>
-                        </div>
-                        <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.15rem", color: Q.Q1.color, fontWeight: 700 }}>{Math.round(a.pctToGoal)}%</div>
-                      </div>
-                    );
-                  })}
-              </div>
-
-              <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem" }}>
-                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "#dc2626", letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "0.35rem" }}>Priority Coaching — {mbrSiteName(s.label)}</div>
-                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)`, marginBottom: "0.9rem" }}>Zero sales · ranked by hours</div>
-                {s.q4List.length === 0
-                  ? <div style={{ color: `var(--text-faint)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem" }}>No Q4 agents at this site — excellent!</div>
-                  : s.q4List.slice(0, 5).map((a, i) => (
-                    <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.5rem 0", borderBottom: i < Math.min(s.q4List.length, 5) - 1 ? "1px solid var(--bg-tertiary)" : "none" }}>
-                      <div>
-                        <div style={{ color: `var(--text-warm)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem" }}>
-                          {a.agentName}
-                          {newHireSet.has(a.agentName) && <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "var(--nh-color)", background: "var(--nh-bg)", padding: "0.05rem 0.3rem", borderRadius: "2px", marginLeft: "0.35rem" }}>NEW</span>}
-                        </div>
-                        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)` }}>{mbrSiteName(a.region)} · 0 sales</div>
-                      </div>
-                      <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.15rem", color: "#6366f1", fontWeight: 700 }}>{fmt(a.hours, 1)} hrs</div>
-                    </div>
-                  ))}
-              </div>
-            </div>
-
-            {/* AI Site Analysis */}
-            {localAI && (
-              <CollapsibleNarrative
-                title={`Site Analysis — ${mbrSiteName(s.label)}`}
-                lines={[]}
-                defaultOpen={false}
-                aiEnabled={true}
-                aiPromptData={{
-                  jobType: `${jobType} — ${mbrSiteName(s.label)}`,
-                  uniqueAgentCount: s.uCount,
-                  totalHours: s.totalHours,
-                  totalGoals: s.totalGoals,
-                  gph: s.gph,
-                  attainment: s.attain,
-                  planGoals: s.sitePlanGoals,
-                  actGoals: s.totalGoals,
-                  distUnique: s.distU,
-                  q1Agents: s.q1List,
-                  q4Agents: s.q4List,
-                  regions: [],
-                  healthScore: null,
-                  totalNewXI: s.totalNewXI,
-                  totalXmLines: s.totalXmLines,
-                  newHiresInProgram: s.uniqueAgents.filter(a => newHireSet.has(a.agentName)),
-                  fiscalInfo,
-                }}
-              />
-            )}
-
-            {/* Sub-region breakdown when viewing BZ (multiple XOTM sites) */}
-            {s.regions.length > 1 && (
-              <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem" }}>
-                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "1rem" }}>
-                  Sub-regions — {mbrSiteName(s.label)}
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                  {s.regions.map(regName => {
-                    const rAgents = s.siteAgents.filter(a => a.region === regName);
-                    const rGoals = rAgents.reduce((sum, a) => sum + a.goals, 0);
-                    const rHours = rAgents.reduce((sum, a) => sum + a.hours, 0);
-                    const rGph = rHours > 0 ? rGoals / rHours : 0;
-                    const rDist = uniqueQuartileDist(rAgents);
-                    const rU = uniqueNames(rAgents).size;
-                    const maxGoals = Math.max(...s.regions.map(rn => s.siteAgents.filter(a => a.region === rn).reduce((sum, a) => sum + a.goals, 0)), 1);
-                    const barW = (rGoals / maxGoals) * 100;
-                    return (
-                      <div key={regName} style={{ padding: "0.85rem 1rem", background: `var(--bg-primary)`, borderRadius: "var(--radius-md, 10px)", border: "1px solid var(--bg-tertiary)" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
-                          <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "1.27rem", color: `var(--text-primary)` }}>{mbrSiteName(regName)}</span>
-                          <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)` }}>{rU} agents · {fmt(rHours, 0)} hrs</span>
-                        </div>
-                        <div style={{ display: "flex", height: "5px", background: `var(--bg-tertiary)`, borderRadius: "3px", overflow: "hidden", marginBottom: "0.4rem" }}>
-                          <div style={{ width: `${barW}%`, background: "#6366f1", borderRadius: "3px", transition: "width 0.5s" }} />
-                        </div>
-                        <div style={{ display: "flex", gap: "0.75rem" }}>
-                          <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "#16a34a" }}>{rGoals} goals</span>
-                          <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)` }}>GPH {fmt(rGph, 3)}</span>
-                          {["Q1","Q2","Q3","Q4"].map(q => rDist[q] > 0 && (
-                            <span key={q} style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: Q[q].color }}>{q}: {rDist[q]}</span>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
+// (Section 12d — ProgramBySiteTab removed: site content is now top-level via TopNav)
 
 // ══════════════════════════════════════════════════════════════════════════════
 // SECTION 13 — SLIDE  (pages/Slide.jsx)
@@ -9927,6 +14648,8 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
   const [dailyRocFilter, setDailyRocFilter] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null); // date string or "wk-YYYY-MM-DD" for week
   const [selectedDrillJob, setSelectedDrillJob] = useState(null); // job type within a selected date
+  const [dailyDrillMode, setDailyDrillMode] = useState("program"); // "program" | "agent"
+  const [expandedAgentName, setExpandedAgentName] = useState(null); // agent name for drill-down in agent mode
 
   // Determine active agents: filter by selected program, then by ROC if drilled down
   const activeAgents = useMemo(() => {
@@ -10317,16 +15040,31 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
                         return (
                           <tr><td colSpan={9} style={{ padding: 0 }}>
                             <div style={{ padding: "0.6rem 1rem", background: "#d9770608", borderLeft: "3px solid #d97706" }}>
-                              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: `var(--text-faint)`, letterSpacing: "0.08em", marginBottom: "0.5rem" }}>
-                                {singleProgram ? "AGENT DETAIL" : (selectedDrillJob ? "AGENT DETAIL" : "PROGRAM BREAKDOWN")} {"\u2014"} {d.date} ({dayLabel(d.date)})
-                                {!singleProgram && selectedDrillJob && (
+                              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: `var(--text-faint)`, letterSpacing: "0.08em", marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                                <span>
+                                  {singleProgram ? "AGENT DETAIL" : (dailyDrillMode === "agent" ? "AGENT BREAKDOWN" : (selectedDrillJob ? "AGENT DETAIL" : "PROGRAM BREAKDOWN"))} {"\u2014"} {d.date} ({dayLabel(d.date)})
+                                </span>
+                                {!singleProgram && selectedDrillJob && dailyDrillMode === "program" && (
                                   <button onClick={e => { e.stopPropagation(); setSelectedDrillJob(null); }}
-                                    style={{ marginLeft: "0.75rem", padding: "0.15rem 0.5rem", borderRadius: "var(--radius-sm, 6px)", border: "1px solid #d97706", background: "#d9770618", color: "#d97706", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", cursor: "pointer" }}>
+                                    style={{ padding: "0.15rem 0.5rem", borderRadius: "var(--radius-sm, 6px)", border: "1px solid #d97706", background: "#d9770618", color: "#d97706", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", cursor: "pointer" }}>
                                     {"\u2190"} Back to Programs
                                   </button>
                                 )}
+                                {!singleProgram && (
+                                  <div style={{ display: "flex", gap: "0.25rem" }}>
+                                    {["program", "agent"].map(mode => {
+                                      const active = dailyDrillMode === mode;
+                                      return (
+                                        <button key={mode} onClick={e => { e.stopPropagation(); setDailyDrillMode(mode); setSelectedDrillJob(null); }}
+                                          style={{ padding: "0.15rem 0.55rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${active ? "#6366f1" : "var(--border-muted)"}`, background: active ? "#6366f118" : "transparent", color: active ? "#6366f1" : "var(--text-dim)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", cursor: "pointer", fontWeight: active ? 600 : 400, textTransform: "capitalize" }}>
+                                          {mode === "program" ? "Programs" : "Agents"}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                )}
                               </div>
-                              {!singleProgram && !selectedDrillJob && (
+                              {!singleProgram && !selectedDrillJob && dailyDrillMode === "program" && (
                                 <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem" }}>
                                   <thead><tr style={{ borderBottom: "1px solid var(--border)" }}>
                                     {["Program", "Agents", "Hours", "Sales", "GPH", "% Goal", "CPS", "HSD", "XM"].map(h => (
@@ -10360,7 +15098,7 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
                                   </tbody>
                                 </table>
                               )}
-                              {(singleProgram || selectedDrillJob) && (() => {
+                              {(singleProgram || (selectedDrillJob && dailyDrillMode === "program")) && (() => {
                                 const drillJob = singleProgram ? (jobs.length > 0 ? jobs[0][0] : null) : selectedDrillJob;
                                 const data = drillJob ? byJob[drillJob] : null;
                                 if (!data) return null;
@@ -10403,6 +15141,77 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
                                       </tbody>
                                     </table>
                                   </div>
+                                );
+                              })()}
+                              {!singleProgram && dailyDrillMode === "agent" && (() => {
+                                // Aggregate rows by agent name
+                                const agentMap = {};
+                                dateAgents.forEach(a => {
+                                  const n = a.agentName;
+                                  if (!agentMap[n]) agentMap[n] = { agentName: n, supervisor: a.supervisor, quartile: a.quartile, hours: 0, goals: 0, goalsNum: 0, hsd: 0, xm: 0, programs: [] };
+                                  agentMap[n].hours += a.hours;
+                                  agentMap[n].goals += a.goals;
+                                  agentMap[n].goalsNum += a.goalsNum || 0;
+                                  agentMap[n].hsd += a.newXI || 0;
+                                  agentMap[n].xm += a.xmLines || 0;
+                                  agentMap[n].programs.push(a);
+                                });
+                                const collapsed = Object.values(agentMap).sort((x, y) => y.hours - x.hours);
+                                return (
+                                  <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem" }}>
+                                    <thead><tr style={{ borderBottom: "1px solid var(--border)" }}>
+                                      {["Agent","Programs","Supervisor","Hours","Sales","GPH","CPS","HSD","XM"].map(h => (
+                                        <th key={h} style={{ padding: "0.2rem 0.5rem", textAlign: h === "Agent" || h === "Programs" || h === "Supervisor" ? "left" : "right", color: `var(--text-faint)`, fontWeight: 400 }}>{h}</th>
+                                      ))}
+                                    </tr></thead>
+                                    <tbody>
+                                      {collapsed.map((ag, ai) => {
+                                        const aGph = ag.hours > 0 ? ag.goals / ag.hours : 0;
+                                        const aCps = ag.goals > 0 ? (ag.hours * 19.77) / ag.goals : ag.hours * 19.77;
+                                        const pClr = sg ? attainColor(aGph / sg * 100) : (aGph > 0 ? `var(--text-secondary)` : `var(--text-faint)`);
+                                        const qColor = Q[ag.quartile]?.color || `var(--text-faint)`;
+                                        const isExpanded = expandedAgentName === ag.agentName;
+                                        const multiProg = ag.programs.length > 1;
+                                        const progNames = [...new Set(ag.programs.map(p => p.jobType))].join(", ");
+                                        return (
+                                          <Fragment key={ag.agentName}>
+                                          <tr onClick={e => { e.stopPropagation(); setExpandedAgentName(isExpanded ? null : ag.agentName); }}
+                                            style={{ borderBottom: "1px solid var(--bg-tertiary)", background: isExpanded ? "#6366f108" : ai % 2 === 0 ? "transparent" : `var(--bg-row-alt)`, cursor: multiProg ? "pointer" : "default" }}>
+                                            <td style={{ padding: "0.2rem 0.5rem", color: qColor }}>{ag.agentName}</td>
+                                            <td style={{ padding: "0.2rem 0.5rem", color: `var(--text-dim)`, fontSize: "0.82rem" }}>
+                                              {multiProg ? <span>{ag.programs.length} programs <span style={{ fontSize: "0.7rem", opacity: 0.5 }}>{isExpanded ? "\u25B2" : "\u25BC"}</span></span> : progNames}
+                                            </td>
+                                            <td style={{ padding: "0.2rem 0.5rem", color: `var(--text-dim)` }}>{ag.supervisor || "\u2014"}</td>
+                                            <td style={{ padding: "0.2rem 0.5rem", textAlign: "right", color: "#6366f1" }}>{ag.hours.toFixed(1)}</td>
+                                            <td style={{ padding: "0.2rem 0.5rem", textAlign: "right", color: ag.goals > 0 ? "#d97706" : `var(--text-faint)`, fontWeight: ag.goals > 0 ? 700 : 400 }}>{ag.goals || "\u2014"}</td>
+                                            <td style={{ padding: "0.2rem 0.5rem", textAlign: "right", color: pClr, fontWeight: 600 }}>{aGph > 0 ? aGph.toFixed(3) : "\u2014"}</td>
+                                            <td style={{ padding: "0.2rem 0.5rem", textAlign: "right", color: pClr }}>${aCps.toFixed(2)}</td>
+                                            <td style={{ padding: "0.2rem 0.5rem", textAlign: "right", color: ag.hsd > 0 ? "#2563eb" : `var(--text-faint)` }}>{ag.hsd || "\u2014"}</td>
+                                            <td style={{ padding: "0.2rem 0.5rem", textAlign: "right", color: ag.xm > 0 ? "#8b5cf6" : `var(--text-faint)` }}>{ag.xm || "\u2014"}</td>
+                                          </tr>
+                                          {isExpanded && ag.programs.length > 1 && ag.programs.sort((x, y) => y.hours - x.hours).map((p, pi) => {
+                                            const pGph = p.hours > 0 ? p.goals / p.hours : 0;
+                                            const pCps = p.goals > 0 ? (p.hours * 19.77) / p.goals : p.hours * 19.77;
+                                            const ppClr = sg ? attainColor(pGph / sg * 100) : (pGph > 0 ? `var(--text-secondary)` : `var(--text-faint)`);
+                                            return (
+                                              <tr key={`${ag.agentName}-${p.jobType}`} style={{ borderBottom: "1px solid var(--bg-tertiary)", background: "#6366f106" }}>
+                                                <td style={{ padding: "0.15rem 0.5rem 0.15rem 1.5rem", color: `var(--text-dim)`, fontSize: "0.82rem" }}>{"\u2514"}</td>
+                                                <td style={{ padding: "0.15rem 0.5rem", color: `var(--text-secondary)`, fontSize: "0.82rem" }}>{p.jobType}</td>
+                                                <td style={{ padding: "0.15rem 0.5rem" }}></td>
+                                                <td style={{ padding: "0.15rem 0.5rem", textAlign: "right", color: "#6366f1", fontSize: "0.82rem" }}>{p.hours.toFixed(1)}</td>
+                                                <td style={{ padding: "0.15rem 0.5rem", textAlign: "right", color: p.goals > 0 ? "#d97706" : `var(--text-faint)`, fontSize: "0.82rem" }}>{p.goals || "\u2014"}</td>
+                                                <td style={{ padding: "0.15rem 0.5rem", textAlign: "right", color: ppClr, fontSize: "0.82rem" }}>{pGph > 0 ? pGph.toFixed(3) : "\u2014"}</td>
+                                                <td style={{ padding: "0.15rem 0.5rem", textAlign: "right", color: ppClr, fontSize: "0.82rem" }}>${pCps.toFixed(2)}</td>
+                                                <td style={{ padding: "0.15rem 0.5rem", textAlign: "right", color: (p.newXI || 0) > 0 ? "#2563eb" : `var(--text-faint)`, fontSize: "0.82rem" }}>{p.newXI || "\u2014"}</td>
+                                                <td style={{ padding: "0.15rem 0.5rem", textAlign: "right", color: (p.xmLines || 0) > 0 ? "#8b5cf6" : `var(--text-faint)`, fontSize: "0.82rem" }}>{p.xmLines || "\u2014"}</td>
+                                              </tr>
+                                            );
+                                          })}
+                                          </Fragment>
+                                        );
+                                      })}
+                                    </tbody>
+                                  </table>
                                 );
                               })()}
                             </div>
@@ -10459,7 +15268,135 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
   );
 }
 
-function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total, onNav, allAgents, localAI, priorAgents, tnpsByAgent }) {
+// ── ProgramSiteCompareCard — DR vs BZ scorecard for shared programs ─────────
+// Renders only when both DR and BZ have agents in this program.
+function ProgramSiteCompareCard({ program, allAgents, newHireSet, goalLookup }) {
+  const data = useMemo(() => {
+    const allRegions = [...new Set(allAgents.map(a => a.region).filter(Boolean))];
+    const drRegions = allRegions.filter(r => !r.toUpperCase().includes("XOTM"));
+    const bzRegions = allRegions.filter(r => r.toUpperCase().includes("XOTM"));
+    const programAgents = allAgents.filter(a => a.jobType === program.jobType);
+
+    // Re-derive the FULL cross-site goalEntries from goalLookup (program.goalEntries
+    // received here may already be site-filtered by the parent App's filteredProgram).
+    let fullEntries = [];
+    if (goalLookup) {
+      const agentRocs = [...new Set(programAgents.map(a => a.rocCode).filter(Boolean))];
+      if (agentRocs.length > 0) {
+        agentRocs.forEach(roc => {
+          const rocEntries = getGoalEntries(goalLookup, program.jobType, roc);
+          rocEntries.forEach(e => {
+            if (!fullEntries.some(x => x.targetAudience === e.targetAudience)) fullEntries.push(e);
+          });
+        });
+      }
+      if (fullEntries.length === 0) fullEntries = getGoalEntries(goalLookup, program.jobType);
+    }
+
+    const buildSide = (regions, siteKey) => {
+      const siteAgents = programAgents.filter(a => regions.includes(a.region));
+      if (siteAgents.length === 0) return null;
+      const sub = buildProgram(siteAgents, program.jobType, filterGoalEntriesBySite(fullEntries, siteKey), newHireSet);
+      const cps = sub.totalGoals > 0 ? (sub.totalHours * MBR_BILLING_RATE) / sub.totalGoals : sub.totalHours * MBR_BILLING_RATE;
+      return {
+        attainment: sub.attainment,
+        goals: sub.totalGoals,
+        plan: sub.planGoals,
+        hours: sub.totalHours,
+        gph: sub.gph,
+        agents: sub.uniqueAgentCount,
+        q1Rate: sub.q1Rate,
+        q1Count: sub.distUnique.Q1,
+        cps,
+      };
+    };
+    return { dr: buildSide(drRegions, "DR"), bz: buildSide(bzRegions, "BZ") };
+  }, [program, allAgents, newHireSet, goalLookup]);
+
+  if (!data.dr || !data.bz) return null;
+
+  // Build winner-per-metric line
+  const fmtPts = v => `${v >= 0 ? "+" : ""}${v.toFixed(1)}pts`;
+  const fmtNum = v => `${v >= 0 ? "+" : ""}${Math.round(v)}`;
+  const fmtGph = v => `${v >= 0 ? "+" : ""}${v.toFixed(2)}`;
+  const fmtCps = v => `${v >= 0 ? "+" : "−"}$${Math.abs(Math.round(v))}`;
+  const drWins = [], bzWins = [];
+  if (data.dr.attainment != null && data.bz.attainment != null) {
+    const d = data.dr.attainment - data.bz.attainment;
+    if (Math.abs(d) >= 0.5) (d > 0 ? drWins : bzWins).push(`attainment ${fmtPts(Math.abs(d))}`);
+  }
+  if (data.dr.gph != null && data.bz.gph != null) {
+    const d = data.dr.gph - data.bz.gph;
+    if (Math.abs(d) >= 0.005) (d > 0 ? drWins : bzWins).push(`GPH ${fmtGph(Math.abs(d))}`);
+  }
+  const dHours = data.dr.hours - data.bz.hours;
+  if (Math.abs(dHours) >= 1) (dHours > 0 ? drWins : bzWins).push(`hours ${fmtNum(Math.abs(dHours))}`);
+  const dAboveGoal = data.dr.q1Count - data.bz.q1Count;
+  if (Math.abs(dAboveGoal) >= 1) (dAboveGoal > 0 ? drWins : bzWins).push(`above-goal agents ${fmtNum(Math.abs(dAboveGoal))}`);
+  const dCps = data.dr.cps - data.bz.cps;
+  if (Math.abs(dCps) >= 1) (dCps < 0 ? drWins : bzWins).push(`CPS ${fmtCps(-Math.abs(dCps))}`);
+
+  const Metric = ({ label, value, sub, valueColor }) => (
+    <div>
+      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.7rem", color: "var(--text-muted)", letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 600 }}>{label}</div>
+      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "1.65rem", color: valueColor || "var(--text-warm)", fontWeight: 800, marginTop: "0.2rem", lineHeight: 1, letterSpacing: "-0.02em" }}>{value}</div>
+      {sub && <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "0.35rem", letterSpacing: "0.02em" }}>{sub}</div>}
+    </div>
+  );
+  const Site = ({ side, accent, label }) => {
+    const d = data[side];
+    return (
+      <div style={{ flex: 1, padding: "1.1rem 1.35rem", minWidth: 0, position: "relative" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.85rem" }}>
+          <span style={{ width: 8, height: 8, borderRadius: 4, background: accent, boxShadow: `0 0 8px ${accent}80` }} />
+          <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: accent, letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 700 }}>{label}</span>
+          <span style={{ fontFamily: "var(--font-data, monospace)", fontSize: "0.7rem", color: "var(--text-dim)" }}>· {d.agents} agents</span>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "0.85rem" }}>
+          <Metric label="Goal"   value={d.attainment != null ? `${Math.round(d.attainment)}%` : "—"} sub={`${d.goals}${d.plan ? ` / ${d.plan}` : ""}`} valueColor={d.attainment != null ? attainColor(d.attainment) : null} />
+          <Metric label="GPH"    value={fmt(d.gph, 2)} />
+          <Metric label="Hours"  value={Math.round(d.hours).toLocaleString()} />
+          <Metric label="Above Goal" value={`${d.q1Count}`} sub={`of ${d.agents} (${Math.round(d.q1Rate)}%)`} />
+          <Metric label="CPS"    value={`$${Math.round(d.cps).toLocaleString()}`} />
+        </div>
+      </div>
+    );
+  };
+
+  // Top accent: half DR orange, half BZ green
+  const accentBorder = "linear-gradient(to right, #ed8936 0%, #ed8936 50%, #48bb78 50%, #48bb78 100%)";
+
+  return (
+    <div style={{ background: "var(--glass-bg)", backdropFilter: "blur(12px) saturate(150%)", WebkitBackdropFilter: "blur(12px) saturate(150%)", border: "1px solid var(--glass-border)", borderRadius: "var(--radius-lg, 16px)", overflow: "hidden", boxShadow: "var(--card-glow)", position: "relative" }}>
+      {/* Top accent stripe — half DR orange, half BZ green */}
+      <div style={{ height: 3, background: accentBorder }} />
+      <div style={{ padding: "0.85rem 1.5rem 0.6rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "var(--text-muted)", letterSpacing: "0.1em", textTransform: "uppercase", fontWeight: 600 }}>
+          Site Comparison · {program.jobType}
+        </div>
+        <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "0.7rem", color: "var(--text-dim)" }}>both sites dialing</div>
+      </div>
+      <div style={{ display: "flex", borderTop: "1px solid var(--glass-border)" }}>
+        <Site side="dr" accent="#ed8936" label="DR" />
+        <div style={{ width: 1, background: "var(--glass-border)" }} />
+        <Site side="bz" accent="#48bb78" label="BZ" />
+      </div>
+      {(drWins.length > 0 || bzWins.length > 0) && (
+        <div style={{ padding: "0.75rem 1.5rem", background: "var(--accent-surface)", borderTop: "1px solid var(--glass-border)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "var(--text-secondary)", lineHeight: 1.6 }}>
+          {drWins.length > 0 && (
+            <span><span style={{ color: "#ed8936", fontWeight: 700 }}>DR</span> leads {drWins.join(", ")}.</span>
+          )}
+          {drWins.length > 0 && bzWins.length > 0 && <span>{" "}</span>}
+          {bzWins.length > 0 && (
+            <span><span style={{ color: "#48bb78", fontWeight: 700 }}>BZ</span> leads {bzWins.join(", ")}.</span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Slide({ program, newHireSet, goalLookup, fiscalInfo, allAgents, localAI, priorAgents, tnpsByAgent, siteFilter = null }) {
   const [tab, setTab] = useState("overview");
   const [rocFilter, setRocFilter] = useState(null); // null = all, or a specific ROC code
   const [rankSort, setRankSort] = useState({ key: "pctToGoal", dir: -1 });
@@ -10512,7 +15449,6 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
 
   const hasSupervisors = agents.some(a => a.supervisor);
   const hasWeeklyData  = agents.some(a => a.weekNum);
-  const hasMultipleSites = regions.length > 1;
 
   // ROC/funding drilldown options
   const rocOptions = useMemo(() => {
@@ -10527,7 +15463,6 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
   }, [goalEntry]);
   const tabs = [
     "overview",
-    ...(hasMultipleSites ? ["bysite"] : []),
     "agents",
     ...(hasSupervisors || hasWeeklyData ? ["teams"] : []),
     ...(goalLookup ? ["goals"] : []),
@@ -10543,7 +15478,7 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
       <div style={{ background: `var(--glass-bg)`, backdropFilter: "blur(12px) saturate(150%)", WebkitBackdropFilter: "blur(12px) saturate(150%)", borderBottom: "1px solid var(--glass-border)", padding: "1rem 2.5rem", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "1rem", flexShrink: 0 }}>
         <div>
           <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.68rem", color: `var(--text-muted)`, letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 500 }}>
-            Program {slideIndex} of {total - 1} <span style={{ display: "inline-block", width: "0.6em" }} /> {totalRowCount} records
+            {siteFilter ? `${siteFilter} · ${getMbrCategory(jobType)}` : `${totalRowCount} records`}
           </div>
           <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.75rem", color: `var(--text-warm)`, fontWeight: 800, letterSpacing: "-0.02em", lineHeight: 1.15, marginTop: "0.15rem" }}>
             {jobType}
@@ -10568,7 +15503,7 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
           {tabs.map(t => (
             <button key={t} onClick={() => setTab(t)}
               style={{ padding: "0.4rem 0.8rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${tab===t?"#d9770650":"var(--text-faint)"}`, background: tab===t?"#d9770612":"transparent", color: tab===t?"#d97706":`var(--text-muted)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", cursor: "pointer", textTransform: "capitalize", fontWeight: tab===t ? 600 : 400, transition: "all 200ms cubic-bezier(0.4,0,0.2,1)" }}>
-              {t === "overview" ? "Overview" : t === "bysite" ? "By Site" : t === "agents" ? "All Agents" : t === "teams" ? "Teams" : t === "goals" ? "Ranking" : t === "daily" ? "Daily" : t}
+              {t === "overview" ? "Overview" : t === "agents" ? "All Agents" : t === "teams" ? "Teams" : t === "goals" ? "Ranking" : t === "daily" ? "Daily" : t}
             </button>
           ))}
         </div>
@@ -10580,6 +15515,10 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
         {/* ── OVERVIEW TAB ── */}
         {tab === "overview" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+            {/* Site comparison card — only renders when both DR and BZ dial this program */}
+            {siteFilter && (
+              <ProgramSiteCompareCard program={program} allAgents={allAgents} newHireSet={newHireSet} goalLookup={goalLookup} />
+            )}
             {/* Stat cards */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "0.75rem" }}>
               <StatCard label="Agents"       value={fUniqueCount}            sub={rocFilter ? `filtered by ${rocFilter}` : `${distUnique.Q1} Q1 of ${uniqueAgentCount}`} accent="#d97706" />
@@ -10921,30 +15860,6 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
           </div>
         )}
 
-        {/* ── BY SITE TAB (program-level) ── */}
-        {tab === "bysite" && hasMultipleSites && (() => {
-          // Group regions into site buckets: XOTM = BZ, everything else = DR
-          const bzRegs = regions.filter(r => r.name.toUpperCase().includes("XOTM")).map(r => r.name);
-          const drRegs = regions.filter(r => !r.name.toUpperCase().includes("XOTM")).map(r => r.name);
-          const siteBuckets = [];
-          if (drRegs.length > 0) siteBuckets.push({ label: drRegs.length === 1 ? drRegs[0] : "DR", regions: drRegs });
-          if (bzRegs.length > 0) siteBuckets.push({ label: "BZ", regions: bzRegs });
-
-          return (
-            <ProgramBySiteTab
-              agents={agents}
-              regions={regions}
-              siteBuckets={siteBuckets}
-              jobType={jobType}
-              goalEntry={goalEntry}
-              goalLookup={goalLookup}
-              fiscalInfo={fiscalInfo}
-              newHireSet={newHireSet}
-              localAI={localAI}
-            />
-          );
-        })()}
-
         {/* ── REGIONS TAB ── */}
         {/* ── AGENTS TAB ── */}
         {tab === "agents" && (
@@ -11133,22 +16048,6 @@ function Slide({ program, newHireSet, goalLookup, fiscalInfo, slideIndex, total,
       </div>
 
       {/* Sticky nav — always visible, never scrolls away */}
-      <div style={{ flexShrink: 0, borderTop: "1px solid var(--border)", padding: "0.75rem 2.5rem", display: "flex", alignItems: "center", justifyContent: "space-between", background: `var(--bg-row-alt)` }}>
-        <button onClick={() => onNav(-1)} disabled={slideIndex === 0}
-          style={{ padding: "0.5rem 1.25rem", background: slideIndex===0?"transparent":"var(--bg-tertiary)", border: `1px solid ${slideIndex===0?`var(--border)`:`var(--text-faint)`}`, borderRadius: "6px", color: slideIndex===0?`var(--border)`:`var(--text-secondary)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", cursor: slideIndex===0?"not-allowed":"pointer", letterSpacing: "0.05em" }}>
-          ← PREV
-        </button>
-        <div style={{ display: "flex", gap: "0.35rem", alignItems: "center" }}>
-          {Array.from({ length: total }).map((_, i) => (
-            <div key={i} onClick={() => onNav(i - slideIndex)}
-              style={{ width: i===slideIndex?"22px":"8px", height: "8px", borderRadius: "4px", background: i===slideIndex?"#d97706":"transparent", border: i===slideIndex?"none":`2px solid var(--text-faint)`, cursor: "pointer", transition: "all 0.2s" }} />
-          ))}
-        </div>
-        <button onClick={() => onNav(1)} disabled={slideIndex === total - 1}
-          style={{ padding: "0.5rem 1.25rem", background: slideIndex===total-1?"transparent":"var(--bg-tertiary)", border: `1px solid ${slideIndex===total-1?`var(--border)`:`var(--text-faint)`}`, borderRadius: "6px", color: slideIndex===total-1?`var(--border)`:`var(--text-secondary)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", cursor: slideIndex===total-1?"not-allowed":"pointer", letterSpacing: "0.05em" }}>
-          NEXT →
-        </button>
-      </div>
     </div>
   );
 }
@@ -13277,6 +18176,8 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
 // Owns state. Calls usePerformanceEngine. Passes data to pages. No computation.
 // ══════════════════════════════════════════════════════════════════════════════
 
+const CURRENT_PAGE_KEY = "perf-intel-current-page";
+
 const THEMES = {
   dark: {
     "--bg-primary":      "#06090d",
@@ -13328,13 +18229,251 @@ const THEMES = {
   },
 };
 
+function LoadingSplash({ onEnded }) {
+  const videoRef = React.useRef(null);
+  const [failed, setFailed] = React.useState(false);
+  const [progress, setProgress] = React.useState(0);
+  React.useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    const fallback = setTimeout(() => { onEnded && onEnded(); }, 15000);
+    const tryPlay = () => { const p = v.play(); if (p && p.catch) p.catch(() => {}); };
+    tryPlay();
+    return () => clearTimeout(fallback);
+  }, [onEnded]);
+  // Page background tracks the video's white → grey → white arc so the
+  // feathered edge blends into the surrounding canvas at every moment.
+  const p = Math.min(1, Math.max(0, progress));
+  const intensity = Math.min(1, Math.sin(p * Math.PI) + 0.35 * p);
+  const g = Math.round(255 - intensity * (255 - 236));
+  const bg = `rgb(${g}, ${g}, ${g})`;
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      {!failed && (
+        <video
+          ref={videoRef}
+          src={`${import.meta.env.BASE_URL}gcs-loading.mp4`}
+          autoPlay
+          muted
+          playsInline
+          preload="auto"
+          onTimeUpdate={e => {
+            const d = e.target.duration;
+            if (d && isFinite(d)) setProgress(Math.min(1, e.target.currentTime / d));
+          }}
+          onEnded={onEnded}
+          onError={() => { setFailed(true); onEnded && onEnded(); }}
+          style={{
+            background: bg,
+            width: "360px",
+            height: "auto",
+            maxWidth: "60vw",
+            maxHeight: "60vh",
+            WebkitMaskImage: "radial-gradient(circle at center, #000 60%, transparent 80%)",
+            maskImage: "radial-gradient(circle at center, #000 60%, transparent 80%)",
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
 export default function App() {
+  const [splashDone, setSplashDone] = useState(false);
   const [rawData,    setRawData]    = useState(null);
   const [lightMode,  setLightMode]  = useState(true);
-  const [slideIndex, setSlideIndex] = useState(0);
+  const [currentPage, _setCurrentPage] = useState(() => {
+    try { const s = localStorage.getItem(CURRENT_PAGE_KEY); return s ? JSON.parse(s) : { section: "overview" }; }
+    catch(e) { return { section: "overview" }; }
+  });
+  const setCurrentPage = useCallback(page => {
+    _setCurrentPage(page);
+    try { localStorage.setItem(CURRENT_PAGE_KEY, JSON.stringify(page)); } catch(e) {}
+  }, []);
+  const [openMenu, setOpenMenu] = useState(null); // null | "dr" | "bz" | "settings"
   const [showToday,  setShowToday]  = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showMbrModal, setShowMbrModal] = useState(false);
+
+  const [showVirgilMbrModal, setShowVirgilMbrModal] = useState(false);
+  const [corpInsights, _setCorpInsights] = useState(() => {
+    try {
+      const raw = localStorage.getItem("perf_intel_corp_insights_v1");
+      if (raw) return JSON.parse(raw);
+      // One-time migration from legacy key introduced in Phase 1
+      const legacy = localStorage.getItem("perf_intel_virgil_insights_v1");
+      if (legacy) {
+        try {
+          const parsed = JSON.parse(legacy);
+          if (parsed && typeof parsed === "object") {
+            localStorage.setItem("perf_intel_corp_insights_v1", legacy);
+            localStorage.removeItem("perf_intel_virgil_insights_v1");
+            return parsed;
+          }
+          // Legacy value is not a usable object; leave legacy key in place untouched
+        } catch(e) {}
+      }
+      return {};
+    } catch(e) { return {}; }
+  });
+  const setCorpInsights = useCallback(updater => {
+    _setCorpInsights(prev => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      try { localStorage.setItem("perf_intel_corp_insights_v1", JSON.stringify(next || {})); } catch(e) {}
+      return next;
+    });
+  }, []);
+  const [showCorpDataSourcesModal, setShowCorpDataSourcesModal] = useState(false);
+
+  const [coachingDetailsRaw, _setCoachingDetailsRaw] = useState(() => {
+    try { return localStorage.getItem("perf_intel_coaching_details_v1") || ""; } catch(e) { return ""; }
+  });
+  const setCoachingDetailsRaw = useCallback(v => {
+    _setCoachingDetailsRaw(v);
+    try { localStorage.setItem("perf_intel_coaching_details_v1", v || ""); } catch(e) {}
+  }, []);
+
+  const [coachingWeeklyRaw, _setCoachingWeeklyRaw] = useState(() => {
+    try { return localStorage.getItem("perf_intel_coaching_weekly_v1") || ""; } catch(e) { return ""; }
+  });
+  const setCoachingWeeklyRaw = useCallback(v => {
+    _setCoachingWeeklyRaw(v);
+    try { localStorage.setItem("perf_intel_coaching_weekly_v1", v || ""); } catch(e) {}
+  }, []);
+
+  // Parse coaching CSVs once at App scope so both VirgilMbrExportModal and
+  // CoachingPage can consume them. The modal also has its own internal memos —
+  // duplication is intentional to avoid changing the modal's signature.
+  const coachingDetails = useMemo(() => parseCoachingDetails(coachingDetailsRaw), [coachingDetailsRaw]);
+  const coachingWeekly  = useMemo(() => parseCoachingWeekly(coachingWeeklyRaw),  [coachingWeeklyRaw]);
+
+  const [loginBucketsRaw, _setLoginBucketsRaw] = useState(() => {
+    try { return localStorage.getItem("perf_intel_login_buckets_v1") || ""; } catch(e) { return ""; }
+  });
+  const setLoginBucketsRaw = useCallback(v => {
+    _setLoginBucketsRaw(v);
+    try { localStorage.setItem("perf_intel_login_buckets_v1", v || ""); } catch(e) {}
+  }, []);
+
+  const handleCoachingDetailsUpload = useCallback(async (file) => {
+    if (!file) return;
+    try {
+      const text = await file.text();
+      setCoachingDetailsRaw(text);
+    } catch(e) {
+      console.error("Coaching Details upload failed:", e);
+    }
+  }, [setCoachingDetailsRaw]);
+
+  const handleCoachingWeeklyUpload = useCallback(async (file) => {
+    if (!file) return;
+    try {
+      const text = await file.text();
+      setCoachingWeeklyRaw(text);
+    } catch(e) {
+      console.error("Weekly Breakdown upload failed:", e);
+    }
+  }, [setCoachingWeeklyRaw]);
+
+  const handleLoginBucketsUpload = useCallback(async (file) => {
+    if (!file) return;
+    try {
+      const text = await file.text();
+      setLoginBucketsRaw(text);
+    } catch(e) {
+      console.error("Login Buckets upload failed:", e);
+    }
+  }, [setLoginBucketsRaw]);
+
+  const [coachingDetailsSheetUrl, _setCoachingDetailsSheetUrl] = useState(() => {
+    try { return localStorage.getItem("perf_intel_coaching_details_url_v1") || DEFAULT_CORP_COACHING_DETAILS_URL; } catch(e) { return DEFAULT_CORP_COACHING_DETAILS_URL; }
+  });
+  const setCoachingDetailsSheetUrl = useCallback(v => {
+    _setCoachingDetailsSheetUrl(v);
+    try { localStorage.setItem("perf_intel_coaching_details_url_v1", v || ""); } catch(e) {}
+  }, []);
+
+  const [coachingWeeklySheetUrl, _setCoachingWeeklySheetUrl] = useState(() => {
+    try { return localStorage.getItem("perf_intel_coaching_weekly_url_v1") || DEFAULT_CORP_COACHING_WEEKLY_URL; } catch(e) { return DEFAULT_CORP_COACHING_WEEKLY_URL; }
+  });
+  const setCoachingWeeklySheetUrl = useCallback(v => {
+    _setCoachingWeeklySheetUrl(v);
+    try { localStorage.setItem("perf_intel_coaching_weekly_url_v1", v || ""); } catch(e) {}
+  }, []);
+
+  const [loginBucketsSheetUrl, _setLoginBucketsSheetUrl] = useState(() => {
+    try { return localStorage.getItem("perf_intel_login_buckets_url_v1") || DEFAULT_CORP_LOGIN_BUCKETS_URL; } catch(e) { return DEFAULT_CORP_LOGIN_BUCKETS_URL; }
+  });
+  const setLoginBucketsSheetUrl = useCallback(v => {
+    _setLoginBucketsSheetUrl(v);
+    try { localStorage.setItem("perf_intel_login_buckets_url_v1", v || ""); } catch(e) {}
+  }, []);
+
+  const [priorQuarterAgentUrl, _setPriorQuarterAgentUrl] = useState(() => {
+    try { return localStorage.getItem("perf_intel_prior_quarter_agent_url_v1") || DEFAULT_CORP_PRIOR_QUARTER_AGENT_URL; } catch(e) { return DEFAULT_CORP_PRIOR_QUARTER_AGENT_URL; }
+  });
+  const setPriorQuarterAgentUrl = useCallback(v => {
+    _setPriorQuarterAgentUrl(v);
+    try { localStorage.setItem("perf_intel_prior_quarter_agent_url_v1", v || ""); } catch(e) {}
+  }, []);
+
+  const [priorQuarterGoalsUrl, _setPriorQuarterGoalsUrl] = useState(() => {
+    try { return localStorage.getItem("perf_intel_prior_quarter_goals_url_v1") || DEFAULT_CORP_PRIOR_QUARTER_GOALS_URL; } catch(e) { return DEFAULT_CORP_PRIOR_QUARTER_GOALS_URL; }
+  });
+  const setPriorQuarterGoalsUrl = useCallback(v => {
+    _setPriorQuarterGoalsUrl(v);
+    try { localStorage.setItem("perf_intel_prior_quarter_goals_url_v1", v || ""); } catch(e) {}
+  }, []);
+
+
+  const [priorQuarterAgentRaw, _setPriorQuarterAgentRaw] = useState(() => {
+    try { return localStorage.getItem("perf_intel_prior_quarter_agent_v1") || ""; } catch(e) { return ""; }
+  });
+  const setPriorQuarterAgentRaw = useCallback(v => {
+    _setPriorQuarterAgentRaw(v);
+    try { localStorage.setItem("perf_intel_prior_quarter_agent_v1", v || ""); } catch(e) {}
+  }, []);
+
+  const [priorQuarterGoalsRaw, _setPriorQuarterGoalsRaw] = useState(() => {
+    try { return localStorage.getItem("perf_intel_prior_quarter_goals_v1") || ""; } catch(e) { return ""; }
+  });
+  const setPriorQuarterGoalsRaw = useCallback(v => {
+    _setPriorQuarterGoalsRaw(v);
+    try { localStorage.setItem("perf_intel_prior_quarter_goals_v1", v || ""); } catch(e) {}
+  }, []);
+
+  const [corpPriorMonthAgentUrl, _setCorpPriorMonthAgentUrl] = useState(() => {
+    try { return localStorage.getItem("perf_intel_corp_prior_month_agent_url_v1") || DEFAULT_CORP_PRIOR_MONTH_AGENT_URL; } catch(e) { return DEFAULT_CORP_PRIOR_MONTH_AGENT_URL; }
+  });
+  const setCorpPriorMonthAgentUrl = useCallback(v => {
+    _setCorpPriorMonthAgentUrl(v);
+    try { localStorage.setItem("perf_intel_corp_prior_month_agent_url_v1", v || ""); } catch(e) {}
+  }, []);
+
+  const [corpPriorMonthGoalsUrl, _setCorpPriorMonthGoalsUrl] = useState(() => {
+    try { return localStorage.getItem("perf_intel_corp_prior_month_goals_url_v4") || DEFAULT_CORP_PRIOR_MONTH_GOALS_URL; } catch(e) { return DEFAULT_CORP_PRIOR_MONTH_GOALS_URL; }
+  });
+  const setCorpPriorMonthGoalsUrl = useCallback(v => {
+    _setCorpPriorMonthGoalsUrl(v);
+    try { localStorage.setItem("perf_intel_corp_prior_month_goals_url_v4", v || ""); } catch(e) {}
+  }, []);
+
+  const [corpPriorMonthAgentRaw, _setCorpPriorMonthAgentRaw] = useState(() => {
+    try { return localStorage.getItem("perf_intel_corp_prior_month_agent_v1") || ""; } catch(e) { return ""; }
+  });
+  const setCorpPriorMonthAgentRaw = useCallback(v => {
+    _setCorpPriorMonthAgentRaw(v);
+    try { localStorage.setItem("perf_intel_corp_prior_month_agent_v1", v || ""); } catch(e) {}
+  }, []);
+
+  const [corpPriorMonthGoalsRaw, _setCorpPriorMonthGoalsRaw] = useState(() => {
+    try { return localStorage.getItem("perf_intel_corp_prior_month_goals_v4") || ""; } catch(e) { return ""; }
+  });
+  const setCorpPriorMonthGoalsRaw = useCallback(v => {
+    _setCorpPriorMonthGoalsRaw(v);
+    try { localStorage.setItem("perf_intel_corp_prior_month_goals_v4", v || ""); } catch(e) {}
+  }, []);
+
   const [localAI, setLocalAI]      = useState(false);
   const [ollamaAvailable, setOllamaAvailable] = useState(null); // null=checking, true/false
   const [hoursThreshold, _setHoursThreshold] = useState(_hoursThreshold);
@@ -13422,6 +18561,47 @@ export default function App() {
     try { if (data) localStorage.setItem(PRIOR_MONTH_STORAGE_KEY + "_goals", JSON.stringify(data)); else localStorage.removeItem(PRIOR_MONTH_STORAGE_KEY + "_goals"); } catch(e) {}
   }, []);
 
+  // Raw CSV text slots — parallel to the parsed-row slots above; used by Corp MBR slide builders
+  const [rawAgentCsv, _setRawAgentCsv] = useState(() => {
+    try { return localStorage.getItem("perf_intel_raw_agent_csv_v1") || ""; } catch(e) { return ""; }
+  });
+  const setRawAgentCsv = useCallback(v => {
+    _setRawAgentCsv(v);
+    try { localStorage.setItem("perf_intel_raw_agent_csv_v1", v || ""); } catch(e) {}
+  }, []);
+
+  const [goalsRawCsv, _setGoalsRawCsv] = useState(() => {
+    try { return localStorage.getItem("perf_intel_goals_raw_csv_v1") || ""; } catch(e) { return ""; }
+  });
+  const setGoalsRawCsv = useCallback(v => {
+    _setGoalsRawCsv(v);
+    try { localStorage.setItem("perf_intel_goals_raw_csv_v1", v || ""); } catch(e) {}
+  }, []);
+
+  const [newHiresRawCsv, _setNewHiresRawCsv] = useState(() => {
+    try { return localStorage.getItem("perf_intel_nh_raw_csv_v1") || ""; } catch(e) { return ""; }
+  });
+  const setNewHiresRawCsv = useCallback(v => {
+    _setNewHiresRawCsv(v);
+    try { localStorage.setItem("perf_intel_nh_raw_csv_v1", v || ""); } catch(e) {}
+  }, []);
+
+  const [priorMonthRawCsv, _setPriorMonthRawCsv] = useState(() => {
+    try { return localStorage.getItem("perf_intel_prior_month_raw_csv_v1") || ""; } catch(e) { return ""; }
+  });
+  const setPriorMonthRawCsv = useCallback(v => {
+    _setPriorMonthRawCsv(v);
+    try { localStorage.setItem("perf_intel_prior_month_raw_csv_v1", v || ""); } catch(e) {}
+  }, []);
+
+  const [priorMonthGoalsRawCsv, _setPriorMonthGoalsRawCsv] = useState(() => {
+    try { return localStorage.getItem("perf_intel_prior_month_goals_raw_csv_v1") || ""; } catch(e) { return ""; }
+  });
+  const setPriorMonthGoalsRawCsv = useCallback(v => {
+    _setPriorMonthGoalsRawCsv(v);
+    try { localStorage.setItem("perf_intel_prior_month_goals_raw_csv_v1", v || ""); } catch(e) {}
+  }, []);
+
   // tNPS survey data — persisted to localStorage
   const [tnpsRaw, _setTnpsRaw] = useState(() => {
     try { const s = localStorage.getItem(TNPS_STORAGE_KEY); return s ? JSON.parse(s) : null; }
@@ -13452,14 +18632,76 @@ export default function App() {
   const perf = usePerformanceEngine({ rawData, goalsRaw, newHiresRaw, tnpsRaw });
   const { programs, jobTypes, newHireSet, newHires, allAgentNames } = perf;
   const hasTnps = perf.tnpsData && perf.tnpsData.length > 0;
-  const programStartIdx = 1;
-  const campaignCompareIdx = programStartIdx + programs.length;
-  const tnpsSlideIdx = hasTnps ? campaignCompareIdx + 1 : -1;
-  const totalSlides = 1 + programs.length + 1 + (hasTnps ? 1 : 0); // Overview + programs + MoM + tNPS?
+  const hasCoaching = (coachingWeekly && coachingWeekly.length > 0) || (coachingDetails && Object.keys(coachingDetails).length > 0);
 
   // Prior month derived data (hoisted for app-wide access)
   const priorAgents = useMemo(() => normalizeAgents(priorMonthRaw || []), [priorMonthRaw]);
   const priorGoalLookup = useMemo(() => buildGoalLookup(priorMonthGoalsRaw), [priorMonthGoalsRaw]);
+
+  const siteRegionGroups = useMemo(() => {
+    if (!perf.agents || perf.agents.length === 0) return { dr: [], bz: [] };
+    const allRegions = [...new Set(perf.agents.map(a => a.region).filter(Boolean))];
+    return {
+      dr: allRegions.filter(r => !r.toUpperCase().includes("XOTM")),
+      bz: allRegions.filter(r => r.toUpperCase().includes("XOTM")),
+    };
+  }, [perf.agents]);
+
+  const programsBySite = useMemo(() => {
+    const result = { DR: [], BZ: [] };
+    if (!perf.programs || !perf.fiscalInfo) return result;
+    const { elapsedBDays, totalBDays } = perf.fiscalInfo;
+    [["DR", siteRegionGroups.dr], ["BZ", siteRegionGroups.bz]].forEach(([siteKey, regs]) => {
+      if (regs.length === 0) return;
+      perf.programs.forEach(prog => {
+        const siteAgents = prog.agents.filter(a => regs.includes(a.region));
+        if (siteAgents.length === 0) return;
+        const sub = buildProgram(siteAgents, prog.jobType, filterGoalEntriesBySite(prog.goalEntries, siteKey), newHireSet);
+        const pacing = sub.attainment != null && sub.planGoals
+          ? calcPacing(sub.actGoals, sub.planGoals, elapsedBDays, totalBDays) : null;
+        result[siteKey].push({
+          jobType: prog.jobType,
+          attainment: sub.attainment,
+          projAttainment: pacing ? pacing.projectedPct : null,
+          category: getMbrCategory(prog.jobType),
+          actGoals: sub.actGoals,
+          planGoals: sub.planGoals,
+        });
+      });
+      result[siteKey].sort((a, b) => (b.attainment ?? -1) - (a.attainment ?? -1));
+    });
+    return result;
+  }, [perf.programs, perf.fiscalInfo, siteRegionGroups, newHireSet]);
+
+  const siteAttainments = useMemo(() => {
+    const result = { DR: { attainment: null, projAttainment: null }, BZ: { attainment: null, projAttainment: null } };
+    if (!perf.fiscalInfo) return result;
+    const { elapsedBDays, totalBDays } = perf.fiscalInfo;
+    ["DR", "BZ"].forEach(siteKey => {
+      const list = programsBySite[siteKey];
+      if (!list || list.length === 0) return;
+      const actGoals = list.reduce((s, p) => s + (p.actGoals || 0), 0);
+      const planGoals = list.reduce((s, p) => s + (p.planGoals || 0), 0);
+      if (planGoals > 0) {
+        const attainment = (actGoals / planGoals) * 100;
+        const pacing = calcPacing(actGoals, planGoals, elapsedBDays, totalBDays);
+        result[siteKey] = { attainment, projAttainment: pacing ? pacing.projectedPct : null };
+      }
+    });
+    return result;
+  }, [programsBySite, perf.fiscalInfo]);
+
+  const filteredProgram = useMemo(() => {
+    if (!currentPage.program) return null;
+    if (currentPage.section !== "dr" && currentPage.section !== "bz") return null;
+    const baseProgram = perf.programMap[currentPage.program];
+    if (!baseProgram) return null;
+    const siteKey = currentPage.section === "dr" ? "DR" : "BZ";
+    const regs = currentPage.section === "dr" ? siteRegionGroups.dr : siteRegionGroups.bz;
+    const siteAgents = baseProgram.agents.filter(a => regs.includes(a.region));
+    if (siteAgents.length === 0) return null;
+    return buildProgram(siteAgents, baseProgram.jobType, filterGoalEntriesBySite(baseProgram.goalEntries, siteKey), newHireSet);
+  }, [currentPage, perf.programMap, siteRegionGroups, newHireSet]);
 
   // AI prefetch counter — triggers re-renders as cache fills
   const [aiPrefetchDone, setAiPrefetchDone] = useState(0);
@@ -13506,7 +18748,7 @@ export default function App() {
   const [sheetLoading, setSheetLoading] = useState(false);
   const [sheetError, setSheetError] = useState(null);
   useEffect(() => {
-    if (rawData) return; // already have data
+    if (rawData && rawAgentCsv) return; // already have data AND text cache
     let cancelled = false;
     (async () => {
       try {
@@ -13516,27 +18758,28 @@ export default function App() {
         const text = await res.text();
         const rows = parseCSV(text);
         if (!cancelled && rows.length > 0) {
+          setRawAgentCsv(text);
           setRawData(rows);
-          setSlideIndex(0);
+          setCurrentPage({ section: "overview" });
         }
         // Auto-load goals sheet if URL configured
-        if (!cancelled && goalsSheetUrl && !goalsRaw) {
+        if (!cancelled && goalsSheetUrl && (!goalsRaw || !goalsRawCsv)) {
           try {
             const proxyG = url => `https://corsproxy.io/?${encodeURIComponent(url)}`;
             let gRes;
             try { gRes = await fetch(goalsSheetUrl); } catch(e) { gRes = null; }
             if (!gRes || !gRes.ok) gRes = await fetch(proxyG(goalsSheetUrl));
-            if (gRes.ok) { const gRows = parseCSV(await gRes.text()); if (gRows.length > 0) setGoalsRaw(gRows); }
+            if (gRes.ok) { const gText = await gRes.text(); const gRows = parseCSV(gText); if (gRows.length > 0) { setGoalsRawCsv(gText); setGoalsRaw(gRows); } }
           } catch(e) {}
         }
         // Auto-load roster sheet if URL configured
-        if (!cancelled && nhSheetUrl && !newHiresRaw) {
+        if (!cancelled && nhSheetUrl && (!newHiresRaw || !newHiresRawCsv)) {
           try {
             const proxyN = url => `https://corsproxy.io/?${encodeURIComponent(url)}`;
             let nRes;
             try { nRes = await fetch(nhSheetUrl); } catch(e) { nRes = null; }
             if (!nRes || !nRes.ok) nRes = await fetch(proxyN(nhSheetUrl));
-            if (nRes.ok) { const nRows = parseCSV(await nRes.text()); if (nRows.length > 0) setNHRaw(nRows); }
+            if (nRes.ok) { const nText = await nRes.text(); const nRows = parseCSV(nText); if (nRows.length > 0) { setNewHiresRawCsv(nText); setNHRaw(nRows); } }
           } catch(e) {}
         }
         // tNPS loads separately after main data (see deferred useEffect below)
@@ -13565,10 +18808,160 @@ export default function App() {
     return () => { cancelled = true; };
   }, [rawData, tnpsSheetUrl, tnpsRaw]);
 
+  // Auto-load Virgil Coaching Details from Google Sheet URL
+  useEffect(() => {
+    if (!coachingDetailsSheetUrl) return;
+    (async () => {
+      try {
+        const res = await fetch(coachingDetailsSheetUrl);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const text = await res.text();
+        setCoachingDetailsRaw(text);
+      } catch(e) {
+        try {
+          const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(coachingDetailsSheetUrl)}`);
+          if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
+          setCoachingDetailsRaw(await res.text());
+        } catch(e2) {
+          console.error("Coaching Details sheet fetch failed:", e2);
+        }
+      }
+    })();
+  }, [coachingDetailsSheetUrl]);
+
+  // Auto-load Virgil Weekly Breakdown from Google Sheet URL
+  useEffect(() => {
+    if (!coachingWeeklySheetUrl) return;
+    (async () => {
+      try {
+        const res = await fetch(coachingWeeklySheetUrl);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const text = await res.text();
+        setCoachingWeeklyRaw(text);
+      } catch(e) {
+        try {
+          const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(coachingWeeklySheetUrl)}`);
+          if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
+          setCoachingWeeklyRaw(await res.text());
+        } catch(e2) {
+          console.error("Weekly Breakdown sheet fetch failed:", e2);
+        }
+      }
+    })();
+  }, [coachingWeeklySheetUrl]);
+
+  // Auto-load Virgil Login Buckets from Google Sheet URL
+  useEffect(() => {
+    if (!loginBucketsSheetUrl) return;
+    (async () => {
+      try {
+        const res = await fetch(loginBucketsSheetUrl);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const text = await res.text();
+        setLoginBucketsRaw(text);
+      } catch(e) {
+        try {
+          const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(loginBucketsSheetUrl)}`);
+          if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
+          setLoginBucketsRaw(await res.text());
+        } catch(e2) {
+          console.error("Login Buckets sheet fetch failed:", e2);
+        }
+      }
+    })();
+  }, [loginBucketsSheetUrl]);
+
+  useEffect(() => {
+    if (!priorQuarterAgentUrl) return;
+    (async () => {
+      try {
+        const res = await fetch(priorQuarterAgentUrl);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const text = await res.text();
+        setPriorQuarterAgentRaw(text);
+      } catch(e) {
+        try {
+          const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(priorQuarterAgentUrl)}`);
+          if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
+          setPriorQuarterAgentRaw(await res.text());
+        } catch(e2) {
+          console.error("Prior Quarter Agent sheet fetch failed:", e2);
+        }
+      }
+    })();
+  }, [priorQuarterAgentUrl]);
+
+  useEffect(() => {
+    if (!priorQuarterGoalsUrl) return;
+    (async () => {
+      try {
+        const res = await fetch(priorQuarterGoalsUrl);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const text = await res.text();
+        setPriorQuarterGoalsRaw(text);
+      } catch(e) {
+        try {
+          const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(priorQuarterGoalsUrl)}`);
+          if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
+          setPriorQuarterGoalsRaw(await res.text());
+        } catch(e2) {
+          console.error("Prior Quarter Goals sheet fetch failed:", e2);
+        }
+      }
+    })();
+  }, [priorQuarterGoalsUrl]);
+
+
+  useEffect(() => {
+    if (!corpPriorMonthAgentUrl) return;
+    (async () => {
+      try {
+        const res = await fetch(corpPriorMonthAgentUrl);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const text = await res.text();
+        setCorpPriorMonthAgentRaw(text);
+      } catch(e) {
+        try {
+          const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(corpPriorMonthAgentUrl)}`);
+          if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
+          setCorpPriorMonthAgentRaw(await res.text());
+        } catch(e2) {
+          console.error("Corp Prior Month Agent sheet fetch failed:", e2);
+        }
+      }
+    })();
+  }, [corpPriorMonthAgentUrl]);
+
+  useEffect(() => {
+    if (!corpPriorMonthGoalsUrl) return;
+    (async () => {
+      try {
+        const res = await fetch(corpPriorMonthGoalsUrl);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const text = await res.text();
+        setCorpPriorMonthGoalsRaw(text);
+      } catch(e) {
+        try {
+          const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(corpPriorMonthGoalsUrl)}`);
+          if (!res.ok) throw new Error(`Proxy HTTP ${res.status}`);
+          setCorpPriorMonthGoalsRaw(await res.text());
+        } catch(e2) {
+          console.error("Corp Prior Month Goals sheet fetch failed:", e2);
+        }
+      }
+    })();
+  }, [corpPriorMonthGoalsUrl]);
+
   // Auto-load prior month data from Google Sheet (after main data loads, non-blocking)
+  // URL stamp busts the cache on monthly rollover — if the source URL changed since last
+  // fetch, we re-fetch rather than serve stale data.
   const [priorSheetLoading, setPriorSheetLoading] = useState(false);
   useEffect(() => {
-    if (!rawData || priorMonthRaw || !priorSheetUrl || priorSheetLoading) return;
+    if (!rawData || !priorSheetUrl || priorSheetLoading) return;
+    let stampedUrl = "";
+    try { stampedUrl = localStorage.getItem("perf_intel_prior_month_url_stamp_v1") || ""; } catch(e) {}
+    const cacheFresh = priorMonthRaw && priorMonthRawCsv && stampedUrl === priorSheetUrl;
+    if (cacheFresh) return;
     let cancelled = false;
     (async () => {
       try {
@@ -13579,16 +18972,24 @@ export default function App() {
         if (!res || !res.ok) res = await fetch(proxyP(priorSheetUrl));
         const text = await res.text();
         const rows = parseCSV(text);
-        if (!cancelled && rows.length > 0) setPriorMonthRaw(rows);
+        if (!cancelled && rows.length > 0) {
+          setPriorMonthRawCsv(text);
+          setPriorMonthRaw(rows);
+          try { localStorage.setItem("perf_intel_prior_month_url_stamp_v1", priorSheetUrl); } catch(e) {}
+        }
       } catch(e) { /* silent */ }
       finally { if (!cancelled) setPriorSheetLoading(false); }
     })();
     return () => { cancelled = true; };
-  }, [rawData, priorSheetUrl, priorMonthRaw]);
+  }, [rawData, priorSheetUrl, priorMonthRaw, priorMonthRawCsv]);
 
   // Auto-load prior month goals from Google Sheet (after prior data loads)
   useEffect(() => {
-    if (!rawData || priorMonthGoalsRaw || !priorGoalsSheetUrl) return;
+    if (!rawData || !priorGoalsSheetUrl) return;
+    let stampedUrl = "";
+    try { stampedUrl = localStorage.getItem("perf_intel_prior_month_goals_url_stamp_v1") || ""; } catch(e) {}
+    const cacheFresh = priorMonthGoalsRaw && priorMonthGoalsRawCsv && stampedUrl === priorGoalsSheetUrl;
+    if (cacheFresh) return;
     let cancelled = false;
     (async () => {
       try {
@@ -13598,11 +18999,15 @@ export default function App() {
         if (!res || !res.ok) res = await fetch(proxyP(priorGoalsSheetUrl));
         const text = await res.text();
         const rows = parseCSV(text);
-        if (!cancelled && rows.length > 0) setPriorMonthGoalsRaw(rows);
+        if (!cancelled && rows.length > 0) {
+          setPriorMonthGoalsRawCsv(text);
+          setPriorMonthGoalsRaw(rows);
+          try { localStorage.setItem("perf_intel_prior_month_goals_url_stamp_v1", priorGoalsSheetUrl); } catch(e) {}
+        }
       } catch(e) { /* silent */ }
     })();
     return () => { cancelled = true; };
-  }, [rawData, tnpsSheetUrl, tnpsRaw]);
+  }, [rawData, priorGoalsSheetUrl, priorMonthGoalsRaw, priorMonthGoalsRawCsv]);
 
   // Last-7-days unique agent names for Today attendance comparison
   const recentAgentNames = useMemo(() => {
@@ -13633,15 +19038,114 @@ export default function App() {
     return map;
   }, [perf.agents]);
 
-  const loadFile = (f, setter) => {
+  const loadFile = (f, setter, textSetter) => {
     const r = new FileReader();
-    r.onload = e => setter(parseCSV(e.target.result));
+    r.onload = e => {
+      const text = e.target.result;
+      if (textSetter) textSetter(text);
+      setter(parseCSV(text));
+    };
     r.readAsText(f);
   };
 
-  const navTo = delta => setSlideIndex(i => Math.max(0, Math.min(totalSlides - 1, i + delta)));
-  const goToSlide = idx => setSlideIndex(Math.max(0, Math.min(totalSlides - 1, idx)));
-  const [showProgramPicker, setShowProgramPicker] = useState(false);
+  const handleRefresh = useCallback(async () => {
+    const proxy = url => `https://corsproxy.io/?${encodeURIComponent(url)}`;
+    // Returns { rows, text } — text preserved so Corp MBR slide builders can consume raw CSV
+    const fetchSheetWithText = async url => {
+      try {
+        let res;
+        try { res = await fetch(url); } catch(e) { res = null; }
+        if (!res || !res.ok) res = await fetch(proxy(url));
+        if (!res.ok) return null;
+        const text = await res.text();
+        const rows = parseCSV(text);
+        return rows.length > 0 ? { rows, text } : null;
+      } catch(e) { return null; }
+    };
+    // Legacy helper that returns only rows (for callers that don't need text)
+    const fetchSheet = async url => {
+      const r = await fetchSheetWithText(url);
+      return r ? r.rows : null;
+    };
+    try {
+      setSheetLoading(true);
+      const agentResult = await fetchSheetWithText(agentSheetUrl);
+      if (agentResult) { setRawAgentCsv(agentResult.text); setRawData(agentResult.rows); }
+      // Refresh secondary sheets in parallel
+      await Promise.all([
+        goalsSheetUrl ? fetchSheetWithText(goalsSheetUrl).then(r => { if (r) { setGoalsRawCsv(r.text); setGoalsRaw(r.rows); } }) : null,
+        nhSheetUrl ? fetchSheetWithText(nhSheetUrl).then(r => { if (r) { setNewHiresRawCsv(r.text); setNHRaw(r.rows); } }) : null,
+        priorSheetUrl ? fetchSheetWithText(priorSheetUrl).then(r => { if (r) { setPriorMonthRawCsv(r.text); setPriorMonthRaw(r.rows); } }) : null,
+        priorGoalsSheetUrl ? fetchSheetWithText(priorGoalsSheetUrl).then(r => { if (r) { setPriorMonthGoalsRawCsv(r.text); setPriorMonthGoalsRaw(r.rows); } }) : null,
+        tnpsSheetUrl ? fetchSheet(tnpsSheetUrl).then(r => { if (r) setTnpsRaw(r); }) : null,
+        coachingDetailsSheetUrl ? (async () => {
+          try {
+            let res; try { res = await fetch(coachingDetailsSheetUrl); } catch(e) { res = null; }
+            if (!res || !res.ok) res = await fetch(proxy(coachingDetailsSheetUrl));
+            if (res.ok) { const t = await res.text(); if (t.trim()) setCoachingDetailsRaw(t); }
+          } catch(e) {}
+        })() : null,
+        coachingWeeklySheetUrl ? (async () => {
+          try {
+            let res; try { res = await fetch(coachingWeeklySheetUrl); } catch(e) { res = null; }
+            if (!res || !res.ok) res = await fetch(proxy(coachingWeeklySheetUrl));
+            if (res.ok) { const t = await res.text(); if (t.trim()) setCoachingWeeklyRaw(t); }
+          } catch(e) {}
+        })() : null,
+        loginBucketsSheetUrl ? (async () => {
+          try {
+            let res; try { res = await fetch(loginBucketsSheetUrl); } catch(e) { res = null; }
+            if (!res || !res.ok) res = await fetch(proxy(loginBucketsSheetUrl));
+            if (res.ok) { const t = await res.text(); if (t.trim()) setLoginBucketsRaw(t); }
+          } catch(e) {}
+        })() : null,
+        priorQuarterAgentUrl ? (async () => {
+          try {
+            let res; try { res = await fetch(priorQuarterAgentUrl); } catch(e) { res = null; }
+            if (!res || !res.ok) res = await fetch(proxy(priorQuarterAgentUrl));
+            if (res.ok) { const t = await res.text(); if (t.trim()) setPriorQuarterAgentRaw(t); }
+          } catch(e) {}
+        })() : null,
+        priorQuarterGoalsUrl ? (async () => {
+          try {
+            let res; try { res = await fetch(priorQuarterGoalsUrl); } catch(e) { res = null; }
+            if (!res || !res.ok) res = await fetch(proxy(priorQuarterGoalsUrl));
+            if (res.ok) { const t = await res.text(); if (t.trim()) setPriorQuarterGoalsRaw(t); }
+          } catch(e) {}
+        })() : null,
+        corpPriorMonthAgentUrl ? (async () => {
+          try {
+            let res; try { res = await fetch(corpPriorMonthAgentUrl); } catch(e) { res = null; }
+            if (!res || !res.ok) res = await fetch(proxy(corpPriorMonthAgentUrl));
+            if (res.ok) { const t = await res.text(); if (t.trim()) setCorpPriorMonthAgentRaw(t); }
+          } catch(e) {}
+        })() : null,
+        corpPriorMonthGoalsUrl ? (async () => {
+          try {
+            let res; try { res = await fetch(corpPriorMonthGoalsUrl); } catch(e) { res = null; }
+            if (!res || !res.ok) res = await fetch(proxy(corpPriorMonthGoalsUrl));
+            if (res.ok) { const t = await res.text(); if (t.trim()) setCorpPriorMonthGoalsRaw(t); }
+          } catch(e) {}
+        })() : null,
+      ].filter(Boolean));
+    } catch(e) { alert("Could not refresh: " + e.message); }
+    finally { setSheetLoading(false); }
+  }, [agentSheetUrl, goalsSheetUrl, nhSheetUrl, priorSheetUrl, priorGoalsSheetUrl, tnpsSheetUrl, coachingDetailsSheetUrl, coachingWeeklySheetUrl, loginBucketsSheetUrl, priorQuarterAgentUrl, priorQuarterGoalsUrl, corpPriorMonthAgentUrl, corpPriorMonthGoalsUrl]);
+
+  // Legacy navigation adapter — translates old slideIndex semantics from
+  // BusinessOverview/CampaignComparisonPanel into currentPage navigation.
+  // BusinessOverview always called these from the "overview" page (slideIndex 0),
+  // so navTo(N) and goToSlide(N) both equal "go to slide N" in absolute terms.
+  const legacyGoToSlide = useCallback(idx => {
+    if (idx === 0) { setCurrentPage({ section: "overview" }); return; }
+    if (hasTnps && idx === programs.length + 2) { setCurrentPage({ section: "tnps" }); return; }
+    if (idx === programs.length + 1) { setCurrentPage({ section: "mom" }); return; }
+    if (idx > 0 && idx <= programs.length) {
+      const program = programs[idx - 1];
+      const drHas = program.agents.some(a => siteRegionGroups.dr.includes(a.region));
+      setCurrentPage({ section: drHas ? "dr" : "bz", program: program.jobType });
+    }
+  }, [hasTnps, programs, siteRegionGroups]);
 
   useEffect(() => {
     const vars = lightMode ? THEMES.light : THEMES.dark;
@@ -13653,33 +19157,60 @@ export default function App() {
   const wrapStyle = { minHeight: "100vh", background: "var(--bg-primary)", color: "var(--text-primary)" };
 
   // If no agent data and not showing Today, show the drop zone
-  if (!rawData && !showToday) {
-    return (
-      <div style={wrapStyle}>
-        {/* Minimal top bar so TODAY is always accessible */}
-        <div style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 200, background: `var(--nav-bg)`, backdropFilter: "blur(16px) saturate(180%)", WebkitBackdropFilter: "blur(16px) saturate(180%)", borderBottom: `1px solid var(--glass-border)`, padding: "0.6rem 1.5rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: `var(--text-dim)`, letterSpacing: "0.08em", fontWeight: 500 }}>
-            PERFORMANCE INTEL
-          </span>
-          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-            <button onClick={() => setLightMode(v => !v)}
-              style={{ background: "transparent", border: `1px solid var(--border-muted)`, borderRadius: "var(--radius-sm, 6px)", color: `var(--text-muted)`, padding: "0.35rem 0.65rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", cursor: "pointer", fontWeight: 500 }}>
-              {lightMode ? "\u2600" : "\u263E"}
-            </button>
-            <button onClick={() => setShowToday(true)}
-              style={{ background: "transparent", border: `1px solid var(--border-muted)`, borderRadius: "var(--radius-sm, 6px)", color: `var(--text-muted)`, padding: "0.35rem 0.75rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", cursor: "pointer", fontWeight: 500, letterSpacing: "0.04em" }}>
-              TODAY
-            </button>
-          </div>
-        </div>
-        {/* Settings panel */}
+
+  return (
+    <div style={wrapStyle}>
+      {!splashDone && <LoadingSplash onEnded={() => setSplashDone(true)} />}
+      {showMbrModal && rawData && <MbrExportModal perf={perf} onClose={() => setShowMbrModal(false)} />}
+      {showVirgilMbrModal && (
+        <VirgilMbrExportModal
+          perf={perf}
+          coachingDetailsRaw={coachingDetailsRaw}
+          coachingWeeklyRaw={coachingWeeklyRaw}
+          loginBucketsRaw={loginBucketsRaw}
+          rawAgentCsv={rawAgentCsv}
+          goalsRaw={goalsRawCsv}
+          priorMonthRaw={priorMonthRawCsv}
+          priorMonthGoalsRaw={priorMonthGoalsRawCsv}
+          newHiresRaw={newHiresRawCsv}
+          priorQuarterAgentRaw={priorQuarterAgentRaw}
+          priorQuarterGoalsRaw={priorQuarterGoalsRaw}
+          corpPriorMonthAgentRaw={corpPriorMonthAgentRaw}
+          corpPriorMonthGoalsRaw={corpPriorMonthGoalsRaw}
+          insights={corpInsights}
+          setInsights={setCorpInsights}
+          ollamaAvailable={ollamaAvailable}
+          onClose={() => setShowVirgilMbrModal(false)}
+        />
+      )}
+      {showCorpDataSourcesModal && (
+        <CorpMbrDataSourcesModal
+          coachingDetailsSheetUrl={coachingDetailsSheetUrl}
+          setCoachingDetailsSheetUrl={setCoachingDetailsSheetUrl}
+          coachingWeeklySheetUrl={coachingWeeklySheetUrl}
+          setCoachingWeeklySheetUrl={setCoachingWeeklySheetUrl}
+          loginBucketsSheetUrl={loginBucketsSheetUrl}
+          setLoginBucketsSheetUrl={setLoginBucketsSheetUrl}
+          corpPriorMonthAgentUrl={corpPriorMonthAgentUrl}
+          setCorpPriorMonthAgentUrl={setCorpPriorMonthAgentUrl}
+          corpPriorMonthGoalsUrl={corpPriorMonthGoalsUrl}
+          setCorpPriorMonthGoalsUrl={setCorpPriorMonthGoalsUrl}
+          priorQuarterAgentUrl={priorQuarterAgentUrl}
+          setPriorQuarterAgentUrl={setPriorQuarterAgentUrl}
+          priorQuarterGoalsUrl={priorQuarterGoalsUrl}
+          setPriorQuarterGoalsUrl={setPriorQuarterGoalsUrl}
+          onClose={() => setShowCorpDataSourcesModal(false)}
+        />
+      )}
+
+      {/* Settings panel — keep existing modal, just gate by showSettings */}
       {showSettings && (
         <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}
           onClick={e => { if (e.target === e.currentTarget) setShowSettings(false); }}>
-          <div style={{ background: `var(--bg-primary)`, border: "1px solid var(--glass-border)", borderRadius: "var(--radius-xl, 20px)", padding: "1.75rem", width: "100%", maxWidth: "650px", boxShadow: "0 24px 80px rgba(0,0,0,0.3)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)" }}>
+          <div style={{ background: "var(--bg-primary)", border: "1px solid var(--glass-border)", borderRadius: "var(--radius-xl, 20px)", padding: "1.75rem", width: "100%", maxWidth: "650px", boxShadow: "0 24px 80px rgba(0,0,0,0.3)" }}>
             <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: "#6366f1", letterSpacing: "0.08em", marginBottom: "1.25rem", fontWeight: 600, textTransform: "uppercase" }}>Data Source Settings</div>
-            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-dim)`, marginBottom: "1rem", lineHeight: 1.5 }}>
-              Publish Google Sheets as CSV (File \u2192 Share \u2192 Publish to web \u2192 CSV format). Update URLs here when sheets change monthly.
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "var(--text-dim)", marginBottom: "1rem", lineHeight: 1.5 }}>
+              Publish Google Sheets as CSV (File → Share → Publish to web → CSV format). Update URLs here when sheets change monthly.
             </div>
             {[
               { key: "agent", label: "Agent Data Sheet", color: "#d97706", current: agentSheetUrl, placeholder: "https://docs.google.com/spreadsheets/.../pub?output=csv" },
@@ -13690,20 +19221,9 @@ export default function App() {
             ].map(({ key, label, color, current, placeholder }) => (
               <div key={key} style={{ marginBottom: "1rem" }}>
                 <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color, letterSpacing: "0.08em", marginBottom: "0.3rem" }}>{label}</div>
-                <input
-                  defaultValue={current}
-                  placeholder={placeholder}
-                  onBlur={e => {
-                    const val = e.target.value.trim();
-                    setSheetUrls(prev => ({ ...prev, [key]: val }));
-                  }}
-                  style={{ width: "100%", padding: "0.5rem 0.75rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem", background: `var(--bg-secondary)`, color: `var(--text-primary)`, border: `1px solid var(--border)`, borderRadius: "6px", boxSizing: "border-box" }}
-                />
-                {current && (
-                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-faint)`, marginTop: "0.2rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {current.slice(0, 80)}{current.length > 80 ? "..." : ""}
-                  </div>
-                )}
+                <input defaultValue={current} placeholder={placeholder}
+                  onBlur={e => setSheetUrls(prev => ({ ...prev, [key]: e.target.value.trim() }))}
+                  style={{ width: "100%", padding: "0.5rem 0.75rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem", background: "var(--bg-secondary)", color: "var(--text-primary)", border: "1px solid var(--border)", borderRadius: "6px", boxSizing: "border-box" }} />
               </div>
             ))}
             {/* Hours Threshold */}
@@ -13735,10 +19255,9 @@ export default function App() {
                 </div>
               )}
             </div>
-
             <div style={{ display: "flex", gap: "0.5rem", justifyContent: "space-between", marginTop: "1rem" }}>
-              <button onClick={() => { setSheetUrls({}); }}
-                style={{ padding: "0.4rem 1rem", borderRadius: "6px", border: "1px solid var(--border)", background: "transparent", color: `var(--text-muted)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", cursor: "pointer" }}>
+              <button onClick={() => setSheetUrls({})}
+                style={{ padding: "0.4rem 1rem", borderRadius: "6px", border: "1px solid var(--border)", background: "transparent", color: "var(--text-muted)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", cursor: "pointer" }}>
                 Reset to Defaults
               </button>
               <button onClick={() => { setShowSettings(false); setRawData(null); setGoalsRaw(null); setNHRaw(null); }}
@@ -13750,208 +19269,127 @@ export default function App() {
         </div>
       )}
 
-      <div style={{ paddingTop: "42px" }}>
-          <DropZone
-            onData={d => { setRawData(d); setSlideIndex(0); }}
-            goalsRaw={goalsRaw}
-            onGoalsLoad={setGoalsRaw}
-            newHiresRaw={newHiresRaw}
-            onNewHiresLoad={setNHRaw}
-          />
-        </div>
-      </div>
-    );
-  }
+      {/* Hidden file inputs */}
+      <input ref={goalsInputRef} type="file" accept=".csv" style={{ display: "none" }} onChange={e => loadFile(e.target.files[0], setGoalsRaw, setGoalsRawCsv)} />
+      <input ref={nhInputRef} type="file" accept=".csv" style={{ display: "none" }} onChange={e => loadFile(e.target.files[0], setNHRaw, setNewHiresRawCsv)} />
+      <input ref={priorGoalsInputRef} type="file" accept=".csv" style={{ display: "none" }} onChange={e => loadFile(e.target.files[0], setPriorMonthGoalsRaw, setPriorMonthGoalsRawCsv)} />
 
-  const isOverview = slideIndex === 0;
-  const isTnpsSlide = hasTnps && slideIndex === tnpsSlideIdx;
-  const isCampaignCompare = slideIndex === campaignCompareIdx;
-  const programIdx = slideIndex - programStartIdx;
-  const program = (!isOverview && !isTnpsSlide && !isCampaignCompare && programIdx >= 0 && programIdx < programs.length) ? programs[programIdx] : null;
+      <TopNav
+        rawData={rawData}
+        currentPage={currentPage}
+        setCurrentPage={setCurrentPage}
+        openMenu={openMenu}
+        setOpenMenu={setOpenMenu}
+        programsBySite={programsBySite}
+        siteAttainments={siteAttainments}
+        fiscalInfo={perf.fiscalInfo}
+        hasTnps={hasTnps}
+        hasCoaching={hasCoaching}
+        lightMode={lightMode}
+        setLightMode={setLightMode}
+        showToday={showToday}
+        setShowToday={setShowToday}
+        ollamaAvailable={ollamaAvailable}
+        localAI={localAI}
+        setLocalAI={setLocalAI}
+        onExportMbr={() => setShowMbrModal(true)}
+        onExportVirgilMbr={() => setShowVirgilMbrModal(true)}
+        onOpenCorpDataSources={() => setShowCorpDataSourcesModal(true)}
+        onRefresh={handleRefresh}
+        onUploadGoals={() => goalsInputRef.current.click()}
+        onUploadRoster={() => nhInputRef.current.click()}
+        onUploadPriorGoals={() => priorGoalsInputRef.current.click()}
+        onUploadCoachingDetails={handleCoachingDetailsUpload}
+        onUploadCoachingWeekly={handleCoachingWeeklyUpload}
+        onUploadLoginBuckets={handleLoginBucketsUpload}
+        onOpenSettings={() => setShowSettings(true)}
+      />
 
-  return (
-    <div style={wrapStyle}>
-      {showMbrModal && rawData && <MbrExportModal perf={perf} onClose={() => setShowMbrModal(false)} />}
-      {/* Top bar — compact by default, expands on hover to show file controls below */}
-      <div style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 200, background: `var(--nav-bg)`, backdropFilter: "blur(16px) saturate(180%)", WebkitBackdropFilter: "blur(16px) saturate(180%)", borderBottom: `1px solid var(--glass-border)`, padding: "0.35rem 1.5rem" }}
-        onMouseEnter={e => { e.currentTarget.dataset.expanded = "true"; const tb = e.currentTarget.querySelector("[data-toolbar]"); if (tb) { tb.style.pointerEvents = "none"; setTimeout(() => { tb.style.pointerEvents = "auto"; }, 300); } }}
-        onMouseLeave={e => e.currentTarget.dataset.expanded = "false"}
-        ref={el => { if (el) { const update = () => { const exp = el.dataset.expanded === "true"; const tb = el.querySelector("[data-toolbar]"); if (tb) tb.style.display = exp ? "flex" : "none"; }; el.dataset.expanded = "false"; const obs = new MutationObserver(update); obs.observe(el, { attributes: true, attributeFilter: ["data-expanded"] }); update(); } }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", color: `var(--text-dim)`, letterSpacing: "0.06em", fontWeight: 500 }}>
-            {rawData
-              ? <>
-                  <span style={{ color: `var(--text-muted)`, fontWeight: 600 }}>PERF INTEL</span>
-                  <span style={{ margin: "0 0.4rem", opacity: 0.3 }}>|</span>
-                  {programs.length} programs
-                  <span style={{ margin: "0 0.4rem", opacity: 0.3 }}>|</span>
-                  {perf.uniqueAgentCount} agents
-                  {goalsRaw && <><span style={{ margin: "0 0.4rem", opacity: 0.3 }}>|</span><span style={{ color: "#16a34a" }}>goals</span></>}
-                  {newHireSet.size > 0 && <><span style={{ margin: "0 0.4rem", opacity: 0.3 }}>|</span><span style={{ color: "var(--nh-color)" }}>{newHireSet.size} NH</span></>}
-                </>
-              : <span><span style={{ fontWeight: 600 }}>PERFORMANCE INTEL</span></span>
-            }
-          </span>
-          <div style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
-            <button onClick={() => setLightMode(v => !v)}
-              style={{ background: "transparent", border: `1px solid var(--border-muted)`, borderRadius: "var(--radius-sm, 6px)", color: `var(--text-muted)`, padding: "0.3rem 0.55rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", cursor: "pointer" }}>
-              {lightMode ? "\u2600" : "\u263E"}
-            </button>
-            <button onClick={() => setShowToday(v => !v)}
-              style={{ background: showToday?"#16a34a12":"transparent", border: `1px solid ${showToday?"#16a34a50":`var(--border-muted)`}`, borderRadius: "var(--radius-sm, 6px)", color: showToday?"#16a34a":`var(--text-muted)`, padding: "0.3rem 0.6rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", cursor: "pointer", fontWeight: 500, letterSpacing: "0.03em" }}>
-              {showToday ? "\u25CF" : "\u25CB"} TODAY
-            </button>
-            <button onClick={() => setShowSettings(v => !v)}
-              style={{ background: showSettings?"#6366f112":"transparent", border: `1px solid ${showSettings?"#6366f150":`var(--border-muted)`}`, borderRadius: "var(--radius-sm, 6px)", color: showSettings?"#6366f1":`var(--text-muted)`, padding: "0.3rem 0.6rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", cursor: "pointer", fontWeight: 500, letterSpacing: "0.03em" }}>
-              DATA
-            </button>
-          </div>
-        </div>
-        {/* File management row — appears below on hover */}
-        <div data-toolbar="" style={{ display: "none", gap: "0.5rem", alignItems: "center", paddingTop: "0.4rem", paddingBottom: "0.15rem", flexWrap: "wrap" }}>
-          {ollamaAvailable && (
-            <button onClick={() => setLocalAI(v => !v)}
-              style={{ background: localAI ? `${AI_COLOR}12` : "transparent", border: `1px solid ${localAI ? `${AI_COLOR}50` : "var(--border-muted)"}`, borderRadius: "var(--radius-sm, 6px)", color: localAI ? AI_COLOR : `var(--text-muted)`, padding: "0.3rem 0.65rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", cursor: "pointer", fontWeight: 500 }}>
-              {localAI ? "\u25CF" : "\u25CB"} Local AI
-            </button>
-          )}
-          <button onClick={() => goalsInputRef.current.click()}
-            style={{ background: goalsRaw?"#16a34a10":"transparent", border: `1px solid ${goalsRaw?"#16a34a40":`var(--border-muted)`}`, borderRadius: "var(--radius-sm, 6px)", color: goalsRaw?"#16a34a":`var(--text-muted)`, padding: "0.3rem 0.65rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", cursor: "pointer", fontWeight: 500 }}>
-            {goalsRaw ? "\u2713 Goals" : "+ Goals"}
-          </button>
-          {goalsRaw && (
-            <button onClick={() => setGoalsRaw(null)} title="Clear saved goals"
-              style={{ background: "transparent", border: "1px solid var(--border-muted)", borderRadius: "var(--radius-sm, 6px)", color: `var(--text-dim)`, padding: "0.3rem 0.45rem", fontSize: "0.75rem", cursor: "pointer", lineHeight: 1 }}>{"\u2715"}</button>
-          )}
-          <input ref={goalsInputRef} type="file" accept=".csv" style={{ display: "none" }} onChange={e => loadFile(e.target.files[0], setGoalsRaw)} />
-          <button onClick={() => nhInputRef.current.click()}
-            style={{ background: newHiresRaw?"#d9770610":"transparent", border: `1px solid ${newHiresRaw?"#d9770640":`var(--border-muted)`}`, borderRadius: "var(--radius-sm, 6px)", color: newHiresRaw?"#d97706":`var(--text-muted)`, padding: "0.3rem 0.65rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", cursor: "pointer", fontWeight: 500 }}>
-            {newHiresRaw ? `\u2713 ${newHireSet.size} NH` : "+ New Hires"}
-          </button>
-          {newHiresRaw && (
-            <button onClick={() => setNHRaw(null)} title="Clear saved roster"
-              style={{ background: "transparent", border: "1px solid var(--border-muted)", borderRadius: "var(--radius-sm, 6px)", color: `var(--text-dim)`, padding: "0.3rem 0.45rem", fontSize: "0.75rem", cursor: "pointer", lineHeight: 1 }}>{"\u2715"}</button>
-          )}
-          <input ref={nhInputRef} type="file" accept=".csv" style={{ display: "none" }} onChange={e => loadFile(e.target.files[0], setNHRaw)} />
-          <button onClick={() => priorGoalsInputRef.current.click()}
-            style={{ background: priorMonthGoalsRaw?"#8b5cf610":"transparent", border: `1px solid ${priorMonthGoalsRaw?"#8b5cf640":`var(--border-muted)`}`, borderRadius: "var(--radius-sm, 6px)", color: priorMonthGoalsRaw?"#8b5cf6":`var(--text-muted)`, padding: "0.3rem 0.65rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", cursor: "pointer", fontWeight: 500 }}>
-            {priorMonthGoalsRaw ? "\u2713 Prior Goals" : "+ Prior Goals"}
-          </button>
-          {priorMonthGoalsRaw && (
-            <button onClick={() => setPriorMonthGoalsRaw(null)} title="Clear saved prior goals"
-              style={{ background: "transparent", border: "1px solid var(--border-muted)", borderRadius: "var(--radius-sm, 6px)", color: `var(--text-dim)`, padding: "0.3rem 0.45rem", fontSize: "0.75rem", cursor: "pointer", lineHeight: 1 }}>{"\u2715"}</button>
-          )}
-          <input ref={priorGoalsInputRef} type="file" accept=".csv" style={{ display: "none" }} onChange={e => loadFile(e.target.files[0], setPriorMonthGoalsRaw)} />
-          <div style={{ flex: 1 }} />
-          {rawData && <button onClick={() => setShowMbrModal(true)} style={{ padding: "0.3rem 0.65rem", background: "transparent", border: "1px solid var(--border-muted)", borderRadius: "var(--radius-sm, 6px)", color: "var(--text-muted)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", cursor: "pointer", fontWeight: 500 }}>Export MBR</button>}
-          <button onClick={() => { setRawData(null); setSlideIndex(0); setShowToday(false); }}
-            style={{ background: "transparent", border: "1px solid var(--border-muted)", borderRadius: "var(--radius-sm, 6px)", color: `var(--text-muted)`, padding: "0.3rem 0.65rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", cursor: "pointer", fontWeight: 500 }}>
-            New File
-          </button>
-          <button onClick={() => { const t = prompt("Paste agent CSV data:"); if (t) { const rows = parseCSV(t); if (rows.length > 0) { setRawData(rows); setSlideIndex(0); } } }}
-            style={{ background: "transparent", border: "1px solid var(--border-muted)", borderRadius: "var(--radius-sm, 6px)", color: `var(--text-muted)`, padding: "0.3rem 0.65rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", cursor: "pointer", fontWeight: 500 }}>
-            Paste
-          </button>
-          <button onClick={async () => { try { setSheetLoading(true); const res = await fetch(agentSheetUrl); const text = await res.text(); const rows = parseCSV(text); if (rows.length > 0) { setRawData(rows); setSlideIndex(0); } } catch(e) { alert("Could not fetch sheet: " + e.message); } finally { setSheetLoading(false); } }}
-            style={{ background: "#2563eb10", border: "1px solid #2563eb40", borderRadius: "var(--radius-sm, 6px)", color: "#2563eb", padding: "0.3rem 0.65rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", cursor: "pointer", fontWeight: 600 }}>
-            {sheetLoading ? "Loading..." : "Refresh"}
-          </button>
-        </div>
-      </div>
-
-      <div style={{ paddingTop: "42px" }}>
+      <div style={{ paddingTop: "48px" }}>
+        <Breadcrumb
+          section={currentPage.section}
+          program={currentPage.program}
+          attainment={filteredProgram ? filteredProgram.attainment : null}
+        />
         {showToday ? (
           <TodayView recentAgentNames={recentAgentNames} historicalAgentMap={historicalAgentMap} goalLookup={perf.goalLookup} />
         ) : sheetLoading && !rawData ? (
-          <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: `var(--bg-primary)`, animation: "fadeIn 0.4s ease" }}>
-            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)`, letterSpacing: "0.1em", marginBottom: "1.25rem", fontWeight: 500 }}>LOADING FROM GOOGLE SHEETS</div>
-            <div style={{ width: "180px", height: "2px", background: `var(--border)`, borderRadius: "2px", overflow: "hidden" }}>
+          <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "var(--bg-primary)", animation: "fadeIn 0.4s ease" }}>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "var(--text-muted)", letterSpacing: "0.1em", marginBottom: "1.25rem", fontWeight: 500 }}>LOADING</div>
+            <div style={{ width: "180px", height: "2px", background: "var(--border)", borderRadius: "2px", overflow: "hidden" }}>
               <div style={{ width: "40%", height: "100%", background: "linear-gradient(90deg, #d97706, #f59e0b)", borderRadius: "2px", animation: "shimmer 1.5s ease-in-out infinite" }} />
             </div>
           </div>
         ) : !rawData ? (
           <DropZone
-            onData={d => { setRawData(d); setSlideIndex(0); }}
+            onData={d => { setRawData(d); setCurrentPage({ section: "overview" }); }}
+            onAgentText={setRawAgentCsv}
             goalsRaw={goalsRaw}
             onGoalsLoad={setGoalsRaw}
+            onGoalsText={setGoalsRawCsv}
             newHiresRaw={newHiresRaw}
             onNewHiresLoad={setNHRaw}
+            onNHText={setNewHiresRawCsv}
           />
-        ) : isOverview ? (
-          <BusinessOverview perf={perf} onNav={navTo} goToSlide={goToSlide} tnpsSlideIdx={tnpsSlideIdx} localAI={localAI} priorAgents={priorAgents} priorGoalLookup={priorGoalLookup} lightMode={lightMode} />
-        ) : (isTnpsSlide || isCampaignCompare || program) ? (
-          <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-            {/* Shared navigation bar — programs, MoM Compare, tNPS */}
-            <div style={{ flexShrink: 0, borderBottom: "1px solid var(--glass-border)", padding: "0.5rem 1.5rem", background: `var(--glass-bg-subtle)`, backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)", display: "flex", alignItems: "center", gap: "0.35rem", overflowX: "auto" }}>
-              <button onClick={() => goToSlide(0)}
-                style={{ padding: "0.4rem 0.75rem", borderRadius: "var(--radius-sm, 6px)", border: "1px solid var(--border-muted)", background: "transparent", color: `var(--text-muted)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, fontWeight: 500 }}>
-                {"\u2190"} Overview
-              </button>
-              <div style={{ width: "1px", height: "18px", background: `var(--border-muted)`, flexShrink: 0, margin: "0 0.15rem" }} />
-              {programs.map((p, pi) => ({ p, pi })).sort((a, b) => (b.p.attainment ?? b.p.healthScore ?? 0) - (a.p.attainment ?? a.p.healthScore ?? 0)).map(({ p, pi }) => {
-                const pIdx = pi + programStartIdx;
-                const isActive = slideIndex === pIdx;
-                const att = p.attainment;
-                const aColor = att !== null ? attainColor(att) : `var(--text-dim)`;
-                return (
-                  <button key={p.jobType} onClick={() => goToSlide(pIdx)}
-                    style={{ padding: "0.4rem 0.7rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${isActive ? aColor + "50" : "transparent"}`, background: isActive ? aColor + "12" : "transparent", color: isActive ? aColor : `var(--text-dim)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", cursor: "pointer", fontWeight: isActive ? 600 : 400, whiteSpace: "nowrap", flexShrink: 0, transition: "all 200ms cubic-bezier(0.4,0,0.2,1)", position: "relative" }}>
-                    {p.jobType}
-                    {att !== null && <span style={{ marginLeft: "0.3rem", fontSize: "0.75rem", opacity: 0.6, fontFamily: "var(--font-data, monospace)" }}>{Math.round(att)}%</span>}
-                    {isActive && <span style={{ position: "absolute", bottom: "-0.5rem", left: "50%", transform: "translateX(-50%)", width: "20px", height: "2px", background: aColor, borderRadius: "1px" }} />}
-                  </button>
-                );
-              })}
-              <div style={{ width: "1px", height: "18px", background: `var(--border-muted)`, flexShrink: 0, margin: "0 0.15rem" }} />
-              <button onClick={() => goToSlide(campaignCompareIdx)}
-                style={{ padding: "0.4rem 0.7rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${isCampaignCompare ? "#d9770650" : "transparent"}`, background: isCampaignCompare ? "#d9770612" : "transparent", color: isCampaignCompare ? "#d97706" : `var(--text-dim)`, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, fontWeight: isCampaignCompare ? 600 : 400 }}>
-                MoM Compare
-              </button>
-              {hasTnps && (
-                <>
-                  <div style={{ width: "1px", height: "18px", background: "var(--border-muted)", flexShrink: 0, margin: "0 0.15rem" }} />
-                  <button onClick={() => goToSlide(tnpsSlideIdx)}
-                    style={{ padding: "0.4rem 0.7rem", borderRadius: "var(--radius-sm, 6px)", border: `1px solid ${isTnpsSlide ? "#d9770650" : "transparent"}`, background: isTnpsSlide ? "#d9770612" : "transparent", color: isTnpsSlide ? "#d97706" : "var(--text-dim)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0, fontWeight: isTnpsSlide ? 600 : 400 }}>
-                    tNPS
-                  </button>
-                </>
-              )}
-            </div>
-            <div style={{ flex: 1, overflow: "hidden" }}>
-            {isTnpsSlide ? (
-              <TNPSSlide perf={perf} onNav={navTo} lightMode={lightMode} />
-            ) : isCampaignCompare ? (
-              <CampaignComparisonPanel
-                currentAgents={perf.agents}
-                onNav={navTo}
-                localAI={localAI}
-                priorAgents={priorAgents}
-                priorGoalLookup={priorGoalLookup}
-                priorSheetLoading={priorSheetLoading}
-                setPriorRaw={setPriorMonthRaw}
-                setPriorGoalsRaw={setPriorMonthGoalsRaw}
-              />
-            ) : (
-              <Slide
-                key={program.jobType}
-                program={program}
-                newHireSet={newHireSet}
-                goalLookup={perf.goalLookup}
-                fiscalInfo={perf.fiscalInfo}
-                slideIndex={slideIndex}
-                total={totalSlides}
-                onNav={navTo}
-                allAgents={perf.agents}
-                localAI={localAI}
-                priorAgents={priorAgents}
-                tnpsByAgent={perf.tnpsByAgent}
-              />
-            )}
-            </div>
-          </div>
-        ) : (
-          <div style={{ minHeight: "90vh", display: "flex", alignItems: "center", justifyContent: "center", color: `var(--text-faint)`, fontFamily: "var(--font-ui, Inter, sans-serif)" }}>
+        ) : programs.length === 0 ? (
+          <div style={{ minHeight: "90vh", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-faint)", fontFamily: "var(--font-ui, Inter, sans-serif)" }}>
             No "Job Type" column found in your data.
+          </div>
+        ) : currentPage.section === "overview" ? (
+          <BusinessOverview perf={perf} onNav={legacyGoToSlide} goToSlide={legacyGoToSlide} tnpsSlideIdx={hasTnps ? programs.length + 2 : -1} localAI={localAI} priorAgents={priorAgents} priorGoalLookup={priorGoalLookup} lightMode={lightMode} />
+        ) : currentPage.section === "tnps" && hasTnps ? (
+          <TNPSSlide perf={perf} onNav={() => {}} lightMode={lightMode} />
+        ) : currentPage.section === "coaching" && hasCoaching ? (
+          <CoachingPage
+            coachingWeekly={coachingWeekly}
+            coachingDetails={coachingDetails}
+            bpLookup={perf && perf.bpLookup}
+            lightMode={lightMode}
+          />
+        ) : currentPage.section === "mom" ? (
+          <CampaignComparisonPanel
+            currentAgents={perf.agents}
+            onNav={() => setCurrentPage({ section: "overview" })}
+            localAI={localAI}
+            priorAgents={priorAgents}
+            priorGoalLookup={priorGoalLookup}
+            priorSheetLoading={priorSheetLoading}
+            setPriorRaw={setPriorMonthRaw}
+            setPriorGoalsRaw={setPriorMonthGoalsRaw}
+          />
+        ) : (currentPage.section === "dr" || currentPage.section === "bz") && !currentPage.program ? (
+          <SiteDrilldown
+            key={currentPage.section}
+            siteLabel={currentPage.section === "dr" ? "Dom. Republic" : "Belize"}
+            regions={currentPage.section === "dr" ? siteRegionGroups.dr : siteRegionGroups.bz}
+            allAgents={perf.agents}
+            priorAgents={priorAgents}
+            programs={programs}
+            goalLookup={perf.goalLookup}
+            newHireSet={newHireSet}
+            fiscalInfo={perf.fiscalInfo}
+            accent={currentPage.section === "dr" ? "#ed8936" : "#48bb78"}
+          />
+        ) : (currentPage.section === "dr" || currentPage.section === "bz") && filteredProgram ? (
+          <Slide
+            key={`${currentPage.section}-${currentPage.program}`}
+            program={filteredProgram}
+            newHireSet={newHireSet}
+            goalLookup={perf.goalLookup}
+            fiscalInfo={perf.fiscalInfo}
+            allAgents={perf.agents}
+            localAI={localAI}
+            priorAgents={priorAgents}
+            tnpsByAgent={perf.tnpsByAgent}
+            siteFilter={currentPage.section.toUpperCase()}
+          />
+        ) : (
+          <div style={{ minHeight: "60vh", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: "1rem", color: "var(--text-dim)", fontFamily: "var(--font-ui, Inter, sans-serif)" }}>
+            <div>This view is no longer available.</div>
+            <button onClick={() => setCurrentPage({ section: "overview" })}
+              style={{ padding: "0.5rem 1rem", borderRadius: "var(--radius-sm, 6px)", border: "1px solid #ed8936", background: "#ed893618", color: "#ed8936", cursor: "pointer", fontWeight: 600 }}>
+              Go to Overview
+            </button>
           </div>
         )}
       </div>
