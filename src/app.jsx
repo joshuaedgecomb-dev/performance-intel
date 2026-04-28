@@ -4862,9 +4862,9 @@ function SiteDrilldown({ siteLabel, regions, allAgents, priorAgents, programs, g
             if (gi === 1) {
               const gphColor = gphVal != null ? "#d97706" : "var(--text-faint)";
               cells.push(
-                <DtCell key="gph" style={{}}>
+                <DtCell key="gph" style={{ background: dtColors[1].bg }}>
                   <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: rowBg ? "1.15rem" : "0.92rem", color: gphColor, fontWeight: 700 }}>
-                    {gphVal != null ? gphVal.toFixed(3) : "\u2014"}
+                    {gphVal != null ? gphVal.toFixed(2) : "\u2014"}
                   </span>
                 </DtCell>
               );
@@ -11429,8 +11429,8 @@ function DailyTargetsCard({ programs, regions, goalLookup, fiscalInfo }) {
       if (mi === 1) {
         const gphColor = gphVal != null ? "#d97706" : "var(--text-faint)";
         cells.push(
-          <div key="gph" style={{ padding: "0.5rem 0", textAlign: "center", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: isTotal ? "1.15rem" : "0.92rem", color: gphColor, fontWeight: 700 }}>
-            {gphVal != null ? gphVal.toFixed(3) : "—"}
+          <div key="gph" style={{ padding: "0.5rem 0", textAlign: "center", background: dtColors[1].bg, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: isTotal ? "1.15rem" : "0.92rem", color: gphColor, fontWeight: 700 }}>
+            {gphVal != null ? gphVal.toFixed(2) : "—"}
           </div>
         );
       }
