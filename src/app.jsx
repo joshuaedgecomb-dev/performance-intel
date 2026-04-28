@@ -11755,6 +11755,9 @@ function BusinessOverview({ perf, onNav, goToSlide, tnpsSlideIdx, localAI, prior
           />
         )}
 
+        {/* Daily Targets — toggle Combined / DR / BZ */}
+        <DailyTargetsCard programs={programs} regions={regions} goalLookup={goalLookup} fiscalInfo={fiscalInfo} />
+
         {/* Gainshare — holistic / company-wide */}
         {goalLookup && (
           <GainsharePanel
