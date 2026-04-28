@@ -4795,10 +4795,10 @@ function SiteDrilldown({ siteLabel, regions, allAgents, priorAgents, programs, g
           });
           return rows;
         })();
-        const gridCols = "2.2fr 3px 1fr 1fr 1fr 3px 1fr 1fr 1fr 3px 1fr 1fr 1fr 3px 1fr 1fr 1fr";
-        // Column indices: 0=prog, 1=div, 2-4=hours, 5=div, 6-8=homes, 9=div, 10-12=hsd, 13=div, 14-16=xm
-        const dividerIndices = [1, 5, 9, 13];
-        const groupStartCols = [2, 6, 10, 14]; // first data col of each group
+        const gridCols = "2.2fr 3px 1fr 1fr 1fr 3px 1fr 1fr 1fr 0.8fr 3px 1fr 1fr 1fr 3px 1fr 1fr 1fr";
+        // Column indices: 0=prog, 1=div, 2-4=hours, 5=div, 6-8=homes, 9=gph, 10=div, 11-13=hsd, 14=div, 15-17=xm
+        const dividerIndices = [1, 5, 10, 14];
+        const groupStartCols = [2, 6, 11, 15]; // first data col of each group
 
         // Use site-level canonical plan totals (sitePlanMetrics) — not per-program sums
         // which can double-count when programs share overlapping TA goal entries
@@ -4814,7 +4814,7 @@ function SiteDrilldown({ siteLabel, regions, allAgents, priorAgents, programs, g
           <div style={{ background: color, borderRadius: "1px", ...style }} />
         );
 
-        const renderMetricCells = (metrics, rowBg) => {
+        const renderMetricCells = (metrics, rowBg, gphVal) => {
           const cells = [];
           metrics.forEach((m, gi) => {
             const g = dtColors[gi];
@@ -4858,6 +4858,17 @@ function SiteDrilldown({ siteLabel, regions, allAgents, priorAgents, programs, g
                 ) : <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-faint)` }}>{"\u2014"}</span>}
               </DtCell>
             );
+            // Insert GPH cell after Homes group (index 1)
+            if (gi === 1) {
+              const gphColor = gphVal != null ? "#d97706" : "var(--text-faint)";
+              cells.push(
+                <DtCell key="gph" style={{}}>
+                  <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: rowBg ? "1.15rem" : "0.92rem", color: gphColor, fontWeight: 700 }}>
+                    {gphVal != null ? gphVal.toFixed(3) : "\u2014"}
+                  </span>
+                </DtCell>
+              );
+            }
           });
           return cells;
         };
@@ -4929,7 +4940,7 @@ function SiteDrilldown({ siteLabel, regions, allAgents, priorAgents, programs, g
             {dtColors.map((g, gi) => (
               <React.Fragment key={g.label}>
                 <div style={{ background: `${g.color}40` }} />
-                <div style={{ gridColumn: "span 3", textAlign: "center", padding: "0.4rem 0", background: `${g.color}18`, borderBottom: `2px solid ${g.color}40`, borderTop: `2px solid ${g.color}30`, borderRadius: gi === 0 ? "6px 0 0 0" : gi === 3 ? "0 6px 0 0" : "0" }}>
+                <div style={{ gridColumn: gi === 1 ? "span 4" : "span 3", textAlign: "center", padding: "0.4rem 0", background: `${g.color}18`, borderBottom: `2px solid ${g.color}40`, borderTop: `2px solid ${g.color}30`, borderRadius: gi === 0 ? "6px 0 0 0" : gi === 3 ? "0 6px 0 0" : "0" }}>
                   <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: g.color, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700 }}>{g.label}</span>
                 </div>
               </React.Fragment>
@@ -4945,6 +4956,7 @@ function SiteDrilldown({ siteLabel, regions, allAgents, priorAgents, programs, g
                 <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.96rem", color: dtTierPct !== 100 && gi > 0 ? "#8b5cf6" : `var(--text-faint)`, textAlign: "center", padding: "0.35rem 0", background: g.bg, fontWeight: dtTierPct !== 100 && gi > 0 ? 600 : 400 }}>{dtTierPct !== 100 && gi > 0 ? `${dtTierPct}%` : "Plan"}</div>
                 <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.96rem", color: `var(--text-faint)`, textAlign: "center", padding: "0.35rem 0", background: g.bg }}>Actual</div>
                 <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.96rem", color: "#d97706", textAlign: "center", padding: "0.35rem 0", fontWeight: 700, background: g.bg }}>/ Day</div>
+                {gi === 1 && <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.96rem", color: "#d97706", textAlign: "center", padding: "0.35rem 0", fontWeight: 700 }}>GPH</div>}
               </React.Fragment>
             ))}
           </div>
@@ -4961,13 +4973,16 @@ function SiteDrilldown({ siteLabel, regions, allAgents, priorAgents, programs, g
             const rocLabel = p._fundingRoc
               ? `${p._fundingRoc}${p._fundingLabel ? ` \u00b7 ${p._fundingLabel}` : ""}`
               : (p.goalBreakout ? p.goalBreakout.map(g => g.roc).filter(Boolean).join(", ") : "");
+            const hrsRemain = Math.max((metrics[0].plan || 0) - (metrics[0].actual || 0), 0);
+            const homesRemain = Math.max((metrics[1].plan || 0) - (metrics[1].actual || 0), 0);
+            const rowGph = hrsRemain > 0 && homesRemain > 0 ? homesRemain / hrsRemain : null;
             return (
               <div key={p.jobType + (p._fundingRoc || String(pi))} style={{ display: "grid", gridTemplateColumns: gridCols, borderBottom: "1px solid var(--bg-tertiary)", alignItems: "center" }}>
                 <div style={{ padding: "0.5rem 0.75rem" }}>
                   <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem", color: `var(--text-warm)` }}>{p.jobType}</div>
                   {rocLabel && <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-faint)` }}>{rocLabel}</div>}
                 </div>
-                {renderMetricCells(metrics, false)}
+                {renderMetricCells(metrics, false, rowGph)}
               </div>
             );
           })}
@@ -4985,10 +5000,13 @@ function SiteDrilldown({ siteLabel, regions, allAgents, priorAgents, programs, g
               { plan: totHsdPlan   ? Math.ceil(totHsdPlan   * tierMult) : totHsdPlan,   actual: filteredDtPrograms.reduce((s, p) => s + (p.hsdAct || 0), 0), fmtFn: v => v.toLocaleString() },
               { plan: totXmPlan    ? Math.ceil(totXmPlan    * tierMult) : totXmPlan,    actual: filteredDtPrograms.reduce((s, p) => s + (p.xmAct || 0), 0), fmtFn: v => v.toLocaleString() },
             ];
+            const totHrsRemain = Math.max((tots[0].plan || 0) - (tots[0].actual || 0), 0);
+            const totHomesRemain = Math.max((tots[1].plan || 0) - (tots[1].actual || 0), 0);
+            const totGph = totHrsRemain > 0 && totHomesRemain > 0 ? totHomesRemain / totHrsRemain : null;
             return (
               <div style={{ display: "grid", gridTemplateColumns: gridCols, borderTop: "2px solid var(--border)", marginTop: "0.25rem", alignItems: "center" }}>
                 <div style={{ padding: "0.65rem 0.75rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)`, textTransform: "uppercase", fontWeight: 700 }}>TOTAL</div>
-                {renderMetricCells(tots, true)}
+                {renderMetricCells(tots, true, totGph)}
               </div>
             );
           })()}
@@ -11754,9 +11772,6 @@ function BusinessOverview({ perf, onNav, goToSlide, tnpsSlideIdx, localAI, prior
             ]}
           />
         )}
-
-        {/* Daily Targets — toggle Combined / DR / BZ */}
-        <DailyTargetsCard programs={programs} regions={regions} goalLookup={goalLookup} fiscalInfo={fiscalInfo} />
 
         {/* Gainshare — holistic / company-wide */}
         {goalLookup && (
