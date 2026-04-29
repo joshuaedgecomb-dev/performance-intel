@@ -261,6 +261,14 @@ const HOUR_GATE_SITE_TIERS = [
   { min: 0,     max: 89.99,    penalty: -6.00, label: "< 90%" },
 ];
 
+// Overall (company-wide / GCS Combined) Hour Attainment gate \u2014 flat -2% if <100%.
+// 2-row table so the gainshare deck slide can render the same Hour Gate column
+// shape used on per-site slides while reflecting the corp overall-mode rule.
+const HOUR_GATE_OVERALL_TIERS = [
+  { min: 100, max: Infinity, penalty: 0,     label: "\u2265 100%" },
+  { min: 0,   max: 99.99,    penalty: -2.00, label: "< 100%" },
+];
+
 function getHourGateTier(pct) {
   if (pct === null || pct === undefined) return null;
   return HOUR_GATE_SITE_TIERS.find(t => pct >= t.min && pct <= t.max) || HOUR_GATE_SITE_TIERS[HOUR_GATE_SITE_TIERS.length - 1];
@@ -5676,8 +5684,134 @@ function computeGainshareReport(agents, goalLookup, fiscalInfo, opts = {}) {
       netBonus,
       totals: { plan: planTot, raw: rawTot, scaled: scaledTot },
       funders,
+      tiersTable: GAINSHARE_SITE_TIERS,
+      isOverall: false,
     };
   }
+
+  // ── Build combined GCS entry (rolls BZ + DR) ──────────────────────────────
+  // Uses overall tier table (max +4% at 126% vs site-table's 139%) and the
+  // overall hour-gate rule (flat -2% if <100%, not tiered).
+  const cTotals = {
+    plan:   { homes: 0, hsd: 0, xm: 0, rgu: 0, hours: 0 },
+    raw:    { homes: 0, hsd: 0, xm: 0, rgu: 0, hours: 0 },
+    scaled: { homes: 0, hsd: 0, xm: 0, rgu: 0 },
+  };
+  const fundersByName = {};
+  for (const siteKey of Object.keys(sites)) {
+    const s = sites[siteKey];
+    if (!s) continue;
+    ["homes", "hsd", "xm", "rgu", "hours"].forEach(k => {
+      cTotals.plan[k] += s.totals.plan[k] || 0;
+      cTotals.raw[k]  += s.totals.raw[k]  || 0;
+    });
+    ["homes", "hsd", "xm", "rgu"].forEach(k => {
+      cTotals.scaled[k] += s.totals.scaled[k] || 0;
+    });
+    s.funders.forEach(f => {
+      if (!fundersByName[f.funder]) {
+        fundersByName[f.funder] = {
+          funder: f.funder, rocs: [],
+          plan:   { homes: 0, hsd: 0, xm: 0, rgu: 0, hours: 0 },
+          raw:    { homes: 0, hsd: 0, xm: 0, rgu: 0, hours: 0 },
+          scaled: { homes: 0, hsd: 0, xm: 0, rgu: 0 },
+          campaigns: [],
+        };
+      }
+      const acc = fundersByName[f.funder];
+      ["homes", "hsd", "xm", "rgu", "hours"].forEach(k => {
+        acc.plan[k] += f.plan[k] || 0;
+        acc.raw[k]  += f.raw[k]  || 0;
+      });
+      ["homes", "hsd", "xm", "rgu"].forEach(k => {
+        acc.scaled[k] += f.scaled[k] || 0;
+      });
+      f.rocs.forEach(r => { if (!acc.rocs.includes(r)) acc.rocs.push(r); });
+      // Merge campaigns by ROC across sites (same ROC in BZ+DR collapses to one row)
+      f.campaigns.forEach(c => {
+        let existing = acc.campaigns.find(x => x.rocCode === c.rocCode);
+        if (!existing) {
+          existing = {
+            rocCode: c.rocCode, target: c.target,
+            plan:   { homes: 0, hsd: 0, rgu: 0, hours: 0 },
+            actual: { homes: 0, hsd: 0, rgu: 0, hours: 0 },
+            scaled: { homes: 0, hsd: 0, rgu: 0 },
+            scaleFactor: 1,
+          };
+          acc.campaigns.push(existing);
+        }
+        ["homes", "hsd", "rgu", "hours"].forEach(k => {
+          existing.plan[k]   += c.plan[k]   || 0;
+          existing.actual[k] += c.actual[k] || 0;
+        });
+        ["homes", "hsd", "rgu"].forEach(k => {
+          existing.scaled[k] += c.scaled[k] || 0;
+        });
+      });
+    });
+  }
+  const combinedFunders = Object.values(fundersByName).map(acc => ({
+    ...acc,
+    triggered: acc.plan.hours > 0 && acc.raw.hours > acc.plan.hours,
+    rawAttain: {
+      homes: acc.plan.homes > 0 ? (acc.raw.homes / acc.plan.homes) * 100 : null,
+      hsd:   acc.plan.hsd   > 0 ? (acc.raw.hsd   / acc.plan.hsd)   * 100 : null,
+      rgu:   acc.plan.rgu   > 0 ? (acc.raw.rgu   / acc.plan.rgu)   * 100 : null,
+    },
+    campaigns: acc.campaigns.map(c => ({
+      ...c,
+      attain: {
+        homes: c.scaled.homes > 0 ? (c.actual.homes / c.scaled.homes) * 100 : null,
+        hsd:   c.scaled.hsd   > 0 ? (c.actual.hsd   / c.scaled.hsd)   * 100 : null,
+        rgu:   c.scaled.rgu   > 0 ? (c.actual.rgu   / c.scaled.rgu)   * 100 : null,
+      },
+    })),
+  }));
+  const cMobileAttain  = cTotals.scaled.homes > 0 ? (cTotals.raw.homes / cTotals.scaled.homes) * 100 : null;
+  const cHsdAttain     = cTotals.scaled.hsd   > 0 ? (cTotals.raw.hsd   / cTotals.scaled.hsd)   * 100 : null;
+  const cCostPerAttain = cTotals.scaled.rgu   > 0 ? (cTotals.raw.rgu   / cTotals.scaled.rgu)   * 100 : null;
+  let cSphAttain = null;
+  if (includeSPH && cTotals.plan.homes > 0 && cTotals.plan.hours > 0 && cTotals.raw.hours > 0) {
+    const actSph = cTotals.raw.homes / cTotals.raw.hours;
+    const planSph = cTotals.plan.homes / cTotals.plan.hours;
+    cSphAttain = planSph > 0 ? (actSph / planSph) * 100 : null;
+  }
+  const cHourAttain = (includeHourGate && cTotals.plan.hours > 0)
+    ? (cTotals.raw.hours / cTotals.plan.hours) * 100
+    : null;
+  const cTiers = {
+    mobile:  cMobileAttain  !== null ? getGainshareTier(cMobileAttain,  false) : null,
+    hsd:     cHsdAttain     !== null ? getGainshareTier(cHsdAttain,     false) : null,
+    costPer: cCostPerAttain !== null ? getGainshareTier(cCostPerAttain, false) : null,
+    sph:     cSphAttain     !== null ? getGainshareTier(cSphAttain,     false) : null,
+    // Hour gate under overall mode: flat -2% if <100%. Looked up against
+    // HOUR_GATE_OVERALL_TIERS so slide ladder display + Net Bonus stay in sync.
+    hour:    cHourAttain    !== null
+      ? (cHourAttain >= 100 ? HOUR_GATE_OVERALL_TIERS[0] : HOUR_GATE_OVERALL_TIERS[1])
+      : null,
+  };
+  const cNetBonus =
+    (cTiers.mobile?.mobile   ?? 0) +
+    (cTiers.hsd?.hsd         ?? 0) +
+    (cTiers.costPer?.costPer ?? 0) +
+    (includeSPH ? (cTiers.sph?.sph ?? 0) : 0) +
+    (includeHourGate ? (cTiers.hour?.penalty ?? 0) : 0);
+  sites.GCS = {
+    displayName: "GCS Combined",
+    attain: {
+      mobile:  cMobileAttain,
+      hsd:     cHsdAttain,
+      costPer: cCostPerAttain,
+      sph:     cSphAttain,
+      hour:    cHourAttain,
+    },
+    tiers: cTiers,
+    netBonus: cNetBonus,
+    totals: cTotals,
+    funders: combinedFunders,
+    tiersTable: GAINSHARE_TIERS,
+    isOverall: true,
+  };
 
   return {
     fiscalStart: fiscalInfo?.fiscalStart || null,
@@ -5863,9 +5997,9 @@ function addGainshareSiteTableSlide(pres, report, siteKey) {
     ? site.totals.plan.homes / site.totals.plan.hours
     : 0;
   const columns = [
-    { key: "mobile",  label: "Mobile",   tierKey: "mobile",  attain: site.attain.mobile,  tier: site.tiers.mobile,  plan: site.totals.scaled.homes, isSph: false, isHour: false, unit: "homes" },
-    { key: "hsd",     label: "HSD",      tierKey: "hsd",     attain: site.attain.hsd,     tier: site.tiers.hsd,     plan: site.totals.scaled.hsd,   isSph: false, isHour: false, unit: "HSD" },
-    { key: "costPer", label: "Cost Per", tierKey: "costPer", attain: site.attain.costPer, tier: site.tiers.costPer, plan: site.totals.scaled.rgu,   isSph: false, isHour: false, unit: "RGU" },
+    { key: "mobile",  label: "Mobile Attainment %",   tierKey: "mobile",  attain: site.attain.mobile,  tier: site.tiers.mobile,  plan: site.totals.scaled.homes, isSph: false, isHour: false, unit: "homes" },
+    { key: "hsd",     label: "HSD Attainment %",      tierKey: "hsd",     attain: site.attain.hsd,     tier: site.tiers.hsd,     plan: site.totals.scaled.hsd,   isSph: false, isHour: false, unit: "HSD" },
+    { key: "costPer", label: "Cost Per Attainment %", tierKey: "costPer", attain: site.attain.costPer, tier: site.tiers.costPer, plan: site.totals.scaled.rgu,   isSph: false, isHour: false, unit: "RGU" },
   ];
   if (includeSPH) {
     columns.push({ key: "sph", label: "SPH", tierKey: "sph", attain: site.attain.sph, tier: site.tiers.sph, plan: sitePlanSph, isSph: true, isHour: false, unit: "sales" });
@@ -5888,17 +6022,24 @@ function addGainshareSiteTableSlide(pres, report, siteKey) {
       x, y: yTop, w: colW, h: 0.3,
       fontSize: 11, fontFace: GAINSHARE_FONT, color: MBR_COLORS.textSecondary, bold: true, align: "center",
     });
-    // Big % attainment
+    // Big % attainment — 1 decimal so values near tier boundaries (e.g. 94.8%
+    // → "94.8%", not rounded up to "95%") are unambiguous against the active
+    // tier band shown below.
     if (col.attain !== null) {
-      slide.addText(`${Math.round(col.attain)}%`, {
+      slide.addText(`${col.attain.toFixed(1)}%`, {
         x, y: yTop + 0.32, w: colW, h: 0.6,
         fontSize: 32, fontFace: GAINSHARE_FONT, color: attainColor(col.attain), bold: true, align: "center",
       });
     }
 
     // Tier ladder. Column widths: range 38% / target 22% / bonus 36% (bonus widened
-    // from 22% to keep "+4.00%" on a single line).
-    const tiers = col.isHour ? HOUR_GATE_SITE_TIERS : GAINSHARE_SITE_TIERS;
+    // from 22% to keep "+4.00%" on a single line). Tier tables vary by entry:
+    // - GCS Combined (overall mode): GAINSHARE_TIERS (max +4 at 126%) +
+    //   HOUR_GATE_OVERALL_TIERS (2-row, flat -2% <100%)
+    // - BZ/DR sites: GAINSHARE_SITE_TIERS (max +4 at 139%) + HOUR_GATE_SITE_TIERS (4-row, tiered)
+    const tiers = col.isHour
+      ? (site.isOverall ? HOUR_GATE_OVERALL_TIERS : HOUR_GATE_SITE_TIERS)
+      : (site.tiersTable || GAINSHARE_SITE_TIERS);
     tiers.forEach((t, tIdx) => {
       const rowY = yTop + 1.05 + tIdx * ladderRowH;
       const isActive = col.tier === t;
@@ -6151,6 +6292,10 @@ async function generateGainshareDeck(report, filename) {
   pres.subject = `Gainshare ${report.fiscalStart} – ${report.fiscalEnd}`;
 
   addGainshareCoverSlide(pres, report);
+  // GCS combined first — executive-summary view using overall tier table
+  addGainshareSiteTableSlide(pres, report, "GCS");
+  addGainshareCampaignDetailsSlide(pres, report, "GCS");
+  // Then per-site detail (site-table tiers)
   addGainshareSiteTableSlide(pres, report, "BZ");
   addGainshareCampaignDetailsSlide(pres, report, "BZ");
   addGainshareSiteTableSlide(pres, report, "DR");
