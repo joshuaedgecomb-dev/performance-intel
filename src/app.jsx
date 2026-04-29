@@ -4908,6 +4908,13 @@ function SiteDrilldown({ siteLabel, regions, allAgents, priorAgents, programs, g
           <div style={{ background: color, borderRadius: "1px", ...style }} />
         );
 
+        // Per-metric /Day rounding: Hours (gi 0) keeps sub-1 fractional precision;
+        // sales (gi 1/2/3) always Math.ceil — fractional sales don't exist.
+        const roundPerDay = (raw, gi) => {
+          if (raw == null || raw <= 0) return null;
+          if (gi === 0 && raw < 1) return Number(raw.toFixed(1));
+          return Math.ceil(raw);
+        };
         const renderMetricCells = (metrics, rowBg, gphVal) => {
           const cells = [];
           metrics.forEach((m, gi) => {
@@ -4915,7 +4922,10 @@ function SiteDrilldown({ siteLabel, regions, allAgents, priorAgents, programs, g
             const diff = (m.actual || 0) - (m.plan || 0);
             const remain = Math.max(-diff, 0);
             const noDaysLeft = !fiscalInfo.remainingBDays || fiscalInfo.remainingBDays <= 0;
-            const perDay = remain > 0 && !noDaysLeft ? remain / fiscalInfo.remainingBDays : 0;
+            // perDayValue may be precomputed by the caller (totals row uses sum-of-rows
+            // so the displayed total matches the visible sum of row values).
+            const rawPerDay = remain > 0 && !noDaysLeft ? remain / fiscalInfo.remainingBDays : 0;
+            const perDayValue = m.perDayValue !== undefined ? m.perDayValue : roundPerDay(rawPerDay, gi);
             const onTrack = m.plan ? (m.actual / m.plan) * 100 >= (fiscalInfo.pctElapsed - 5) : true;
             const isOver = diff > 0;
             cells.push(<Divider key={`d${gi}`} color={`${g.color}40`} />);
@@ -4947,7 +4957,9 @@ function SiteDrilldown({ siteLabel, regions, allAgents, priorAgents, programs, g
                             -{m.fmtFn(remain)}
                           </span>
                       : <span style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: rowBg ? "1.95rem" : "1.65rem", color: rowBg ? "#d97706" : (onTrack ? "#16a34a" : "#dc2626"), fontWeight: 700, lineHeight: 1 }}>
-                          {perDay < 1 ? perDay.toFixed(1) : Math.ceil(perDay)}
+                          {perDayValue != null
+                            ? (perDayValue < 1 ? perDayValue.toFixed(1) : perDayValue.toLocaleString())
+                            : "0"}
                         </span>
                 ) : <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-faint)` }}>{"\u2014"}</span>}
               </DtCell>
@@ -5055,67 +5067,73 @@ function SiteDrilldown({ siteLabel, regions, allAgents, priorAgents, programs, g
             ))}
           </div>
 
-          {/* Program data rows */}
-          {/* Funder-gate map: scaling only kicks in for funders whose total actual
-              hours exceed plan hours. Below the gate, programs keep Jess plan. */}
-          {filteredDtPrograms.map((p, pi) => {
-            const tierMult = dtTierPct / 100;
-            const funderName = p._fundingLabel || p.goalBreakout?.[0]?.funding || "Unknown";
-            const triggered = (siteScaled?.funders || []).find(f => f.funder === funderName)?.triggered === true;
-            const programScale = (triggered && p.sitePlanHours && p.sitePlanHours > 0) ? (p.totalHours || 0) / p.sitePlanHours : 1;
-            const metrics = [
-              { plan: p.sitePlanHours, actual: p.totalHours, fmtFn: v => fmt(v, 0) },
-              { plan: p.sitePlanGoals ? Math.ceil(p.sitePlanGoals * programScale * tierMult) : p.sitePlanGoals, actual: p.totalGoals, fmtFn: v => v.toLocaleString() },
-              { plan: p.sitePlanHsd   ? Math.ceil(p.sitePlanHsd   * programScale * tierMult) : p.sitePlanHsd,   actual: p.hsdAct,     fmtFn: v => v.toLocaleString() },
-              { plan: p.sitePlanXm    ? Math.ceil(p.sitePlanXm    * programScale * tierMult) : p.sitePlanXm,    actual: p.xmAct,      fmtFn: v => v.toLocaleString() },
-            ];
-            const rocLabel = p._fundingRoc
-              ? `${p._fundingRoc}${p._fundingLabel ? ` \u00b7 ${p._fundingLabel}` : ""}`
-              : (p.goalBreakout ? p.goalBreakout.map(g => g.roc).filter(Boolean).join(", ") : "");
-            const hrsRemain = Math.max((metrics[0].plan || 0) - (metrics[0].actual || 0), 0);
-            const homesRemain = Math.max((metrics[1].plan || 0) - (metrics[1].actual || 0), 0);
-            const rowGph = hrsRemain > 0 && homesRemain > 0 ? homesRemain / hrsRemain : null;
-            return (
-              <div key={p.jobType + (p._fundingRoc || String(pi))} style={{ display: "grid", gridTemplateColumns: gridCols, borderBottom: "1px solid var(--bg-tertiary)", alignItems: "center" }}>
-                <div style={{ padding: "0.5rem 0.75rem" }}>
-                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem", color: `var(--text-warm)` }}>{p.jobType}</div>
-                  {rocLabel && <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-faint)` }}>{rocLabel}</div>}
-                </div>
-                {renderMetricCells(metrics, false, rowGph)}
-              </div>
-            );
-          })}
-
-          {/* Totals row */}
+          {/* Program data rows + totals. Funder-gate: scaling only kicks in for
+              funders whose total actual hours exceed plan hours. Per-row metrics
+              and rounded /Day are precomputed so the totals row can sum them
+              (avoids total \u2260 sum-of-rows from independent rounding). */}
           {(() => {
             const tierMult = dtTierPct / 100;
-            const totHoursPlan = dtFundingFilter ? filteredDtPrograms.reduce((s, p) => s + (p.sitePlanHours || 0), 0) : canonPlanHours;
-            // Scaled program plans are summed BEFORE the tier multiplier so each program's
-            // own scale factor is preserved. Funder-gate applies: programs in
-            // funders that haven't exceeded plan hours stay at Jess plan.
-            const programScaleFor = (p) => {
+            const noDaysLeft = !fiscalInfo.remainingBDays || fiscalInfo.remainingBDays <= 0;
+            const programRowData = filteredDtPrograms.map((p, pi) => {
               const funderName = p._fundingLabel || p.goalBreakout?.[0]?.funding || "Unknown";
               const triggered = (siteScaled?.funders || []).find(f => f.funder === funderName)?.triggered === true;
-              if (!triggered) return 1;
-              return (p.sitePlanHours && p.sitePlanHours > 0) ? (p.totalHours || 0) / p.sitePlanHours : 1;
-            };
-            const totGoalsScaled = filteredDtPrograms.reduce((s, p) => s + (p.sitePlanGoals || 0) * programScaleFor(p), 0);
-            const totHsdScaled   = filteredDtPrograms.reduce((s, p) => s + (p.sitePlanHsd   || 0) * programScaleFor(p), 0);
-            const totXmScaled    = filteredDtPrograms.reduce((s, p) => s + (p.sitePlanXm    || 0) * programScaleFor(p), 0);
+              const programScale = (triggered && p.sitePlanHours && p.sitePlanHours > 0) ? (p.totalHours || 0) / p.sitePlanHours : 1;
+              const metrics = [
+                { plan: p.sitePlanHours, actual: p.totalHours, fmtFn: v => fmt(v, 0) },
+                { plan: p.sitePlanGoals ? Math.ceil(p.sitePlanGoals * programScale * tierMult) : p.sitePlanGoals, actual: p.totalGoals, fmtFn: v => v.toLocaleString() },
+                { plan: p.sitePlanHsd   ? Math.ceil(p.sitePlanHsd   * programScale * tierMult) : p.sitePlanHsd,   actual: p.hsdAct,     fmtFn: v => v.toLocaleString() },
+                { plan: p.sitePlanXm    ? Math.ceil(p.sitePlanXm    * programScale * tierMult) : p.sitePlanXm,    actual: p.xmAct,      fmtFn: v => v.toLocaleString() },
+              ];
+              metrics.forEach((m, gi) => {
+                const remain = Math.max((m.plan || 0) - (m.actual || 0), 0);
+                const raw = remain > 0 && !noDaysLeft ? remain / fiscalInfo.remainingBDays : 0;
+                m.perDayValue = roundPerDay(raw, gi);
+              });
+              const rocLabel = p._fundingRoc
+                ? `${p._fundingRoc}${p._fundingLabel ? ` \u00b7 ${p._fundingLabel}` : ""}`
+                : (p.goalBreakout ? p.goalBreakout.map(g => g.roc).filter(Boolean).join(", ") : "");
+              const hrsRemain = Math.max((metrics[0].plan || 0) - (metrics[0].actual || 0), 0);
+              const homesRemain = Math.max((metrics[1].plan || 0) - (metrics[1].actual || 0), 0);
+              const rowGph = hrsRemain > 0 && homesRemain > 0 ? homesRemain / hrsRemain : null;
+              return { p, pi, metrics, rowGph, rocLabel };
+            });
+
+            // Hours plan stays canonical (canonPlanHours dedups shared TA goal entries).
+            // Sales plans (Homes/HSD/XM) sum the per-row ceiled values so the displayed
+            // total matches the visible sum of rows.
+            const totHoursPlan = dtFundingFilter ? filteredDtPrograms.reduce((s, p) => s + (p.sitePlanHours || 0), 0) : canonPlanHours;
+            const sumRowPlan = (i) => programRowData.reduce((s, r) => s + (r.metrics[i].plan || 0), 0);
             const tots = [
               { plan: totHoursPlan, actual: filteredDtPrograms.reduce((s, p) => s + p.totalHours, 0), fmtFn: v => fmt(v, 0) },
-              { plan: totGoalsScaled > 0 ? Math.ceil(totGoalsScaled * tierMult) : 0, actual: filteredDtPrograms.reduce((s, p) => s + p.totalGoals, 0), fmtFn: v => v.toLocaleString() },
-              { plan: totHsdScaled   > 0 ? Math.ceil(totHsdScaled   * tierMult) : 0, actual: filteredDtPrograms.reduce((s, p) => s + (p.hsdAct || 0), 0), fmtFn: v => v.toLocaleString() },
-              { plan: totXmScaled    > 0 ? Math.ceil(totXmScaled    * tierMult) : 0, actual: filteredDtPrograms.reduce((s, p) => s + (p.xmAct || 0), 0), fmtFn: v => v.toLocaleString() },
+              { plan: sumRowPlan(1), actual: filteredDtPrograms.reduce((s, p) => s + p.totalGoals, 0), fmtFn: v => v.toLocaleString() },
+              { plan: sumRowPlan(2), actual: filteredDtPrograms.reduce((s, p) => s + (p.hsdAct || 0), 0), fmtFn: v => v.toLocaleString() },
+              { plan: sumRowPlan(3), actual: filteredDtPrograms.reduce((s, p) => s + (p.xmAct || 0), 0), fmtFn: v => v.toLocaleString() },
             ];
+            // Total /Day = sum of rounded per-row /Day values (matches visible row sum).
+            tots.forEach((t, ti) => {
+              const sum = programRowData.reduce((s, r) => s + (r.metrics[ti].perDayValue || 0), 0);
+              t.perDayValue = sum > 0 ? (Number.isInteger(sum) ? sum : Number(sum.toFixed(1))) : null;
+            });
             const totHrsRemain = Math.max((tots[0].plan || 0) - (tots[0].actual || 0), 0);
             const totHomesRemain = Math.max((tots[1].plan || 0) - (tots[1].actual || 0), 0);
             const totGph = totHrsRemain > 0 && totHomesRemain > 0 ? totHomesRemain / totHrsRemain : null;
+
             return (
-              <div style={{ display: "grid", gridTemplateColumns: gridCols, borderTop: "2px solid var(--border)", marginTop: "0.25rem", alignItems: "center" }}>
-                <div style={{ padding: "0.65rem 0.75rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)`, textTransform: "uppercase", fontWeight: 700 }}>TOTAL</div>
-                {renderMetricCells(tots, true, totGph)}
-              </div>
+              <>
+                {programRowData.map(({ p, pi, metrics, rowGph, rocLabel }) => (
+                  <div key={p.jobType + (p._fundingRoc || String(pi))} style={{ display: "grid", gridTemplateColumns: gridCols, borderBottom: "1px solid var(--bg-tertiary)", alignItems: "center" }}>
+                    <div style={{ padding: "0.5rem 0.75rem" }}>
+                      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem", color: `var(--text-warm)` }}>{p.jobType}</div>
+                      {rocLabel && <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-faint)` }}>{rocLabel}</div>}
+                    </div>
+                    {renderMetricCells(metrics, false, rowGph)}
+                  </div>
+                ))}
+                <div style={{ display: "grid", gridTemplateColumns: gridCols, borderTop: "2px solid var(--border)", marginTop: "0.25rem", alignItems: "center" }}>
+                  <div style={{ padding: "0.65rem 0.75rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)`, textTransform: "uppercase", fontWeight: 700 }}>TOTAL</div>
+                  {renderMetricCells(tots, true, totGph)}
+                </div>
+              </>
             );
           })()}
         </div>
@@ -12471,12 +12489,20 @@ function DailyTargetsCard({ programs, regions, goalLookup, fiscalInfo }) {
   const viewLabel = view === "Combined" ? "Combined" : view === "DR" ? "Dom. Republic" : "Belize";
   const remainingBDays = fiscalInfo.remainingBDays || 0;
 
+  // Per-metric /Day rounding rule: Hours (idx 0) keeps sub-1 fractional precision;
+  // sales (Homes/HSD/XM, idx 1/2/3) always Math.ceil because fractional sales don't exist.
+  const roundPerDay = (raw, mi) => {
+    if (raw == null) return null;
+    if (mi === 0 && raw < 1) return Number(raw.toFixed(1));
+    return Math.ceil(raw);
+  };
   const renderMetricCells = (metrics, isTotal, gphVal) => {
     const cells = [];
     metrics.forEach((m, mi) => {
       const g = dtColors[mi];
-      const remaining = (m.plan || 0) - (m.actual || 0);
-      const perDay = remainingBDays > 0 && remaining > 0 ? remaining / remainingBDays : null;
+      // perDayValue is precomputed by the caller so the totals row can sum the
+      // rounded per-row values (otherwise total ≠ sum of displayed rows).
+      const perDayValue = m.perDayValue;
       cells.push(<div key={`d${mi}`} style={{ background: `${g.color}25` }} />);
       cells.push(
         <div key={`p${mi}`} style={{ padding: "0.5rem 0", textAlign: "center", background: g.bg, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: isTotal ? "0.95rem" : "0.88rem", color: m.plan ? "var(--text-secondary)" : "var(--text-faint)", fontWeight: isTotal ? 700 : 400 }}>
@@ -12489,8 +12515,10 @@ function DailyTargetsCard({ programs, regions, goalLookup, fiscalInfo }) {
         </div>
       );
       cells.push(
-        <div key={`pd${mi}`} style={{ padding: "0.5rem 0", textAlign: "center", background: g.bg, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: isTotal ? "1.4rem" : "1.15rem", color: perDay != null ? (isTotal ? "#d97706" : "#16a34a") : "var(--text-faint)", fontWeight: 700 }}>
-          {perDay != null ? (perDay < 1 ? perDay.toFixed(1) : Math.ceil(perDay).toLocaleString()) : (m.plan && m.actual >= m.plan ? "—" : "—")}
+        <div key={`pd${mi}`} style={{ padding: "0.5rem 0", textAlign: "center", background: g.bg, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: isTotal ? "1.4rem" : "1.15rem", color: perDayValue != null ? (isTotal ? "#d97706" : "#16a34a") : "var(--text-faint)", fontWeight: 700 }}>
+          {perDayValue != null
+            ? (perDayValue < 1 ? perDayValue.toFixed(1) : perDayValue.toLocaleString())
+            : "—"}
         </div>
       );
       // Insert GPH cell after Homes /Day (index 1)
@@ -12604,66 +12632,75 @@ function DailyTargetsCard({ programs, regions, goalLookup, fiscalInfo }) {
           </div>
 
           {/* Program rows. Funder-gate: scaling only kicks in for funders whose
-              actual hours exceed plan hours within the current view (Combined / BZ / DR). */}
-          {dtPrograms.map((p, pi) => {
-            const tierMult = dtcTierPct / 100;
-            const funderName = p._fundingLabel || p.goalBreakout?.[0]?.funding || "Unknown";
-            const triggered = dtcFunderTriggered.get(funderName) === true;
-            const programScale = (triggered && p.sitePlanHours && p.sitePlanHours > 0) ? (p.totalHours || 0) / p.sitePlanHours : 1;
-            const metrics = [
-              { plan: p.sitePlanHours, actual: p.totalHours, fmtFn: v => fmt(v, 0) },
-              { plan: p.sitePlanGoals ? Math.ceil(p.sitePlanGoals * programScale * tierMult) : p.sitePlanGoals, actual: p.totalGoals, fmtFn: v => v.toLocaleString() },
-              { plan: p.sitePlanHsd   ? Math.ceil(p.sitePlanHsd   * programScale * tierMult) : p.sitePlanHsd,   actual: p.hsdAct,     fmtFn: v => v.toLocaleString() },
-              { plan: p.sitePlanXm    ? Math.ceil(p.sitePlanXm    * programScale * tierMult) : p.sitePlanXm,    actual: p.xmAct,      fmtFn: v => v.toLocaleString() },
-            ];
-            const rocLabel = p._fundingRoc
-              ? `${p._fundingRoc}${p._fundingLabel ? ` · ${p._fundingLabel}` : ""}`
-              : (p.goalBreakout ? p.goalBreakout.map(g => g.roc).filter(Boolean).join(", ") : "");
-            // GPH = homes remaining / hours remaining (per day cancels out)
-            const hrsRemain = Math.max((metrics[0].plan || 0) - (metrics[0].actual || 0), 0);
-            const homesRemain = Math.max((metrics[1].plan || 0) - (metrics[1].actual || 0), 0);
-            const rowGph = hrsRemain > 0 && homesRemain > 0 ? homesRemain / hrsRemain : null;
-            return (
-              <div key={p.jobType + (p._fundingRoc || String(pi))} style={{ display: "grid", gridTemplateColumns: gridCols, borderBottom: "1px solid var(--bg-tertiary)", alignItems: "center" }}>
-                <div style={{ padding: "0.5rem 0.75rem" }}>
-                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem", color: "var(--text-warm)" }}>{p.jobType}</div>
-                  {rocLabel && <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.74rem", color: "var(--text-faint)" }}>{rocLabel}</div>}
-                </div>
-                {renderMetricCells(metrics, false, rowGph)}
-              </div>
-            );
-          })}
-
-          {/* Totals row */}
+              actual hours exceed plan hours within the current view (Combined / BZ / DR).
+              Per-row metrics + rounded /Day are precomputed so the totals row can sum
+              the rounded row values (avoids total ≠ sum-of-rows from independent rounding). */}
           {(() => {
             const tierMult = dtcTierPct / 100;
-            const totHoursPlan = fundingFilter ? dtPrograms.reduce((s, p) => s + (p.sitePlanHours || 0), 0) : canon.hours;
-            // Scaled program plans are summed BEFORE the tier multiplier so each program's
-            // own scale factor is preserved. Funder-gate applies: programs whose
-            // funder hasn't exceeded plan hours stay at Jess plan.
-            const programScaleFor = (p) => {
+            const programRowData = dtPrograms.map((p, pi) => {
               const funderName = p._fundingLabel || p.goalBreakout?.[0]?.funding || "Unknown";
               const triggered = dtcFunderTriggered.get(funderName) === true;
-              if (!triggered) return 1;
-              return (p.sitePlanHours && p.sitePlanHours > 0) ? (p.totalHours || 0) / p.sitePlanHours : 1;
-            };
-            const totGoalsScaled = dtPrograms.reduce((s, p) => s + (p.sitePlanGoals || 0) * programScaleFor(p), 0);
-            const totHsdScaled   = dtPrograms.reduce((s, p) => s + (p.sitePlanHsd   || 0) * programScaleFor(p), 0);
-            const totXmScaled    = dtPrograms.reduce((s, p) => s + (p.sitePlanXm    || 0) * programScaleFor(p), 0);
+              const programScale = (triggered && p.sitePlanHours && p.sitePlanHours > 0) ? (p.totalHours || 0) / p.sitePlanHours : 1;
+              const metrics = [
+                { plan: p.sitePlanHours, actual: p.totalHours, fmtFn: v => fmt(v, 0) },
+                { plan: p.sitePlanGoals ? Math.ceil(p.sitePlanGoals * programScale * tierMult) : p.sitePlanGoals, actual: p.totalGoals, fmtFn: v => v.toLocaleString() },
+                { plan: p.sitePlanHsd   ? Math.ceil(p.sitePlanHsd   * programScale * tierMult) : p.sitePlanHsd,   actual: p.hsdAct,     fmtFn: v => v.toLocaleString() },
+                { plan: p.sitePlanXm    ? Math.ceil(p.sitePlanXm    * programScale * tierMult) : p.sitePlanXm,    actual: p.xmAct,      fmtFn: v => v.toLocaleString() },
+              ];
+              metrics.forEach((m, mi) => {
+                const remaining = (m.plan || 0) - (m.actual || 0);
+                const raw = remainingBDays > 0 && remaining > 0 ? remaining / remainingBDays : null;
+                m.perDayValue = roundPerDay(raw, mi);
+              });
+              const rocLabel = p._fundingRoc
+                ? `${p._fundingRoc}${p._fundingLabel ? ` · ${p._fundingLabel}` : ""}`
+                : (p.goalBreakout ? p.goalBreakout.map(g => g.roc).filter(Boolean).join(", ") : "");
+              // GPH = homes remaining / hours remaining (per day cancels out)
+              const hrsRemain = Math.max((metrics[0].plan || 0) - (metrics[0].actual || 0), 0);
+              const homesRemain = Math.max((metrics[1].plan || 0) - (metrics[1].actual || 0), 0);
+              const rowGph = hrsRemain > 0 && homesRemain > 0 ? homesRemain / hrsRemain : null;
+              return { p, pi, metrics, rowGph, rocLabel };
+            });
+
+            // Hours plan stays canonical (canon.hours dedups shared TA goal entries).
+            // Sales plans (Homes/HSD/XM) sum the per-row ceiled values so the
+            // displayed total matches the visible sum of rows — each row is rounded
+            // up because partial sales don't exist, so summing those rounded figures
+            // is what the floor team is actually being asked to hit.
+            const totHoursPlan = fundingFilter ? dtPrograms.reduce((s, p) => s + (p.sitePlanHours || 0), 0) : canon.hours;
+            const sumRowPlan = (i) => programRowData.reduce((s, r) => s + (r.metrics[i].plan || 0), 0);
             const tots = [
               { plan: totHoursPlan, actual: dtPrograms.reduce((s, p) => s + (p.totalHours || 0), 0), fmtFn: v => fmt(v, 0) },
-              { plan: totGoalsScaled > 0 ? Math.ceil(totGoalsScaled * tierMult) : 0, actual: dtPrograms.reduce((s, p) => s + (p.totalGoals || 0), 0), fmtFn: v => v.toLocaleString() },
-              { plan: totHsdScaled   > 0 ? Math.ceil(totHsdScaled   * tierMult) : 0, actual: dtPrograms.reduce((s, p) => s + (p.hsdAct     || 0), 0), fmtFn: v => v.toLocaleString() },
-              { plan: totXmScaled    > 0 ? Math.ceil(totXmScaled    * tierMult) : 0, actual: dtPrograms.reduce((s, p) => s + (p.xmAct      || 0), 0), fmtFn: v => v.toLocaleString() },
+              { plan: sumRowPlan(1), actual: dtPrograms.reduce((s, p) => s + (p.totalGoals || 0), 0), fmtFn: v => v.toLocaleString() },
+              { plan: sumRowPlan(2), actual: dtPrograms.reduce((s, p) => s + (p.hsdAct     || 0), 0), fmtFn: v => v.toLocaleString() },
+              { plan: sumRowPlan(3), actual: dtPrograms.reduce((s, p) => s + (p.xmAct      || 0), 0), fmtFn: v => v.toLocaleString() },
             ];
+            // Total /Day = sum of rounded per-row /Day values, so the displayed total
+            // matches the visual sum of the rows above (no .5 sales, no off-by-one).
+            tots.forEach((t, ti) => {
+              const sum = programRowData.reduce((s, r) => s + (r.metrics[ti].perDayValue || 0), 0);
+              t.perDayValue = sum > 0 ? (Number.isInteger(sum) ? sum : Number(sum.toFixed(1))) : null;
+            });
             const totHrsRemain = Math.max((tots[0].plan || 0) - (tots[0].actual || 0), 0);
             const totHomesRemain = Math.max((tots[1].plan || 0) - (tots[1].actual || 0), 0);
             const totGph = totHrsRemain > 0 && totHomesRemain > 0 ? totHomesRemain / totHrsRemain : null;
+
             return (
-              <div style={{ display: "grid", gridTemplateColumns: gridCols, borderTop: "2px solid var(--border)", marginTop: "0.25rem", alignItems: "center" }}>
-                <div style={{ padding: "0.65rem 0.75rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 700 }}>TOTAL</div>
-                {renderMetricCells(tots, true, totGph)}
-              </div>
+              <>
+                {programRowData.map(({ p, pi, metrics, rowGph, rocLabel }) => (
+                  <div key={p.jobType + (p._fundingRoc || String(pi))} style={{ display: "grid", gridTemplateColumns: gridCols, borderBottom: "1px solid var(--bg-tertiary)", alignItems: "center" }}>
+                    <div style={{ padding: "0.5rem 0.75rem" }}>
+                      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.88rem", color: "var(--text-warm)" }}>{p.jobType}</div>
+                      {rocLabel && <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.74rem", color: "var(--text-faint)" }}>{rocLabel}</div>}
+                    </div>
+                    {renderMetricCells(metrics, false, rowGph)}
+                  </div>
+                ))}
+                <div style={{ display: "grid", gridTemplateColumns: gridCols, borderTop: "2px solid var(--border)", marginTop: "0.25rem", alignItems: "center" }}>
+                  <div style={{ padding: "0.65rem 0.75rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 700 }}>TOTAL</div>
+                  {renderMetricCells(tots, true, totGph)}
+                </div>
+              </>
             );
           })()}
         </>
