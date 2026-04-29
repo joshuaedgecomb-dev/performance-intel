@@ -4339,13 +4339,35 @@ function SiteDrilldown({ siteLabel, regions, allAgents, priorAgents, programs, g
   // Hour Attainment gate for this site
   const siteHourAttain = sitePlanMetrics && sitePlanMetrics.hours > 0 ? (totalHrs / sitePlanMetrics.hours) * 100 : null;
 
-  // Projection is mathematically a no-op under SPH-scaled rule (T/E factor
-  // cancels). Pass current attainments as projection so GainsharePanel hides
-  // the projection display (projTier === currentTier).
-  const siteProjMobileCapped  = siteMobileAttain;
-  const siteProjHsdCapped     = siteHsdAttain;
-  const siteProjCostPerCapped = siteCostPerAttain;
-  const siteProjHourCapped    = siteHourAttain;
+  // Projected attainment under the SPH-scaled rule. The "T/E cancels" identity
+  // only holds when a funder is triggered (raw hours > plan hours); when the
+  // funder-gate hasn't fired, the denominator stays pinned to Jess plan and the
+  // numerator pacing forward DOES move attainment. So we re-evaluate the
+  // funder-gate at projected hours per funder, rebuild the scaled denominator,
+  // and divide the projected actuals into it.
+  const siteProjFactor = (fiscalInfo && fiscalInfo.elapsedBDays && fiscalInfo.totalBDays)
+    ? fiscalInfo.totalBDays / fiscalInfo.elapsedBDays : null;
+  const siteProjScaled = (() => {
+    if (!siteProjFactor || !siteScaled) return null;
+    let h = 0, d = 0, r = 0;
+    siteScaled.funders.forEach(f => {
+      const projHours = f.raw.hours * siteProjFactor;
+      const triggeredProj = f.plan.hours > 0 && projHours > f.plan.hours;
+      const scale = (triggeredProj && f.plan.hours > 0) ? projHours / f.plan.hours : 1;
+      h += f.plan.homes * scale;
+      d += f.plan.hsd   * scale;
+      r += f.plan.rgu   * scale;
+    });
+    return { homes: h, hsd: d, rgu: r };
+  })();
+  const siteProjMobileCapped  = (siteProjFactor && siteProjScaled && siteProjScaled.homes > 0)
+    ? ((totalG     * siteProjFactor) / siteProjScaled.homes) * 100 : null;
+  const siteProjHsdCapped     = (siteProjFactor && siteProjScaled && siteProjScaled.hsd > 0)
+    ? ((siteActHsd * siteProjFactor) / siteProjScaled.hsd)   * 100 : null;
+  const siteProjCostPerCapped = (siteProjFactor && siteProjScaled && siteProjScaled.rgu > 0)
+    ? ((siteActRgu * siteProjFactor) / siteProjScaled.rgu)   * 100 : null;
+  // Hour Gate has no funder-gate dependency — let GainsharePanel pace via calcPacing.
+  const siteProjHourCapped    = null;
 
   const regionStats = regions.map(r => {
     const ra = allAgents.filter(a => (a.region || "Unknown") === r);
@@ -12475,9 +12497,20 @@ function DailyTargetsCard({ programs, regions, goalLookup, fiscalInfo }) {
     return { hours, goals, hsd, xm };
   }, [goalLookup, view]);
 
-  if (!fiscalInfo) return null;
+  // Stable funding-source list: derived from the UNFILTERED program set so the
+  // button row doesn't shrink when a filter drops programs that don't share
+  // the active funder. Only depends on view (siteKeys) and the source data.
+  const fundingSources = useMemo(() => {
+    if (!programs || !goalLookup) return [];
+    const set = new Set();
+    programs.forEach(p => {
+      const planRows = siteKeys.flatMap(k => (p.goalEntry?.[k] || []));
+      planRows.forEach(r => { if (r._funding) set.add(r._funding); });
+    });
+    return [...set];
+  }, [programs, goalLookup, view]);
 
-  const fundingSources = [...new Set(dtPrograms.flatMap(p => (p.goalBreakout || []).map(g => g.funding)).filter(Boolean))];
+  if (!fiscalInfo) return null;
   const dtColors = [
     { label: "Hours",    color: "#6366f1", bg: "#6366f108" },
     { label: "Homes",    color: "#16a34a", bg: "#16a34a08" },
@@ -12794,15 +12827,30 @@ function BusinessOverview({ perf, onNav, goToSlide, tnpsSlideIdx, localAI, prior
     // per-funder via the combined raw vs plan ratio). We use the combined
     // ratio per funder for global scaling consistency.
     scaled = { homes: 0, hsd: 0, xm: 0, rgu: 0 };
+    // Projected scaled rollup: re-evaluate the funder-gate at projected EOM
+    // hours so early-fiscal projections (where no funder has triggered yet)
+    // pace forward against the fixed Jess plan instead of collapsing to a no-op.
+    const projF = (fiscalInfo && fiscalInfo.elapsedBDays && fiscalInfo.totalBDays)
+      ? fiscalInfo.totalBDays / fiscalInfo.elapsedBDays : null;
+    const projScaled = projF ? { homes: 0, hsd: 0, xm: 0, rgu: 0 } : null;
     Object.values(perFunder).forEach(pf => {
       const factor = pf.triggered && pf.planHours > 0 ? (pf.rawHours / pf.planHours) : 1;
       scaled.homes += pf.jessPlan.homes * factor;
       scaled.hsd   += pf.jessPlan.hsd   * factor;
       scaled.xm    += pf.jessPlan.xm    * factor;
       scaled.rgu   += pf.jessPlan.rgu   * factor;
+      if (projF) {
+        const projHours = pf.rawHours * projF;
+        const triggeredProj = pf.planHours > 0 && projHours > pf.planHours;
+        const pFactor = (triggeredProj && pf.planHours > 0) ? projHours / pf.planHours : 1;
+        projScaled.homes += pf.jessPlan.homes * pFactor;
+        projScaled.hsd   += pf.jessPlan.hsd   * pFactor;
+        projScaled.xm    += pf.jessPlan.xm    * pFactor;
+        projScaled.rgu   += pf.jessPlan.rgu   * pFactor;
+      }
     });
-    return { ...scaled, funderTriggered };
-  }, [goalLookup, agents]);
+    return { ...scaled, projScaled, funderTriggered };
+  }, [goalLookup, agents, fiscalInfo]);
 
   // SPH-scaled global attainments — denominators are the per-site scaled rollups summed.
   // Falls back to Jess plan when scaled isn't available (e.g. before goalLookup loads).
@@ -12813,12 +12861,26 @@ function BusinessOverview({ perf, onNav, goToSlide, tnpsSlideIdx, localAI, prior
   const globalHsdAttain     = globalScaledHsd   > 0 ? (globalNewXI / globalScaledHsd)   * 100 : (globalPlanNewXI ? (globalNewXI / globalPlanNewXI) * 100 : null);
   const globalCostPerAttain = globalScaledRgu   > 0 ? (globalRgu   / globalScaledRgu)   * 100 : (globalPlanRgu ? (globalRgu / globalPlanRgu) * 100 : null);
 
-  // Projection is mathematically a no-op under the SPH-scaled rule (T/E factor
-  // cancels). Pass current attainments as projection so GainsharePanel hides
-  // the projection display (projTier === currentTier).
-  const globalProjMobileCapped  = goalsAttain;
-  const globalProjHsdCapped     = globalHsdAttain;
-  const globalProjCostPerCapped = globalCostPerAttain;
+  // Projected attainment under the SPH-scaled rule. The no-op identity only
+  // holds when the funder-gate is triggered; while it's still pinned to Jess
+  // plan, the numerator paces forward and attainment moves with it. We project
+  // hours per funder, re-evaluate the gate, rebuild the scaled denominator,
+  // and divide the projected actuals into it. Falls back to Jess plan when the
+  // scaled rollup isn't available.
+  const globalProjFactor = (fiscalInfo && fiscalInfo.elapsedBDays && fiscalInfo.totalBDays)
+    ? fiscalInfo.totalBDays / fiscalInfo.elapsedBDays : null;
+  const projGlobalGoals = globalProjFactor != null ? globalGoals * globalProjFactor : null;
+  const projGlobalNewXI = globalProjFactor != null ? globalNewXI * globalProjFactor : null;
+  const projGlobalRgu   = globalProjFactor != null ? globalRgu   * globalProjFactor : null;
+  const globalProjMobileCapped  = (globalProjFactor != null && globalScaled?.projScaled?.homes > 0)
+    ? (projGlobalGoals / globalScaled.projScaled.homes) * 100
+    : (globalProjFactor != null && planTotal > 0)      ? (projGlobalGoals / planTotal)      * 100 : null;
+  const globalProjHsdCapped     = (globalProjFactor != null && globalScaled?.projScaled?.hsd > 0)
+    ? (projGlobalNewXI / globalScaled.projScaled.hsd) * 100
+    : (globalProjFactor != null && globalPlanNewXI > 0) ? (projGlobalNewXI / globalPlanNewXI) * 100 : null;
+  const globalProjCostPerCapped = (globalProjFactor != null && globalScaled?.projScaled?.rgu > 0)
+    ? (projGlobalRgu / globalScaled.projScaled.rgu) * 100
+    : (globalProjFactor != null && globalPlanRgu > 0)   ? (projGlobalRgu / globalPlanRgu)     * 100 : null;
 
   // SPH Attainment: (actual SPH / plan SPH) * 100
   const actualGlobalSph = totalHours > 0 ? globalGoals / totalHours : 0;
