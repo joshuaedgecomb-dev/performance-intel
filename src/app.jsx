@@ -1282,6 +1282,142 @@ function getGlobalPlanForKey(goalLookup, metricKey) {
 }
 
 
+// ── Funding-source scaling for gainshare ────────────────────────────────────
+// Returns { funders, unmatchedRaw, totals } where each campaign's goals are
+// scaled by actual_hours / plan_hours (corp SPH redistribution rule), and
+// funder/total scaled rollups are pre-computed for callers.
+//
+// siteAgents: array of normalized agent rows already filtered to one site
+// siteGoalRows: array of goal rows already filtered to that site
+// unmatchedRaw: zero-valued metrics or, if any agents had ROCs not listed in
+//   any funder, the sum of those agents' actuals.
+function computeFunderScaling(siteAgents, siteGoalRows) {
+  // Group goal rows by funding source, gathering per-campaign rows
+  const fg = {};
+  (siteGoalRows || []).forEach(r => {
+    const f = r._funding || "Unknown";
+    const roc = (r._roc || "").toUpperCase();
+    if (!fg[f]) fg[f] = { campaigns: [] };
+    const plan = computePlanRow(r);
+    fg[f].campaigns.push({ row: r, roc, target: r._target || r["Target"] || "", plan });
+  });
+
+  const matched = new Set();
+  const funders = [];
+  let cHomes = 0, cHsd = 0, cXm = 0, cRgu = 0;            // scaled rollup
+  let rHomes = 0, rHsd = 0, rXm = 0, rRgu = 0, rHours = 0; // raw actuals
+  let pHomes = 0, pHsd = 0, pXm = 0, pRgu = 0, pHours = 0; // original (Jess) plans
+
+  Object.entries(fg).forEach(([funder, g]) => {
+    // Pass 1: gather per-campaign actuals + funder totals (needed to evaluate the
+    // funder-gate before we know whether to apply scaling).
+    const rawCampaigns = [];
+    let fRawH = 0, fRawD = 0, fRawX = 0, fRawR = 0, fRawHrs = 0;
+    let fPlanH = 0, fPlanD = 0, fPlanX = 0, fPlanR = 0, fPlanHrs = 0;
+    const rocs = [];
+
+    g.campaigns.forEach(camp => {
+      const roc = camp.roc;
+      if (roc) {
+        matched.add(roc);
+        rocs.push(roc);
+      }
+      const rocAgents = (siteAgents || []).filter(a => roc && (a.rocCode || "").toUpperCase() === roc);
+      const aH = rocAgents.reduce((s, a) => s + a.goals,   0);
+      const aD = rocAgents.reduce((s, a) => s + a.newXI,   0);
+      const aX = rocAgents.reduce((s, a) => s + a.xmLines, 0);
+      const aR = rocAgents.reduce((s, a) => s + a.rgu,     0);
+      const aHrs = rocAgents.reduce((s, a) => s + a.hours, 0);
+      rawCampaigns.push({ camp, roc, actuals: { homes: aH, hsd: aD, xm: aX, rgu: aR, hours: aHrs } });
+      fRawH += aH; fRawD += aD; fRawX += aX; fRawR += aR; fRawHrs += aHrs;
+      fPlanH += camp.plan.homesGoal; fPlanD += camp.plan.hsdGoal;
+      fPlanX += camp.plan.xmGoal;    fPlanR += camp.plan.rguGoal;
+      fPlanHrs += camp.plan.hoursGoal;
+    });
+
+    // Funder gate (corp rule): scale only when this funding source's TOTAL actual
+    // hours exceed its TOTAL plan hours. Below or at plan, every campaign keeps
+    // its Jess goal — no daily-target shrinking from unused budget mid-month.
+    const triggered = fPlanHrs > 0 && fRawHrs > fPlanHrs;
+
+    // Pass 2: build campaign records with conditional scaling.
+    let fScaledH = 0, fScaledD = 0, fScaledX = 0, fScaledR = 0;
+    const campaigns = rawCampaigns.map(({ camp, roc, actuals }) => {
+      const scaleFactor = (triggered && camp.plan.hoursGoal > 0)
+        ? actuals.hours / camp.plan.hoursGoal
+        : 1;
+      const scaled = {
+        homes: camp.plan.homesGoal * scaleFactor,
+        hsd:   camp.plan.hsdGoal   * scaleFactor,
+        xm:    camp.plan.xmGoal    * scaleFactor,
+        rgu:   camp.plan.rguGoal   * scaleFactor,
+      };
+      fScaledH += scaled.homes; fScaledD += scaled.hsd;
+      fScaledX += scaled.xm;    fScaledR += scaled.rgu;
+      const planMetric = {
+        homes: camp.plan.homesGoal, hsd: camp.plan.hsdGoal,
+        xm:    camp.plan.xmGoal,    rgu: camp.plan.rguGoal,
+        hours: camp.plan.hoursGoal,
+      };
+      const attain = {
+        homes: scaled.homes > 0 ? (actuals.homes / scaled.homes) * 100 : null,
+        hsd:   scaled.hsd   > 0 ? (actuals.hsd   / scaled.hsd)   * 100 : null,
+        rgu:   scaled.rgu   > 0 ? (actuals.rgu   / scaled.rgu)   * 100 : null,
+      };
+      return {
+        rocCode: roc, target: camp.target,
+        plan: planMetric, actual: actuals, scaled, scaleFactor, attain,
+      };
+    });
+
+    cHomes += fScaledH; cHsd += fScaledD; cXm += fScaledX; cRgu += fScaledR;
+    rHomes += fRawH; rHsd += fRawD; rXm += fRawX; rRgu += fRawR;
+    pHomes += fPlanH; pHsd += fPlanD; pXm += fPlanX; pRgu += fPlanR; pHours += fPlanHrs;
+    rHours += fRawHrs;
+
+    const rawAttain = {
+      homes: fPlanH > 0 ? (fRawH / fPlanH) * 100 : null,
+      hsd:   fPlanD > 0 ? (fRawD / fPlanD) * 100 : null,
+      rgu:   fPlanR > 0 ? (fRawR / fPlanR) * 100 : null,
+    };
+
+    funders.push({
+      funder,
+      rocs: [...new Set(rocs)],
+      campaigns,
+      plan:   { homes: fPlanH,   hsd: fPlanD,   xm: fPlanX,   rgu: fPlanR,   hours: fPlanHrs },
+      raw:    { homes: fRawH,    hsd: fRawD,    xm: fRawX,    rgu: fRawR,    hours: fRawHrs },
+      scaled: { homes: fScaledH, hsd: fScaledD, xm: fScaledX, rgu: fScaledR },
+      rawAttain,
+      triggered,
+    });
+  });
+
+  // Unmatched agents (ROCs not in any goal funder) — count toward raw, no plan
+  const unmatchedAgents = (siteAgents || []).filter(a => !matched.has((a.rocCode || "").toUpperCase()));
+  let unmatchedRaw = { homes: 0, hsd: 0, xm: 0, rgu: 0, hours: 0 };
+  if (unmatchedAgents.length) {
+    const uH = unmatchedAgents.reduce((s, a) => s + a.goals,   0);
+    const uD = unmatchedAgents.reduce((s, a) => s + a.newXI,   0);
+    const uX = unmatchedAgents.reduce((s, a) => s + a.xmLines, 0);
+    const uR = unmatchedAgents.reduce((s, a) => s + a.rgu,     0);
+    const uHrs = unmatchedAgents.reduce((s, a) => s + a.hours, 0);
+    rHomes += uH; rHsd += uD; rXm += uX; rRgu += uR;
+    rHours += uHrs;
+    unmatchedRaw = { homes: uH, hsd: uD, xm: uX, rgu: uR, hours: uHrs };
+  }
+
+  return {
+    funders,
+    unmatchedRaw,
+    totals: {
+      plan:   { homes: pHomes, hsd: pHsd, xm: pXm, rgu: pRgu, hours: pHours },
+      raw:    { homes: rHomes, hsd: rHsd, xm: rXm, rgu: rRgu, hours: rHours },
+      scaled: { homes: cHomes, hsd: cHsd, xm: cXm, rgu: cRgu },
+    },
+  };
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // SECTION 5 — REGION BUILDER  (engine/regionBuilder.js)
 // Produces RegionStat[] from normalized agents.
@@ -4168,82 +4304,24 @@ function SiteDrilldown({ siteLabel, regions, allAgents, priorAgents, programs, g
   const siteActHsd = agents.reduce((s, a) => s + a.newXI,  0);
   const siteActXm  = agents.reduce((s, a) => s + a.xmLines, 0);
 
-  // Per-funding-source capped actuals for gainshare
-  // Each funding source's unit contribution is capped at 100% of its plan
-  const siteCapped = (() => {
+  // Per-funding-source SPH-scaled goals (uses module-scope helper).
+  // Each campaign's goals scale by actual_hours / plan_hours; site rollup is
+  // the sum of campaign-scaled goals. Drives both displayed attainment and
+  // the GainsharePanel tier ladder denominators.
+  const siteScaled = (() => {
     if (!goalLookup || !sitePlanMetrics) return null;
-    const fg = {};
-    Object.values(goalLookup.byTA || {}).forEach(siteMap => {
-      (siteMap[sitePlanKey] || []).forEach(r => {
-        const f = r._funding || "Unknown";
-        const roc = (r._roc || "").toUpperCase();
-        if (!fg[f]) fg[f] = { homes: 0, hsd: 0, xm: 0, rgu: 0, hours: 0, rocs: new Set() };
-        const p = computePlanRow(r);
-        fg[f].homes += p.homesGoal; fg[f].hsd += p.hsdGoal;
-        fg[f].xm += p.xmGoal; fg[f].rgu += p.rguGoal;
-        fg[f].hours += p.hoursGoal;
-        if (roc) fg[f].rocs.add(roc);
-      });
-    });
-    const matched = new Set();
-    let cHomes = 0, cHsd = 0, cXm = 0, cRgu = 0;
-    const proj = { homes: [], hsd: [], xm: [], rgu: [], hours: [] };
-    Object.values(fg).forEach(g => {
-      g.rocs.forEach(r => matched.add(r));
-      const fa = agents.filter(a => g.rocs.has((a.rocCode || "").toUpperCase()));
-      const aH = fa.reduce((s, a) => s + a.goals, 0);
-      const aD = fa.reduce((s, a) => s + a.newXI, 0);
-      const aX = fa.reduce((s, a) => s + a.xmLines, 0);
-      const aR = fa.reduce((s, a) => s + a.rgu, 0);
-      const aHrs = fa.reduce((s, a) => s + a.hours, 0);
-      cHomes += g.homes > 0 ? Math.min(aH, g.homes) : aH;
-      cHsd   += g.hsd   > 0 ? Math.min(aD, g.hsd)   : aD;
-      cXm    += g.xm    > 0 ? Math.min(aX, g.xm)    : aX;
-      cRgu   += g.rgu   > 0 ? Math.min(aR, g.rgu)    : aR;
-      proj.homes.push({ actual: aH, plan: g.homes });
-      proj.hsd.push({ actual: aD, plan: g.hsd });
-      proj.xm.push({ actual: aX, plan: g.xm });
-      proj.rgu.push({ actual: aR, plan: g.rgu });
-      proj.hours.push({ actual: aHrs, plan: g.hours });
-    });
-    const um = agents.filter(a => !matched.has((a.rocCode || "").toUpperCase()));
-    if (um.length) {
-      const uH = um.reduce((s, a) => s + a.goals, 0);
-      const uD = um.reduce((s, a) => s + a.newXI, 0);
-      const uX = um.reduce((s, a) => s + a.xmLines, 0);
-      const uR = um.reduce((s, a) => s + a.rgu, 0);
-      const uHrs = um.reduce((s, a) => s + a.hours, 0);
-      cHomes += uH; cHsd += uD; cXm += uX; cRgu += uR;
-      proj.homes.push({ actual: uH, plan: 0 });
-      proj.hsd.push({ actual: uD, plan: 0 });
-      proj.xm.push({ actual: uX, plan: 0 });
-      proj.rgu.push({ actual: uR, plan: 0 });
-      proj.hours.push({ actual: uHrs, plan: 0 });
-    }
-    return { homes: cHomes, hsd: cHsd, xm: cXm, rgu: cRgu, proj };
+    const siteRows = Object.values(goalLookup.byTA || {}).flatMap(m => m[sitePlanKey] || []);
+    return computeFunderScaling(agents, siteRows);
   })();
 
-  // Capped projected attainment per funding source
-  const cappedProjAttain = (groups, totalPlan) => {
-    if (!fiscalInfo?.elapsedBDays || !fiscalInfo?.totalBDays || !totalPlan) return null;
-    let cp = 0;
-    groups.forEach(g => {
-      const projected = (g.actual / fiscalInfo.elapsedBDays) * fiscalInfo.totalBDays;
-      cp += g.plan > 0 ? Math.min(projected, g.plan) : projected;
-    });
-    return (cp / totalPlan) * 100;
-  };
-
-  // Gainshare attainments for the site (site-tier table) — uses raw actuals
-  const siteMobileAttain  = sitePlanMetrics && sitePlanMetrics.goals > 0 ? (totalG       / sitePlanMetrics.goals) * 100 : null;
-  const siteHsdAttain     = sitePlanMetrics && sitePlanMetrics.hsd   > 0 ? (siteActHsd   / sitePlanMetrics.hsd)   * 100 : null;
-  const siteCostPerAttain = sitePlanMetrics && sitePlanMetrics.rgu   > 0 ? (siteActRgu   / sitePlanMetrics.rgu)   * 100 : null;
-
-  // Capped projections: each funding source's projected EOM is capped at 100% of its plan
-  const siteProjMobileCapped = siteCapped ? cappedProjAttain(siteCapped.proj.homes, sitePlanMetrics?.goals) : null;
-  const siteProjHsdCapped    = siteCapped ? cappedProjAttain(siteCapped.proj.hsd,   sitePlanMetrics?.hsd)   : null;
-  const siteProjCostPerCapped = siteCapped ? cappedProjAttain(siteCapped.proj.rgu,  sitePlanMetrics?.rgu)   : null;
-  const siteProjHourCapped   = siteCapped ? cappedProjAttain(siteCapped.proj.hours, sitePlanMetrics?.hours) : null;
+  // SPH-scaled attainments — denominator is sum of campaign-scaled goals
+  // (per-campaign goal × actual_hours / plan_hours), matching the corp rule.
+  const siteScaledMobile  = siteScaled?.totals.scaled.homes ?? 0;
+  const siteScaledHsd     = siteScaled?.totals.scaled.hsd   ?? 0;
+  const siteScaledRgu     = siteScaled?.totals.scaled.rgu   ?? 0;
+  const siteMobileAttain  = siteScaledMobile > 0 ? (totalG     / siteScaledMobile) * 100 : null;
+  const siteHsdAttain     = siteScaledHsd    > 0 ? (siteActHsd / siteScaledHsd)    * 100 : null;
+  const siteCostPerAttain = siteScaledRgu    > 0 ? (siteActRgu / siteScaledRgu)    * 100 : null;
 
   // SPH Attainment for this site
   const siteActualSph = totalHrs > 0 ? totalG / totalHrs : 0;
@@ -4252,6 +4330,14 @@ function SiteDrilldown({ siteLabel, regions, allAgents, priorAgents, programs, g
 
   // Hour Attainment gate for this site
   const siteHourAttain = sitePlanMetrics && sitePlanMetrics.hours > 0 ? (totalHrs / sitePlanMetrics.hours) * 100 : null;
+
+  // Projection is mathematically a no-op under SPH-scaled rule (T/E factor
+  // cancels). Pass current attainments as projection so GainsharePanel hides
+  // the projection display (projTier === currentTier).
+  const siteProjMobileCapped  = siteMobileAttain;
+  const siteProjHsdCapped     = siteHsdAttain;
+  const siteProjCostPerCapped = siteCostPerAttain;
+  const siteProjHourCapped    = siteHourAttain;
 
   const regionStats = regions.map(r => {
     const ra = allAgents.filter(a => (a.region || "Unknown") === r);
@@ -4447,12 +4533,12 @@ function SiteDrilldown({ siteLabel, regions, allAgents, priorAgents, programs, g
           hourAttain={siteHourAttain}
           siteMode={true}
           fiscalInfo={fiscalInfo}
-          mobileActual={totalG}      mobilePlan={sitePlanMetrics?.goals || 0}
-          hsdActual={siteActHsd}     hsdPlan={sitePlanMetrics?.hsd || 0}
-          costPerActual={siteActRgu} costPerPlan={sitePlanMetrics?.rgu || 0}
+          mobileActual={totalG}      mobilePlan={siteScaledMobile}
+          hsdActual={siteActHsd}     hsdPlan={siteScaledHsd}
+          costPerActual={siteActRgu} costPerPlan={siteScaledRgu}
           sphActual={siteActualSph}  sphPlan={sitePlanSph}
           hourActual={totalHrs}      hourPlan={sitePlanMetrics?.hours || 0}
-          homesActual={totalG}       homesPlan={sitePlanMetrics?.goals || 0}
+          homesActual={totalG}       homesPlan={siteScaledMobile}
           projMobileCapped={siteProjMobileCapped}
           projHsdCapped={siteProjHsdCapped}
           projCostPerCapped={siteProjCostPerCapped}
@@ -4962,13 +5048,18 @@ function SiteDrilldown({ siteLabel, regions, allAgents, priorAgents, programs, g
           </div>
 
           {/* Program data rows */}
+          {/* Funder-gate map: scaling only kicks in for funders whose total actual
+              hours exceed plan hours. Below the gate, programs keep Jess plan. */}
           {filteredDtPrograms.map((p, pi) => {
             const tierMult = dtTierPct / 100;
+            const funderName = p._fundingLabel || p.goalBreakout?.[0]?.funding || "Unknown";
+            const triggered = (siteScaled?.funders || []).find(f => f.funder === funderName)?.triggered === true;
+            const programScale = (triggered && p.sitePlanHours && p.sitePlanHours > 0) ? (p.totalHours || 0) / p.sitePlanHours : 1;
             const metrics = [
               { plan: p.sitePlanHours, actual: p.totalHours, fmtFn: v => fmt(v, 0) },
-              { plan: p.sitePlanGoals ? Math.ceil(p.sitePlanGoals * tierMult) : p.sitePlanGoals, actual: p.totalGoals, fmtFn: v => v.toLocaleString() },
-              { plan: p.sitePlanHsd   ? Math.ceil(p.sitePlanHsd   * tierMult) : p.sitePlanHsd,   actual: p.hsdAct,     fmtFn: v => v.toLocaleString() },
-              { plan: p.sitePlanXm    ? Math.ceil(p.sitePlanXm    * tierMult) : p.sitePlanXm,    actual: p.xmAct,      fmtFn: v => v.toLocaleString() },
+              { plan: p.sitePlanGoals ? Math.ceil(p.sitePlanGoals * programScale * tierMult) : p.sitePlanGoals, actual: p.totalGoals, fmtFn: v => v.toLocaleString() },
+              { plan: p.sitePlanHsd   ? Math.ceil(p.sitePlanHsd   * programScale * tierMult) : p.sitePlanHsd,   actual: p.hsdAct,     fmtFn: v => v.toLocaleString() },
+              { plan: p.sitePlanXm    ? Math.ceil(p.sitePlanXm    * programScale * tierMult) : p.sitePlanXm,    actual: p.xmAct,      fmtFn: v => v.toLocaleString() },
             ];
             const rocLabel = p._fundingRoc
               ? `${p._fundingRoc}${p._fundingLabel ? ` \u00b7 ${p._fundingLabel}` : ""}`
@@ -4991,14 +5082,23 @@ function SiteDrilldown({ siteLabel, regions, allAgents, priorAgents, programs, g
           {(() => {
             const tierMult = dtTierPct / 100;
             const totHoursPlan = dtFundingFilter ? filteredDtPrograms.reduce((s, p) => s + (p.sitePlanHours || 0), 0) : canonPlanHours;
-            const totGoalsPlan = dtFundingFilter ? filteredDtPrograms.reduce((s, p) => s + (p.sitePlanGoals || 0), 0) : canonPlanGoals;
-            const totHsdPlan   = dtFundingFilter ? filteredDtPrograms.reduce((s, p) => s + (p.sitePlanHsd || 0), 0) : canonPlanHsd;
-            const totXmPlan    = dtFundingFilter ? filteredDtPrograms.reduce((s, p) => s + (p.sitePlanXm || 0), 0) : canonPlanXm;
+            // Scaled program plans are summed BEFORE the tier multiplier so each program's
+            // own scale factor is preserved. Funder-gate applies: programs in
+            // funders that haven't exceeded plan hours stay at Jess plan.
+            const programScaleFor = (p) => {
+              const funderName = p._fundingLabel || p.goalBreakout?.[0]?.funding || "Unknown";
+              const triggered = (siteScaled?.funders || []).find(f => f.funder === funderName)?.triggered === true;
+              if (!triggered) return 1;
+              return (p.sitePlanHours && p.sitePlanHours > 0) ? (p.totalHours || 0) / p.sitePlanHours : 1;
+            };
+            const totGoalsScaled = filteredDtPrograms.reduce((s, p) => s + (p.sitePlanGoals || 0) * programScaleFor(p), 0);
+            const totHsdScaled   = filteredDtPrograms.reduce((s, p) => s + (p.sitePlanHsd   || 0) * programScaleFor(p), 0);
+            const totXmScaled    = filteredDtPrograms.reduce((s, p) => s + (p.sitePlanXm    || 0) * programScaleFor(p), 0);
             const tots = [
               { plan: totHoursPlan, actual: filteredDtPrograms.reduce((s, p) => s + p.totalHours, 0), fmtFn: v => fmt(v, 0) },
-              { plan: totGoalsPlan ? Math.ceil(totGoalsPlan * tierMult) : totGoalsPlan, actual: filteredDtPrograms.reduce((s, p) => s + p.totalGoals, 0), fmtFn: v => v.toLocaleString() },
-              { plan: totHsdPlan   ? Math.ceil(totHsdPlan   * tierMult) : totHsdPlan,   actual: filteredDtPrograms.reduce((s, p) => s + (p.hsdAct || 0), 0), fmtFn: v => v.toLocaleString() },
-              { plan: totXmPlan    ? Math.ceil(totXmPlan    * tierMult) : totXmPlan,    actual: filteredDtPrograms.reduce((s, p) => s + (p.xmAct || 0), 0), fmtFn: v => v.toLocaleString() },
+              { plan: totGoalsScaled > 0 ? Math.ceil(totGoalsScaled * tierMult) : 0, actual: filteredDtPrograms.reduce((s, p) => s + p.totalGoals, 0), fmtFn: v => v.toLocaleString() },
+              { plan: totHsdScaled   > 0 ? Math.ceil(totHsdScaled   * tierMult) : 0, actual: filteredDtPrograms.reduce((s, p) => s + (p.hsdAct || 0), 0), fmtFn: v => v.toLocaleString() },
+              { plan: totXmScaled    > 0 ? Math.ceil(totXmScaled    * tierMult) : 0, actual: filteredDtPrograms.reduce((s, p) => s + (p.xmAct || 0), 0), fmtFn: v => v.toLocaleString() },
             ];
             const totHrsRemain = Math.max((tots[0].plan || 0) - (tots[0].actual || 0), 0);
             const totHomesRemain = Math.max((tots[1].plan || 0) - (tots[1].actual || 0), 0);
@@ -5252,13 +5352,14 @@ function MenuRow({ icon, label, hint, onClick }) {
     </button>
   );
 }
-function SettingsMenu({ onExportMbr, onExportVirgilMbr, onOpenCorpDataSources, onRefresh, onUploadGoals, onUploadRoster, onUploadPriorGoals, onUploadCoachingDetails, onUploadCoachingWeekly, onUploadLoginBuckets, onOpenSettings, ollamaAvailable, localAI, onToggleLocalAI }) {
+function SettingsMenu({ onExportMbr, onExportVirgilMbr, onExportGainshare, onOpenCorpDataSources, onRefresh, onUploadGoals, onUploadRoster, onUploadPriorGoals, onUploadCoachingDetails, onUploadCoachingWeekly, onUploadLoginBuckets, onOpenSettings, ollamaAvailable, localAI, onToggleLocalAI }) {
   return (
     <div role="menu" aria-label="Settings and actions"
       style={{ position: "absolute", top: "calc(100% + 4px)", right: 0, minWidth: 240, background: "var(--bg-tertiary)", border: "1px solid var(--border)", borderRadius: "var(--radius-md, 10px)", boxShadow: "0 12px 32px rgba(0,0,0,0.35)", padding: "6px 0", zIndex: 250 }}>
       <MenuSection label="Actions" />
       <MenuRow icon="📊" label="Export MBR" hint="monthly" onClick={onExportMbr} />
       <MenuRow icon="🎯" label="Export Corp MBR" hint="monthly" onClick={onExportVirgilMbr} />
+      <MenuRow icon="📈" label="Export Gainshare" hint="monthly" onClick={onExportGainshare} />
       <MenuRow icon="🔄" label="Refresh from sheet" onClick={onRefresh} />
       <div style={{ borderTop: "1px solid var(--border-muted)", margin: "4px 0" }} />
       <MenuSection label="Data" />
@@ -5344,7 +5445,7 @@ function TopNav({
   programsBySite, siteAttainments, fiscalInfo, hasTnps, hasCoaching,
   lightMode, setLightMode, showToday, setShowToday,
   ollamaAvailable, localAI, setLocalAI,
-  onExportMbr, onExportVirgilMbr, onOpenCorpDataSources, onRefresh, onUploadGoals, onUploadRoster, onUploadPriorGoals, onUploadCoachingDetails, onUploadCoachingWeekly, onUploadLoginBuckets, onOpenSettings,
+  onExportMbr, onExportVirgilMbr, onExportGainshare, onOpenCorpDataSources, onRefresh, onUploadGoals, onUploadRoster, onUploadPriorGoals, onUploadCoachingDetails, onUploadCoachingWeekly, onUploadLoginBuckets, onOpenSettings,
 }) {
   const navRef = useRef(null);
   const drRef = useRef(null);
@@ -5453,6 +5554,7 @@ function TopNav({
             <SettingsMenu
               onExportMbr={() => { onExportMbr(); setOpenMenu(null); }}
               onExportVirgilMbr={() => { onExportVirgilMbr(); setOpenMenu(null); }}
+              onExportGainshare={() => { onExportGainshare(); setOpenMenu(null); }}
               onOpenCorpDataSources={() => { onOpenCorpDataSources(); setOpenMenu(null); }}
               onRefresh={() => { onRefresh(); setOpenMenu(null); }}
               onUploadGoals={() => { onUploadGoals(); setOpenMenu(null); }}
@@ -5478,6 +5580,584 @@ function TopNav({
   );
 }
 
+
+// ══════════════════════════════════════════════════════════════════════════════
+// GAINSHARE PPTX EXPORT
+// ══════════════════════════════════════════════════════════════════════════════
+//
+// Standalone gainshare deck builder. Distinct from the MBR — this report is
+// per-site (Belize, Dominican Republic) with funder-level cap mechanics shown.
+
+const GAINSHARE_FUNDER_ORDER = ["Growth", "National", "HQ", "Marketing", "Other"];
+const GAINSHARE_SITE_DISPLAY = { BZ: "Belize", DR: "Dominican Republic" };
+const GAINSHARE_FONT = "Aptos";
+
+// Compute the structured gainshare report for both sites. Pure function.
+// agents: normalized agent rows (output of normalizeAgents)
+// goalLookup: output of buildGoalLookup
+// fiscalInfo: { fiscalStart, fiscalEnd, ... }
+// opts: { includeSPH: bool, includeHourGate: bool }
+function computeGainshareReport(agents, goalLookup, fiscalInfo, opts = {}) {
+  const { includeSPH = true, includeHourGate = true } = opts;
+  const SITE_KEYS = { BZ: "BZ", DR: "DR" };
+  const sites = {};
+
+  for (const [siteKey, sitePlanKey] of Object.entries(SITE_KEYS)) {
+    // Filter agents for this site (matching SiteDrilldown's site mapping)
+    const siteAgents = (agents || []).filter(a => {
+      const loc = (a.Location || a.location || "").trim().toUpperCase();
+      if (siteKey === "BZ") return loc === "BZ";
+      return loc === "SD" || loc === "PU";
+    });
+
+    const siteRows = goalLookup
+      ? Object.values(goalLookup.byTA || {}).flatMap(m => m[sitePlanKey] || [])
+      : [];
+
+    const cap = computeFunderScaling(siteAgents, siteRows);
+    const planTot = cap.totals.plan;
+    const rawTot = cap.totals.raw;
+    const scaledTot = cap.totals.scaled;
+
+    // Filter and order funders for display; helper already produced campaigns + scaled.
+    const funders = cap.funders
+      .filter(f => GAINSHARE_FUNDER_ORDER.includes(f.funder) || f.funder === "Unknown")
+      .sort((a, b) => {
+        const ai = GAINSHARE_FUNDER_ORDER.indexOf(a.funder);
+        const bi = GAINSHARE_FUNDER_ORDER.indexOf(b.funder);
+        return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+      });
+
+    // Attainments use SCALED plan as denominator (corp rule).
+    const mobileAttain  = scaledTot.homes > 0 ? (rawTot.homes / scaledTot.homes) * 100 : null;
+    const hsdAttain     = scaledTot.hsd   > 0 ? (rawTot.hsd   / scaledTot.hsd)   * 100 : null;
+    const costPerAttain = scaledTot.rgu   > 0 ? (rawTot.rgu   / scaledTot.rgu)   * 100 : null;
+
+    // SPH = (raw homes / raw hours) ÷ (plan homes / plan hours), as %.
+    // Uses ORIGINAL plan SPH ratio — measures pure productivity vs the
+    // weighted-average plan SPH (separate from Mobile attainment under scaling).
+    let sphAttain = null;
+    if (includeSPH && planTot.homes > 0 && planTot.hours > 0 && rawTot.hours > 0) {
+      const actSph = rawTot.homes / rawTot.hours;
+      const planSph = planTot.homes / planTot.hours;
+      sphAttain = planSph > 0 ? (actSph / planSph) * 100 : null;
+    }
+
+    // Hour gate — raw hours / plan hours
+    const hourAttain = (includeHourGate && planTot.hours > 0)
+      ? (rawTot.hours / planTot.hours) * 100
+      : null;
+
+    const tiers = {
+      mobile:  mobileAttain  !== null ? getGainshareTier(mobileAttain,  true) : null,
+      hsd:     hsdAttain     !== null ? getGainshareTier(hsdAttain,     true) : null,
+      costPer: costPerAttain !== null ? getGainshareTier(costPerAttain, true) : null,
+      sph:     sphAttain     !== null ? getGainshareTier(sphAttain,     true) : null,
+      hour:    hourAttain    !== null ? getHourGateTier(hourAttain)            : null,
+    };
+
+    const netBonus =
+      (tiers.mobile?.mobile  ?? 0) +
+      (tiers.hsd?.hsd        ?? 0) +
+      (tiers.costPer?.costPer ?? 0) +
+      (includeSPH      && tiers.sph  ? tiers.sph.sph    : 0) +
+      (includeHourGate && tiers.hour ? tiers.hour.penalty : 0);
+
+    sites[siteKey] = {
+      displayName: GAINSHARE_SITE_DISPLAY[siteKey],
+      attain: {
+        mobile: mobileAttain,
+        hsd:    hsdAttain,
+        costPer: costPerAttain,
+        sph:    sphAttain,
+        hour:   hourAttain,
+      },
+      tiers,
+      netBonus,
+      totals: { plan: planTot, raw: rawTot, scaled: scaledTot },
+      funders,
+    };
+  }
+
+  return {
+    fiscalStart: fiscalInfo?.fiscalStart || null,
+    fiscalEnd:   fiscalInfo?.fiscalEnd   || null,
+    generatedAt: new Date().toISOString(),
+    options:     { includeSPH, includeHourGate },
+    sites,
+  };
+}
+
+if (typeof window !== "undefined" && import.meta.env?.DEV) {
+  window.__gainshare = {
+    computeGainshareReport,
+    computeFunderScaling,
+    getGainshareTier,
+    getHourGateTier,
+  };
+}
+
+// Common footer for every gainshare slide: data source line, light gray bar with
+// "GCS | Performance Intel" tagline, and the GCS logo bottom-right.
+function addGainshareSlideFooter(pres, slide, report) {
+  const lastDate = (report.fiscalEnd || "").slice(0, 10);
+
+  // "Data Source: BI data through {date}" — italic, just above the bar
+  slide.addText(`Data Source: BI data through ${lastDate}`, {
+    x: 0.4, y: 7.02, w: 8, h: 0.18,
+    fontSize: 7, fontFace: GAINSHARE_FONT, color: MBR_COLORS.textSecondary, italic: true,
+  });
+
+  // Light gray footer bar
+  slide.addShape(pres.shapes.RECTANGLE, {
+    x: 0, y: 7.22, w: MBR_W, h: 0.28,
+    fill: { color: "F5F5FA" }, line: { color: "F5F5FA", width: 0 },
+  });
+  slide.addShape(pres.shapes.RECTANGLE, {
+    x: 0, y: 7.22, w: MBR_W, h: 0.01,
+    fill: { color: MBR_COLORS.cardBorder }, line: { color: MBR_COLORS.cardBorder, width: 0 },
+  });
+
+  // GCS | Performance Intel — italic, on the bar
+  slide.addText("GCS  |  Performance Intel", {
+    x: 0.4, y: 7.24, w: 4, h: 0.22,
+    fontSize: 7, fontFace: GAINSHARE_FONT, color: MBR_COLORS.textSecondary, italic: true,
+  });
+
+  // GCS logo bottom-right
+  if (report.gcsLogoDataUrl) {
+    slide.addImage({
+      data: report.gcsLogoDataUrl,
+      x: MBR_W - 1.05, y: 6.95, w: 0.85, h: 0.45,
+    });
+  }
+}
+
+function addGainshareCoverSlide(pres, report) {
+  const slide = pres.addSlide();
+  slide.bkgd = "FFFFFF";
+
+  // Full-bleed teal→purple gradient (split into two halves to mimic the Corp MBR look)
+  slide.addShape(pres.shapes.RECTANGLE, {
+    x: 0, y: 0, w: MBR_W * 0.5, h: 6.95,
+    fill: { color: "0B5F7A" }, line: { color: "0B5F7A", width: 0 },
+  });
+  slide.addShape(pres.shapes.RECTANGLE, {
+    x: MBR_W * 0.5, y: 0, w: MBR_W * 0.5, h: 6.95,
+    fill: { color: "7C3AED" }, line: { color: "7C3AED", width: 0 },
+  });
+  // Soft middle blend stripe
+  slide.addShape(pres.shapes.RECTANGLE, {
+    x: MBR_W * 0.35, y: 0, w: MBR_W * 0.30, h: 6.95,
+    fill: { color: "3B3F8F", transparency: 60 }, line: { color: "3B3F8F", width: 0 },
+  });
+
+  // Eyebrow
+  slide.addText("TELESALES PERFORMANCE", {
+    x: 0.5, y: 1.5, w: MBR_W - 1.0, h: 0.4,
+    fontSize: 14, fontFace: GAINSHARE_FONT, color: "FFFFFF", bold: true,
+    charSpacing: 6, align: "center",
+  });
+
+  // Big headline
+  slide.addText("GAINSHARE REPORT", {
+    x: 0.5, y: 2.1, w: MBR_W - 1.0, h: 1.2,
+    fontSize: 60, fontFace: GAINSHARE_FONT, color: "FFFFFF", bold: true,
+    align: "center", charSpacing: 4,
+  });
+
+  // Fiscal period
+  const periodText = report.fiscalStart && report.fiscalEnd
+    ? `Fiscal Period: ${report.fiscalStart}  –  ${report.fiscalEnd}`
+    : "Fiscal Period: —";
+  slide.addText(periodText, {
+    x: 0.5, y: 3.45, w: MBR_W - 1.0, h: 0.4,
+    fontSize: 18, fontFace: GAINSHARE_FONT, color: "FFD27A", italic: true,
+    align: "center",
+  });
+
+  // Today's date
+  const ord = (d) => {
+    const s = ["th","st","nd","rd"]; const v = d % 100;
+    return s[(v - 20) % 10] || s[v] || s[0];
+  };
+  const today = new Date();
+  const monthFull = today.toLocaleDateString("en-US", { month: "long" }).toUpperCase();
+  const day = today.getDate();
+  const dateText = `${monthFull} ${day}${ord(day).toUpperCase()}, ${today.getFullYear()}`;
+  slide.addText(dateText, {
+    x: 0.5, y: 4.35, w: MBR_W - 1.0, h: 0.35,
+    fontSize: 11, fontFace: GAINSHARE_FONT, color: "FFFFFF", bold: true,
+    charSpacing: 5, align: "center",
+  });
+
+  // Business partner line
+  slide.addText("GLOBAL CALLCENTER SOLUTIONS", {
+    x: 0.5, y: 4.75, w: MBR_W - 1.0, h: 0.35,
+    fontSize: 11, fontFace: GAINSHARE_FONT, color: "FFFFFF", bold: true,
+    charSpacing: 4, align: "center",
+  });
+
+  // Presenter line
+  slide.addText("Presented by Joshua Edgecomb", {
+    x: 0.5, y: 5.15, w: MBR_W - 1.0, h: 0.3,
+    fontSize: 10, fontFace: GAINSHARE_FONT, color: "FFFFFF", italic: true,
+    align: "center",
+  });
+
+  addGainshareSlideFooter(pres, slide, report);
+}
+
+// Compute the units needed to hit each tier for a metric.
+// thresholdPct = the lower bound of the tier; plan = the metric's plan total.
+// For SPH, target = targetSPH * actualHours (so it displays as homes, not SPH ratio).
+function gainshareTierTarget(thresholdPct, plan, isSph, actualHours) {
+  if (!plan || plan <= 0) return null;
+  if (isSph) {
+    const targetSph = (thresholdPct / 100) * plan;
+    return actualHours > 0 ? Math.ceil(targetSph * actualHours) : null;
+  }
+  return Math.ceil((thresholdPct / 100) * plan);
+}
+
+// One slide per site: full tier ladder, all included metrics in columns.
+function addGainshareSiteTableSlide(pres, report, siteKey) {
+  const site = report.sites[siteKey];
+  if (!site) return;
+  const { includeSPH, includeHourGate } = report.options;
+
+  const slide = pres.addSlide();
+  slide.bkgd = MBR_COLORS.white;
+
+  // Top purple band
+  slide.addShape(pres.shapes.RECTANGLE, {
+    x: 0, y: 0, w: MBR_W, h: 0.95,
+    fill: { color: MBR_COLORS.purple }, line: { color: MBR_COLORS.purple, width: 0 },
+  });
+  slide.addText(`${site.displayName.toUpperCase()} — SITE GAINSHARE`, {
+    x: 0.4, y: 0.18, w: 9.5, h: 0.6,
+    fontSize: 22, fontFace: GAINSHARE_FONT, color: MBR_COLORS.white, bold: true,
+  });
+  // Net bonus on the right
+  const netSign = site.netBonus > 0 ? "+" : "";
+  const netColor = site.netBonus > 0 ? "16a34a" : site.netBonus < 0 ? "dc2626" : MBR_COLORS.white;
+  slide.addText("NET BONUS", {
+    x: MBR_W - 3.6, y: 0.12, w: 3.2, h: 0.25,
+    fontSize: 10, fontFace: GAINSHARE_FONT, color: MBR_COLORS.amber, align: "right", bold: true,
+  });
+  slide.addText(`${netSign}${site.netBonus.toFixed(2)}%`, {
+    x: MBR_W - 3.6, y: 0.32, w: 3.2, h: 0.55,
+    fontSize: 28, fontFace: GAINSHARE_FONT, color: netColor, bold: true, align: "right",
+  });
+
+  // Amber rule
+  slide.addShape(pres.shapes.RECTANGLE, {
+    x: 0, y: 0.95, w: MBR_W, h: 0.05,
+    fill: { color: MBR_COLORS.amber }, line: { color: MBR_COLORS.amber, width: 0 },
+  });
+
+  // Build column list. Tier targets use the SCALED plan for Mobile/HSD/Cost Per
+  // (since attainment is measured against the scaled plan under the corp rule).
+  // SPH and Hour Gate keep their original plan denominators.
+  const sitePlanSph = site.totals.plan.hours > 0
+    ? site.totals.plan.homes / site.totals.plan.hours
+    : 0;
+  const columns = [
+    { key: "mobile",  label: "Mobile",   tierKey: "mobile",  attain: site.attain.mobile,  tier: site.tiers.mobile,  plan: site.totals.scaled.homes, isSph: false, isHour: false, unit: "homes" },
+    { key: "hsd",     label: "HSD",      tierKey: "hsd",     attain: site.attain.hsd,     tier: site.tiers.hsd,     plan: site.totals.scaled.hsd,   isSph: false, isHour: false, unit: "HSD" },
+    { key: "costPer", label: "Cost Per", tierKey: "costPer", attain: site.attain.costPer, tier: site.tiers.costPer, plan: site.totals.scaled.rgu,   isSph: false, isHour: false, unit: "RGU" },
+  ];
+  if (includeSPH) {
+    columns.push({ key: "sph", label: "SPH", tierKey: "sph", attain: site.attain.sph, tier: site.tiers.sph, plan: sitePlanSph, isSph: true, isHour: false, unit: "sales" });
+  }
+  if (includeHourGate) {
+    columns.push({ key: "hour", label: "Hour Gate", tierKey: "penalty", attain: site.attain.hour, tier: site.tiers.hour, plan: site.totals.plan.hours, isSph: false, isHour: true, unit: "hrs" });
+  }
+
+  const colCount = columns.length;
+  const margin = 0.4;
+  const usableW = MBR_W - margin * 2;
+  const colW = usableW / colCount;
+  const yTop = 1.25;
+  const ladderRowH = 0.36;
+
+  columns.forEach((col, idx) => {
+    const x = margin + idx * colW;
+    // Header
+    slide.addText(col.label.toUpperCase(), {
+      x, y: yTop, w: colW, h: 0.3,
+      fontSize: 11, fontFace: GAINSHARE_FONT, color: MBR_COLORS.textSecondary, bold: true, align: "center",
+    });
+    // Big % attainment
+    if (col.attain !== null) {
+      slide.addText(`${Math.round(col.attain)}%`, {
+        x, y: yTop + 0.32, w: colW, h: 0.6,
+        fontSize: 32, fontFace: GAINSHARE_FONT, color: attainColor(col.attain), bold: true, align: "center",
+      });
+    }
+
+    // Tier ladder. Column widths: range 38% / target 22% / bonus 36% (bonus widened
+    // from 22% to keep "+4.00%" on a single line).
+    const tiers = col.isHour ? HOUR_GATE_SITE_TIERS : GAINSHARE_SITE_TIERS;
+    tiers.forEach((t, tIdx) => {
+      const rowY = yTop + 1.05 + tIdx * ladderRowH;
+      const isActive = col.tier === t;
+      const bonusVal = col.isHour ? t.penalty : t[col.tierKey];
+      const sign = bonusVal > 0 ? "+" : "";
+
+      // Background for active tier — rounded pill matching the dashboard's gainshare style.
+      if (isActive) {
+        const tintColor = bonusVal > 0 ? "16a34a" : bonusVal < 0 ? "dc2626" : MBR_COLORS.cardBorder;
+        slide.addShape(pres.shapes.ROUNDED_RECTANGLE, {
+          x: x + 0.04, y: rowY, w: colW - 0.08, h: ladderRowH - 0.04,
+          fill: { color: tintColor, transparency: 80 },
+          line: { color: tintColor, width: 1 },
+          rectRadius: 0.06,
+        });
+      }
+
+      // Range label (left)
+      slide.addText(t.label || "", {
+        x: x + 0.08, y: rowY + 0.02, w: colW * 0.38, h: ladderRowH - 0.06,
+        fontSize: 8, fontFace: GAINSHARE_FONT,
+        color: isActive ? MBR_COLORS.textPrimary : MBR_COLORS.textSecondary,
+        bold: isActive, valign: "middle",
+      });
+
+      // Target needed (center) — skip for hour gate where target is just attainable %
+      const target = col.isHour
+        ? (col.plan ? Math.ceil((t.min / 100) * col.plan) : null)
+        : gainshareTierTarget(t.min, col.plan, col.isSph, site.totals.raw.hours);
+      if (target !== null) {
+        slide.addText(target.toLocaleString(), {
+          x: x + colW * 0.40, y: rowY + 0.02, w: colW * 0.22, h: ladderRowH - 0.06,
+          fontSize: 8, fontFace: GAINSHARE_FONT,
+          color: isActive ? MBR_COLORS.textPrimary : MBR_COLORS.textSecondary,
+          align: "center", valign: "middle",
+        });
+      }
+
+      // Bonus % (right) — wider so "+4.00%" doesn't wrap
+      slide.addText(`${sign}${bonusVal.toFixed(2)}%`, {
+        x: x + colW * 0.62, y: rowY + 0.02, w: colW * 0.36, h: ladderRowH - 0.06,
+        fontSize: 9, fontFace: GAINSHARE_FONT,
+        color: isActive
+          ? (bonusVal > 0 ? "16a34a" : bonusVal < 0 ? "dc2626" : MBR_COLORS.textSecondary)
+          : MBR_COLORS.textSecondary,
+        bold: isActive, align: "right", valign: "middle",
+      });
+    });
+  });
+
+  addGainshareSlideFooter(pres, slide, report);
+}
+
+const GAINSHARE_FUNDER_COLORS = {
+  Growth:    "16a34a",  // green
+  National:  "2563eb",  // blue
+  HQ:        "d97706",  // amber
+  Marketing: "7c3aed",  // purple
+  Other:     "6b7280",  // gray
+  Unknown:   "6b7280",
+};
+
+// One slide per site: per-campaign rows grouped by funder, with subtotal
+// rows showing raw / plan / raw% / capped contribution + warning glyph.
+//
+// 10-column table: ROC | Campaign | (Hours, Mobile, HSD, Cost Per) × (Act, Plan).
+// Funder header rows colspan all 10. Subtotal rows colspan 2 per metric pair so
+// the "raw / plan / X% / capped Y" string fits cleanly under each metric group.
+function addGainshareCampaignDetailsSlide(pres, report, siteKey) {
+  const site = report.sites[siteKey];
+  if (!site || !site.funders.length) return;
+
+  const slide = pres.addSlide();
+  slide.bkgd = MBR_COLORS.white;
+
+  // Header
+  slide.addShape(pres.shapes.RECTANGLE, {
+    x: 0, y: 0, w: MBR_W, h: 0.7,
+    fill: { color: MBR_COLORS.purple }, line: { color: MBR_COLORS.purple, width: 0 },
+  });
+  slide.addText(`${site.displayName.toUpperCase()} — CAMPAIGN DETAILS`, {
+    x: 0.4, y: 0.13, w: MBR_W - 4, h: 0.45,
+    fontSize: 18, fontFace: GAINSHARE_FONT, color: MBR_COLORS.white, bold: true,
+  });
+  slide.addText(`Fiscal: ${report.fiscalStart} – ${report.fiscalEnd}`, {
+    x: MBR_W - 4, y: 0.18, w: 3.5, h: 0.35,
+    fontSize: 11, fontFace: GAINSHARE_FONT, color: MBR_COLORS.amber, align: "right",
+  });
+  // Amber rule
+  slide.addShape(pres.shapes.RECTANGLE, {
+    x: 0, y: 0.7, w: MBR_W, h: 0.04,
+    fill: { color: MBR_COLORS.amber }, line: { color: MBR_COLORS.amber, width: 0 },
+  });
+
+  // Build rows: two header rows → per-funder (header row + campaign rows + subtotal) → site total
+  const rows = [];
+  rows.push({ type: "headerTop" });
+  rows.push({ type: "headerBottom" });
+  site.funders.forEach(f => {
+    rows.push({ type: "funderHeader", funder: f.funder });
+    f.campaigns.forEach(c => rows.push({ type: "campaign", funder: f.funder, c }));
+    rows.push({ type: "subtotal", funder: f.funder, f });
+  });
+  rows.push({ type: "siteTotal", site });
+
+  // Render as a pptx table for proper alignment/wrapping
+  const tableRows = rows.map(r => {
+    if (r.type === "headerTop") {
+      // Top row: ROC | Campaign | "Hours Attainment" (cs2) | "Mobile Attainment" (cs2) | "HSD Attainment" (cs2) | "Cost Per Attainment" (cs2)
+      const headerStyle = { fill: { color: MBR_COLORS.cardBorder }, color: MBR_COLORS.textPrimary, bold: true, fontSize: 9, fontFace: GAINSHARE_FONT, align: "center" };
+      return [
+        { text: "ROC",      options: { ...headerStyle, rowspan: 2 } },
+        { text: "Campaign", options: { ...headerStyle, rowspan: 2 } },
+        { text: "Hours Attainment",     options: { ...headerStyle, colspan: 2 } },
+        { text: "Mobile Attainment",    options: { ...headerStyle, colspan: 2 } },
+        { text: "HSD Attainment",       options: { ...headerStyle, colspan: 2 } },
+        { text: "Cost Per Attainment",  options: { ...headerStyle, colspan: 2 } },
+      ];
+    }
+    if (r.type === "headerBottom") {
+      // Bottom row: blank | blank | Act | Plan | Act | Plan | Act | Plan | Act | Plan
+      const subStyle = { fill: { color: MBR_COLORS.cardBorder }, color: MBR_COLORS.textSecondary, bold: true, fontSize: 8, fontFace: GAINSHARE_FONT, align: "center" };
+      return [
+        { text: "Act",  options: subStyle },
+        { text: "Plan", options: subStyle },
+        { text: "Act",  options: subStyle },
+        { text: "Plan", options: subStyle },
+        { text: "Act",  options: subStyle },
+        { text: "Plan", options: subStyle },
+        { text: "Act",  options: subStyle },
+        { text: "Plan", options: subStyle },
+      ];
+    }
+    if (r.type === "funderHeader") {
+      return [{
+        text: r.funder.toUpperCase(),
+        options: {
+          colspan: 10,
+          fill: { color: GAINSHARE_FUNDER_COLORS[r.funder] || "6b7280", transparency: 80 },
+          color: GAINSHARE_FUNDER_COLORS[r.funder] || MBR_COLORS.textPrimary,
+          bold: true, fontSize: 10, fontFace: GAINSHARE_FONT, align: "left",
+        },
+      }];
+    }
+    if (r.type === "campaign") {
+      const { c } = r;
+      const numCell = (v) => v === null || v === undefined ? "—" : Math.round(v).toLocaleString();
+      const cellStyle = { fontSize: 9, fontFace: GAINSHARE_FONT, color: MBR_COLORS.textPrimary, align: "center" };
+      return [
+        { text: c.rocCode, options: { fontSize: 9, fontFace: GAINSHARE_FONT, color: MBR_COLORS.textPrimary } },
+        { text: c.target,  options: { fontSize: 9, fontFace: GAINSHARE_FONT, color: MBR_COLORS.textSecondary } },
+        { text: numCell(c.actual.hours), options: cellStyle },
+        { text: numCell(c.plan.hours),   options: cellStyle },
+        { text: numCell(c.actual.homes), options: cellStyle },
+        { text: c.plan.homes ? numCell(c.scaled.homes) : "—", options: cellStyle },
+        { text: c.plan.hsd   ? numCell(c.actual.hsd)   : "—", options: cellStyle },
+        { text: c.plan.hsd   ? numCell(c.scaled.hsd)   : "—", options: cellStyle },
+        { text: c.plan.rgu   ? numCell(c.actual.rgu)   : "—", options: cellStyle },
+        { text: c.plan.rgu   ? numCell(c.scaled.rgu)   : "—", options: cellStyle },
+      ];
+    }
+    if (r.type === "subtotal") {
+      const { f } = r;
+      // Act col: raw actual sum.
+      // Plan col: "scaled | XX%" on a single line.
+      const subtotalPlanCell = (raw, scaled, jess) => {
+        if (!jess && !scaled) return "—";
+        const pct = scaled > 0 ? (raw / scaled) * 100 : null;
+        return pct !== null
+          ? `${Math.round(scaled)} | ${pct.toFixed(0)}%`
+          : `${Math.round(scaled)}`;
+      };
+      const tint = GAINSHARE_FUNDER_COLORS[f.funder] || "6b7280";
+      const baseStyle = { fontSize: 8, fontFace: GAINSHARE_FONT, italic: true, fill: { color: tint, transparency: 92 } };
+      return [
+        { text: "─ subtotal", options: { ...baseStyle, color: MBR_COLORS.textSecondary } },
+        { text: "",           options: { ...baseStyle } },
+        { text: `${Math.round(f.raw.hours)}`, options: { ...baseStyle, align: "center", color: MBR_COLORS.textSecondary } },
+        { text: `${Math.round(f.plan.hours)}`, options: { ...baseStyle, align: "center", color: MBR_COLORS.textSecondary } },
+        { text: f.plan.homes ? `${Math.round(f.raw.homes)}` : "—", options: { ...baseStyle, align: "center", color: tint } },
+        { text: subtotalPlanCell(f.raw.homes, f.scaled.homes, f.plan.homes), options: { ...baseStyle, align: "center", color: tint } },
+        { text: f.plan.hsd   ? `${Math.round(f.raw.hsd)}`   : "—", options: { ...baseStyle, align: "center", color: tint } },
+        { text: subtotalPlanCell(f.raw.hsd,   f.scaled.hsd,   f.plan.hsd),   options: { ...baseStyle, align: "center", color: tint } },
+        { text: f.plan.rgu   ? `${Math.round(f.raw.rgu)}`   : "—", options: { ...baseStyle, align: "center", color: tint } },
+        { text: subtotalPlanCell(f.raw.rgu,   f.scaled.rgu,   f.plan.rgu),   options: { ...baseStyle, align: "center", color: tint } },
+      ];
+    }
+    if (r.type === "siteTotal") {
+      const t = r.site.totals;
+      // Site total: Act col shows raw actual sum.
+      // Plan col: "scaled | XX%" on a single line.
+      const totalPlanCell = (raw, scaled, jess) => {
+        if (!jess && !scaled) return "—";
+        const pct = scaled > 0 ? (raw / scaled) * 100 : null;
+        return pct !== null
+          ? `${Math.round(scaled)} | ${pct.toFixed(1)}%`
+          : `${Math.round(scaled)}`;
+      };
+      const baseStyle = { fontSize: 9, fontFace: GAINSHARE_FONT, bold: true, fill: { color: MBR_COLORS.purple, transparency: 88 } };
+      return [
+        { text: "SITE TOTAL", options: { ...baseStyle, color: MBR_COLORS.purple } },
+        { text: "",           options: { ...baseStyle } },
+        { text: `${Math.round(t.raw.hours)}`, options: { ...baseStyle, align: "center", color: MBR_COLORS.textPrimary } },
+        { text: `${Math.round(t.plan.hours)}`, options: { ...baseStyle, align: "center", color: MBR_COLORS.textPrimary } },
+        { text: t.plan.homes ? `${Math.round(t.raw.homes)}` : "—", options: { ...baseStyle, align: "center", color: MBR_COLORS.textPrimary } },
+        { text: totalPlanCell(t.raw.homes, t.scaled.homes, t.plan.homes), options: { ...baseStyle, align: "center", color: MBR_COLORS.textPrimary } },
+        { text: t.plan.hsd   ? `${Math.round(t.raw.hsd)}`   : "—", options: { ...baseStyle, align: "center", color: MBR_COLORS.textPrimary } },
+        { text: totalPlanCell(t.raw.hsd,   t.scaled.hsd,   t.plan.hsd),   options: { ...baseStyle, align: "center", color: MBR_COLORS.textPrimary } },
+        { text: t.plan.rgu   ? `${Math.round(t.raw.rgu)}`   : "—", options: { ...baseStyle, align: "center", color: MBR_COLORS.textPrimary } },
+        { text: totalPlanCell(t.raw.rgu,   t.scaled.rgu,   t.plan.rgu),   options: { ...baseStyle, align: "center", color: MBR_COLORS.textPrimary } },
+      ];
+    }
+    return [];
+  });
+
+  // 10 columns: ROC, Campaign, then 4 metric pairs (Act, Plan).
+  // Total proportion = 13.25 units; scaled to fill MBR_W - 0.6.
+  const colProportions = [0.85, 3.2, 0.8, 0.8, 1.05, 1.05, 1.05, 1.05, 1.05, 1.05];
+  const proportionTotal = colProportions.reduce((s, v) => s + v, 0);
+  slide.addTable(tableRows, {
+    x: 0.3, y: 0.95, w: MBR_W - 0.6,
+    colW: colProportions.map(v => v * (MBR_W - 0.6) / proportionTotal),
+    fontSize: 9, fontFace: GAINSHARE_FONT,
+    border: { type: "solid", color: MBR_COLORS.cardBorder, pt: 0.5 },
+  });
+
+  addGainshareSlideFooter(pres, slide, report);
+}
+
+async function generateGainshareDeck(report, filename) {
+  // Load GCS logo (mirrors Corp MBR loader). Attached to report so every slide
+  // builder can render it via addGainshareSlideFooter.
+  let gcsLogoDataUrl = "";
+  try {
+    const logoRes = await fetch("/gcs-logo.png");
+    if (logoRes.ok) {
+      const blob = await logoRes.blob();
+      gcsLogoDataUrl = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(String(reader.result || ""));
+        reader.readAsDataURL(blob);
+      });
+    }
+  } catch (e) { console.warn("GCS logo load failed:", e); }
+  report.gcsLogoDataUrl = gcsLogoDataUrl;
+
+  const pres = new pptxgen();
+  pres.layout = "LAYOUT_WIDE";
+  pres.title = "Gainshare Report";
+  pres.subject = `Gainshare ${report.fiscalStart} – ${report.fiscalEnd}`;
+
+  addGainshareCoverSlide(pres, report);
+  addGainshareSiteTableSlide(pres, report, "BZ");
+  addGainshareCampaignDetailsSlide(pres, report, "BZ");
+  addGainshareSiteTableSlide(pres, report, "DR");
+  addGainshareCampaignDetailsSlide(pres, report, "DR");
+
+  await pres.writeFile({ fileName: filename });
+}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // SECTION 11.5 — MBR PPTX EXPORT
@@ -9902,6 +10582,217 @@ Write bullet-point style insights focused on movement vs prior, gaps vs 75% goal
   );
 }
 
+function GainshareModalConfirm({
+  perf, dataSource, setDataSource,
+  goalsUrl, setGoalsUrl, agentUrl, setAgentUrl,
+  includeSPH, setIncludeSPH, includeHourGate, setIncludeHourGate,
+  filename, setFilename,
+  canGenerate, onCancel, onGenerate,
+}) {
+  const fiscalStart = perf?.fiscalInfo?.fiscalStart || "—";
+  const fiscalEnd   = perf?.fiscalInfo?.fiscalEnd   || "—";
+
+  return (
+    <>
+      <div style={{ fontSize: "1rem", fontWeight: 700, color: "var(--text-primary)", marginBottom: "0.4rem" }}>
+        Gainshare Export
+      </div>
+      <div style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginBottom: "1rem" }}>
+        Fiscal period: {fiscalStart} – {fiscalEnd}
+      </div>
+
+      {/* Data source */}
+      <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "0.4rem" }}>
+        Data Source
+      </div>
+      <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer", fontSize: "0.82rem", color: "var(--text-secondary)", marginBottom: "0.3rem" }}>
+        <input type="radio" name="ds" checked={dataSource === "loaded"} onChange={() => setDataSource("loaded")} />
+        Use loaded data
+      </label>
+      <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer", fontSize: "0.82rem", color: "var(--text-secondary)", marginBottom: "0.4rem" }}>
+        <input type="radio" name="ds" checked={dataSource === "url"} onChange={() => setDataSource("url")} />
+        Fetch from Google Sheet CSV
+      </label>
+      {dataSource === "url" && (
+        <div style={{ paddingLeft: "1.4rem", marginBottom: "0.6rem" }}>
+          <input value={goalsUrl} onChange={e => setGoalsUrl(e.target.value)} placeholder="Goals CSV URL" style={{
+            width: "100%", padding: "0.35rem 0.5rem", borderRadius: 6, border: "1px solid var(--border-muted)",
+            fontSize: "0.78rem", marginBottom: "0.3rem", fontFamily: "var(--font-data, monospace)",
+          }} />
+          <input value={agentUrl} onChange={e => setAgentUrl(e.target.value)} placeholder="Agent CSV URL" style={{
+            width: "100%", padding: "0.35rem 0.5rem", borderRadius: 6, border: "1px solid var(--border-muted)",
+            fontSize: "0.78rem", fontFamily: "var(--font-data, monospace)",
+          }} />
+        </div>
+      )}
+
+      {/* Metric toggles */}
+      <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.06em", marginTop: "0.6rem", marginBottom: "0.4rem" }}>
+        Metrics on Site Table
+      </div>
+      <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginBottom: "0.3rem" }}>
+        Mobile / HSD / Cost Per (always included)
+      </div>
+      <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer", fontSize: "0.82rem", color: "var(--text-secondary)", marginBottom: "0.2rem" }}>
+        <input type="checkbox" checked={includeSPH} onChange={e => setIncludeSPH(e.target.checked)} />
+        SPH Attainment
+      </label>
+      <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer", fontSize: "0.82rem", color: "var(--text-secondary)", marginBottom: "0.6rem" }}>
+        <input type="checkbox" checked={includeHourGate} onChange={e => setIncludeHourGate(e.target.checked)} />
+        Hour Attainment Gate
+      </label>
+
+      {/* Filename */}
+      <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "0.3rem" }}>
+        Output filename
+      </div>
+      <input value={filename} onChange={e => setFilename(e.target.value)} style={{
+        width: "100%", padding: "0.35rem 0.5rem", borderRadius: 6, border: "1px solid var(--border-muted)",
+        fontSize: "0.82rem", fontFamily: "var(--font-data, monospace)", marginBottom: "1rem",
+      }} />
+
+      <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
+        <button onClick={onCancel} style={{
+          padding: "0.4rem 1rem", borderRadius: "var(--radius-sm, 6px)",
+          border: "1px solid var(--border-muted)", background: "transparent",
+          color: "var(--text-muted)", fontSize: "0.82rem", cursor: "pointer",
+        }}>Cancel</button>
+        <button onClick={onGenerate} disabled={!canGenerate} style={{
+          padding: "0.4rem 1rem", borderRadius: "var(--radius-sm, 6px)",
+          border: "none", background: canGenerate ? "#6137F4" : "var(--border-muted)",
+          color: "#fff", fontSize: "0.82rem", cursor: canGenerate ? "pointer" : "not-allowed", fontWeight: 600,
+        }}>Generate</button>
+      </div>
+    </>
+  );
+}
+
+function GainshareExportModal({ perf, onClose }) {
+  const [state, setState] = useState("confirm");      // confirm | fetching | generating | error
+  const [error, setError] = useState(null);
+  const [dataSource, setDataSource] = useState("loaded"); // "loaded" | "url"
+  const [goalsUrl, setGoalsUrl] = useState("");
+  const [agentUrl, setAgentUrl] = useState("");
+  const [includeSPH, setIncludeSPH] = useState(true);
+  const [includeHourGate, setIncludeHourGate] = useState(true);
+
+  // Default filename derived from fiscal end (YYYY-MM)
+  const defaultFilename = (() => {
+    const fe = perf?.fiscalInfo?.fiscalEnd || "";
+    const m = fe.match(/^(\d{4})-(\d{2})/);
+    return m ? `GCS-Gainshare-${m[1]}-${m[2]}.pptx` : "GCS-Gainshare.pptx";
+  })();
+  const [filename, setFilename] = useState(defaultFilename);
+
+  const canGenerate = (() => {
+    if (dataSource === "loaded") return !!(perf?.allAgents?.length || perf?.agents?.length) && !!perf?.goalLookup;
+    return goalsUrl.trim() && agentUrl.trim();
+  })();
+
+  const handleGenerate = useCallback(async () => {
+    setError(null);
+    try {
+      let agents, goalLookup, fiscalInfo;
+      if (dataSource === "loaded") {
+        agents     = perf.allAgents || perf.agents;
+        goalLookup = perf.goalLookup;
+        fiscalInfo = perf.fiscalInfo;
+      } else {
+        setState("fetching");
+        // Use the same corsproxy-with-direct-fallback pattern used throughout
+        // the App component for prior-month / coaching CSV loads.
+        const fetchCsv = async (url) => {
+          // Try direct first (some sheets allow CORS)
+          try {
+            const r = await fetch(url);
+            if (r.ok) return await r.text();
+          } catch { /* fall through */ }
+          // Fall back to corsproxy.io
+          const r = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`);
+          if (!r.ok) throw new Error(`Fetch failed: ${url} (${r.status})`);
+          return await r.text();
+        };
+        const [goalsCsv, agentCsv] = await Promise.all([
+          fetchCsv(goalsUrl),
+          fetchCsv(agentUrl),
+        ]);
+        const goalsRows = parseCSV(goalsCsv);
+        const agentRows = parseCSV(agentCsv);
+        agents = normalizeAgents(agentRows);
+        goalLookup = buildGoalLookup(goalsRows);
+        const datestrs = agentRows.map(r => r.Date || r.date).filter(Boolean);
+        fiscalInfo = getFiscalMonthInfo(datestrs);
+      }
+      setState("generating");
+      const report = computeGainshareReport(agents, goalLookup, fiscalInfo, { includeSPH, includeHourGate });
+      await generateGainshareDeck(report, filename);
+      onClose();
+    } catch (e) {
+      console.error("Gainshare export failed:", e);
+      setState("error");
+      setError(String(e.message || e));
+    }
+  }, [dataSource, goalsUrl, agentUrl, includeSPH, includeHourGate, filename, perf, onClose]);
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}
+      onClick={state === "generating" || state === "fetching" ? undefined : onClose}>
+      <div onClick={e => e.stopPropagation()} style={{
+        background: "var(--card-bg, #fff)", borderRadius: "var(--radius-md, 10px)",
+        border: "1px solid var(--glass-border)", padding: "1.5rem", width: "30rem", maxWidth: "92vw",
+        fontFamily: "var(--font-ui, Inter, sans-serif)", boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+      }}>
+        {state === "confirm" && (
+          <GainshareModalConfirm
+            perf={perf}
+            dataSource={dataSource} setDataSource={setDataSource}
+            goalsUrl={goalsUrl} setGoalsUrl={setGoalsUrl}
+            agentUrl={agentUrl} setAgentUrl={setAgentUrl}
+            includeSPH={includeSPH} setIncludeSPH={setIncludeSPH}
+            includeHourGate={includeHourGate} setIncludeHourGate={setIncludeHourGate}
+            filename={filename} setFilename={setFilename}
+            canGenerate={canGenerate}
+            onCancel={onClose}
+            onGenerate={handleGenerate}
+          />
+        )}
+        {state === "fetching" && (
+          <div style={{ textAlign: "center", padding: "1rem 0" }}>
+            <div style={{ fontSize: "0.9rem", fontWeight: 600, color: "var(--text-primary)", marginBottom: "0.5rem" }}>
+              Fetching CSVs…
+            </div>
+          </div>
+        )}
+        {state === "generating" && (
+          <div style={{ textAlign: "center", padding: "1rem 0" }}>
+            <div style={{ fontSize: "0.9rem", fontWeight: 600, color: "var(--text-primary)", marginBottom: "0.5rem" }}>
+              Generating Gainshare Deck…
+            </div>
+          </div>
+        )}
+        {state === "error" && (
+          <>
+            <div style={{ fontSize: "0.9rem", fontWeight: 600, color: "#dc2626", marginBottom: "0.5rem" }}>Export Failed</div>
+            <div style={{ fontSize: "0.82rem", color: "var(--text-muted)", marginBottom: "1rem" }}>{error}</div>
+            <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
+              <button onClick={() => setState("confirm")} style={{
+                padding: "0.4rem 1rem", borderRadius: "var(--radius-sm, 6px)",
+                border: "1px solid var(--border-muted)", background: "transparent",
+                color: "var(--text-muted)", fontSize: "0.82rem", cursor: "pointer",
+              }}>Back</button>
+              <button onClick={onClose} style={{
+                padding: "0.4rem 1rem", borderRadius: "var(--radius-sm, 6px)",
+                border: "1px solid var(--border-muted)", background: "transparent",
+                color: "var(--text-muted)", fontSize: "0.82rem", cursor: "pointer",
+              }}>Close</button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function MbrExportModal({ perf, onClose }) {
   const [state, setState] = useState("confirm");
   const [progress, setProgress] = useState("");
@@ -11373,6 +12264,38 @@ function DailyTargetsCard({ programs, regions, goalLookup, fiscalInfo }) {
     return rows.filter(r => r.sitePlanHours || r.sitePlanGoals || r.sitePlanHsd || r.sitePlanXm);
   }, [programs, goalLookup, view, fundingFilter]);
 
+  // Funder-gate map: scaling kicks in only for funders whose total view-scoped
+  // actual hours exceed plan hours. Programs in non-triggered funders keep
+  // Jess plan (no daily-target shrinking from unused mid-month hours).
+  // Multi-funder programs are split by goalBreakout so hours attribute correctly.
+  const dtcFunderTriggered = useMemo(() => {
+    const totals = {};
+    dtPrograms.forEach(p => {
+      const breakouts = p.goalBreakout || [];
+      if (breakouts.length === 0) {
+        const f = p._fundingLabel || "Unknown";
+        if (!totals[f]) totals[f] = { actual: 0, plan: 0 };
+        totals[f].actual += p.totalHours || 0;
+        totals[f].plan += p.sitePlanHours || 0;
+      } else {
+        breakouts.forEach(fb => {
+          const f = fb.funding || "Unknown";
+          if (!totals[f]) totals[f] = { actual: 0, plan: 0 };
+          const rocAgents = fb.roc
+            ? (p.siteAgents || p.agents || []).filter(a => (a.rocCode || "").toUpperCase() === fb.roc.toUpperCase())
+            : [];
+          totals[f].actual += rocAgents.reduce((s, a) => s + (a.hours || 0), 0);
+          totals[f].plan += fb.hours || 0;
+        });
+      }
+    });
+    const map = new Map();
+    Object.entries(totals).forEach(([name, t]) => {
+      map.set(name, t.plan > 0 && t.actual > t.plan);
+    });
+    return map;
+  }, [dtPrograms]);
+
   // Canonical site-level totals (read directly from goalLookup so we don't double-count
   // when programs share overlapping TA goal entries)
   const canon = useMemo(() => {
@@ -11535,14 +12458,18 @@ function DailyTargetsCard({ programs, regions, goalLookup, fiscalInfo }) {
             ))}
           </div>
 
-          {/* Program rows */}
+          {/* Program rows. Funder-gate: scaling only kicks in for funders whose
+              actual hours exceed plan hours within the current view (Combined / BZ / DR). */}
           {dtPrograms.map((p, pi) => {
             const tierMult = dtcTierPct / 100;
+            const funderName = p._fundingLabel || p.goalBreakout?.[0]?.funding || "Unknown";
+            const triggered = dtcFunderTriggered.get(funderName) === true;
+            const programScale = (triggered && p.sitePlanHours && p.sitePlanHours > 0) ? (p.totalHours || 0) / p.sitePlanHours : 1;
             const metrics = [
               { plan: p.sitePlanHours, actual: p.totalHours, fmtFn: v => fmt(v, 0) },
-              { plan: p.sitePlanGoals ? Math.ceil(p.sitePlanGoals * tierMult) : p.sitePlanGoals, actual: p.totalGoals, fmtFn: v => v.toLocaleString() },
-              { plan: p.sitePlanHsd   ? Math.ceil(p.sitePlanHsd   * tierMult) : p.sitePlanHsd,   actual: p.hsdAct,     fmtFn: v => v.toLocaleString() },
-              { plan: p.sitePlanXm    ? Math.ceil(p.sitePlanXm    * tierMult) : p.sitePlanXm,    actual: p.xmAct,      fmtFn: v => v.toLocaleString() },
+              { plan: p.sitePlanGoals ? Math.ceil(p.sitePlanGoals * programScale * tierMult) : p.sitePlanGoals, actual: p.totalGoals, fmtFn: v => v.toLocaleString() },
+              { plan: p.sitePlanHsd   ? Math.ceil(p.sitePlanHsd   * programScale * tierMult) : p.sitePlanHsd,   actual: p.hsdAct,     fmtFn: v => v.toLocaleString() },
+              { plan: p.sitePlanXm    ? Math.ceil(p.sitePlanXm    * programScale * tierMult) : p.sitePlanXm,    actual: p.xmAct,      fmtFn: v => v.toLocaleString() },
             ];
             const rocLabel = p._fundingRoc
               ? `${p._fundingRoc}${p._fundingLabel ? ` · ${p._fundingLabel}` : ""}`
@@ -11566,14 +12493,23 @@ function DailyTargetsCard({ programs, regions, goalLookup, fiscalInfo }) {
           {(() => {
             const tierMult = dtcTierPct / 100;
             const totHoursPlan = fundingFilter ? dtPrograms.reduce((s, p) => s + (p.sitePlanHours || 0), 0) : canon.hours;
-            const totGoalsPlan = fundingFilter ? dtPrograms.reduce((s, p) => s + (p.sitePlanGoals || 0), 0) : canon.goals;
-            const totHsdPlan   = fundingFilter ? dtPrograms.reduce((s, p) => s + (p.sitePlanHsd   || 0), 0) : canon.hsd;
-            const totXmPlan    = fundingFilter ? dtPrograms.reduce((s, p) => s + (p.sitePlanXm    || 0), 0) : canon.xm;
+            // Scaled program plans are summed BEFORE the tier multiplier so each program's
+            // own scale factor is preserved. Funder-gate applies: programs whose
+            // funder hasn't exceeded plan hours stay at Jess plan.
+            const programScaleFor = (p) => {
+              const funderName = p._fundingLabel || p.goalBreakout?.[0]?.funding || "Unknown";
+              const triggered = dtcFunderTriggered.get(funderName) === true;
+              if (!triggered) return 1;
+              return (p.sitePlanHours && p.sitePlanHours > 0) ? (p.totalHours || 0) / p.sitePlanHours : 1;
+            };
+            const totGoalsScaled = dtPrograms.reduce((s, p) => s + (p.sitePlanGoals || 0) * programScaleFor(p), 0);
+            const totHsdScaled   = dtPrograms.reduce((s, p) => s + (p.sitePlanHsd   || 0) * programScaleFor(p), 0);
+            const totXmScaled    = dtPrograms.reduce((s, p) => s + (p.sitePlanXm    || 0) * programScaleFor(p), 0);
             const tots = [
               { plan: totHoursPlan, actual: dtPrograms.reduce((s, p) => s + (p.totalHours || 0), 0), fmtFn: v => fmt(v, 0) },
-              { plan: totGoalsPlan ? Math.ceil(totGoalsPlan * tierMult) : totGoalsPlan, actual: dtPrograms.reduce((s, p) => s + (p.totalGoals || 0), 0), fmtFn: v => v.toLocaleString() },
-              { plan: totHsdPlan   ? Math.ceil(totHsdPlan   * tierMult) : totHsdPlan,   actual: dtPrograms.reduce((s, p) => s + (p.hsdAct     || 0), 0), fmtFn: v => v.toLocaleString() },
-              { plan: totXmPlan    ? Math.ceil(totXmPlan    * tierMult) : totXmPlan,    actual: dtPrograms.reduce((s, p) => s + (p.xmAct      || 0), 0), fmtFn: v => v.toLocaleString() },
+              { plan: totGoalsScaled > 0 ? Math.ceil(totGoalsScaled * tierMult) : 0, actual: dtPrograms.reduce((s, p) => s + (p.totalGoals || 0), 0), fmtFn: v => v.toLocaleString() },
+              { plan: totHsdScaled   > 0 ? Math.ceil(totHsdScaled   * tierMult) : 0, actual: dtPrograms.reduce((s, p) => s + (p.hsdAct     || 0), 0), fmtFn: v => v.toLocaleString() },
+              { plan: totXmScaled    > 0 ? Math.ceil(totXmScaled    * tierMult) : 0, actual: dtPrograms.reduce((s, p) => s + (p.xmAct      || 0), 0), fmtFn: v => v.toLocaleString() },
             ];
             const totHrsRemain = Math.max((tots[0].plan || 0) - (tots[0].actual || 0), 0);
             const totHomesRemain = Math.max((tots[1].plan || 0) - (tots[1].actual || 0), 0);
@@ -11628,68 +12564,79 @@ function BusinessOverview({ perf, onNav, goToSlide, tnpsSlideIdx, localAI, prior
   const atGoalRate = uniqueAgentCount > 0
     ? ((distUnique.Q1 + distUnique.Q2) / uniqueAgentCount) * 100 : 0;
 
-  const goalsAttain = planTotal ? (globalGoals / planTotal) * 100 : null;
-
-  // Holistic gainshare attainments (overall table)
-  const globalHsdAttain    = globalPlanNewXI  ? (globalNewXI  / globalPlanNewXI)  * 100 : null;
-  const globalCostPerAttain = globalPlanRgu ? (globalRgu / globalPlanRgu) * 100 : null;
-
-  // Per-funding-source capped projections (global / all sites)
-  const globalCapped = useMemo(() => {
-    if (!goalLookup || !planTotal) return null;
-    const fg = {};
-    Object.values(goalLookup.byTA || {}).forEach(siteMap => {
-      Object.values(siteMap).flat().forEach(r => {
-        const f = r._funding || "Unknown";
-        const roc = (r._roc || "").toUpperCase();
-        if (!fg[f]) fg[f] = { homes: 0, hsd: 0, xm: 0, rgu: 0, hours: 0, rocs: new Set() };
-        const p = computePlanRow(r);
-        fg[f].homes += p.homesGoal; fg[f].hsd += p.hsdGoal;
-        fg[f].xm += p.xmGoal; fg[f].rgu += p.rguGoal;
-        fg[f].hours += p.hoursGoal;
-        if (roc) fg[f].rocs.add(roc);
+  // Global SPH-scaled rollup. Calls computeFunderScaling once per site, then
+  // aggregates per-funder (BZ+DR) for a combined trigger evaluation. Combined
+  // funder trigger overrides per-site triggers — under combined view, what
+  // matters is whether the funder as a whole exceeded plan hours across sites.
+  const globalScaled = useMemo(() => {
+    if (!goalLookup) return null;
+    const SITE_KEYS = { BZ: "BZ", DR: "DR" };
+    const SITE_LOC_FILTER = {
+      BZ: (a) => (a.Location || a.location || "").trim().toUpperCase() === "BZ",
+      DR: (a) => {
+        const loc = (a.Location || a.location || "").trim().toUpperCase();
+        return loc === "SD" || loc === "PU";
+      },
+    };
+    // Per-funder raw + plan totals across sites (for combined trigger calc)
+    const perFunder = {}; // { [funderName]: { rawHours, planHours, scaled: {h,d,x,r}, jessPlan: {h,d,x,r} } }
+    let scaled = { homes: 0, hsd: 0, xm: 0, rgu: 0 };
+    for (const [siteKey, planKey] of Object.entries(SITE_KEYS)) {
+      const siteAgents = (agents || []).filter(SITE_LOC_FILTER[siteKey]);
+      const siteRows = Object.values(goalLookup.byTA || {}).flatMap(m => m[planKey] || []);
+      const cap = computeFunderScaling(siteAgents, siteRows);
+      cap.funders.forEach(f => {
+        if (!perFunder[f.funder]) {
+          perFunder[f.funder] = { rawHours: 0, planHours: 0,
+            jessPlan: { homes: 0, hsd: 0, xm: 0, rgu: 0 },
+            triggered: false };
+        }
+        perFunder[f.funder].rawHours += f.raw.hours;
+        perFunder[f.funder].planHours += f.plan.hours;
+        perFunder[f.funder].jessPlan.homes += f.plan.homes;
+        perFunder[f.funder].jessPlan.hsd   += f.plan.hsd;
+        perFunder[f.funder].jessPlan.xm    += f.plan.xm;
+        perFunder[f.funder].jessPlan.rgu   += f.plan.rgu;
       });
-    });
-    const matched = new Set();
-    const proj = { homes: [], hsd: [], xm: [], rgu: [], hours: [] };
-    Object.values(fg).forEach(g => {
-      g.rocs.forEach(r => matched.add(r));
-      const fa = agents.filter(a => g.rocs.has((a.rocCode || "").toUpperCase()));
-      const aH = fa.reduce((s, a) => s + a.goals, 0);
-      const aD = fa.reduce((s, a) => s + a.newXI, 0);
-      const aX = fa.reduce((s, a) => s + a.xmLines, 0);
-      const aR = fa.reduce((s, a) => s + a.rgu, 0);
-      const aHrs = fa.reduce((s, a) => s + a.hours, 0);
-      proj.homes.push({ actual: aH, plan: g.homes });
-      proj.hsd.push({ actual: aD, plan: g.hsd });
-      proj.xm.push({ actual: aX, plan: g.xm });
-      proj.rgu.push({ actual: aR, plan: g.rgu });
-      proj.hours.push({ actual: aHrs, plan: g.hours });
-    });
-    const um = agents.filter(a => !matched.has((a.rocCode || "").toUpperCase()));
-    if (um.length) {
-      proj.homes.push({ actual: um.reduce((s, a) => s + a.goals, 0), plan: 0 });
-      proj.hsd.push({ actual: um.reduce((s, a) => s + a.newXI, 0), plan: 0 });
-      proj.xm.push({ actual: um.reduce((s, a) => s + a.xmLines, 0), plan: 0 });
-      proj.rgu.push({ actual: um.reduce((s, a) => s + a.rgu, 0), plan: 0 });
-      proj.hours.push({ actual: um.reduce((s, a) => s + a.hours, 0), plan: 0 });
     }
-    return proj;
-  }, [goalLookup, planTotal, agents]);
-
-  const cappedProjGlobal = (groups, totalPlan) => {
-    if (!fiscalInfo?.elapsedBDays || !fiscalInfo?.totalBDays || !totalPlan) return null;
-    let cp = 0;
-    groups.forEach(g => {
-      const projected = (g.actual / fiscalInfo.elapsedBDays) * fiscalInfo.totalBDays;
-      cp += g.plan > 0 ? Math.min(projected, g.plan) : projected;
+    // Combined trigger per funder
+    Object.values(perFunder).forEach(pf => {
+      pf.triggered = pf.planHours > 0 && pf.rawHours > pf.planHours;
     });
-    return (cp / totalPlan) * 100;
-  };
-  const globalProjMobileCapped  = globalCapped ? cappedProjGlobal(globalCapped.homes, planTotal) : null;
-  const globalProjHsdCapped     = globalCapped ? cappedProjGlobal(globalCapped.hsd, globalPlanNewXI) : null;
-  const globalProjCostPerCapped = globalCapped ? cappedProjGlobal(globalCapped.rgu, globalPlanRgu) : null;
-  const globalProjHourCapped    = globalCapped ? cappedProjGlobal(globalCapped.hours, globalPlanHours) : null;
+    // Build funderTriggered map keyed by name (for downstream consumers)
+    const funderTriggered = new Map();
+    Object.entries(perFunder).forEach(([name, pf]) => funderTriggered.set(name, pf.triggered));
+
+    // Recompute scaled rollup using COMBINED triggers (re-run per site with the
+    // already-computed combined trigger applied uniformly, or scale-from-Jess
+    // per-funder via the combined raw vs plan ratio). We use the combined
+    // ratio per funder for global scaling consistency.
+    scaled = { homes: 0, hsd: 0, xm: 0, rgu: 0 };
+    Object.values(perFunder).forEach(pf => {
+      const factor = pf.triggered && pf.planHours > 0 ? (pf.rawHours / pf.planHours) : 1;
+      scaled.homes += pf.jessPlan.homes * factor;
+      scaled.hsd   += pf.jessPlan.hsd   * factor;
+      scaled.xm    += pf.jessPlan.xm    * factor;
+      scaled.rgu   += pf.jessPlan.rgu   * factor;
+    });
+    return { ...scaled, funderTriggered };
+  }, [goalLookup, agents]);
+
+  // SPH-scaled global attainments — denominators are the per-site scaled rollups summed.
+  // Falls back to Jess plan when scaled isn't available (e.g. before goalLookup loads).
+  const globalScaledHomes = globalScaled?.homes ?? 0;
+  const globalScaledHsd   = globalScaled?.hsd   ?? 0;
+  const globalScaledRgu   = globalScaled?.rgu   ?? 0;
+  const goalsAttain         = globalScaledHomes > 0 ? (globalGoals / globalScaledHomes) * 100 : (planTotal ? (globalGoals / planTotal) * 100 : null);
+  const globalHsdAttain     = globalScaledHsd   > 0 ? (globalNewXI / globalScaledHsd)   * 100 : (globalPlanNewXI ? (globalNewXI / globalPlanNewXI) * 100 : null);
+  const globalCostPerAttain = globalScaledRgu   > 0 ? (globalRgu   / globalScaledRgu)   * 100 : (globalPlanRgu ? (globalRgu / globalPlanRgu) * 100 : null);
+
+  // Projection is mathematically a no-op under the SPH-scaled rule (T/E factor
+  // cancels). Pass current attainments as projection so GainsharePanel hides
+  // the projection display (projTier === currentTier).
+  const globalProjMobileCapped  = goalsAttain;
+  const globalProjHsdCapped     = globalHsdAttain;
+  const globalProjCostPerCapped = globalCostPerAttain;
 
   // SPH Attainment: (actual SPH / plan SPH) * 100
   const actualGlobalSph = totalHours > 0 ? globalGoals / totalHours : 0;
@@ -11782,16 +12729,16 @@ function BusinessOverview({ perf, onNav, goToSlide, tnpsSlideIdx, localAI, prior
             sphAttain={globalSphAttain}
             hourAttain={globalHourAttain}
             fiscalInfo={fiscalInfo}
-            mobileActual={globalGoals}   mobilePlan={planTotal}
-            hsdActual={globalNewXI}      hsdPlan={globalPlanNewXI}
-            costPerActual={globalRgu}    costPerPlan={globalPlanRgu}
+            mobileActual={globalGoals}   mobilePlan={globalScaledHomes}
+            hsdActual={globalNewXI}      hsdPlan={globalScaledHsd}
+            costPerActual={globalRgu}    costPerPlan={globalScaledRgu}
             sphActual={actualGlobalSph}  sphPlan={planGlobalSph}
             hourActual={totalHours}      hourPlan={globalPlanHours}
-            homesActual={globalGoals}    homesPlan={planTotal}
+            homesActual={globalGoals}    homesPlan={globalScaledHomes}
             projMobileCapped={globalProjMobileCapped}
             projHsdCapped={globalProjHsdCapped}
             projCostPerCapped={globalProjCostPerCapped}
-            projHourCapped={globalProjHourCapped}
+            projHourCapped={null}
           />
         )}
 
@@ -18312,6 +19259,7 @@ export default function App() {
   const [showToday,  setShowToday]  = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showMbrModal, setShowMbrModal] = useState(false);
+  const [showGainshareModal, setShowGainshareModal] = useState(false);
 
   const [showVirgilMbrModal, setShowVirgilMbrModal] = useState(false);
   const [corpInsights, _setCorpInsights] = useState(() => {
@@ -19180,6 +20128,7 @@ export default function App() {
     <div style={wrapStyle}>
       {!splashDone && <LoadingSplash onEnded={() => setSplashDone(true)} />}
       {showMbrModal && rawData && <MbrExportModal perf={perf} onClose={() => setShowMbrModal(false)} />}
+      {showGainshareModal && rawData && <GainshareExportModal perf={perf} onClose={() => setShowGainshareModal(false)} />}
       {showVirgilMbrModal && (
         <VirgilMbrExportModal
           perf={perf}
@@ -19312,6 +20261,7 @@ export default function App() {
         setLocalAI={setLocalAI}
         onExportMbr={() => setShowMbrModal(true)}
         onExportVirgilMbr={() => setShowVirgilMbrModal(true)}
+        onExportGainshare={() => setShowGainshareModal(true)}
         onOpenCorpDataSources={() => setShowCorpDataSourcesModal(true)}
         onRefresh={handleRefresh}
         onUploadGoals={() => goalsInputRef.current.click()}
