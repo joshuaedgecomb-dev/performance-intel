@@ -7827,8 +7827,15 @@ function buildCoachingPageData(coachingWeekly, coachingDetails, bpLookup, monthF
   });
 
   const isMultiMonth = activeMonths.size > 1;
-  const currentMonthShort = currentMonth.replace(/\s*'?\d{2,4}$/, "").trim() || "FW";
-  const currentAbbrev = (currentMonth || "").slice(0, 3);
+  // Display month for week-bucket labels: the latest month *within the active selection*
+  // (not the latest month overall). Otherwise selecting "Apr '26" while the data extends
+  // through May '26 would label Apr's weeks as "May W1...W5".
+  const sortedActiveForLabel = [...activeMonths].sort((a, b) => monthOrder(a) - monthOrder(b));
+  const labelMonth = sortedActiveForLabel.length
+    ? sortedActiveForLabel[sortedActiveForLabel.length - 1]
+    : currentMonth;
+  const currentMonthShort = labelMonth.replace(/\s*'?\d{2,4}$/, "").trim() || "FW";
+  const currentAbbrev = (labelMonth || "").slice(0, 3);
   const monNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
   // Build hybrid buckets.
@@ -7991,24 +7998,28 @@ function buildCoachingPageData(coachingWeekly, coachingDetails, bpLookup, monthF
   const bzRollup = bySite.filter(s => s.site === "BZ")
     .reduce((acc, s) => ({ x: acc.x + s.x, y: acc.y + s.y }), { x: 0, y: 0 });
 
-  // Org-level KPIs from coachingDetails (Comcast authoritative). Sum across active months.
-  let orgCoachingX = 0, orgCoachingY = 0, orgTotalSessions = 0;
-  let ackPctSum = 0, ackPctCount = 0;
-  for (const month of activeMonths) {
-    const bucket = safeDetails[month] || {};
-    orgCoachingX += Number(bucket["Coaching Sessions"]) || 0;
-    orgCoachingY += Number(bucket["Coachings Due"]) || 0;
-    orgTotalSessions += Number(bucket["Total Sessions"]) || 0;
-    const ackRaw = bucket["Acknowledged %"] || bucket["Acknowledged % "];
-    if (ackRaw !== undefined && ackRaw !== "") {
-      ackPctSum += coachingNormalizedPct(ackRaw);
-      ackPctCount += 1;
-    }
+  // Org Coaching KPI is derived from the per-week CSV using the Color WB rule:
+  // count agent-weeks where Color WB is "Yes" or "No" (NCR rows excluded);
+  // sum column D ("Coaching Sessions  (copy)") across those rows for the numerator.
+  // No bpLookup filter — every Yes/No agent-week counts toward the org total.
+  let orgCoachingX = 0, orgCoachingY = 0;
+  for (const row of activeRows) {
+    if (row.colorWb !== "Yes" && row.colorWb !== "No") continue;
+    orgCoachingY += 1;
+    orgCoachingX += row.sessions || 0;
   }
   const orgCoachingPct = orgCoachingY ? orgCoachingX / orgCoachingY : null;
-  const ackPct = ackPctCount ? ackPctSum / ackPctCount : null;
-  const ackY = orgTotalSessions;
-  const ackX = ackPct != null && ackY ? Math.round(ackPct * ackY) : 0;
+
+  // Acknowledgement comes from coachingDetails. Match Tableau's formula:
+  //   Acknowledged % = Coaching Acknowledged / Coaching Sessions  (not / Total Sessions).
+  let ackX = 0, ackY = 0, orgTotalSessions = 0;
+  for (const month of activeMonths) {
+    const bucket = safeDetails[month] || {};
+    ackX += Number(bucket["Coaching Acknowledged"] || bucket["Coaching Acknowledged "]) || 0;
+    ackY += Number(bucket["Coaching Sessions"]) || 0;
+    orgTotalSessions += Number(bucket["Total Sessions"]) || 0;
+  }
+  const ackPct = ackY ? ackX / ackY : null;
 
   // Per-bucket org trend (hybrid in multi-month mode: prior months collapsed, current month per-week).
   const byWeek = rawBuckets.map((bucket, i) => {
