@@ -5932,8 +5932,24 @@ const GAINSHARE_FONT = "Aptos";
 // goalLookup: output of buildGoalLookup
 // fiscalInfo: { fiscalStart, fiscalEnd, ... }
 // opts: { includeSPH: bool, includeHourGate: bool }
+// When neither SPH nor Hour Gate is included in the deck, the Cost Per attainment
+// tier doubles (e.g. +1% becomes +2%) per Comcast's compensating-bonus rule —
+// SPH/HG and Cost Per share a max-bonus envelope, and turning the paired metrics
+// off means Cost Per absorbs their share. Mobile and HSD bonuses are unchanged.
 function computeGainshareReport(agents, goalLookup, fiscalInfo, opts = {}) {
   const { includeSPH = true, includeHourGate = true } = opts;
+  const noSphHg = !includeSPH && !includeHourGate;
+  const overallTiers = noSphHg
+    ? GAINSHARE_TIERS.map(t => ({ ...t, costPer: t.costPer * 2 }))
+    : GAINSHARE_TIERS;
+  const siteTiers = noSphHg
+    ? GAINSHARE_SITE_TIERS.map(t => ({ ...t, costPer: t.costPer * 2 }))
+    : GAINSHARE_SITE_TIERS;
+  const costPerTier = (pct, isSite) => {
+    if (pct === null || pct === undefined) return null;
+    const table = isSite ? siteTiers : overallTiers;
+    return table.find(t => pct >= t.min && pct <= t.max) || table[table.length - 1];
+  };
   const SITE_KEYS = { BZ: "BZ", DR: "DR" };
   const sites = {};
 
@@ -5986,7 +6002,7 @@ function computeGainshareReport(agents, goalLookup, fiscalInfo, opts = {}) {
     const tiers = {
       mobile:  mobileAttain  !== null ? getGainshareTier(mobileAttain,  true) : null,
       hsd:     hsdAttain     !== null ? getGainshareTier(hsdAttain,     true) : null,
-      costPer: costPerAttain !== null ? getGainshareTier(costPerAttain, true) : null,
+      costPer: costPerTier(costPerAttain, true),
       sph:     sphAttain     !== null ? getGainshareTier(sphAttain,     true) : null,
       hour:    hourAttain    !== null ? getHourGateTier(hourAttain)            : null,
     };
@@ -6011,7 +6027,7 @@ function computeGainshareReport(agents, goalLookup, fiscalInfo, opts = {}) {
       netBonus,
       totals: { plan: planTot, raw: rawTot, scaled: scaledTot },
       funders,
-      tiersTable: GAINSHARE_SITE_TIERS,
+      tiersTable: siteTiers,
       isOverall: false,
     };
   }
@@ -6109,7 +6125,7 @@ function computeGainshareReport(agents, goalLookup, fiscalInfo, opts = {}) {
   const cTiers = {
     mobile:  cMobileAttain  !== null ? getGainshareTier(cMobileAttain,  false) : null,
     hsd:     cHsdAttain     !== null ? getGainshareTier(cHsdAttain,     false) : null,
-    costPer: cCostPerAttain !== null ? getGainshareTier(cCostPerAttain, false) : null,
+    costPer: costPerTier(cCostPerAttain, false),
     sph:     cSphAttain     !== null ? getGainshareTier(cSphAttain,     false) : null,
     // Hour gate under overall mode: flat -2% if <100%. Looked up against
     // HOUR_GATE_OVERALL_TIERS so slide ladder display + Net Bonus stay in sync.
@@ -6136,7 +6152,7 @@ function computeGainshareReport(agents, goalLookup, fiscalInfo, opts = {}) {
     netBonus: cNetBonus,
     totals: cTotals,
     funders: combinedFunders,
-    tiersTable: GAINSHARE_TIERS,
+    tiersTable: overallTiers,
     isOverall: true,
   };
 
@@ -11155,7 +11171,8 @@ Write bullet-point style insights focused on movement vs prior, gaps vs 75% goal
 }
 
 function GainshareModalConfirm({
-  perf, dataSource, setDataSource,
+  perf, historicalMonths = [],
+  dataSource, setDataSource,
   goalsUrl, setGoalsUrl, agentUrl, setAgentUrl,
   includeSPH, setIncludeSPH, includeHourGate, setIncludeHourGate,
   filename, setFilename,
@@ -11177,23 +11194,37 @@ function GainshareModalConfirm({
       <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "0.4rem" }}>
         Data Source
       </div>
-      <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer", fontSize: "0.82rem", color: "var(--text-secondary)", marginBottom: "0.3rem" }}>
-        <input type="radio" name="ds" checked={dataSource === "loaded"} onChange={() => setDataSource("loaded")} />
-        Use loaded data
-      </label>
-      <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer", fontSize: "0.82rem", color: "var(--text-secondary)", marginBottom: "0.4rem" }}>
-        <input type="radio" name="ds" checked={dataSource === "url"} onChange={() => setDataSource("url")} />
-        Fetch from Google Sheet CSV
-      </label>
-      {dataSource === "url" && (
-        <div style={{ paddingLeft: "1.4rem", marginBottom: "0.6rem" }}>
+      <select
+        value={dataSource}
+        onChange={e => setDataSource(e.target.value)}
+        style={{
+          width: "100%", padding: "0.4rem 0.5rem", borderRadius: 6,
+          border: "1px solid var(--border-muted)", background: "var(--card-bg, #fff)",
+          color: "var(--text-secondary)", fontSize: "0.82rem",
+          fontFamily: "var(--font-ui, Inter, sans-serif)", marginBottom: "0.6rem",
+        }}
+      >
+        <option value="loaded">Loaded data (current dashboard)</option>
+        {historicalMonths.length > 0 && (
+          <optgroup label="Saved historical months">
+            {[...historicalMonths].sort((a, b) => b.id.localeCompare(a.id)).map(m => (
+              <option key={m.id} value={m.id}>{m.label}</option>
+            ))}
+          </optgroup>
+        )}
+        <option value="custom">Custom Google Sheet URLs…</option>
+      </select>
+      {dataSource === "custom" && (
+        <div style={{ marginBottom: "0.6rem" }}>
           <input value={goalsUrl} onChange={e => setGoalsUrl(e.target.value)} placeholder="Goals CSV URL" style={{
             width: "100%", padding: "0.35rem 0.5rem", borderRadius: 6, border: "1px solid var(--border-muted)",
             fontSize: "0.78rem", marginBottom: "0.3rem", fontFamily: "var(--font-data, monospace)",
+            boxSizing: "border-box",
           }} />
           <input value={agentUrl} onChange={e => setAgentUrl(e.target.value)} placeholder="Agent CSV URL" style={{
             width: "100%", padding: "0.35rem 0.5rem", borderRadius: 6, border: "1px solid var(--border-muted)",
             fontSize: "0.78rem", fontFamily: "var(--font-data, monospace)",
+            boxSizing: "border-box",
           }} />
         </div>
       )}
@@ -11239,10 +11270,11 @@ function GainshareModalConfirm({
   );
 }
 
-function GainshareExportModal({ perf, onClose }) {
+function GainshareExportModal({ perf, historicalMonths = [], onClose }) {
   const [state, setState] = useState("confirm");      // confirm | fetching | generating | error
   const [error, setError] = useState(null);
-  const [dataSource, setDataSource] = useState("loaded"); // "loaded" | "url"
+  // dataSource: "loaded" (current dashboard data), "custom" (typed URLs), or a historical month id
+  const [dataSource, setDataSource] = useState("loaded");
   const [goalsUrl, setGoalsUrl] = useState("");
   const [agentUrl, setAgentUrl] = useState("");
   const [includeSPH, setIncludeSPH] = useState(true);
@@ -11256,9 +11288,25 @@ function GainshareExportModal({ perf, onClose }) {
   })();
   const [filename, setFilename] = useState(defaultFilename);
 
+  // When the user picks a historical month, retitle the file to that month so they
+  // don't accidentally overwrite the current-month deck.
+  useEffect(() => {
+    const month = historicalMonths.find(m => m.id === dataSource);
+    if (!month) return;
+    setFilename(`GCS-Gainshare-${month.id}.pptx`);
+  }, [dataSource, historicalMonths]);
+
+  // Resolve which URLs to fetch based on dataSource
+  const resolvedUrls = (() => {
+    if (dataSource === "loaded" || dataSource === "custom") return { goalsUrl, agentUrl };
+    const month = historicalMonths.find(m => m.id === dataSource);
+    if (!month) return { goalsUrl: "", agentUrl: "" };
+    return { goalsUrl: month.goalsUrl, agentUrl: month.agentUrl };
+  })();
+
   const canGenerate = (() => {
     if (dataSource === "loaded") return !!(perf?.allAgents?.length || perf?.agents?.length) && !!perf?.goalLookup;
-    return goalsUrl.trim() && agentUrl.trim();
+    return resolvedUrls.goalsUrl.trim() && resolvedUrls.agentUrl.trim();
   })();
 
   const handleGenerate = useCallback(async () => {
@@ -11285,8 +11333,8 @@ function GainshareExportModal({ perf, onClose }) {
           return await r.text();
         };
         const [goalsCsv, agentCsv] = await Promise.all([
-          fetchCsv(goalsUrl),
-          fetchCsv(agentUrl),
+          fetchCsv(resolvedUrls.goalsUrl),
+          fetchCsv(resolvedUrls.agentUrl),
         ]);
         const goalsRows = parseCSV(goalsCsv);
         const agentRows = parseCSV(agentCsv);
@@ -11304,7 +11352,7 @@ function GainshareExportModal({ perf, onClose }) {
       setState("error");
       setError(String(e.message || e));
     }
-  }, [dataSource, goalsUrl, agentUrl, includeSPH, includeHourGate, filename, perf, onClose]);
+  }, [dataSource, resolvedUrls.goalsUrl, resolvedUrls.agentUrl, includeSPH, includeHourGate, filename, perf, onClose]);
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }}
@@ -11317,6 +11365,7 @@ function GainshareExportModal({ perf, onClose }) {
         {state === "confirm" && (
           <GainshareModalConfirm
             perf={perf}
+            historicalMonths={historicalMonths}
             dataSource={dataSource} setDataSource={setDataSource}
             goalsUrl={goalsUrl} setGoalsUrl={setGoalsUrl}
             agentUrl={agentUrl} setAgentUrl={setAgentUrl}
@@ -17929,7 +17978,16 @@ const deriveHsdXm = (products) => ({
 // Full-screen auto-rotating view using current theme, site filter, campaign comparison.
 function TVMode({ d, codes, doFetch, lastRefresh, onExit, activeOnly, setActiveOnly, prevAgentHours }) {
   const [slideIdx, setSlideIdx] = useState(0);
-  const [tvSite, setTvSite] = useState("ALL");
+  // Persist tvSite so a paste-mode flip, auto-refresh remount, or any other
+  // transient unmount of TVMode doesn't snap the site filter back to "ALL".
+  const [tvSite, _setTvSite] = useState(() => {
+    try { return localStorage.getItem("today_tv_site") || "ALL"; }
+    catch(e) { return "ALL"; }
+  });
+  const setTvSite = useCallback(v => {
+    _setTvSite(v);
+    try { localStorage.setItem("today_tv_site", v); } catch(e) {}
+  }, []);
   const autoScrollRef = useRef(null);
   const agentScrollRef = useRef(null);
 
@@ -18530,6 +18588,7 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
   }, []);
   const [activeOnly, setActiveOnly] = useState(false);
   const [screensaverMode, setScreensaverMode] = useState(false);
+  const [attendanceCollapsed, setAttendanceCollapsed] = useState(true);
 
   // Persist code selection to localStorage whenever it changes
   useEffect(() => {
@@ -19303,139 +19362,6 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
         </div>
       )}
 
-      {/* ── Attendance + By Region side by side ── */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.25rem", marginBottom: "1.25rem", alignItems: "stretch" }}>
-
-        {/* ── Attendance panel ── */}
-        <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem" }}>
-          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "1rem" }}>
-            Attendance vs Last 7 Days
-          </div>
-          <div style={{ display: "flex", gap: "0.75rem", marginBottom: "1rem" }}>
-            {[
-              { label: "Present", count: d.presentCount,   color: "#16a34a" },
-              { label: "Absent",  count: d.absent.length,  color: "#dc2626" },
-              { label: "New",     count: d.newFaces.length, color: "#d97706" },
-            ].map(({ label, count, color }) => (
-              <div key={label} style={{ flex: 1, padding: "0.6rem", background: color+"12", border: `1px solid ${color}30`, borderRadius: "var(--radius-md, 10px)", textAlign: "center" }}>
-                <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.75rem", color, fontWeight: 700, lineHeight: 1 }}>{count}</div>
-                <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color, marginTop: "0.15rem" }}>{label}</div>
-              </div>
-            ))}
-          </div>
-          {d.absent.length > 0 && (
-            <div>
-              <button onClick={() => setShowAbsent(v => !v)}
-                style={{ background: "transparent", border: "none", cursor: "pointer", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "#dc2626", padding: 0, display: "flex", alignItems: "center", gap: "0.3rem", marginBottom: "0.4rem" }}>
-                <span>{showAbsent?"▾":"▸"}</span>
-                {d.absent.length} absent today — worked in last 7 days
-              </button>
-              {showAbsent && (
-                <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
-                  {Object.entries(d.absentByRegion).sort().map(([reg, agents]) => (
-                    <div key={reg}>
-                      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: getRegColor(reg), textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.25rem" }}>
-                        {reg} <span style={{ color: `var(--text-faint)` }}>({agents.length})</span>
-                      </div>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem" }}>
-                        {agents.sort((a,b)=>a.name.localeCompare(b.name)).map(({ name, quartile }) => (
-                          <div key={name} style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", padding: "0.15rem 0.5rem", borderRadius: "3px",
-                            background: "#dc262612", border: "1px solid #dc262630", color: "#dc2626",
-                            display: "flex", alignItems: "center", gap: "0.3rem" }}>
-                            {name.split(" ")[0]}
-                            {quartile && <span style={{ opacity: 0.6, fontSize: "0.81rem", color: Q[quartile]?.color || `var(--text-muted)` }}>{quartile}</span>}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-          {d.newFaces.length > 0 && (
-            <div style={{ marginTop: "0.75rem" }}>
-              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "#d97706", marginBottom: "0.4rem" }}>
-                ▸ {d.newFaces.length} agents working today not in recent history
-              </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem" }}>
-                {d.newFaces.sort().map(name => (
-                  <div key={name} style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", padding: "0.15rem 0.5rem", borderRadius: "3px",
-                    background: "#d9770612", border: "1px solid #d9770630", color: "#d97706" }}>
-                    {name.split(" ")[0]}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* ── By Region ── */}
-        <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem", display: "flex", flexDirection: "column" }}>
-          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "1rem" }}>
-            By Region — Live
-          </div>
-          {Object.entries(d.byReg).sort().map(([reg, s]) => {
-            const gph = s.hrs > 0 ? s.goals / s.hrs : 0;
-            const avgPct = s.pctCount > 0 ? s.pctSum / s.pctCount : null;
-            const isBZ = reg.toUpperCase().includes("XOTM");
-            const regColor = getRegColor(reg);
-            const pctColor = avgPct !== null ? attainColor(avgPct) : `var(--text-dim)`;
-            const hasProd = Object.keys(s.products).length > 0;
-            return (
-              <div key={reg} style={{ padding: "0.85rem 1rem", background: `var(--bg-primary)`, borderRadius: "var(--radius-md, 10px)", border: `1px solid ${regColor}22`, marginBottom: "0.6rem" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
-                  <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "1.32rem", color: regColor, fontWeight: 600 }}>{reg}</span>
-                  <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)` }}>{s.count} agents</span>
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr", gap: "0.5rem" }}>
-                  {[
-                    { l: "Hours",     v: fmt(s.hrs, 1),                                      c: "#6366f1" },
-                    { l: "Sales",     v: s.goals || "—",                                      c: "#d97706" },
-                    { l: "GPH",       v: s.goals > 0 ? gph.toFixed(3) : "—",                 c: "#16a34a" },
-                    { l: "RGU",       v: s.rgu || "—",                                        c: "#2563eb" },
-                    { l: "% to Goal", v: avgPct !== null ? `${Math.round(avgPct)}%` : "—",   c: pctColor  },
-                  ].map(({ l, v, c }) => (
-                    <div key={l} style={{ textAlign: "center" }}>
-                      <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.15rem", color: c, fontWeight: 600 }}>{v}</div>
-                      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: `var(--text-dim)` }}>{l}</div>
-                    </div>
-                  ))}
-                </div>
-                {hasProd && displayCodes.length > 0 && (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "0.2rem", marginTop: "0.5rem" }}>
-                    {Object.entries(s.products)
-                      .filter(([cod]) => selectedCodes.size === 0 || selectedCodes.has(cod))
-                      .sort((a,b)=>b[1]-a[1]).map(([cod, cnt]) => (
-                      <span key={cod} style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.81rem", padding: "0.1rem 0.35rem", borderRadius: "3px", background: "#6366f108", border: "1px solid #6366f120", color: "#6366f1aa",
-                        wordBreak: "break-word", overflowWrap: "anywhere" }}
-                        title={`${prodLabel(cod, codes)}: ${cnt}`}>
-                        {prodLabel(cod, codes)}: {cnt}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-
-          {/* Product mix if any sales exist */}
-          {Object.keys(d.productTotals).length > 0 && (
-            <div style={{ marginTop: "auto", paddingTop: "0.75rem", borderTop: "1px solid var(--bg-tertiary)" }}>
-              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-dim)`, marginBottom: "0.4rem" }}>PRODUCT MIX TODAY</div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem" }}>
-                {Object.entries(d.productTotals).sort((a,b)=>b[1]-a[1]).map(([cod, cnt]) => (
-                  <div key={cod} style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", padding: "0.15rem 0.5rem", borderRadius: "3px", background: "#6366f112", border: "1px solid #6366f130", color: "#6366f1",
-                    wordBreak: "break-word", overflowWrap: "anywhere" }}>
-                    {prodLabel(cod, codes)}: {cnt}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
       {/* ── Programs breakdown ── */}
       <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem", marginBottom: "1.25rem" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem", flexWrap: "wrap", gap: "0.5rem" }}>
@@ -19728,6 +19654,152 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
             </tfoot>
           </table>
         </div>
+      </div>
+
+      {/* ── Attendance + By Region (collapsible, default collapsed) ── */}
+      <div style={{ marginBottom: "1.25rem" }}>
+        <button
+          onClick={() => setAttendanceCollapsed(v => !v)}
+          style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: attendanceCollapsed ? "var(--radius-lg, 16px)" : "var(--radius-lg, 16px) var(--radius-lg, 16px) 0 0", borderBottom: attendanceCollapsed ? "1px solid var(--border)" : "1px solid var(--border-muted)", cursor: "pointer", padding: "0.85rem 1.25rem", color: "var(--text-muted)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", letterSpacing: "0.12em", textTransform: "uppercase" }}
+        >
+          <span>{attendanceCollapsed ? "▸" : "▾"} Attendance &amp; Region Detail</span>
+          <span style={{ fontSize: "0.7rem", letterSpacing: "0.08em", opacity: 0.7, textTransform: "none" }}>
+            {d.absent.length} absent · {Object.keys(d.byReg).length} regions
+          </span>
+        </button>
+        {!attendanceCollapsed && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.25rem", marginTop: "0.5rem", alignItems: "stretch" }}>
+
+            {/* ── Attendance panel ── */}
+            <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem" }}>
+              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "1rem" }}>
+                Attendance vs Last 7 Days
+              </div>
+              <div style={{ display: "flex", gap: "0.75rem", marginBottom: "1rem" }}>
+                {[
+                  { label: "Present", count: d.presentCount,   color: "#16a34a" },
+                  { label: "Absent",  count: d.absent.length,  color: "#dc2626" },
+                  { label: "New",     count: d.newFaces.length, color: "#d97706" },
+                ].map(({ label, count, color }) => (
+                  <div key={label} style={{ flex: 1, padding: "0.6rem", background: color+"12", border: `1px solid ${color}30`, borderRadius: "var(--radius-md, 10px)", textAlign: "center" }}>
+                    <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.75rem", color, fontWeight: 700, lineHeight: 1 }}>{count}</div>
+                    <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color, marginTop: "0.15rem" }}>{label}</div>
+                  </div>
+                ))}
+              </div>
+              {d.absent.length > 0 && (
+                <div>
+                  <button onClick={() => setShowAbsent(v => !v)}
+                    style={{ background: "transparent", border: "none", cursor: "pointer", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "#dc2626", padding: 0, display: "flex", alignItems: "center", gap: "0.3rem", marginBottom: "0.4rem" }}>
+                    <span>{showAbsent?"▾":"▸"}</span>
+                    {d.absent.length} absent today — worked in last 7 days
+                  </button>
+                  {showAbsent && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+                      {Object.entries(d.absentByRegion).sort().map(([reg, agents]) => (
+                        <div key={reg}>
+                          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: getRegColor(reg), textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.25rem" }}>
+                            {reg} <span style={{ color: `var(--text-faint)` }}>({agents.length})</span>
+                          </div>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem" }}>
+                            {agents.sort((a,b)=>a.name.localeCompare(b.name)).map(({ name, quartile }) => (
+                              <div key={name} style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", padding: "0.15rem 0.5rem", borderRadius: "3px",
+                                background: "#dc262612", border: "1px solid #dc262630", color: "#dc2626",
+                                display: "flex", alignItems: "center", gap: "0.3rem" }}>
+                                {name.split(" ")[0]}
+                                {quartile && <span style={{ opacity: 0.6, fontSize: "0.81rem", color: Q[quartile]?.color || `var(--text-muted)` }}>{quartile}</span>}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+              {d.newFaces.length > 0 && (
+                <div style={{ marginTop: "0.75rem" }}>
+                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: "#d97706", marginBottom: "0.4rem" }}>
+                    ▸ {d.newFaces.length} agents working today not in recent history
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem" }}>
+                    {d.newFaces.sort().map(name => (
+                      <div key={name} style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", padding: "0.15rem 0.5rem", borderRadius: "3px",
+                        background: "#d9770612", border: "1px solid #d9770630", color: "#d97706" }}>
+                        {name.split(" ")[0]}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* ── By Region ── */}
+            <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem", display: "flex", flexDirection: "column" }}>
+              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "1rem" }}>
+                By Region — Live
+              </div>
+              {Object.entries(d.byReg).sort().map(([reg, s]) => {
+                const gph = s.hrs > 0 ? s.goals / s.hrs : 0;
+                const avgPct = s.pctCount > 0 ? s.pctSum / s.pctCount : null;
+                const isBZ = reg.toUpperCase().includes("XOTM");
+                const regColor = getRegColor(reg);
+                const pctColor = avgPct !== null ? attainColor(avgPct) : `var(--text-dim)`;
+                const hasProd = Object.keys(s.products).length > 0;
+                return (
+                  <div key={reg} style={{ padding: "0.85rem 1rem", background: `var(--bg-primary)`, borderRadius: "var(--radius-md, 10px)", border: `1px solid ${regColor}22`, marginBottom: "0.6rem" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+                      <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "1.32rem", color: regColor, fontWeight: 600 }}>{reg}</span>
+                      <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)` }}>{s.count} agents</span>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr", gap: "0.5rem" }}>
+                      {[
+                        { l: "Hours",     v: fmt(s.hrs, 1),                                      c: "#6366f1" },
+                        { l: "Sales",     v: s.goals || "—",                                      c: "#d97706" },
+                        { l: "GPH",       v: s.goals > 0 ? gph.toFixed(3) : "—",                 c: "#16a34a" },
+                        { l: "RGU",       v: s.rgu || "—",                                        c: "#2563eb" },
+                        { l: "% to Goal", v: avgPct !== null ? `${Math.round(avgPct)}%` : "—",   c: pctColor  },
+                      ].map(({ l, v, c }) => (
+                        <div key={l} style={{ textAlign: "center" }}>
+                          <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.15rem", color: c, fontWeight: 600 }}>{v}</div>
+                          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: `var(--text-dim)` }}>{l}</div>
+                        </div>
+                      ))}
+                    </div>
+                    {hasProd && displayCodes.length > 0 && (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.2rem", marginTop: "0.5rem" }}>
+                        {Object.entries(s.products)
+                          .filter(([cod]) => selectedCodes.size === 0 || selectedCodes.has(cod))
+                          .sort((a,b)=>b[1]-a[1]).map(([cod, cnt]) => (
+                          <span key={cod} style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.81rem", padding: "0.1rem 0.35rem", borderRadius: "3px", background: "#6366f108", border: "1px solid #6366f120", color: "#6366f1aa",
+                            wordBreak: "break-word", overflowWrap: "anywhere" }}
+                            title={`${prodLabel(cod, codes)}: ${cnt}`}>
+                            {prodLabel(cod, codes)}: {cnt}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* Product mix if any sales exist */}
+              {Object.keys(d.productTotals).length > 0 && (
+                <div style={{ marginTop: "auto", paddingTop: "0.75rem", borderTop: "1px solid var(--bg-tertiary)" }}>
+                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-dim)`, marginBottom: "0.4rem" }}>PRODUCT MIX TODAY</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem" }}>
+                    {Object.entries(d.productTotals).sort((a,b)=>b[1]-a[1]).map(([cod, cnt]) => (
+                      <div key={cod} style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", padding: "0.15rem 0.5rem", borderRadius: "3px", background: "#6366f112", border: "1px solid #6366f130", color: "#6366f1",
+                        wordBreak: "break-word", overflowWrap: "anywhere" }}>
+                        {prodLabel(cod, codes)}: {cnt}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── Agent leaderboard ── */}
@@ -21061,7 +21133,7 @@ export default function App() {
     <div style={wrapStyle}>
       {!splashDone && <LoadingSplash onEnded={() => setSplashDone(true)} />}
       {showMbrModal && rawData && <MbrExportModal perf={perf} onClose={() => setShowMbrModal(false)} />}
-      {showGainshareModal && rawData && <GainshareExportModal perf={perf} onClose={() => setShowGainshareModal(false)} />}
+      {showGainshareModal && rawData && <GainshareExportModal perf={perf} historicalMonths={historicalMonths} onClose={() => setShowGainshareModal(false)} />}
       {showHistoricalMonthsModal && (
         <HistoricalMonthsModal
           onClose={() => setShowHistoricalMonthsModal(false)}
