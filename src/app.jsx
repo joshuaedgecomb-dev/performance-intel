@@ -7540,10 +7540,19 @@ function parseCoachingDetails(rawCsv) {
   return byMonth;
 }
 
+// "Last, First" → "First Last"; pass through if no comma. Used so per-row supervisor
+// labels match the roster's "First Last" convention used elsewhere in the dashboard.
+function normalizeSupervisorName(name) {
+  const s = (name || "").trim();
+  if (!s) return "";
+  const m = s.match(/^([^,]+),\s*(.+)$/);
+  return m ? `${m[2].trim()} ${m[1].trim()}` : s;
+}
+
 function parseCoachingWeekly(rawCsv) {
   if (!rawCsv || !rawCsv.trim()) return [];
   const rows = parseCSV(rawCsv);
-  return rows.map(r => {
+  const parsed = rows.map(r => {
     const nameField = (r["Name or NT"] || "").trim();
     const pipeIdx = nameField.lastIndexOf("|");
     const displayName = pipeIdx >= 0 ? nameField.slice(0, pipeIdx).trim() : nameField;
@@ -7557,9 +7566,28 @@ function parseCoachingWeekly(rawCsv) {
       sessions: Number(r["Coaching Sessions  (copy)"] ?? r["Coaching Sessions (copy)"] ?? r["Coaching Sessions"]) || 0,
       colorWb: (r["Color WB"] || "").trim(),
       manager: (r["Manager"] || "").trim(),
-      supervisor: (r["Supervisor."] || "").trim(),
+      supervisor: normalizeSupervisorName(r["Supervisor."] || ""),
     };
   });
+
+  // Source data emits 2-3 dup rows per agent-week (Tableau pivot artifact: same agent
+  // appears once per supervisor-history snapshot). Collapse to one row per
+  // (ntid, fiscalMonth, fiscalWeek). Preference: non-empty supervisor wins; ties broken
+  // last-row-wins so genuine mid-week shifts (rare) take the most recent assignment.
+  // Rows missing ntid pass through unchanged — they can't be safely keyed.
+  const dedupeMap = new Map();
+  const passthrough = [];
+  for (const row of parsed) {
+    if (!row.ntid) { passthrough.push(row); continue; }
+    const key = `${row.ntid}|${row.fiscalMonth}|${row.fiscalWeek}`;
+    const existing = dedupeMap.get(key);
+    const newHasSup = !!row.supervisor;
+    const oldHasSup = existing ? !!existing.supervisor : false;
+    if (!existing || (newHasSup && !oldHasSup) || newHasSup === oldHasSup) {
+      dedupeMap.set(key, row);
+    }
+  }
+  return [...passthrough, ...dedupeMap.values()];
 }
 
 // Sheets can mis-coerce "4-7" → "7-Apr" and "8-15" → "15-Aug". Map them back.
@@ -7872,10 +7900,13 @@ function buildCoachingPageData(coachingWeekly, coachingDetails, bpLookup, monthF
 
   const weekLabels = bucketLabels;  // alias preserved for downstream code that reads data.weekLabels
 
-  // Build per-agent bucket map. Key: ntid|bucketKey → {sessions, eligibleWeeks}
+  // Build per-agent bucket map. Key: ntid|bucketKey → {sessions, eligibleWeeks, supervisor}
+  // Each entry's `supervisor` is the per-week supervisor of record (priority:
+  // row.supervisor → bp.supervisor → "Unassigned"). For MONTH: buckets that aggregate
+  // multiple weeks, last-row-wins, matching the dedupe rule in parseCoachingWeekly.
   // Entry existence signals eligibility; NCR rows are skipped entirely (matches buildCoachingStats).
   const agentBucketMap = new Map();
-  const agentMeta = new Map(); // ntid → {ntid, agentName, supervisor, site, region}
+  const agentMeta = new Map(); // ntid → {ntid, agentName, site, region}
   for (const row of activeRows) {
     if (!row.ntid) continue;
     if (row.colorWb === "No Coaching Required") continue;
@@ -7885,17 +7916,34 @@ function buildCoachingPageData(coachingWeekly, coachingDetails, bpLookup, monthF
     const { site, region: normalizedRegion } = coachingSiteFromRegion(region);
     if (!site) continue;
     if (!isValidCoachingRegion(normalizedRegion)) continue;
-    const supervisor = (bp && bp.supervisor) || row.supervisor || "Unassigned";
+    const supervisor = row.supervisor || (bp && bp.supervisor) || "Unassigned";
     if (!agentMeta.has(row.ntid)) {
-      agentMeta.set(row.ntid, { ntid: row.ntid, agentName: row.displayName, supervisor, site, region: normalizedRegion });
+      // daysSinceHire used to flag agents within 60d of their hire date in the UI.
+      // Falls back to null when roster has no hire date — flag won't render.
+      const hireDate = bp ? bp.hireDate : "";
+      const hireMs = hireDate ? new Date(hireDate).getTime() : NaN;
+      const daysSinceHire = !isNaN(hireMs) ? Math.floor((Date.now() - hireMs) / 86400000) : null;
+      agentMeta.set(row.ntid, { ntid: row.ntid, agentName: row.displayName, site, region: normalizedRegion, hireDate, daysSinceHire });
     }
     const bucket = bucketKeyForRow(row);
     const key = `${row.ntid}|${bucket}`;
-    const existing = agentBucketMap.get(key) || { sessions: 0, eligibleWeeks: 0 };
+    const existing = agentBucketMap.get(key) || { sessions: 0, eligibleWeeks: 0, supervisor };
     existing.sessions += row.sessions || 0;
     existing.eligibleWeeks += 1;
+    existing.supervisor = supervisor;
     agentBucketMap.set(key, existing);
   }
+
+  // Most-recent supervisor for an agent in the active period — used as the AllAgents
+  // tab's supervisor column. Walks rawBuckets in reverse so we pick the supervisor
+  // from the most recent bucket where this agent had an assignment.
+  const lastSupervisorFor = (ntid) => {
+    for (let i = rawBuckets.length - 1; i >= 0; i--) {
+      const v = agentBucketMap.get(`${ntid}|${rawBuckets[i]}`);
+      if (v) return v.supervisor;
+    }
+    return "Unassigned";
+  };
 
   // Helper: weeks array for one agent across rawBuckets (dual-shape entries for count + pct modes)
   const weeksForAgent = (ntid) => rawBuckets.map((bucket, i) => {
@@ -7920,57 +7968,87 @@ function buildCoachingPageData(coachingWeekly, coachingDetails, bpLookup, monthF
     };
   });
 
-  // Build per-agent rollups
+  // Build per-agent rollups for AllAgents tab. Each agent's `weeks` array sums all of
+  // their data regardless of which supervisor they were under that week — the supervisor
+  // column shows their most recent assignment in the active period.
   const allAgents = [];
   for (const [ntid, meta] of agentMeta.entries()) {
     const weeks = weeksForAgent(ntid);
     const sessionsX = weeks.reduce((acc, w) => acc + (w.eligible ? (w.sessions || 0) : 0), 0);
     const sessionsY = weeks.reduce((acc, w) => acc + (w.eligible ? w.y : 0), 0);
     const pct = sessionsY ? sessionsX / sessionsY : null;
-    allAgents.push({ ...meta, weeks, sessionsX, sessionsY, pct });
+    allAgents.push({ ...meta, supervisor: lastSupervisorFor(ntid), weeks, sessionsX, sessionsY, pct });
   }
   allAgents.sort((a, b) => (a.pct ?? 999) - (b.pct ?? 999));
 
-  // Group agents by supervisor
-  const supMap = new Map();
-  for (const ag of allAgents) {
-    if (!supMap.has(ag.supervisor)) {
-      supMap.set(ag.supervisor, { supervisor: ag.supervisor, agents: [] });
-    }
-    supMap.get(ag.supervisor).agents.push(ag);
+  // Group by per-bucket supervisor: an agent appears under every supervisor they had
+  // during the active period. In each supervisor's view, cells outside that supervisor's
+  // tenure render `outsideTenure: true` and are excluded from supervisor + per-agent X/Y.
+  const supAgentSet = new Map(); // supervisor → Set<ntid>
+  for (const [key, val] of agentBucketMap.entries()) {
+    const ntid = key.split("|")[0];
+    if (!supAgentSet.has(val.supervisor)) supAgentSet.set(val.supervisor, new Set());
+    supAgentSet.get(val.supervisor).add(ntid);
   }
-  const bySupervisor = [...supMap.values()].map(g => {
+  const bySupervisor = [...supAgentSet.entries()].map(([supervisor, ntidSet]) => {
+    const agentList = [...ntidSet].map(ntid => {
+      const meta = agentMeta.get(ntid);
+      const weeks = rawBuckets.map((bucket, i) => {
+        const v = agentBucketMap.get(`${ntid}|${bucket}`);
+        if (!v) {
+          return { week: bucketLabels[i], sessions: null, eligible: false, x: 0, y: 0, pct: null };
+        }
+        if (v.supervisor !== supervisor) {
+          // Agent existed this bucket but was on a different supervisor's team.
+          return { week: bucketLabels[i], sessions: null, eligible: false, outsideTenure: true, x: 0, y: 0, pct: null };
+        }
+        return {
+          week: bucketLabels[i],
+          sessions: v.sessions,
+          eligible: true,
+          x: v.sessions,
+          y: v.eligibleWeeks,
+          pct: v.eligibleWeeks ? v.sessions / v.eligibleWeeks : null,
+        };
+      });
+      const sessionsX = weeks.reduce((acc, w) => acc + (w.eligible ? (w.sessions || 0) : 0), 0);
+      const sessionsY = weeks.reduce((acc, w) => acc + (w.eligible ? w.y : 0), 0);
+      const pct = sessionsY ? sessionsX / sessionsY : null;
+      return { ...meta, supervisor, weeks, sessionsX, sessionsY, pct };
+    }).sort((a, b) => (a.pct ?? 999) - (b.pct ?? 999));
+
     // primary site = mode of agent regions; ties broken alphabetically
     const regionCounts = {};
-    g.agents.forEach(a => { regionCounts[a.region] = (regionCounts[a.region] || 0) + 1; });
+    agentList.forEach(a => { regionCounts[a.region] = (regionCounts[a.region] || 0) + 1; });
     const primaryRegion = Object.keys(regionCounts).sort((a, b) =>
       regionCounts[b] - regionCounts[a] || a.localeCompare(b)
     )[0] || "";
     const { site } = coachingSiteFromRegion(primaryRegion);
-    // Per-bucket supervisor stats: agents coached / eligible agent-weeks in bucket
+
+    // Per-bucket supervisor stats: sum only the cells assigned to this supervisor.
     const weeks = rawBuckets.map((bucket, i) => {
       let x = 0, y = 0;
-      for (const a of g.agents) {
+      for (const a of agentList) {
         const w = a.weeks[i];
         if (w.eligible) {
-          y += w.y;            // sum eligible weeks (= 1 for week buckets, N for month buckets)
           x += w.sessions || 0;
+          y += w.y;
         }
       }
       return { week: bucketLabels[i], x, y, pct: y ? x / y : null };
     });
-    const sessionsX = g.agents.reduce((acc, a) => acc + a.sessionsX, 0);
-    const sessionsY = g.agents.reduce((acc, a) => acc + a.sessionsY, 0);
+    const sessionsX = agentList.reduce((acc, a) => acc + a.sessionsX, 0);
+    const sessionsY = agentList.reduce((acc, a) => acc + a.sessionsY, 0);
     return {
-      supervisor: g.supervisor,
+      supervisor,
       site,
       region: primaryRegion,
-      agentCount: g.agents.length,
+      agentCount: agentList.length,
       weeks,
       sessionsX,
       sessionsY,
       pct: sessionsY ? sessionsX / sessionsY : null,
-      agents: g.agents,
+      agents: agentList,
     };
   }).filter(sup => sup.agents.length >= 2)
     .sort((a, b) => (a.pct ?? 999) - (b.pct ?? 999));
@@ -11107,6 +11185,13 @@ function KpiTile({ label, value, sub, accent }) {
 // mode = "count": shows raw session count, color from coachingCellColor
 // mode = "pct":   shows "X/Y", color from coachingPctColor band
 function WeekCell({ mode, data }) {
+  // Outside-tenure: agent existed this bucket but on a different supervisor's team.
+  // Distinct from "no data" (—) so supervisor views can show explicit N/A for shifts.
+  if (data && data.outsideTenure) {
+    return (
+      <span style={{ display: "block", textAlign: "center", background: "transparent", color: "#666", fontSize: "0.7rem", fontWeight: 600, padding: "0.25rem 0", borderRadius: 3, fontStyle: "italic" }}>N/A</span>
+    );
+  }
   if (!data || (mode === "count" && !data.eligible)) {
     return (
       <span style={{ display: "block", textAlign: "center", background: "#444", color: "#888", fontSize: "0.72rem", fontWeight: 700, padding: "0.25rem 0", borderRadius: 3 }}>—</span>
@@ -11181,7 +11266,28 @@ function AgentRow({ agent, weekLabels, lightMode, indented, cellMode = "count" }
         marginTop: 3,
       }}
     >
-      <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: indented ? "0.78rem" : "0.82rem", color: "var(--text-warm)", fontWeight: 500 }}>{agent.agentName}</span>
+      <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: indented ? "0.78rem" : "0.82rem", color: "var(--text-warm)", fontWeight: 500, display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
+        {agent.agentName}
+        {agent.daysSinceHire != null && agent.daysSinceHire <= 60 && (
+          <span
+            title={`Hired ${agent.daysSinceHire}d ago${agent.hireDate ? ` (${agent.hireDate})` : ""}`}
+            style={{
+              fontFamily: "var(--font-ui, Inter, sans-serif)",
+              fontSize: "0.6rem",
+              fontWeight: 700,
+              letterSpacing: "0.05em",
+              padding: "0.1rem 0.35rem",
+              borderRadius: 3,
+              background: "#6366f120",
+              color: "#6366f1",
+              border: "1px solid #6366f150",
+              whiteSpace: "nowrap",
+            }}
+          >
+            NEW · {agent.daysSinceHire}d
+          </span>
+        )}
+      </span>
       {!indented && (
         <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "var(--text-dim)" }}>{agent.supervisor}</span>
       )}
@@ -11456,6 +11562,33 @@ function CoachingBySupervisorTab({ data, lightMode }) {
     }).filter(Boolean).sort((a, b) => (a.pct ?? 999) - (b.pct ?? 999));
   }, [data.bySupervisor, data.weekLabels, activeChip]);
 
+  // Totals across filtered supervisors. Per-bucket sums are already partitioned
+  // exactly (each agent-week is assigned to one supervisor post-dedup), so summing
+  // across rows is a true aggregate. Agent count uses unique ntids since an agent
+  // can appear under multiple supervisors when they shifted mid-period.
+  const totalsRow = useMemo(() => {
+    if (filteredSupervisors.length === 0) return null;
+    const weeks = data.weekLabels.map((label, i) => {
+      let x = 0, y = 0;
+      for (const sup of filteredSupervisors) {
+        x += sup.weeks[i].x;
+        y += sup.weeks[i].y;
+      }
+      return { week: label, x, y, pct: y ? x / y : null };
+    });
+    const sessionsX = filteredSupervisors.reduce((acc, s) => acc + s.sessionsX, 0);
+    const sessionsY = filteredSupervisors.reduce((acc, s) => acc + s.sessionsY, 0);
+    const uniqueNtids = new Set();
+    filteredSupervisors.forEach(s => s.agents.forEach(a => uniqueNtids.add(a.ntid)));
+    return {
+      agentCount: uniqueNtids.size,
+      weeks,
+      sessionsX,
+      sessionsY,
+      pct: sessionsY ? sessionsX / sessionsY : null,
+    };
+  }, [filteredSupervisors, data.weekLabels]);
+
   const toggle = (key) => {
     setExpanded(prev => {
       const next = new Set(prev);
@@ -11526,17 +11659,50 @@ function CoachingBySupervisorTab({ data, lightMode }) {
           No supervisors match the current site filter.
         </div>
       ) : (
-        filteredSupervisors.map((sup, i) => (
-          <SupervisorRow
-            key={`${sup.supervisor}-${i}`}
-            sup={sup}
-            weekLabels={data.weekLabels}
-            expanded={expanded.has(sup.supervisor)}
-            onToggle={() => toggle(sup.supervisor)}
-            lightMode={lightMode}
-            cellMode={data.agentCellMode}
-          />
-        ))
+        <Fragment>
+          {filteredSupervisors.map((sup, i) => (
+            <SupervisorRow
+              key={`${sup.supervisor}-${i}`}
+              sup={sup}
+              weekLabels={data.weekLabels}
+              expanded={expanded.has(sup.supervisor)}
+              onToggle={() => toggle(sup.supervisor)}
+              lightMode={lightMode}
+              cellMode={data.agentCellMode}
+            />
+          ))}
+          {totalsRow && (() => {
+            const accent = coachingPctColor(totalsRow.pct);
+            const sessionsColor = totalsRow.sessionsX > totalsRow.sessionsY ? "#6366f1" : accent;
+            return (
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: `1.4fr 0.9fr 0.5fr ${data.weekLabels.map(() => "0.7fr").join(" ")} 0.7fr 0.5fr`,
+                gap: 4,
+                padding: "0.6rem 0.5rem",
+                alignItems: "center",
+                background: lightMode ? "#f1f5f9" : "#1a1f2e",
+                borderTop: `2px solid ${accent}`,
+                borderRadius: "0 3px 3px 0",
+                marginTop: 8,
+                fontWeight: 700,
+              }}>
+                <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: "var(--text-warm)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                  Total
+                </span>
+                <span />
+                <span style={{ textAlign: "center", fontFamily: "var(--font-data, monospace)", fontSize: "0.78rem", color: "var(--text-dim)" }}>{totalsRow.agentCount}</span>
+                {totalsRow.weeks.map((w, i) => <WeekCell key={i} mode="pct" data={w} />)}
+                <span style={{ textAlign: "right", fontFamily: "var(--font-data, monospace)", fontSize: "0.9rem", fontWeight: 800, color: sessionsColor }}>
+                  {totalsRow.sessionsX}/{totalsRow.sessionsY}
+                </span>
+                <span style={{ textAlign: "right", fontFamily: "var(--font-data, monospace)", fontSize: "0.9rem", fontWeight: 800, color: sessionsColor }}>
+                  {totalsRow.pct == null ? "—" : `${Math.round(totalsRow.pct * 100)}%`}
+                </span>
+              </div>
+            );
+          })()}
+        </Fragment>
       )}
     </div>
   );
@@ -11545,6 +11711,7 @@ function CoachingBySupervisorTab({ data, lightMode }) {
 function CoachingAllAgentsTab({ data, lightMode }) {
   const [activeChip, setActiveChip] = useState("all");
   const [search, setSearch] = useState("");
+  const [newHireOnly, setNewHireOnly] = useState(false);
   const [sortBy, setSortBy] = useState("pct"); // "pct" | "name" | "sessions"
   const [sortDir, setSortDir] = useState("asc");
 
@@ -11553,6 +11720,7 @@ function CoachingAllAgentsTab({ data, lightMode }) {
   const filtered = useMemo(() => {
     const s = search.trim().toLowerCase();
     let rows = data.allAgents.filter(a => filterFn(a.region));
+    if (newHireOnly) rows = rows.filter(a => a.daysSinceHire != null && a.daysSinceHire <= 60);
     if (s) rows = rows.filter(a => (a.agentName || "").toLowerCase().includes(s));
     rows.sort((a, b) => {
       let av, bv;
@@ -11564,7 +11732,7 @@ function CoachingAllAgentsTab({ data, lightMode }) {
       return (a.agentName || "").localeCompare(b.agentName || "");
     });
     return rows;
-  }, [data.allAgents, activeChip, search, sortBy, sortDir]);
+  }, [data.allAgents, activeChip, search, newHireOnly, sortBy, sortDir]);
 
   const gappedCount = useMemo(() => filtered.filter(a => (a.pct ?? 0) < 1).length, [filtered]);
 
@@ -11591,22 +11759,44 @@ function CoachingAllAgentsTab({ data, lightMode }) {
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
         <CoachingSiteChips activeChip={activeChip} onChange={setActiveChip} lightMode={lightMode} />
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search agent name..."
-          style={{
-            background: "var(--bg-secondary)",
-            border: "1px solid var(--border)",
-            borderRadius: "var(--radius-sm, 6px)",
-            padding: "0.4rem 0.7rem",
-            fontFamily: "var(--font-ui, Inter, sans-serif)",
-            fontSize: "0.78rem",
-            color: "var(--text-warm)",
-            minWidth: 200,
-          }}
-        />
+        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search agent name..."
+            style={{
+              background: "var(--bg-secondary)",
+              border: "1px solid var(--border)",
+              borderRadius: "var(--radius-sm, 6px)",
+              padding: "0.4rem 0.7rem",
+              fontFamily: "var(--font-ui, Inter, sans-serif)",
+              fontSize: "0.78rem",
+              color: "var(--text-warm)",
+              minWidth: 200,
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => setNewHireOnly(v => !v)}
+            title="Show only agents within 60 days of hire date"
+            style={{
+              padding: "0.4rem 0.75rem",
+              borderRadius: "var(--radius-sm, 6px)",
+              border: `1px solid ${newHireOnly ? "#6366f1" : "var(--border-muted)"}`,
+              background: newHireOnly ? "#6366f118" : "transparent",
+              color: newHireOnly ? "#6366f1" : "var(--text-dim)",
+              fontFamily: "var(--font-ui, Inter, sans-serif)",
+              fontSize: "0.78rem",
+              fontWeight: newHireOnly ? 600 : 400,
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+              transition: "all 150ms",
+            }}
+          >
+            New Hires
+          </button>
+        </div>
       </div>
 
       <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", color: "var(--text-dim)", marginBottom: "0.6rem" }}>
