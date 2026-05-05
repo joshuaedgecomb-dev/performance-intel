@@ -531,6 +531,41 @@ const GOALS_STORAGE_KEY = "perf_intel_goals_v1";
 const NH_STORAGE_KEY    = "perf_intel_newhires_v1";
 const SHEET_URLS_KEY    = "perf_intel_sheet_urls_v1";
 const PRIOR_MONTH_STORAGE_KEY = "perf_intel_prior_month_v1";
+const HISTORICAL_MONTHS_STORAGE_KEY = "perf_intel_historical_months_v1";
+const ACTIVE_MONTH_STORAGE_KEY = "perf_intel_active_month_id";
+const HISTORICAL_MONTHS_CACHE_KEY = "perf_intel_historical_months_data_v1";
+const MOM_PAIR_STORAGE_KEY = "perf_intel_mom_pair_v1";
+const HISTORICAL_MONTHS_SEEDED_KEY = "perf_intel_historical_months_seeded_v1";
+
+// Hard-coded seed entries for fiscal year 2026. Merged in once on first mount —
+// missing seeds (by label) get appended; already-present labels are left alone.
+// User deletions are persisted via the seeded flag so they don't re-appear on reload.
+const SEED_HISTORICAL_MONTHS = [
+  {
+    id: "2026-01",
+    label: "Jan '26",
+    agentUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vSa5e_6X7OgghkoUB8iX3KbUE_2Zo0zq_KMba-eduKsc5DV4n_p0elaIk0dM2C6sbJ_YT7kIlwx-hZ_/pub?gid=667346347&single=true&output=csv",
+    goalsUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vSa5e_6X7OgghkoUB8iX3KbUE_2Zo0zq_KMba-eduKsc5DV4n_p0elaIk0dM2C6sbJ_YT7kIlwx-hZ_/pub?gid=589472704&single=true&output=csv",
+  },
+  {
+    id: "2026-02",
+    label: "Feb '26",
+    agentUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQRwJCdrvxQZPM78VX1jKEXjnn5C1yUGQ-dMPXXZ6KYotmkU7W_IZZi1i8IZ_CHBV4MdkYqH_KCptul/pub?gid=667346347&single=true&output=csv",
+    goalsUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQRwJCdrvxQZPM78VX1jKEXjnn5C1yUGQ-dMPXXZ6KYotmkU7W_IZZi1i8IZ_CHBV4MdkYqH_KCptul/pub?gid=1294017991&single=true&output=csv",
+  },
+  {
+    id: "2026-03",
+    label: "Mar '26",
+    agentUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vTZkBGVIxieyjBKftqL1oecSaUxRkao-gz2B9q4Z8zCY8hEtSy1M28S00RDCS8JVPgPFXJAv2LbsZru/pub?gid=667346347&single=true&output=csv",
+    goalsUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vTZkBGVIxieyjBKftqL1oecSaUxRkao-gz2B9q4Z8zCY8hEtSy1M28S00RDCS8JVPgPFXJAv2LbsZru/pub?gid=1685208822&single=true&output=csv",
+  },
+  {
+    id: "2026-04",
+    label: "Apr '26",
+    agentUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRvZhKIIyy3cGz3zpQwCACc88SWwV2YO9xmuQvsTKwKbgOMWBlD9vWJZ_ywTpQGa_JXGmT5vpgl99uk/pub?gid=667346347&single=true&output=csv",
+    goalsUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRvZhKIIyy3cGz3zpQwCACc88SWwV2YO9xmuQvsTKwKbgOMWBlD9vWJZ_ywTpQGa_JXGmT5vpgl99uk/pub?gid=1685208822&single=true&output=csv",
+  },
+];
 // Data source URLs are loaded from .env.local (gitignored) via Vite's import.meta.env.
 // To configure: copy .env.example to .env.local and fill in your published Google Sheet CSV URLs.
 const DEFAULT_AGENT_SHEET_URL = import.meta.env.VITE_DEFAULT_AGENT_SHEET_URL || "";
@@ -5379,6 +5414,213 @@ function SiteDropdown({ site, programs, attainment, projAttainment, currentProgr
   );
 }
 
+// ── HistoricalMonthsManager — Settings sub-component for saved months ────────
+function HistoricalMonthsManager({
+  historicalMonths,
+  setHistoricalMonths,
+  activeMonthId,
+  historicalMonthsCache,
+  setHistoricalMonthsCache,
+  onSwitchAndReload,
+  monthSwitchLoading,
+  monthSwitchError,
+  lightMode,
+}) {
+  const [pendingActive, setPendingActive] = useState(activeMonthId);
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState({ label: "", agentUrl: "", goalsUrl: "", isManual: false });
+
+  useEffect(() => { setPendingActive(activeMonthId); }, [activeMonthId]);
+
+  // Build dropdown options: every prior month back to January of current year, minus
+  // months that already have a saved entry. "Other..." flips to manual text entry.
+  const monthOptions = useMemo(() => {
+    const today = new Date();
+    const monNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    const opts = [];
+    const m = today.getMonth();
+    const y = today.getFullYear();
+    for (let i = 1; i <= m; i++) {
+      const pm = m - i;
+      opts.push(`${monNames[pm]} '${String(y).slice(-2)}`);
+    }
+    const existing = new Set(historicalMonths.map(h => h.label));
+    return opts.filter(o => !existing.has(o));
+  }, [historicalMonths]);
+
+  const addMonth = () => {
+    const trimmed = { label: draft.label.trim(), agentUrl: draft.agentUrl.trim(), goalsUrl: draft.goalsUrl.trim() };
+    if (!trimmed.label || !trimmed.agentUrl || !trimmed.goalsUrl) return;
+    let id = deriveMonthId(trimmed.label) || `manual-${Date.now()}`;
+    let unique = id, suffix = 0;
+    while (historicalMonths.some(m => m.id === unique)) {
+      suffix += 1;
+      unique = `${id}-${String.fromCharCode(96 + suffix)}`;
+    }
+    setHistoricalMonths([...historicalMonths, { id: unique, label: trimmed.label, agentUrl: trimmed.agentUrl, goalsUrl: trimmed.goalsUrl }]);
+    setDraft({ label: "", agentUrl: "", goalsUrl: "", isManual: false });
+    setAdding(false);
+  };
+
+  const updateMonth = (id, field, value) => {
+    setHistoricalMonths(historicalMonths.map(m => m.id === id ? { ...m, [field]: value } : m));
+  };
+
+  const removeMonth = (id) => {
+    setHistoricalMonths(historicalMonths.filter(m => m.id !== id));
+    // Also drop its cached payload to free space
+    if (historicalMonthsCache[id]) {
+      const next = { ...historicalMonthsCache };
+      delete next[id];
+      setHistoricalMonthsCache(next);
+    }
+    if (pendingActive === id) setPendingActive("current");
+  };
+
+  const sorted = [...historicalMonths].sort((a, b) => b.id.localeCompare(a.id));
+  const inputBase = { fontSize: "0.72rem", padding: "0.3rem 0.5rem", background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: 4, color: "var(--text-warm)" };
+
+  return (
+    <div style={{ marginTop: "1.5rem", paddingTop: "1.25rem", borderTop: "1px solid var(--border-muted)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.85rem" }}>
+        <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.78rem", letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-muted)" }}>
+          Historical Months
+        </span>
+        <button
+          onClick={() => setAdding(true)}
+          disabled={adding}
+          style={{ padding: "0.3rem 0.7rem", fontSize: "0.75rem", fontWeight: 600, color: "#6366f1", background: "transparent", border: "1px solid #6366f150", borderRadius: 6, cursor: adding ? "not-allowed" : "pointer", opacity: adding ? 0.5 : 1 }}
+        >
+          + Add month
+        </button>
+      </div>
+
+      {sorted.length === 0 && !adding && (
+        <div style={{ fontSize: "0.78rem", color: "var(--text-faint)", fontStyle: "italic", padding: "0.5rem 0" }}>
+          No saved months yet. Click <strong>+ Add month</strong> to save a finished month's data &amp; goals URLs.
+        </div>
+      )}
+
+      {sorted.map(m => (
+        <div key={m.id} style={{ display: "grid", gridTemplateColumns: "1.4fr 2fr 2fr auto", gap: "0.5rem", alignItems: "center", padding: "0.45rem 0", borderBottom: "1px solid var(--border-muted)" }}>
+          <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "var(--text-warm)", fontWeight: 500 }}>
+            {m.label}
+          </span>
+          <input type="text" value={m.agentUrl} onChange={(e) => updateMonth(m.id, "agentUrl", e.target.value)} placeholder="Data: https://...csv" style={inputBase} />
+          <input type="text" value={m.goalsUrl} onChange={(e) => updateMonth(m.id, "goalsUrl", e.target.value)} placeholder="Goals: https://...csv" style={inputBase} />
+          <button onClick={() => removeMonth(m.id)} title={`Remove ${m.label}`} style={{ background: "transparent", color: "#dc2626", border: "none", cursor: "pointer", fontSize: "1rem", padding: "0.2rem 0.4rem" }}>×</button>
+        </div>
+      ))}
+
+      {adding && (
+        <div style={{ display: "grid", gridTemplateColumns: "1.4fr 2fr 2fr auto", gap: "0.5rem", alignItems: "center", padding: "0.6rem 0.5rem", background: lightMode ? "#eef2ff" : "#1a1d28", borderRadius: 4, marginTop: 4 }}>
+          {draft.isManual ? (
+            <input
+              type="text"
+              value={draft.label}
+              onChange={(e) => setDraft({ ...draft, label: e.target.value })}
+              placeholder="Custom label"
+              autoFocus
+              style={{ ...inputBase, fontSize: "0.78rem", border: "1px solid #6366f1" }}
+            />
+          ) : (
+            <select
+              value={draft.label}
+              onChange={(e) => {
+                if (e.target.value === "__other__") setDraft({ ...draft, label: "", isManual: true });
+                else setDraft({ ...draft, label: e.target.value });
+              }}
+              style={{ ...inputBase, fontSize: "0.78rem", border: "1px solid #6366f1", appearance: "auto" }}
+            >
+              <option value="" disabled>— Pick a month —</option>
+              {monthOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+              <option value="__other__">Other...</option>
+            </select>
+          )}
+          <input type="text" value={draft.agentUrl} onChange={(e) => setDraft({ ...draft, agentUrl: e.target.value })} placeholder="Data: https://...csv" style={{ ...inputBase, border: "1px solid #6366f1" }} />
+          <input type="text" value={draft.goalsUrl} onChange={(e) => setDraft({ ...draft, goalsUrl: e.target.value })} placeholder="Goals: https://...csv" style={{ ...inputBase, border: "1px solid #6366f1" }} />
+          <div style={{ display: "flex", gap: "0.3rem" }}>
+            <button onClick={addMonth} style={{ background: "#6366f1", color: "#fff", border: "none", borderRadius: 4, padding: "0.3rem 0.55rem", fontSize: "0.7rem", cursor: "pointer", fontWeight: 600 }}>Save</button>
+            <button onClick={() => { setAdding(false); setDraft({ label: "", agentUrl: "", goalsUrl: "", isManual: false }); }} style={{ background: "transparent", color: "var(--text-dim)", border: "1px solid var(--border-muted)", borderRadius: 4, padding: "0.3rem 0.55rem", fontSize: "0.7rem", cursor: "pointer" }}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      <div style={{ marginTop: "1.1rem", display: "flex", gap: "0.85rem", alignItems: "center", flexWrap: "wrap" }}>
+        <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontFamily: "var(--font-ui, Inter, sans-serif)" }}>Active:</span>
+        <label style={{ display: "flex", alignItems: "center", gap: "0.3rem", fontSize: "0.78rem", fontFamily: "var(--font-ui, Inter, sans-serif)", color: "var(--text-warm)", cursor: "pointer" }}>
+          <input type="radio" name="pending-active-month" checked={pendingActive === "current"} onChange={() => setPendingActive("current")} />
+          Current
+        </label>
+        {sorted.map(m => (
+          <label key={m.id} style={{ display: "flex", alignItems: "center", gap: "0.3rem", fontSize: "0.78rem", fontFamily: "var(--font-ui, Inter, sans-serif)", color: "var(--text-warm)", cursor: "pointer" }}>
+            <input type="radio" name="pending-active-month" checked={pendingActive === m.id} onChange={() => setPendingActive(m.id)} />
+            {m.label}
+          </label>
+        ))}
+        <button
+          onClick={() => onSwitchAndReload(pendingActive)}
+          disabled={pendingActive === activeMonthId || monthSwitchLoading}
+          style={{ marginLeft: "auto", padding: "0.4rem 0.85rem", fontSize: "0.78rem", fontWeight: 600, color: "#fff", background: (pendingActive === activeMonthId || monthSwitchLoading) ? "var(--text-faint)" : "#6366f1", border: "none", borderRadius: 6, cursor: (pendingActive === activeMonthId || monthSwitchLoading) ? "not-allowed" : "pointer" }}
+        >
+          {monthSwitchLoading ? "Loading..." : "Switch & reload"}
+        </button>
+      </div>
+
+      {monthSwitchError && (
+        <div style={{ marginTop: "0.6rem", padding: "0.5rem 0.7rem", background: "#dc262618", border: "1px solid #dc262650", borderRadius: 4, color: "#dc2626", fontSize: "0.75rem", fontFamily: "var(--font-ui, Inter, sans-serif)" }}>
+          {monthSwitchError}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── HistoricalMonthsModal — standalone overlay wrapping the manager ─────────
+function HistoricalMonthsModal({ onClose, ...managerProps }) {
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.55)",
+        zIndex: 300,
+        display: "flex",
+        alignItems: "flex-start",
+        justifyContent: "center",
+        paddingTop: "5vh",
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: "var(--bg-secondary)",
+          color: "var(--text-warm)",
+          borderRadius: "var(--radius-lg, 16px)",
+          border: "1px solid var(--border)",
+          width: "min(900px, 92vw)",
+          maxHeight: "85vh",
+          overflowY: "auto",
+          padding: "1.25rem 1.5rem 1.5rem",
+          boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+          <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.95rem", fontWeight: 600, color: "var(--text-primary)" }}>
+            📅 Historical Months
+          </span>
+          <button onClick={onClose} title="Close"
+            style={{ background: "transparent", border: "none", color: "var(--text-dim)", fontSize: "1.4rem", lineHeight: 1, cursor: "pointer", padding: "0 0.4rem" }}>
+            ×
+          </button>
+        </div>
+        <HistoricalMonthsManager {...managerProps} />
+      </div>
+    </div>
+  );
+}
+
 // ── SettingsMenu — overflow menu with actions, data, settings ───────────────
 // MenuSection / MenuRow hoisted to module scope so they aren't recreated on
 // every SettingsMenu render (would cause unmount/remount of the subtree).
@@ -5400,7 +5642,7 @@ function MenuRow({ icon, label, hint, onClick }) {
     </button>
   );
 }
-function SettingsMenu({ onExportMbr, onExportVirgilMbr, onExportGainshare, onOpenCorpDataSources, onRefresh, onUploadGoals, onUploadRoster, onUploadPriorGoals, onUploadCoachingDetails, onUploadCoachingWeekly, onUploadLoginBuckets, onOpenSettings, ollamaAvailable, localAI, onToggleLocalAI }) {
+function SettingsMenu({ onExportMbr, onExportVirgilMbr, onExportGainshare, onOpenCorpDataSources, onRefresh, onUploadGoals, onUploadRoster, onUploadPriorGoals, onUploadCoachingDetails, onUploadCoachingWeekly, onUploadLoginBuckets, onOpenSettings, onOpenHistoricalMonths, ollamaAvailable, localAI, onToggleLocalAI }) {
   return (
     <div role="menu" aria-label="Settings and actions"
       style={{ position: "absolute", top: "calc(100% + 4px)", right: 0, minWidth: 240, background: "var(--bg-tertiary)", border: "1px solid var(--border)", borderRadius: "var(--radius-md, 10px)", boxShadow: "0 12px 32px rgba(0,0,0,0.35)", padding: "6px 0", zIndex: 250 }}>
@@ -5421,6 +5663,7 @@ function SettingsMenu({ onExportMbr, onExportVirgilMbr, onExportGainshare, onOpe
       <div style={{ borderTop: "1px solid var(--border-muted)", margin: "4px 0" }} />
       <MenuSection label="Settings" />
       <MenuRow icon="⚙" label="Data sources" onClick={onOpenSettings} />
+      <MenuRow icon="📅" label="Historical months" onClick={onOpenHistoricalMonths} />
       {ollamaAvailable && (
         <MenuRow icon="🤖" label="Local AI" hint={localAI ? "on" : "off"} onClick={onToggleLocalAI} />
       )}
@@ -5477,6 +5720,40 @@ function Breadcrumb({ section, program, attainment }) {
 // ── TopNav — permanent top navigation bar ───────────────────────────────────
 // topNavLinkStyle hoisted to module scope (matches MenuSection/MenuRow/Crumb pattern)
 // and parameterized by accent color so DR (#ed8936) and BZ (#48bb78) share it.
+function MonthPill({ label, onClick, onClear }) {
+  return (
+    <span
+      onClick={onClick}
+      title="Active historical month — click to manage"
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "0.4rem",
+        background: "#6366f120",
+        color: "#6366f1",
+        border: "1px solid #6366f150",
+        padding: "0.25rem 0.6rem",
+        borderRadius: 6,
+        fontFamily: "var(--font-data, monospace)",
+        fontSize: "0.74rem",
+        fontWeight: 700,
+        letterSpacing: "0.04em",
+        cursor: "pointer",
+        userSelect: "none",
+      }}
+    >
+      <span>📅 {label.toUpperCase()}</span>
+      <span
+        onClick={(e) => { e.stopPropagation(); onClear(); }}
+        title="Back to Current"
+        style={{ fontSize: "0.85rem", lineHeight: 1, color: "#6366f180", padding: "0 0.2rem" }}
+      >
+        ×
+      </span>
+    </span>
+  );
+}
+
 function topNavLinkStyle(active, accent = "#ed8936") {
   return {
     padding: "0.4rem 0.75rem", borderRadius: "var(--radius-sm, 6px)",
@@ -5493,7 +5770,8 @@ function TopNav({
   programsBySite, siteAttainments, fiscalInfo, hasTnps, hasCoaching,
   lightMode, setLightMode, showToday, setShowToday,
   ollamaAvailable, localAI, setLocalAI,
-  onExportMbr, onExportVirgilMbr, onExportGainshare, onOpenCorpDataSources, onRefresh, onUploadGoals, onUploadRoster, onUploadPriorGoals, onUploadCoachingDetails, onUploadCoachingWeekly, onUploadLoginBuckets, onOpenSettings,
+  onExportMbr, onExportVirgilMbr, onExportGainshare, onOpenCorpDataSources, onRefresh, onUploadGoals, onUploadRoster, onUploadPriorGoals, onUploadCoachingDetails, onUploadCoachingWeekly, onUploadLoginBuckets, onOpenSettings, onOpenHistoricalMonths,
+  activeMonthLabel, onSwitchToCurrent,
 }) {
   const navRef = useRef(null);
   const drRef = useRef(null);
@@ -5578,6 +5856,14 @@ function TopNav({
 
       <div style={{ flex: 1 }} />
 
+      {activeMonthLabel && (
+        <MonthPill
+          label={activeMonthLabel}
+          onClick={onOpenHistoricalMonths}
+          onClear={onSwitchToCurrent}
+        />
+      )}
+
       {rawData && fiscalInfo && (
         <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", padding: "0.3rem 0.65rem", borderRadius: "var(--radius-sm, 6px)", background: "rgba(22,163,74,0.12)", border: "1px solid rgba(22,163,74,0.3)" }}>
           <span style={{ width: 6, height: 6, borderRadius: 3, background: "#16a34a", boxShadow: "0 0 6px #16a34a80" }} />
@@ -5612,6 +5898,7 @@ function TopNav({
               onUploadCoachingWeekly={onUploadCoachingWeekly}
               onUploadLoginBuckets={onUploadLoginBuckets}
               onOpenSettings={() => { onOpenSettings(); setOpenMenu(null); }}
+              onOpenHistoricalMonths={() => { onOpenHistoricalMonths(); setOpenMenu(null); }}
               ollamaAvailable={ollamaAvailable}
               localAI={localAI}
               onToggleLocalAI={() => { setLocalAI(v => !v); setOpenMenu(null); }}
@@ -7677,6 +7964,17 @@ function parseExtendedAgentStats(rawCsv) {
 function normalizeVirgilMonthKey(s) {
   if (!s) return "";
   return s.replace(/['"`]/g, "").replace(/\s+/g, " ").trim();
+}
+
+// Convert "Apr '26" / "Apr 2026" → "2026-04" for stable id keys. Returns "" if unparseable.
+function deriveMonthId(label) {
+  const m = String(label || "").trim().match(/^([A-Za-z]{3,})\s*'?(\d{2,4})$/);
+  if (!m) return "";
+  const monthNames = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
+  const mIdx = monthNames.indexOf(m[1].slice(0, 3).toLowerCase());
+  if (mIdx < 0) return "";
+  const yr = m[2].length === 4 ? m[2] : `20${m[2]}`;
+  return `${yr}-${String(mIdx + 1).padStart(2, "0")}`;
 }
 
 function getPriorMonthLabel(label) {
@@ -15495,7 +15793,13 @@ function buildMoMAgentStats(currentAgents, priorAgents) {
   return results;
 }
 
-function CampaignComparisonPanel({ currentAgents, onNav, localAI, priorAgents, priorGoalLookup, priorSheetLoading, setPriorRaw, setPriorGoalsRaw }) {
+function CampaignComparisonPanel({ momMonthOptions, momPair, setMomPair, onNav, localAI, priorSheetLoading, setPriorRaw, setPriorGoalsRaw }) {
+  const leftSrc = momMonthOptions.find(o => o.id === momPair.left) || momMonthOptions[0] || { agents: [], goalLookup: null };
+  const rightSrc = momPair.right ? (momMonthOptions.find(o => o.id === momPair.right) || null) : null;
+  const currentAgents = leftSrc.agents;
+  const priorAgents = rightSrc ? rightSrc.agents : [];
+  const priorGoalLookup = rightSrc ? rightSrc.goalLookup : null;
+
   const [activeJobType, setActiveJobType] = useState(null);
   const [sortCol, setSortCol] = useState("delta");
   const [sortDir, setSortDir] = useState(-1);
@@ -15617,6 +15921,34 @@ function CampaignComparisonPanel({ currentAgents, onNav, localAI, priorAgents, p
 
   return (
     <div style={{ padding:"2rem 2.5rem", minHeight:"90vh", background:"var(--bg-primary)" }}>
+      <div style={{ display:"flex", alignItems:"center", gap:"0.6rem", marginBottom:"0.85rem", flexWrap:"wrap" }}>
+        <span style={{ fontFamily:"var(--font-ui, Inter, sans-serif)", fontSize:"0.7rem", letterSpacing:"0.08em", textTransform:"uppercase", color:"var(--text-muted)" }}>Compare</span>
+        <select
+          value={momPair.left}
+          onChange={(e) => setMomPair({ ...momPair, left: e.target.value })}
+          style={{ background:"var(--bg-secondary)", color:"var(--text-warm)", border:"1px solid var(--border)", borderRadius:4, padding:"0.3rem 0.5rem", fontSize:"0.78rem" }}
+        >
+          {momMonthOptions.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+        </select>
+        <span style={{ fontSize:"0.78rem", color:"var(--text-dim)" }}>vs</span>
+        <select
+          value={momPair.right}
+          onChange={(e) => setMomPair({ ...momPair, right: e.target.value })}
+          style={{ background:"var(--bg-secondary)", color:"var(--text-warm)", border:"1px solid var(--border)", borderRadius:4, padding:"0.3rem 0.5rem", fontSize:"0.78rem" }}
+        >
+          <option value="">— pick a month —</option>
+          {momMonthOptions.filter(o => o.id !== momPair.left).map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+        </select>
+        <button
+          onClick={() => setMomPair({ left: momPair.right, right: momPair.left })}
+          disabled={!momPair.right}
+          title="Swap left and right"
+          style={{ background:"transparent", color:"#6366f1", border:"1px solid #6366f150", borderRadius:4, padding:"0.3rem 0.6rem", fontSize:"0.74rem", cursor:momPair.right ? "pointer" : "not-allowed", opacity:momPair.right ? 1 : 0.5 }}
+        >
+          Swap ⇄
+        </button>
+      </div>
+
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"1.5rem" }}>
         <div>
           <div style={{ fontFamily:"monospace", fontSize:"1.08rem", color:"var(--text-dim)", letterSpacing:"0.15em" }}>CAMPAIGN COMPARISON \u00B7 Month over Month</div>
@@ -19705,6 +20037,7 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showMbrModal, setShowMbrModal] = useState(false);
   const [showGainshareModal, setShowGainshareModal] = useState(false);
+  const [showHistoricalMonthsModal, setShowHistoricalMonthsModal] = useState(false);
 
   const [showVirgilMbrModal, setShowVirgilMbrModal] = useState(false);
   const [corpInsights, _setCorpInsights] = useState(() => {
@@ -19921,6 +20254,61 @@ export default function App() {
     _setSheetUrls(urls);
     try { localStorage.setItem(SHEET_URLS_KEY, JSON.stringify(urls)); } catch(e) {}
   }, []);
+
+  const [historicalMonths, _setHistoricalMonths] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(HISTORICAL_MONTHS_STORAGE_KEY)) || []; }
+    catch(e) { return []; }
+  });
+  const setHistoricalMonths = useCallback(v => {
+    _setHistoricalMonths(v);
+    try { localStorage.setItem(HISTORICAL_MONTHS_STORAGE_KEY, JSON.stringify(v)); } catch(e) {}
+  }, []);
+
+  // One-shot: merge SEED_HISTORICAL_MONTHS into the saved list on first mount.
+  // Gated by a localStorage flag so user deletions stick across reloads.
+  useEffect(() => {
+    let alreadySeeded = false;
+    try { alreadySeeded = localStorage.getItem(HISTORICAL_MONTHS_SEEDED_KEY) === "true"; } catch(e) {}
+    if (alreadySeeded) return;
+    const existing = new Set(historicalMonths.map(h => h.label));
+    const missing = SEED_HISTORICAL_MONTHS.filter(s => !existing.has(s.label));
+    if (missing.length > 0) {
+      setHistoricalMonths([...historicalMonths, ...missing]);
+    }
+    try { localStorage.setItem(HISTORICAL_MONTHS_SEEDED_KEY, "true"); } catch(e) {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const [activeMonthId, _setActiveMonthId] = useState(() => {
+    try { return localStorage.getItem(ACTIVE_MONTH_STORAGE_KEY) || "current"; }
+    catch(e) { return "current"; }
+  });
+  const setActiveMonthId = useCallback(v => {
+    _setActiveMonthId(v);
+    try { localStorage.setItem(ACTIVE_MONTH_STORAGE_KEY, v); } catch(e) {}
+  }, []);
+
+  const [historicalMonthsCache, _setHistoricalMonthsCache] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(HISTORICAL_MONTHS_CACHE_KEY)) || {}; }
+    catch(e) { return {}; }
+  });
+  const setHistoricalMonthsCache = useCallback(v => {
+    _setHistoricalMonthsCache(v);
+    try { localStorage.setItem(HISTORICAL_MONTHS_CACHE_KEY, JSON.stringify(v)); } catch(e) {}
+  }, []);
+
+  const [momPair, _setMomPair] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(MOM_PAIR_STORAGE_KEY)) || { left: "current", right: "" }; }
+    catch(e) { return { left: "current", right: "" }; }
+  });
+  const setMomPair = useCallback(v => {
+    _setMomPair(v);
+    try { localStorage.setItem(MOM_PAIR_STORAGE_KEY, JSON.stringify(v)); } catch(e) {}
+  }, []);
+
+  const [monthSwitchLoading, setMonthSwitchLoading] = useState(false);
+  const [monthSwitchError, setMonthSwitchError] = useState("");
+
   const agentSheetUrl = sheetUrls.agent || DEFAULT_AGENT_SHEET_URL;
   const goalsSheetUrl = sheetUrls.goals || DEFAULT_GOALS_SHEET_URL;
   const nhSheetUrl    = sheetUrls.nh || DEFAULT_NH_SHEET_URL;
@@ -20040,7 +20428,19 @@ export default function App() {
     return eff;
   }, [hoursThreshold, hoursAutoScale, earlyFiscalInfo]);
 
-  const perf = usePerformanceEngine({ rawData, goalsRaw, newHiresRaw, tnpsRaw });
+  const activeAgentRaw = useMemo(() => {
+    if (activeMonthId === "current") return rawData;
+    const cached = historicalMonthsCache[activeMonthId];
+    return cached && cached.agentRaw ? parseCSV(cached.agentRaw) : rawData;
+  }, [activeMonthId, historicalMonthsCache, rawData]);
+
+  const activeGoalsRaw = useMemo(() => {
+    if (activeMonthId === "current") return goalsRaw;
+    const cached = historicalMonthsCache[activeMonthId];
+    return cached && cached.goalsRaw ? parseCSV(cached.goalsRaw) : goalsRaw;
+  }, [activeMonthId, historicalMonthsCache, goalsRaw]);
+
+  const perf = usePerformanceEngine({ rawData: activeAgentRaw, goalsRaw: activeGoalsRaw, newHiresRaw, tnpsRaw });
   const { programs, jobTypes, newHireSet, newHires, allAgentNames } = perf;
   const hasTnps = perf.tnpsData && perf.tnpsData.length > 0;
   const hasCoaching = (coachingWeekly && coachingWeekly.length > 0) || (coachingDetails && Object.keys(coachingDetails).length > 0);
@@ -20048,6 +20448,32 @@ export default function App() {
   // Prior month derived data (hoisted for app-wide access)
   const priorAgents = useMemo(() => normalizeAgents(priorMonthRaw || []), [priorMonthRaw]);
   const priorGoalLookup = useMemo(() => buildGoalLookup(priorMonthGoalsRaw), [priorMonthGoalsRaw]);
+
+  // MoM Compare options: Current + every cached historical month + legacy Prior fallback
+  // when the list is empty. Each entry carries pre-parsed agents and a built goal lookup.
+  const momMonthOptions = useMemo(() => {
+    const opts = [{ id: "current", label: "Current", agents: perf.agents || [], goalLookup: perf.goalLookup }];
+    for (const m of historicalMonths) {
+      const cached = historicalMonthsCache[m.id];
+      if (cached && cached.agentRaw && cached.goalsRaw) {
+        const parsedAgents = normalizeAgents(parseCSV(cached.agentRaw));
+        const lookup = buildGoalLookup(parseCSV(cached.goalsRaw));
+        opts.push({ id: m.id, label: m.label, agents: parsedAgents, goalLookup: lookup });
+      }
+    }
+    // Legacy fallback when the historical list is empty
+    if (historicalMonths.length === 0 && priorAgents && priorAgents.length > 0) {
+      opts.push({ id: "legacy-prior", label: "Prior", agents: priorAgents, goalLookup: priorGoalLookup });
+    }
+    return opts;
+  }, [perf.agents, perf.goalLookup, historicalMonths, historicalMonthsCache, priorAgents, priorGoalLookup]);
+
+  useEffect(() => {
+    if (!momPair.right && momMonthOptions.length > 1) {
+      const fallback = momMonthOptions.find(o => o.id !== momPair.left);
+      if (fallback) setMomPair({ ...momPair, right: fallback.id });
+    }
+  }, [momMonthOptions, momPair, setMomPair]);
 
   const siteRegionGroups = useMemo(() => {
     if (!perf.agents || perf.agents.length === 0) return { dr: [], bz: [] };
@@ -20459,6 +20885,68 @@ export default function App() {
     r.readAsText(f);
   };
 
+  // Fetches a historical month's two CSVs and caches them. Mirrors handleRefresh's
+  // corsproxy.io fallback. Returns true on success; false (and sets monthSwitchError) on failure.
+  const fetchHistoricalMonth = useCallback(async (month) => {
+    if (!month || !month.agentUrl || !month.goalsUrl) {
+      setMonthSwitchError(`Missing URLs for ${month && month.label || "month"}`);
+      return false;
+    }
+    setMonthSwitchLoading(true);
+    setMonthSwitchError("");
+    const fetchOne = async (url) => {
+      try {
+        const r = await fetch(url);
+        if (r.ok) return await r.text();
+      } catch(e) {}
+      // CORS fallback
+      try {
+        const r2 = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`);
+        if (r2.ok) return await r2.text();
+      } catch(e) {}
+      return null;
+    };
+    try {
+      const [agentRaw, goalsRaw] = await Promise.all([fetchOne(month.agentUrl), fetchOne(month.goalsUrl)]);
+      if (!agentRaw || !goalsRaw) {
+        setMonthSwitchError(`Couldn't load ${month.label} — check the URL in Settings`);
+        setMonthSwitchLoading(false);
+        return false;
+      }
+      setHistoricalMonthsCache({ ...historicalMonthsCache, [month.id]: { agentRaw, goalsRaw, fetchedAt: Date.now() } });
+      setMonthSwitchLoading(false);
+      return true;
+    } catch(e) {
+      setMonthSwitchError(`Couldn't load ${month.label} — ${e.message || "fetch error"}`);
+      setMonthSwitchLoading(false);
+      return false;
+    }
+  }, [historicalMonthsCache, setHistoricalMonthsCache]);
+
+  // Top-level entry point used by the Settings UI and the top-nav pill. Validates,
+  // fetches if needed, and commits the new active selection. On error, leaves the
+  // active month untouched (no half-loaded state).
+  const switchActiveMonth = useCallback(async (newId) => {
+    if (newId === activeMonthId) return;
+    if (newId === "current") {
+      setActiveMonthId("current");
+      setMonthSwitchError("");
+      return;
+    }
+    const month = historicalMonths.find(m => m.id === newId);
+    if (!month) {
+      setMonthSwitchError(`Month ${newId} not found in saved list`);
+      return;
+    }
+    // Use cache when available, otherwise fetch
+    if (historicalMonthsCache[newId] && historicalMonthsCache[newId].agentRaw && historicalMonthsCache[newId].goalsRaw) {
+      setActiveMonthId(newId);
+      return;
+    }
+    const ok = await fetchHistoricalMonth(month);
+    if (ok) setActiveMonthId(newId);
+  }, [activeMonthId, historicalMonths, historicalMonthsCache, fetchHistoricalMonth, setActiveMonthId]);
+
   const handleRefresh = useCallback(async () => {
     const proxy = url => `https://corsproxy.io/?${encodeURIComponent(url)}`;
     // Returns { rows, text } — text preserved so Corp MBR slide builders can consume raw CSV
@@ -20574,6 +21062,23 @@ export default function App() {
       {!splashDone && <LoadingSplash onEnded={() => setSplashDone(true)} />}
       {showMbrModal && rawData && <MbrExportModal perf={perf} onClose={() => setShowMbrModal(false)} />}
       {showGainshareModal && rawData && <GainshareExportModal perf={perf} onClose={() => setShowGainshareModal(false)} />}
+      {showHistoricalMonthsModal && (
+        <HistoricalMonthsModal
+          onClose={() => setShowHistoricalMonthsModal(false)}
+          historicalMonths={historicalMonths}
+          setHistoricalMonths={setHistoricalMonths}
+          activeMonthId={activeMonthId}
+          historicalMonthsCache={historicalMonthsCache}
+          setHistoricalMonthsCache={setHistoricalMonthsCache}
+          onSwitchAndReload={async (newId) => {
+            await switchActiveMonth(newId);
+            setShowHistoricalMonthsModal(false);
+          }}
+          monthSwitchLoading={monthSwitchLoading}
+          monthSwitchError={monthSwitchError}
+          lightMode={lightMode}
+        />
+      )}
       {showVirgilMbrModal && (
         <VirgilMbrExportModal
           perf={perf}
@@ -20716,7 +21221,39 @@ export default function App() {
         onUploadCoachingWeekly={handleCoachingWeeklyUpload}
         onUploadLoginBuckets={handleLoginBucketsUpload}
         onOpenSettings={() => setShowSettings(true)}
+        onOpenHistoricalMonths={() => setShowHistoricalMonthsModal(true)}
+        activeMonthLabel={activeMonthId === "current" ? null : (historicalMonths.find(m => m.id === activeMonthId) || {}).label || activeMonthId}
+        onSwitchToCurrent={() => switchActiveMonth("current")}
       />
+
+      {activeMonthId !== "current" && (() => {
+        const m = historicalMonths.find(x => x.id === activeMonthId);
+        if (!m) return null;
+        return (
+          <div style={{
+            background: "#6366f114",
+            borderBottom: "1px solid #6366f140",
+            padding: "0.45rem 1rem",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            fontFamily: "var(--font-ui, Inter, sans-serif)",
+            fontSize: "0.78rem",
+            color: "#6366f1",
+            position: "sticky",
+            top: 48,
+            zIndex: 150,
+          }}>
+            <span>📅 Viewing <strong>{m.label}</strong> (Final)</span>
+            <button
+              onClick={() => switchActiveMonth("current")}
+              style={{ background: "transparent", color: "#6366f1", border: "1px solid #6366f150", padding: "0.2rem 0.6rem", borderRadius: 4, fontSize: "0.74rem", fontWeight: 600, cursor: "pointer" }}
+            >
+              Switch to Current
+            </button>
+          </div>
+        );
+      })()}
 
       <div style={{ paddingTop: "48px" }}>
         <Breadcrumb
@@ -20761,11 +21298,11 @@ export default function App() {
           />
         ) : currentPage.section === "mom" ? (
           <CampaignComparisonPanel
-            currentAgents={perf.agents}
+            momMonthOptions={momMonthOptions}
+            momPair={momPair}
+            setMomPair={setMomPair}
             onNav={() => setCurrentPage({ section: "overview" })}
             localAI={localAI}
-            priorAgents={priorAgents}
-            priorGoalLookup={priorGoalLookup}
             priorSheetLoading={priorSheetLoading}
             setPriorRaw={setPriorMonthRaw}
             setPriorGoalsRaw={setPriorMonthGoalsRaw}
