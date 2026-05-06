@@ -18536,6 +18536,30 @@ function TVMode({ d, codes, doFetch, lastRefresh, onExit, activeOnly, setActiveO
   );
 }
 
+// Returns true when viewport is < 480px wide. Drives all conditional layout
+// decisions inside TodayView. Uses matchMedia (rather than resize+innerWidth)
+// because Chrome devtools device emulation reliably fires matchMedia change
+// events on viewport flips but sometimes skips resize on initial load.
+function useIsMobile() {
+  const query = "(max-width: 479px)";
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== "undefined" && window.matchMedia(query).matches
+  );
+  useEffect(() => {
+    const mq = window.matchMedia(query);
+    const check = () => setIsMobile(mq.matches);
+    check();
+    if (mq.addEventListener) {
+      mq.addEventListener("change", check);
+      return () => mq.removeEventListener("change", check);
+    }
+    // Safari < 14 fallback
+    mq.addListener(check);
+    return () => mq.removeListener(check);
+  }, []);
+  return isMobile;
+}
+
 function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
   const [raw,         setRaw]         = useState(() => {
     try {
@@ -18589,6 +18613,7 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
   const [activeOnly, setActiveOnly] = useState(false);
   const [screensaverMode, setScreensaverMode] = useState(false);
   const [attendanceCollapsed, setAttendanceCollapsed] = useState(true);
+  const isMobile = useIsMobile();
 
   // Persist code selection to localStorage whenever it changes
   useEffect(() => {
@@ -19161,22 +19186,22 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
   }
 
   return (
-    <div style={{ background: `var(--bg-primary)`, minHeight: "90vh", padding: "2rem 2.5rem", paddingBottom: "4rem" }}>
+    <div style={{ background: `var(--bg-primary)`, minHeight: "90vh", padding: isMobile ? "0.75rem 0.75rem" : "2rem 2.5rem", paddingBottom: isMobile ? "2rem" : "4rem" }}>
 
       {/* ── Header ── */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.75rem" }}>
+      <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", justifyContent: "space-between", alignItems: isMobile ? "stretch" : "center", gap: isMobile ? "0.6rem" : 0, marginBottom: isMobile ? "1rem" : "1.75rem" }}>
         <div>
-          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: "#16a34a", letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: "0.25rem" }}>
+          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: isMobile ? "0.7rem" : "0.82rem", color: "#16a34a", letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: "0.25rem" }}>
           ● LIVE · auto-refreshes every 5 min · last loaded {now}
           </div>
-          <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "3rem", color: `var(--text-warm)`, fontWeight: 700 }}>Today's Operations</div>
+          <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: isMobile ? "1.6rem" : "3rem", color: `var(--text-warm)`, fontWeight: 700 }}>Today's Operations</div>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", alignItems: "flex-end" }}>
+        <div style={{ display: "flex", flexDirection: isMobile ? "row" : "column", gap: "0.4rem", alignItems: isMobile ? "stretch" : "flex-end" }}>
           <button onClick={() => { setActiveOnly(false); setScreensaverMode(true); }}
             style={{ background: "#6366f110", border: "1px solid #6366f140", borderRadius: "6px",
-              color: "#6366f1", padding: "0.5rem 1.25rem", fontFamily: "var(--font-ui, Inter, sans-serif)",
-              fontSize: "1.1rem", cursor: "pointer", fontWeight: 700, width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}>
-            <span style={{ fontSize: "2.4rem", lineHeight: 1 }}>📺</span> TV Mode
+              color: "#6366f1", padding: isMobile ? "0.45rem 0.6rem" : "0.5rem 1.25rem", fontFamily: "var(--font-ui, Inter, sans-serif)",
+              fontSize: isMobile ? "0.82rem" : "1.1rem", cursor: "pointer", fontWeight: 700, flex: isMobile ? 1 : "0 0 auto", width: isMobile ? "auto" : "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}>
+            <span style={{ fontSize: isMobile ? "1.1rem" : "2.4rem", lineHeight: 1 }}>📺</span> TV Mode
           </button>
           <button onClick={async () => {
               try {
@@ -19186,8 +19211,8 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
               }
             }}
             style={{ background: "transparent", border: "1px solid var(--text-faint)", borderRadius: "6px",
-              color: `var(--text-muted)`, padding: "0.4rem 1rem", fontFamily: "var(--font-ui, Inter, sans-serif)",
-              fontSize: "0.8rem", cursor: "pointer", width: "100%" }}>
+              color: `var(--text-muted)`, padding: isMobile ? "0.45rem 0.6rem" : "0.4rem 1rem", fontFamily: "var(--font-ui, Inter, sans-serif)",
+              fontSize: isMobile ? "0.78rem" : "0.8rem", cursor: "pointer", flex: isMobile ? 1 : "0 0 auto", width: isMobile ? "auto" : "100%" }}>
             {loading ? "Fetching..." : "\u27F3 Refresh Data"}
           </button>
         </div>
@@ -19218,25 +19243,26 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
           </div>
         );
       })()}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "0.75rem", marginBottom: "1.5rem" }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(6, 1fr)", gap: isMobile ? "0.5rem" : "0.75rem", marginBottom: isMobile ? "1rem" : "1.5rem" }}>
         {[
           { v: d.presentCount,           l: activeOnly ? "Active" : "On Floor", sub: `${d.absent.length} absent · ${d.newFaces.length} new`, c: "#16a34a" },
           { v: fmt(d.totalHrs, 1),        l: "Hours Today", sub: `${fmt(d.totalHrs/Math.max(d.presentCount,1), 2)} avg/agent`,  c: "#6366f1" },
           { v: d.totalGoals,              l: "Sales Today", sub: d.totalGoals > 0 ? `${fmt(d.totalHrs > 0 ? d.totalGoals/d.totalHrs : 0, 3)} GPH pace` : "no sales yet", c: "#d97706" },
+          { v: d.totalGoals > 0 ? `$${((d.totalHrs * 19.77) / d.totalGoals).toFixed(2)}` : `$${(d.totalHrs * 19.77).toFixed(2)}`, l: "CPS", sub: "cost per sale", c: "#8b5cf6" },
           { v: d.totalRgu || "—",         l: "RGU",         sub: "today total",  c: "#2563eb" },
           { v: d.absent.length,           l: "Absent",      sub: `of ${recentAgentNames.size} last-7-day roster`, c: d.absent.length > 0 ? "#dc2626" : "#16a34a" },
-        ].map(({ v, l, sub, c }) => (
-          <div key={l} style={{ background: `var(--bg-secondary)`, border: `1px solid ${c}22`, borderRadius: "var(--radius-md, 10px)", padding: "1rem", textAlign: "center" }}>
-            <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "3rem", color: c, fontWeight: 700, lineHeight: 1 }}>{v}</div>
-            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: c, marginTop: "0.2rem" }}>{l}</div>
-            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-faint)`, marginTop: "0.2rem" }}>{sub}</div>
+        ].map(({ v, l, sub, c }, i) => (
+          <div key={l} style={{ background: `var(--bg-secondary)`, border: `1px solid ${c}22`, borderRadius: "var(--radius-md, 10px)", padding: isMobile ? "0.65rem 0.5rem" : "1rem", textAlign: "center" }}>
+            <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: isMobile ? "1.8rem" : "3rem", color: c, fontWeight: 700, lineHeight: 1 }}>{v}</div>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: isMobile ? "0.72rem" : "0.82rem", color: c, marginTop: "0.2rem" }}>{l}</div>
+            <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: isMobile ? "0.66rem" : "0.82rem", color: `var(--text-faint)`, marginTop: "0.15rem" }}>{sub}</div>
           </div>
         ))}
       </div>
 
       {/* ── Product Code Columns — full-width slim bar ── */}
       {allAvailableCodes.length > 0 && (
-        <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1rem 1.25rem", marginBottom: "1.25rem" }}>
+        <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: isMobile ? "0.65rem 0.75rem" : "1rem 1.25rem", marginBottom: isMobile ? "0.85rem" : "1.25rem" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase" }}>
               Product Code Columns
@@ -19363,7 +19389,7 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
       )}
 
       {/* ── Programs breakdown ── */}
-      <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem", marginBottom: "1.25rem" }}>
+      <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: isMobile ? "0.75rem" : "1.25rem", marginBottom: isMobile ? "0.85rem" : "1.25rem" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem", flexWrap: "wrap", gap: "0.5rem" }}>
           <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase" }}>Performance by Campaign · by Site</div>
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
@@ -19442,7 +19468,7 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
           const totAgents = sortedPrograms.reduce((s, p) => s + p.agentCount, 0);
           const filterColor = sortedPrograms.length > 0 ? getRegColor(sortedPrograms[0].reg) : "#d97706";
           return (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "0.5rem", marginBottom: "1rem", padding: "0.75rem", background: filterColor + "08", border: `1px solid ${filterColor}25`, borderRadius: "var(--radius-md, 10px)" }}>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(3, 1fr)" : "repeat(5, 1fr)", gap: isMobile ? "0.4rem" : "0.5rem", marginBottom: isMobile ? "0.7rem" : "1rem", padding: isMobile ? "0.5rem" : "0.75rem", background: filterColor + "08", border: `1px solid ${filterColor}25`, borderRadius: "var(--radius-md, 10px)" }}>
               {[
                 { l: "Campaigns", v: sortedPrograms.length, c: filterColor },
                 { l: "Agents", v: totAgents, c: `var(--text-secondary)` },
@@ -19452,13 +19478,82 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
                 { l: "CPS", v: totGoals > 0 ? `$${((totHrs * 19.77) / totGoals).toFixed(2)}` : `$${(totHrs * 19.77).toFixed(2)}`, c: (() => { const pv = sortedPrograms.filter(p => p.pctToGoal !== null); return pv.length > 0 ? attainColor(pv.reduce((s,p) => s + p.pctToGoal, 0) / pv.length) : `var(--text-faint)`; })() },
               ].map(({ l, v, c }) => (
                 <div key={l} style={{ textAlign: "center" }}>
-                  <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: "1.95rem", color: c, fontWeight: 700, lineHeight: 1 }}>{v}</div>
-                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.9rem", color: `var(--text-dim)`, marginTop: "0.1rem" }}>{l}</div>
+                  <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: isMobile ? "1.1rem" : "1.95rem", color: c, fontWeight: 700, lineHeight: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{v}</div>
+                  <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: isMobile ? "0.65rem" : "0.9rem", color: `var(--text-dim)`, marginTop: "0.1rem" }}>{l}</div>
                 </div>
               ))}
             </div>
           );
         })()}
+        {isMobile ? (
+          <div>
+            {/* Sort chip strip */}
+            <div style={{ display: "flex", gap: "0.3rem", flexWrap: "wrap", marginBottom: "0.5rem" }}>
+              {[
+                { k: "hrs",       l: "Hrs"   },
+                { k: "goals",     l: "Sales" },
+                { k: "pctToGoal", l: "%"     },
+                { k: "gph",       l: "GPH"   },
+                { k: "cps",       l: "CPS"   },
+                { k: "rgu",       l: "RGU"   },
+              ].map(({ k, l }) => (
+                <button key={k} onClick={() => toggleProgSort(k)}
+                  style={{ padding: "0.2rem 0.55rem", fontSize: "0.7rem", borderRadius: 4, border: "none", cursor: "pointer", background: progSortBy === k ? "#d9770618" : "var(--bg-tertiary)", color: progSortBy === k ? "#d97706" : "var(--text-dim)", fontWeight: progSortBy === k ? 700 : 400 }}>
+                  {l}{progSortBy === k ? (progSortDir === -1 ? " ↓" : " ↑") : ""}
+                </button>
+              ))}
+            </div>
+            {/* Card list */}
+            {sortedPrograms.map((p) => {
+              const accent = p.pctToGoal !== null && p.pctToGoal !== undefined ? attainColor(p.pctToGoal) : "var(--text-faint)";
+              const isBZ = (p.reg || "").toUpperCase().includes("XOTM");
+              const regColor = isBZ ? "#48bb78" : "#ed8936";
+              const gph = p.hrs > 0 ? p.effectiveGoals / p.hrs : 0;
+              return (
+                <div key={`${p.reg}-${p.roc || p.grp}`} style={{ background: "var(--bg-primary)", borderRadius: "var(--radius-md, 10px)", padding: "0.6rem 0.7rem", marginBottom: "0.45rem", borderLeft: `3px solid ${accent}` }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "0.4rem", gap: "0.5rem" }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text-warm)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {p.grp} {p.roc && <span style={{ fontFamily: "var(--font-data, monospace)", color: "var(--text-faint)", fontSize: "0.72rem" }}>{p.roc}</span>}
+                      </div>
+                      <div style={{ fontSize: "0.68rem", color: regColor, marginTop: "0.1rem" }}>{p.reg} · {p.agentCount} agents</div>
+                    </div>
+                    <div style={{ fontSize: "0.95rem", fontWeight: 700, color: accent, whiteSpace: "nowrap" }}>
+                      {p.pctToGoal !== null && p.pctToGoal !== undefined ? `${Math.round(p.pctToGoal)}%` : "—"}
+                    </div>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "0.2rem" }}>
+                    {[
+                      { l: "Hours", v: fmt(p.hrs, 1),                                 c: "#6366f1" },
+                      { l: "Sales", v: p.effectiveGoals || "—",                        c: "#d97706" },
+                      { l: "GPH",   v: p.effectiveGoals > 0 ? gph.toFixed(3) : "—",    c: "#16a34a" },
+                      { l: "CPS",   v: p.effectiveGoals > 0 ? `$${((p.hrs * 19.77) / p.effectiveGoals).toFixed(0)}` : `$${(p.hrs * 19.77).toFixed(0)}`, c: accent },
+                      { l: "RGU",   v: p.rgu || "—",                                   c: "#2563eb" },
+                    ].map(({ l, v, c }) => (
+                      <div key={l} style={{ textAlign: "center" }}>
+                        <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "0.85rem", fontWeight: 700, color: c, lineHeight: 1.1 }}>{v}</div>
+                        <div style={{ fontSize: "0.6rem", color: "var(--text-dim)" }}>{l}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {Object.keys(p.products || {}).length > 0 && displayCodes.length > 0 && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.2rem", marginTop: "0.45rem" }}>
+                      {Object.entries(p.products)
+                        .filter(([cod]) => selectedCodes.size === 0 || selectedCodes.has(cod))
+                        .sort((a, b) => b[1] - a[1])
+                        .slice(0, 6)
+                        .map(([cod, cnt]) => (
+                        <span key={cod} style={{ fontSize: "0.62rem", padding: "0.1rem 0.3rem", borderRadius: 3, background: "#6366f110", border: "1px solid #6366f140", color: "#6366f1", whiteSpace: "nowrap" }}>
+                          {prodLabel(cod, codes)}: {cnt}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", whiteSpace: "nowrap" }}>
             <thead>
@@ -19654,6 +19749,7 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
             </tfoot>
           </table>
         </div>
+        )}
       </div>
 
       {/* ── Attendance + By Region (collapsible, default collapsed) ── */}
@@ -19668,10 +19764,10 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
           </span>
         </button>
         {!attendanceCollapsed && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.25rem", marginTop: "0.5rem", alignItems: "stretch" }}>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: isMobile ? "0.6rem" : "1.25rem", marginTop: "0.5rem", alignItems: "stretch" }}>
 
             {/* ── Attendance panel ── */}
-            <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem" }}>
+            <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: isMobile ? "0.75rem" : "1.25rem" }}>
               <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "1rem" }}>
                 Attendance vs Last 7 Days
               </div>
@@ -19735,7 +19831,7 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
             </div>
 
             {/* ── By Region ── */}
-            <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem", display: "flex", flexDirection: "column" }}>
+            <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: isMobile ? "0.75rem" : "1.25rem", display: "flex", flexDirection: "column" }}>
               <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "1rem" }}>
                 By Region — Live
               </div>
@@ -19752,11 +19848,12 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
                       <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "1.32rem", color: regColor, fontWeight: 600 }}>{reg}</span>
                       <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", color: `var(--text-muted)` }}>{s.count} agents</span>
                     </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr", gap: "0.5rem" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: "0.4rem" }}>
                       {[
                         { l: "Hours",     v: fmt(s.hrs, 1),                                      c: "#6366f1" },
                         { l: "Sales",     v: s.goals || "—",                                      c: "#d97706" },
                         { l: "GPH",       v: s.goals > 0 ? gph.toFixed(3) : "—",                 c: "#16a34a" },
+                        { l: "CPS",       v: s.goals > 0 ? `$${((s.hrs * 19.77) / s.goals).toFixed(0)}` : `$${(s.hrs * 19.77).toFixed(0)}`, c: pctColor },
                         { l: "RGU",       v: s.rgu || "—",                                        c: "#2563eb" },
                         { l: "% to Goal", v: avgPct !== null ? `${Math.round(avgPct)}%` : "—",   c: pctColor  },
                       ].map(({ l, v, c }) => (
@@ -19803,7 +19900,7 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
       </div>
 
       {/* ── Agent leaderboard ── */}
-      <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "1.25rem" }}>
+      <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: isMobile ? "0.75rem" : "1.25rem" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem", flexWrap: "wrap", gap: "0.5rem" }}>
           <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase" }}>
             Agent Leaderboard · {sortedAgents.length} {lbRegion === "All" ? (lbJob ? `in ${lbJob}` : (activeOnly ? "active now" : "today")) : `in ${lbRegion}`}{lbJob && lbRegion !== "All" ? ` · ${lbJob}` : ""}
@@ -19863,7 +19960,59 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
           );
         })()}
         {(() => {
-          return (
+          return isMobile ? (
+          <div>
+            {/* Sort chip strip */}
+            <div style={{ display: "flex", gap: "0.3rem", flexWrap: "wrap", marginBottom: "0.5rem" }}>
+              {[
+                { k: "hrs",   l: "Hrs"   },
+                { k: "goals", l: "Sales" },
+                { k: "pctToGoal", l: "%" },
+                { k: "rgu",   l: "RGU"   },
+              ].map(({ k, l }) => (
+                <button key={k} onClick={() => toggleSort(k)}
+                  style={{ padding: "0.2rem 0.55rem", fontSize: "0.7rem", borderRadius: 4, border: "none", cursor: "pointer", background: sortBy === k ? "#d9770618" : "var(--bg-tertiary)", color: sortBy === k ? "#d97706" : "var(--text-dim)", fontWeight: sortBy === k ? 700 : 400 }}>
+                  {l}{sortBy === k ? (sortDir === -1 ? " ↓" : " ↑") : ""}
+                </button>
+              ))}
+            </div>
+            {/* Card list */}
+            {sortedAgents.map((a, i) => {
+              const accent = a.pctToGoal !== null && a.pctToGoal !== undefined ? attainColor(a.pctToGoal) : "var(--text-faint)";
+              const isBZ = (a.reg || "").toUpperCase().includes("XOTM");
+              const regColor = isBZ ? "#48bb78" : "#ed8936";
+              const pctText = a.pctToGoal !== null && a.pctToGoal !== undefined ? `${Math.round(a.pctToGoal)}%` : "—";
+              return (
+                <div key={`${a.name}-${a.job || i}`} style={{ background: "var(--bg-primary)", borderRadius: "var(--radius-sm, 6px)", padding: "0.5rem 0.65rem", marginBottom: "0.35rem", borderLeft: `2px solid ${accent}` }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "0.5rem" }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: "0.82rem", fontWeight: 500, color: "var(--text-warm)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{a.name}</div>
+                      <div style={{ fontSize: "0.62rem", color: regColor, marginTop: "0.05rem" }}>
+                        {a.reg}{a.job ? ` · ${a.job}` : ""}
+                      </div>
+                    </div>
+                    <div style={{ fontFamily: "var(--font-data, monospace)", fontSize: "0.78rem", fontWeight: 700, color: accent, whiteSpace: "nowrap", textAlign: "right" }}>
+                      {fmt(a.hrs, 1)}h · {a.effectiveGoals || 0} sales · {pctText} · ${a.effectiveGoals > 0 ? Math.round((a.hrs * 19.77) / a.effectiveGoals) : Math.round(a.hrs * 19.77)}
+                    </div>
+                  </div>
+                  {Object.keys(a.products || {}).length > 0 && displayCodes.length > 0 && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.18rem", marginTop: "0.35rem" }}>
+                      {Object.entries(a.products)
+                        .filter(([cod]) => selectedCodes.size === 0 || selectedCodes.has(cod))
+                        .sort((b, c) => c[1] - b[1])
+                        .slice(0, 6)
+                        .map(([cod, cnt]) => (
+                        <span key={cod} style={{ fontSize: "0.6rem", padding: "0.08rem 0.28rem", borderRadius: 3, background: "#6366f110", border: "1px solid #6366f140", color: "#6366f1", whiteSpace: "nowrap" }}>
+                          {prodLabel(cod, codes)}: {cnt}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          ) : (
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", whiteSpace: "nowrap" }}>
             <thead>
