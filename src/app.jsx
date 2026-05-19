@@ -239,18 +239,19 @@ const GAINSHARE_TIERS = [
   { min: 0,      max: 73.99,    mobile:-4.00, hsd:-4.00, costPer:-1.00, sph:-1.00, label: "< 74%" },
 ];
 
-// SITE-LEVEL (BZ / DR breakouts) — used on the By Site drilldown
+// SITE-LEVEL (BZ / DR breakouts) — used on the By Site drilldown.
+// SPH mirrors Cost Per per the vendor gainshare spec.
 const GAINSHARE_SITE_TIERS = [
-  { min: 139, max: Infinity, mobile: 4.00, hsd: 4.00, costPer: 2.50, sph: 1.00, label: "> 139%" },
-  { min: 129, max: 139,      mobile: 3.00, hsd: 3.00, costPer: 2.00, sph: 0.75, label: "129–139%" },
-  { min: 118, max: 128.99,   mobile: 2.00, hsd: 2.00, costPer: 1.50, sph: 0.50, label: "118–128.99%" },
-  { min: 107, max: 117.99,   mobile: 1.00, hsd: 1.00, costPer: 0.50, sph: 0.25, label: "107–117.99%" },
+  { min: 139, max: Infinity, mobile: 4.00, hsd: 4.00, costPer: 2.50, sph: 2.50, label: "> 139%" },
+  { min: 129, max: 139,      mobile: 3.00, hsd: 3.00, costPer: 2.00, sph: 2.00, label: "129–139%" },
+  { min: 118, max: 128.99,   mobile: 2.00, hsd: 2.00, costPer: 1.50, sph: 1.50, label: "118–128.99%" },
+  { min: 107, max: 117.99,   mobile: 1.00, hsd: 1.00, costPer: 0.50, sph: 0.50, label: "107–117.99%" },
   { min: 100, max: 106.99,   mobile: 0,    hsd: 0,    costPer: 0,    sph: 0,    label: "100–106.99%" },
-  { min: 95,  max: 99.99,    mobile:-1.00, hsd:-1.00, costPer:-0.50, sph:-0.25, label: "95–99.99%" },
-  { min: 90,  max: 94.99,    mobile:-2.00, hsd:-2.00, costPer:-1.00, sph:-0.50, label: "90–94.99%" },
-  { min: 85,  max: 89.99,    mobile:-3.00, hsd:-3.00, costPer:-2.00, sph:-0.75, label: "85–89.99%" },
-  { min: 80,  max: 84.99,    mobile:-4.00, hsd:-4.00, costPer:-2.50, sph:-1.00, label: "80–84.99%" },
-  { min: 0,   max: 79.99,    mobile:-5.00, hsd:-5.00, costPer:-3.00, sph:-1.00, label: "< 79.99%" },
+  { min: 95,  max: 99.99,    mobile:-1.00, hsd:-1.00, costPer:-0.50, sph:-0.50, label: "95–99.99%" },
+  { min: 90,  max: 94.99,    mobile:-2.00, hsd:-2.00, costPer:-1.00, sph:-1.00, label: "90–94.99%" },
+  { min: 85,  max: 89.99,    mobile:-3.00, hsd:-3.00, costPer:-2.00, sph:-2.00, label: "85–89.99%" },
+  { min: 80,  max: 84.99,    mobile:-4.00, hsd:-4.00, costPer:-2.50, sph:-2.50, label: "80–84.99%" },
+  { min: 0,   max: 79.99,    mobile:-5.00, hsd:-5.00, costPer:-3.00, sph:-3.00, label: "< 79.99%" },
 ];
 
 // Site-level Hour Attainment gate tiers (from the image: 0%, -2%, -4%, -6%)
@@ -5932,24 +5933,10 @@ const GAINSHARE_FONT = "Aptos";
 // goalLookup: output of buildGoalLookup
 // fiscalInfo: { fiscalStart, fiscalEnd, ... }
 // opts: { includeSPH: bool, includeHourGate: bool }
-// When neither SPH nor Hour Gate is included in the deck, the Cost Per attainment
-// tier doubles (e.g. +1% becomes +2%) per Comcast's compensating-bonus rule —
-// SPH/HG and Cost Per share a max-bonus envelope, and turning the paired metrics
-// off means Cost Per absorbs their share. Mobile and HSD bonuses are unchanged.
+// When SPH or Hour Gate toggles are off, their bonus contributions are simply
+// omitted from netBonus — Mobile/HSD/Cost Per tier tables stay unchanged.
 function computeGainshareReport(agents, goalLookup, fiscalInfo, opts = {}) {
   const { includeSPH = true, includeHourGate = true } = opts;
-  const noSphHg = !includeSPH && !includeHourGate;
-  const overallTiers = noSphHg
-    ? GAINSHARE_TIERS.map(t => ({ ...t, costPer: t.costPer * 2 }))
-    : GAINSHARE_TIERS;
-  const siteTiers = noSphHg
-    ? GAINSHARE_SITE_TIERS.map(t => ({ ...t, costPer: t.costPer * 2 }))
-    : GAINSHARE_SITE_TIERS;
-  const costPerTier = (pct, isSite) => {
-    if (pct === null || pct === undefined) return null;
-    const table = isSite ? siteTiers : overallTiers;
-    return table.find(t => pct >= t.min && pct <= t.max) || table[table.length - 1];
-  };
   const SITE_KEYS = { BZ: "BZ", DR: "DR" };
   const sites = {};
 
@@ -6002,7 +5989,7 @@ function computeGainshareReport(agents, goalLookup, fiscalInfo, opts = {}) {
     const tiers = {
       mobile:  mobileAttain  !== null ? getGainshareTier(mobileAttain,  true) : null,
       hsd:     hsdAttain     !== null ? getGainshareTier(hsdAttain,     true) : null,
-      costPer: costPerTier(costPerAttain, true),
+      costPer: costPerAttain !== null ? getGainshareTier(costPerAttain, true) : null,
       sph:     sphAttain     !== null ? getGainshareTier(sphAttain,     true) : null,
       hour:    hourAttain    !== null ? getHourGateTier(hourAttain)            : null,
     };
@@ -6027,7 +6014,7 @@ function computeGainshareReport(agents, goalLookup, fiscalInfo, opts = {}) {
       netBonus,
       totals: { plan: planTot, raw: rawTot, scaled: scaledTot },
       funders,
-      tiersTable: siteTiers,
+      tiersTable: GAINSHARE_SITE_TIERS,
       isOverall: false,
     };
   }
@@ -6125,7 +6112,7 @@ function computeGainshareReport(agents, goalLookup, fiscalInfo, opts = {}) {
   const cTiers = {
     mobile:  cMobileAttain  !== null ? getGainshareTier(cMobileAttain,  false) : null,
     hsd:     cHsdAttain     !== null ? getGainshareTier(cHsdAttain,     false) : null,
-    costPer: costPerTier(cCostPerAttain, false),
+    costPer: cCostPerAttain !== null ? getGainshareTier(cCostPerAttain, false) : null,
     sph:     cSphAttain     !== null ? getGainshareTier(cSphAttain,     false) : null,
     // Hour gate under overall mode: flat -2% if <100%. Looked up against
     // HOUR_GATE_OVERALL_TIERS so slide ladder display + Net Bonus stay in sync.
@@ -6152,7 +6139,7 @@ function computeGainshareReport(agents, goalLookup, fiscalInfo, opts = {}) {
     netBonus: cNetBonus,
     totals: cTotals,
     funders: combinedFunders,
-    tiersTable: overallTiers,
+    tiersTable: GAINSHARE_TIERS,
     isOverall: true,
   };
 
@@ -8390,15 +8377,28 @@ function buildCoachingPageData(coachingWeekly, coachingDetails, bpLookup, monthF
   const bzRollup = bySite.filter(s => s.site === "BZ")
     .reduce((acc, s) => ({ x: acc.x + s.x, y: acc.y + s.y }), { x: 0, y: 0 });
 
-  // Org Coaching KPI is derived from the per-week CSV using the Color WB rule:
-  // count agent-weeks where Color WB is "Yes" or "No" (NCR rows excluded);
-  // sum column D ("Coaching Sessions  (copy)") across those rows for the numerator.
-  // No bpLookup filter — every Yes/No agent-week counts toward the org total.
+  // Org Coaching KPI pulls Coaching Sessions / Coachings Due from Coaching Details
+  // (Tableau's authoritative source). This matches Comcast's official "Completed %"
+  // and the Corp MBR slide. Per-month fallback to the weekly Yes/No count handles
+  // months where Coaching Details didn't load — preserves a renderable tile rather
+  // than 0/0. NOTE: site/supervisor rollups still use the weekly methodology, so
+  // they will not sum to this ORG number (different denominator definitions).
   let orgCoachingX = 0, orgCoachingY = 0;
-  for (const row of activeRows) {
-    if (row.colorWb !== "Yes" && row.colorWb !== "No") continue;
-    orgCoachingY += 1;
-    orgCoachingX += row.sessions || 0;
+  for (const month of activeMonths) {
+    const bucket = safeDetails[month] || {};
+    const monthSessions = Number(bucket["Coaching Sessions"]) || 0;
+    const monthDue = Number(bucket["Coachings Due"]) || 0;
+    if (monthDue > 0) {
+      orgCoachingX += monthSessions;
+      orgCoachingY += monthDue;
+    } else {
+      for (const row of activeRows) {
+        if (row.fiscalMonth !== month) continue;
+        if (row.colorWb !== "Yes" && row.colorWb !== "No") continue;
+        orgCoachingY += 1;
+        orgCoachingX += row.sessions || 0;
+      }
+    }
   }
   const orgCoachingPct = orgCoachingY ? orgCoachingX / orgCoachingY : null;
 
@@ -11728,6 +11728,10 @@ function CoachingSummaryTab({ data, lightMode }) {
         <KpiTile label="DR Coaching" value={fmtPct(bySiteRollup.dr.pct)} sub={`${bySiteRollup.dr.x} / ${bySiteRollup.dr.y} agent-weeks`} accent={drAccent} />
         <KpiTile label="BZ Coaching" value={fmtPct(bySiteRollup.bz.pct)} sub={`${bySiteRollup.bz.x} / ${bySiteRollup.bz.y} agent-weeks`} accent={bzAccent} />
         <KpiTile label="Acknowledgement" value={fmtPct(org.ackPct)} sub={`${org.ackX} / ${org.ackY} sessions`} accent={ackAccent} />
+      </div>
+
+      <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem", color: "var(--text-faint)", fontStyle: "italic", marginTop: "-0.5rem" }}>
+        Org Coaching uses Coachings Due (myPerformance source); site &amp; supervisor breakdowns use agent-week coverage and will not sum to Org.
       </div>
 
       {/* Site comparison bar chart */}
@@ -19243,22 +19247,31 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
           </div>
         );
       })()}
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(6, 1fr)", gap: isMobile ? "0.5rem" : "0.75rem", marginBottom: isMobile ? "1rem" : "1.5rem" }}>
-        {[
-          { v: d.presentCount,           l: activeOnly ? "Active" : "On Floor", sub: `${d.absent.length} absent · ${d.newFaces.length} new`, c: "#16a34a" },
-          { v: fmt(d.totalHrs, 1),        l: "Hours Today", sub: `${fmt(d.totalHrs/Math.max(d.presentCount,1), 2)} avg/agent`,  c: "#6366f1" },
-          { v: d.totalGoals,              l: "Sales Today", sub: d.totalGoals > 0 ? `${fmt(d.totalHrs > 0 ? d.totalGoals/d.totalHrs : 0, 3)} GPH pace` : "no sales yet", c: "#d97706" },
+      {(() => {
+        // Roster-driven KPIs (Absent + new-faces sub-line) only render when a
+        // last-7-day roster is provided. LiveStats standalone passes an empty
+        // recentAgentNames Set, so those metrics would always be 0/0 — drop them.
+        const hasRoster = recentAgentNames && recentAgentNames.size > 0;
+        const kpis = [
+          { v: d.presentCount,            l: activeOnly ? "Active" : "On Floor", sub: hasRoster ? `${d.absent.length} absent · ${d.newFaces.length} new` : "agents on the floor", c: "#16a34a" },
+          { v: fmt(d.totalHrs, 1),         l: "Hours Today", sub: `${fmt(d.totalHrs/Math.max(d.presentCount,1), 2)} avg/agent`,  c: "#6366f1" },
+          { v: d.totalGoals,               l: "Sales Today", sub: d.totalGoals > 0 ? `${fmt(d.totalHrs > 0 ? d.totalGoals/d.totalHrs : 0, 3)} GPH pace` : "no sales yet", c: "#d97706" },
           { v: d.totalGoals > 0 ? `$${((d.totalHrs * 19.77) / d.totalGoals).toFixed(2)}` : `$${(d.totalHrs * 19.77).toFixed(2)}`, l: "CPS", sub: "cost per sale", c: "#8b5cf6" },
-          { v: d.totalRgu || "—",         l: "RGU",         sub: "today total",  c: "#2563eb" },
-          { v: d.absent.length,           l: "Absent",      sub: `of ${recentAgentNames.size} last-7-day roster`, c: d.absent.length > 0 ? "#dc2626" : "#16a34a" },
-        ].map(({ v, l, sub, c }, i) => (
-          <div key={l} style={{ background: `var(--bg-secondary)`, border: `1px solid ${c}22`, borderRadius: "var(--radius-md, 10px)", padding: isMobile ? "0.65rem 0.5rem" : "1rem", textAlign: "center" }}>
+          { v: d.totalRgu || "—",          l: "RGU",         sub: "today total",  c: "#2563eb" },
+          ...(hasRoster ? [{ v: d.absent.length, l: "Absent", sub: `of ${recentAgentNames.size} last-7-day roster`, c: d.absent.length > 0 ? "#dc2626" : "#16a34a" }] : []),
+        ];
+        return (
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : `repeat(${kpis.length}, 1fr)`, gap: isMobile ? "0.5rem" : "0.75rem", marginBottom: isMobile ? "1rem" : "1.5rem" }}>
+        {kpis.map(({ v, l, sub, c }, i) => (
+          <div key={l} style={{ background: `var(--bg-secondary)`, border: `1px solid ${c}22`, borderRadius: "var(--radius-md, 10px)", padding: isMobile ? "0.65rem 0.5rem" : "1rem", textAlign: "center", gridColumn: isMobile && kpis.length % 2 === 1 && i === kpis.length - 1 ? "1 / -1" : undefined }}>
             <div style={{ fontFamily: "var(--font-display, Inter, sans-serif)", fontSize: isMobile ? "1.8rem" : "3rem", color: c, fontWeight: 700, lineHeight: 1 }}>{v}</div>
             <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: isMobile ? "0.72rem" : "0.82rem", color: c, marginTop: "0.2rem" }}>{l}</div>
             <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: isMobile ? "0.66rem" : "0.82rem", color: `var(--text-faint)`, marginTop: "0.15rem" }}>{sub}</div>
           </div>
         ))}
       </div>
+        );
+      })()}
 
       {/* ── Product Code Columns — full-width slim bar ── */}
       {allAvailableCodes.length > 0 && (
@@ -19753,20 +19766,25 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
       </div>
 
       {/* ── Attendance + By Region (collapsible, default collapsed) ── */}
+      {/* hasAttendance is false on the LiveStats standalone (which passes empty
+          recentAgentNames). When false, the Attendance panel is suppressed and
+          the section becomes "Region Detail" only — single-column always. */}
+      {(() => { const hasAttendance = recentAgentNames && recentAgentNames.size > 0; return (
       <div style={{ marginBottom: "1.25rem" }}>
         <button
           onClick={() => setAttendanceCollapsed(v => !v)}
           style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--bg-secondary)", border: "1px solid var(--border)", borderRadius: attendanceCollapsed ? "var(--radius-lg, 16px)" : "var(--radius-lg, 16px) var(--radius-lg, 16px) 0 0", borderBottom: attendanceCollapsed ? "1px solid var(--border)" : "1px solid var(--border-muted)", cursor: "pointer", padding: "0.85rem 1.25rem", color: "var(--text-muted)", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", letterSpacing: "0.12em", textTransform: "uppercase" }}
         >
-          <span>{attendanceCollapsed ? "▸" : "▾"} Attendance &amp; Region Detail</span>
+          <span>{attendanceCollapsed ? "▸" : "▾"} {hasAttendance ? "Attendance & Region Detail" : "Region Detail"}</span>
           <span style={{ fontSize: "0.7rem", letterSpacing: "0.08em", opacity: 0.7, textTransform: "none" }}>
-            {d.absent.length} absent · {Object.keys(d.byReg).length} regions
+            {hasAttendance ? `${d.absent.length} absent · ${Object.keys(d.byReg).length} regions` : `${Object.keys(d.byReg).length} regions`}
           </span>
         </button>
         {!attendanceCollapsed && (
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: isMobile ? "0.6rem" : "1.25rem", marginTop: "0.5rem", alignItems: "stretch" }}>
+          <div style={{ display: "grid", gridTemplateColumns: (isMobile || !hasAttendance) ? "1fr" : "1fr 1fr", gap: isMobile ? "0.6rem" : "1.25rem", marginTop: "0.5rem", alignItems: "stretch" }}>
 
             {/* ── Attendance panel ── */}
+            {hasAttendance && (
             <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: isMobile ? "0.75rem" : "1.25rem" }}>
               <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "1rem" }}>
                 Attendance vs Last 7 Days
@@ -19829,6 +19847,7 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
                 </div>
               )}
             </div>
+            )}
 
             {/* ── By Region ── */}
             <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: isMobile ? "0.75rem" : "1.25rem", display: "flex", flexDirection: "column" }}>
@@ -19898,6 +19917,7 @@ function TodayView({ recentAgentNames, historicalAgentMap, goalLookup }) {
           </div>
         )}
       </div>
+      ); })()}
 
       {/* ── Agent leaderboard ── */}
       <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: isMobile ? "0.75rem" : "1.25rem" }}>
