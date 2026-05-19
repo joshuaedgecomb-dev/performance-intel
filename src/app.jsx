@@ -4947,10 +4947,10 @@ function SiteDrilldown({ siteLabel, regions, allAgents, priorAgents, programs, g
           });
           return rows;
         })();
-        const gridCols = "2.2fr 3px 1fr 1fr 1fr 3px 1fr 1fr 1fr 0.8fr 3px 1fr 1fr 1fr 3px 1fr 1fr 1fr";
-        // Column indices: 0=prog, 1=div, 2-4=hours, 5=div, 6-8=homes, 9=gph, 10=div, 11-13=hsd, 14=div, 15-17=xm
-        const dividerIndices = [1, 5, 10, 14];
-        const groupStartCols = [2, 6, 11, 15]; // first data col of each group
+        const gridCols = "2.2fr 3px 1fr 1fr 1fr 0.8fr 3px 1fr 1fr 1fr 0.8fr 3px 1fr 1fr 1fr 3px 1fr 1fr 1fr";
+        // Column indices: 0=prog, 1=div, 2-4=hours, 5=hrsRem, 6=div, 7-9=homes, 10=gph, 11=div, 12-14=hsd, 15=div, 16-18=xm
+        const dividerIndices = [1, 6, 11, 15];
+        const groupStartCols = [2, 7, 12, 16]; // first data col of each group
 
         // Use site-level canonical plan totals (sitePlanMetrics) — not per-program sums
         // which can double-count when programs share overlapping TA goal entries
@@ -5022,6 +5022,17 @@ function SiteDrilldown({ siteLabel, regions, allAgents, priorAgents, programs, g
                 ) : <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-faint)` }}>{"\u2014"}</span>}
               </DtCell>
             );
+            // Insert Remaining cell after Hours /Day (index 0)
+            if (gi === 0) {
+              const hrsRemainVal = m.plan && !isOver ? (m.plan - (m.actual || 0)) : null;
+              cells.push(
+                <DtCell key="hrsRem" style={{ background: g.bg }}>
+                  <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: rowBg ? "1.11rem" : "1.08rem", color: hrsRemainVal != null ? `var(--text-warm)` : `var(--text-faint)`, fontWeight: rowBg ? 700 : 400 }}>
+                    {hrsRemainVal != null ? m.fmtFn(hrsRemainVal) : "\u2014"}
+                  </span>
+                </DtCell>
+              );
+            }
             // Insert GPH cell after Homes group (index 1)
             if (gi === 1) {
               const gphColor = gphVal != null ? "#d97706" : "var(--text-faint)";
@@ -5104,7 +5115,7 @@ function SiteDrilldown({ siteLabel, regions, allAgents, priorAgents, programs, g
             {dtColors.map((g, gi) => (
               <React.Fragment key={g.label}>
                 <div style={{ background: `${g.color}40` }} />
-                <div style={{ gridColumn: gi === 1 ? "span 4" : "span 3", textAlign: "center", padding: "0.4rem 0", background: `${g.color}18`, borderBottom: `2px solid ${g.color}40`, borderTop: `2px solid ${g.color}30`, borderRadius: gi === 0 ? "6px 0 0 0" : gi === 3 ? "0 6px 0 0" : "0" }}>
+                <div style={{ gridColumn: gi === 0 || gi === 1 ? "span 4" : "span 3", textAlign: "center", padding: "0.4rem 0", background: `${g.color}18`, borderBottom: `2px solid ${g.color}40`, borderTop: `2px solid ${g.color}30`, borderRadius: gi === 0 ? "6px 0 0 0" : gi === 3 ? "0 6px 0 0" : "0" }}>
                   <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: g.color, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700 }}>{g.label}</span>
                 </div>
               </React.Fragment>
@@ -5120,6 +5131,7 @@ function SiteDrilldown({ siteLabel, regions, allAgents, priorAgents, programs, g
                 <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.96rem", color: dtTierPct !== 100 && gi > 0 ? "#8b5cf6" : `var(--text-faint)`, textAlign: "center", padding: "0.35rem 0", background: g.bg, fontWeight: dtTierPct !== 100 && gi > 0 ? 600 : 400 }}>{dtTierPct !== 100 && gi > 0 ? `${dtTierPct}%` : "Plan"}</div>
                 <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.96rem", color: `var(--text-faint)`, textAlign: "center", padding: "0.35rem 0", background: g.bg }}>Actual</div>
                 <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.96rem", color: "#d97706", textAlign: "center", padding: "0.35rem 0", fontWeight: 700, background: g.bg }}>/ Day</div>
+                {gi === 0 && <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.96rem", color: "#d97706", textAlign: "center", padding: "0.35rem 0", fontWeight: 700, background: g.bg }}>Remaining</div>}
                 {gi === 1 && <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.96rem", color: "#d97706", textAlign: "center", padding: "0.35rem 0", fontWeight: 700 }}>GPH</div>}
               </React.Fragment>
             ))}
@@ -13069,8 +13081,8 @@ function DailyTargetsCard({ programs, regions, goalLookup, fiscalInfo }) {
     { label: "HSD",      color: "#2563eb", bg: "#2563eb08" },
     { label: "XM Lines", color: "#8b5cf6", bg: "#8b5cf608" },
   ];
-  // Grid: Program | div | Hours(Plan,Actual,/Day) | div | Homes(Plan,Actual,/Day,GPH) | div | HSD(Plan,Actual,/Day) | div | XM(Plan,Actual,/Day)
-  const gridCols = "2.2fr 3px 1fr 1fr 1fr 3px 1fr 1fr 1fr 0.8fr 3px 1fr 1fr 1fr 3px 1fr 1fr 1fr";
+  // Grid: Program | div | Hours(Plan,Actual,/Day,Remaining) | div | Homes(Plan,Actual,/Day,GPH) | div | HSD(Plan,Actual,/Day) | div | XM(Plan,Actual,/Day)
+  const gridCols = "2.2fr 3px 1fr 1fr 1fr 0.8fr 3px 1fr 1fr 1fr 0.8fr 3px 1fr 1fr 1fr 3px 1fr 1fr 1fr";
   const viewLabel = view === "Combined" ? "Combined" : view === "DR" ? "Dom. Republic" : "Belize";
   const remainingBDays = fiscalInfo.remainingBDays || 0;
 
@@ -13106,6 +13118,15 @@ function DailyTargetsCard({ programs, regions, goalLookup, fiscalInfo }) {
             : "—"}
         </div>
       );
+      // Insert Remaining cell after Hours /Day (index 0)
+      if (mi === 0) {
+        const hrsRemainVal = m.plan && (m.actual || 0) <= m.plan ? (m.plan - (m.actual || 0)) : null;
+        cells.push(
+          <div key="hrsRem" style={{ padding: "0.5rem 0", textAlign: "center", background: g.bg, fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: isTotal ? "0.95rem" : "0.88rem", color: hrsRemainVal != null ? "var(--text-warm)" : "var(--text-faint)", fontWeight: isTotal ? 700 : 500 }}>
+            {hrsRemainVal != null ? m.fmtFn(hrsRemainVal) : "—"}
+          </div>
+        );
+      }
       // Insert GPH cell after Homes /Day (index 1)
       if (mi === 1) {
         const gphColor = gphVal != null ? "#d97706" : "var(--text-faint)";
@@ -13195,7 +13216,7 @@ function DailyTargetsCard({ programs, regions, goalLookup, fiscalInfo }) {
             {dtColors.map((g, gi) => (
               <Fragment key={g.label}>
                 <div style={{ background: `${g.color}40` }} />
-                <div style={{ gridColumn: gi === 1 ? "span 4" : "span 3", textAlign: "center", padding: "0.4rem 0", background: `${g.color}18`, borderBottom: `2px solid ${g.color}40`, borderTop: `2px solid ${g.color}30`, borderRadius: gi === 0 ? "6px 0 0 0" : gi === 3 ? "0 6px 0 0" : "0" }}>
+                <div style={{ gridColumn: gi === 0 || gi === 1 ? "span 4" : "span 3", textAlign: "center", padding: "0.4rem 0", background: `${g.color}18`, borderBottom: `2px solid ${g.color}40`, borderTop: `2px solid ${g.color}30`, borderRadius: gi === 0 ? "6px 0 0 0" : gi === 3 ? "0 6px 0 0" : "0" }}>
                   <span style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: g.color, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700 }}>{g.label}</span>
                 </div>
               </Fragment>
@@ -13211,6 +13232,7 @@ function DailyTargetsCard({ programs, regions, goalLookup, fiscalInfo }) {
                 <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: dtcTierPct !== 100 && gi > 0 ? "#8b5cf6" : "var(--text-faint)", textAlign: "center", padding: "0.35rem 0", background: g.bg, fontWeight: dtcTierPct !== 100 && gi > 0 ? 600 : 400 }}>{dtcTierPct !== 100 && gi > 0 ? `${dtcTierPct}%` : "Plan"}</div>
                 <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: "var(--text-faint)", textAlign: "center", padding: "0.35rem 0", background: g.bg }}>Actual</div>
                 <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: "#d97706", textAlign: "center", padding: "0.35rem 0", fontWeight: 700, background: g.bg }}>/ Day</div>
+                {gi === 0 && <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: "#d97706", textAlign: "center", padding: "0.35rem 0", fontWeight: 700, background: g.bg }}>Remaining</div>}
                 {gi === 1 && <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: "#d97706", textAlign: "center", padding: "0.35rem 0", fontWeight: 700, background: g.bg }}>GPH</div>}
               </Fragment>
             ))}
