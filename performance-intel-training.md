@@ -2,13 +2,13 @@
 
 > **Purpose**: This document trains Claude CLI to understand, modify, debug, and extend the Performance Intel dashboard. It combines the complete codebase reference with operational training on every feature, data pipeline, and design decision.
 
-> **Last updated**: 2026-04-12 (post top-nav redesign + ProgramSiteCompareCard)
+> **Last updated**: 2026-05-26 (June fiscal rollover: new workbook, May '26 seeded, seed key v2; Daily Targets Hours-Remaining column; Org Coaching aligned to Tableau; vendor SPH site tiers corrected; 2× cost-per rule removed)
 
 ---
 
 ## 1. What This Tool Is
 
-Performance Intel is a **single-file React artifact** (`src/app.jsx`, ~14,000 lines) powering a telesales performance analytics dashboard for a BPO managing outbound **Xfinity** campaigns. It serves two geographic sites:
+Performance Intel is a **single-file React artifact** (`src/app.jsx`, ~21,600 lines) powering a telesales performance analytics dashboard for a BPO managing outbound **Xfinity** campaigns. It serves two geographic sites:
 
 - **DR (SD-Xfinity)** — Santo Domingo, Dominican Republic
 - **BZ (Belize)** — Three sub-sites: Belize City-XOTM, OW-XOTM, San Ignacio-XOTM
@@ -21,7 +21,7 @@ The tool processes CSV and JSON data for agent performance, goals, and roster tr
 
 | Property | Value |
 |----------|-------|
-| File | `src/app.jsx` (~14,000 lines, single-file) |
+| File | `src/app.jsx` (~21,600 lines, single-file) |
 | Framework | React 18 with named imports only |
 | Import style | `import React, { useState, useMemo, useRef, useCallback, useEffect, Fragment, Component } from "react"` — **never** use `React.` namespace |
 | Styling | Inline CSS with CSS custom properties for light/dark mode |
@@ -229,7 +229,7 @@ Hour Attainment = Actual Hours ÷ Planned Hours × 100
 | < 74% | -4.00% | -4.00% | -1.00% | -1.00% |
 
 ### Site (`GAINSHARE_SITE_TIERS`)
-Different ranges (starts > 139%), different values. SPH mirrors Cost Per values.
+Different ranges (starts > 139%), different values. **SPH now mirrors Cost Per exactly** (e.g., +2.50% / +2.00% / +1.50% / +0.50% / 0 / -0.50% / -1.00% / -2.00% / -2.50% / -3.00%) per the vendor gainshare spec. Corrected 2026-05-19 — prior values had SPH at a much smaller magnitude than Cost Per. If you regenerate gainshare numbers for any month prior to that fix, expect SPH bonus deltas vs Comcast's source.
 
 ### Hour Gate — Overall
 Flat -2% penalty if below 100%.
@@ -244,6 +244,63 @@ Flat -2% penalty if below 100%.
 
 ### Display
 Each metric: attainment % → "X to next tier" → tier rows (Range | Target needed or ✓ | Bonus %) → net bonus total.
+
+### Tier Target Selector (Daily Targets)
+Both the `DailyTargetsCard` (BusinessOverview) and the SiteDrilldown inline Daily Targets include a gainshare tier target selector that adjusts plan values to show what's needed to hit each tier:
+
+| View | Tier buttons | Tiers from |
+|------|-------------|------------|
+| Overview (`DailyTargetsCard`) | Plan / 106% / 113% / 120% / 126% | `GAINSHARE_TIERS` (overall) |
+| Site drilldown (DR/BZ) | Plan / 107% / 118% / 129% / 139% | `GAINSHARE_SITE_TIERS` (per-site) |
+
+- **Hours are NOT scaled** — only Homes, HSD, and XM plans are multiplied by `tierPct / 100`
+- **SPH-scaled goal rule applies** — see §7.5 below. Per-program plan is scaled by `programScale = actual_hours / plan_hours` only when the program's funder has triggered (funder hours > funder plan hours). Pre-trigger, programs use Jess plan values.
+- State: `dtTierPct` (SiteDrilldown), `dtcTierPct` (DailyTargetsCard) — default `100`
+- Sub-header "Plan" label changes to show tier % (e.g., "113%") in purple when active, for Homes/HSD/XM columns only
+- Subtitle updates to show tier label (e.g., "Required per day to finish at 113% (Tier +2)")
+
+**Hours-Remaining column (added 2026-05-19)** — both `DailyTargetsCard` (~line 13069) and the SiteDrilldown inline Daily Targets (~line 4947) now render a 4th column inside the Hours group: `plan − actual` while under plan, em-dash once over. Color is `var(--text-warm)`. The grid template grew from `"... 1fr 1fr 1fr 3px 1fr 1fr 1fr 0.8fr 3px ..."` to `"... 1fr 1fr 1fr 0.8fr 3px 1fr 1fr 1fr 0.8fr 3px ..."` — divider indices and group-start indices shifted (`dividerIndices = [1, 6, 11, 15]`, `groupStartCols = [2, 7, 12, 16]`). The Hours group header now spans 4 cells via `gridColumn: gi === 0 || gi === 1 ? "span 4" : "span 3"`. If you touch this grid layout, both `DailyTargetsCard` and `SiteDrilldown` must move together — they share the column scheme.
+
+### 7.5. SPH-Scaled Goal Rule (Corp Funder-Gate)
+
+**Why**: Comcast's gainshare model scales each campaign's homes/HSD/RGU goal by `actual_hours / plan_hours` when hours redistribute within a funding source. If a campaign over-delivers hours into a higher-SPH program, the goal scales up. The rule is **gated at the funding-source level** — scaling only kicks in when the entire funder exceeds plan hours, otherwise every campaign keeps its original Jess plan goal.
+
+**Per-campaign formula** (only when funder triggered):
+```
+scale_factor = actual_hours / plan_hours
+scaled_goal  = jess_plan_goal × scale_factor
+```
+
+**Funder-gate**:
+```
+funder_actual_hours = Σ campaign actuals in funder
+funder_plan_hours   = Σ campaign plans in funder
+triggered           = funder_actual_hours > funder_plan_hours
+```
+
+**Implementation**: `computeFunderScaling(siteAgents, siteGoalRows)` (app.jsx ~line 1294) returns `{ funders: [{funder, rocs, campaigns: [{rocCode, plan, actual, scaled, scaleFactor, attain}], plan, raw, scaled, rawAttain, triggered}], unmatchedRaw, totals: {plan, raw, scaled} }`. Used by:
+- `SiteDrilldown` — `siteScaled` IIFE consumes for site attainments and Daily Targets
+- `BusinessOverview` — `globalScaled` useMemo aggregates per-funder triggers across BZ+DR for combined view
+- `DailyTargetsCard` — `dtcFunderTriggered` useMemo derives view-scoped (Combined/BZ/DR) trigger map from `dtPrograms`
+- `computeGainshareReport` (gainshare PPTX export) — drives deck attainment and per-campaign scaled values
+
+**What this means visually**:
+- **Early fiscal** (e.g. April Day 4): no funder has crossed 100% hours yet → every program shows Jess plan in Daily Targets and dashboard attainments → matches production behavior pre-migration.
+- **End of fiscal**: most funders trigger → per-campaign symmetric scaling → Mobile/HSD/Cost Per attainments diverge from raw (typically lower since over-delivery on high-SPH campaigns raises the bar).
+- **Single-campaign funder**: trigger fires when that single campaign crosses 100% hours, scale factor = `actual/plan`, and the funder rollup tracks the campaign 1:1.
+- **Edge case** (intentional): funder where one campaign over-delivers but funder TOTAL is still under plan → trigger NOT met → all campaigns keep Jess plan. The over-delivering campaign doesn't get its goal raised on its own; the gate is at the funder level.
+
+**Net Bonus / projection notes**: Under this rule, projection equals current attainment when pace is constant (T/E factor cancels in numerator and denominator). The dashboard's `GainsharePanel` naturally hides the projection display because `projTier === currentTier`. SiteDrilldown and BusinessOverview pass current attainments as `projMobileCapped`/etc. props for this reason.
+
+### GPH Column (Daily Targets)
+A "GPH" column is appended inside the Homes group (after Plan/Actual/Day). It shows the required conversion rate to hit the homes target:
+```
+GPH = (homes plan remaining − homes actual) / (hours plan remaining − hours actual)
+```
+- Formatted to 2 decimal places
+- Background matches Homes group shading (`#16a34a08`)
+- Shows "—" when on track (no remaining gap) or when plan is null
+- Updates dynamically when tier selector changes (since homes plan changes)
 
 ---
 
@@ -308,9 +365,13 @@ Overview | Daily | Trends (no By Site — removed in nav redesign)
 Overview | All Agents | Teams | Ranking | Daily (no By Site — removed)
 
 ### Drill-Down Patterns (within pages)
-- **Daily** (BusinessOverview/SiteDrilldown): Date → Programs → Agents (3-level)
+- **Daily** (BusinessOverview/SiteDrilldown): Date → Programs/Agents toggle → Agent drill-down (3-level)
+  - **Program mode** (default): Date → Program breakdown → click program → Agent detail
+  - **Agent mode**: Date → Aggregated agent list (multi-program agents collapsed) → click agent → per-program drill-down
+  - Toggle: `dailyDrillMode` state (`"program"` | `"agent"`), buttons render in expanded panel header
+  - Agent mode uses `expandedAgentName` state for per-agent program drill-down
 - **Supervisor Ranking**: Supervisor → Agents → Campaign composition (3-level)
-- **Daily Targets**: Funding filter splits by ROC with per-funding plan+actuals
+- **Daily Targets**: Funding filter splits by ROC with per-funding plan+actuals; gainshare tier target selector adjusts plan values; GPH column in Homes group; **Remaining column** (4th column in Hours group) shows `plan − actual` while still under plan (em-dash once over), in `var(--text-warm)`
 
 ---
 
@@ -332,7 +393,7 @@ Overview | All Agents | Teams | Ranking | Daily (no By Site — removed)
 ### Pages
 | Component | Purpose |
 |-----------|---------|
-| `BusinessOverview` | Cross-site dashboard with KPIs, gainshare, Daily/Trends tabs |
+| `BusinessOverview` | Cross-site dashboard with KPIs, gainshare (above daily targets), Daily/Trends tabs |
 | `SiteDrilldown` | Site-scoped analytics: narrative, goals, gainshare, supervisor ranking, daily targets |
 | `Slide` | Program-level analytics; accepts `siteFilter` prop for site-scoped eyebrow |
 | `CampaignComparisonPanel` | Month-over-month agent comparison |
@@ -343,14 +404,17 @@ Overview | All Agents | Teams | Ranking | Daily (no By Site — removed)
 | Component | Purpose |
 |-----------|---------|
 | `ProgramSiteCompareCard` | DR vs BZ scorecard at top of program slides; only renders when both sites dial the program; includes winner-per-metric line |
-| `DailyBreakdownPanel` | 3-level date drill-down (`singleProgram` skips program level) |
+| `DailyBreakdownPanel` | Date drill-down with Programs/Agents toggle; agent mode aggregates multi-program agents with expandable per-program detail (`singleProgram` skips toggle, shows agents directly) |
 | `GainsharePanel` | 5 metrics + hour gate with tier display |
 | `RankingAgentTray` | Expandable agent tray with campaign drill-down |
 | `SupervisorCard` | Teams tab card with sparklines and coaching insights |
 | `CollapsibleNarrative` | Collapsible text panel with Copy button |
 | `MetricComparePanel` | Goals vs Plan cards with delta/remaining display |
 | `AgentTable` | Sortable agent table with region filter |
+| `DailyTargetsCard` | Overview Daily Targets with Combined/DR/BZ toggle, funding filter, gainshare tier selector, GPH column, Hours-Remaining column |
 | `MbrExportModal` | PowerPoint MBR export modal |
+| `GainshareExportModal` | Per-site gainshare PPTX export — 5 slides (Cover → BZ Site Table → BZ Campaign Details → DR Site Table → DR Campaign Details). Uses Aptos font. Modal supports loaded-data or Google Sheet CSV URL override. SPH and Hour Gate metric toggles. |
+| `GainshareModalConfirm` | Confirm-state UI for `GainshareExportModal` — data source radio, URL fields, metric toggles, filename input |
 
 ### Helpers (module-scope, hoisted)
 | Helper | Purpose |
@@ -359,6 +423,9 @@ Overview | All Agents | Teams | Ranking | Daily (no By Site — removed)
 | `Crumb`, `CRUMB_SEP` | Breadcrumb sub-elements |
 | `topNavLinkStyle(active, accent)` | Top-nav button style factory (used by all 5 nav links) |
 | `filterGoalEntriesBySite(entries, "DR"|"BZ")` | Strips entry.siteMap to one site's plan rows |
+| `computeFunderScaling(siteAgents, siteGoalRows)` | §7.5 corp SPH-scaled goal helper. Returns funders[] with per-campaign + scaled rollups + triggered flag. Single source of truth for the funder-gate rule across dashboard and gainshare export. |
+| `computeGainshareReport(agents, goalLookup, fiscalInfo, opts)` | Pure data function for gainshare PPTX export. Returns structured per-site report with attain/tiers/netBonus/totals/funders. Consumed by `addGainshareCoverSlide`, `addGainshareSiteTableSlide`, `addGainshareCampaignDetailsSlide`. |
+| `addGainshareSlideFooter(pres, slide, report)` | Common footer for every gainshare slide: data source line, GCS \| Performance Intel tagline, GCS logo bottom-right. |
 
 ---
 
@@ -424,6 +491,9 @@ Overview | All Agents | Teams | Ranking | Daily (no By Site — removed)
 13. **Mutually-exclusive menus**: `openMenu` state allows only one of `dr | bz | settings | null` open at a time. Click-outside and Escape both clear it.
 14. **Sub-component hoisting**: All inline helper sub-components (`MenuRow`, `MenuSection`, `Crumb`, `topNavLinkStyle`) MUST be at module scope, not nested inside their parent — otherwise they're recreated each render and unmount/remount their subtree.
 15. **handleRefresh** (in App): refreshes ALL sheets in parallel (agent + goals + roster + prior + tNPS), uses corsproxy.io fallback. Don't simplify it back to agent-only.
+16. **Deploy requires `.env.local`**: The root `src/app.jsx` reads all data URLs from `import.meta.env.VITE_DEFAULT_*_URL` with empty-string fallbacks. Without `.env.local` in the deploy repo, the build produces an app with no default URLs → "No Job Type column" on load. Always copy `.env.local` from the source project to the deploy package before building.
+17. **Two `src/app.jsx` files**: Root `src/app.jsx` is authoritative (~21,600 lines). `Project/src/app.jsx` is an older copy (~14,000 lines) missing MyPerformance, Corp MBR, and recent features. Vite serves and builds from root. Always edit root.
+18. **BusinessOverview card order**: Gainshare table renders **above** Daily Targets on the Overview tab (swapped 2026-04-28).
 
 ---
 
@@ -479,7 +549,9 @@ Overview | All Agents | Teams | Ranking | Daily (no By Site — removed)
 
 ## 15. Codebase Map (where things live)
 
-The file is one ~14,000-line module. These ranges shift after edits — use `grep -n "function ComponentName"` to confirm. The order below is the source order top-to-bottom.
+The file is one ~21,600-line module. These ranges shift after edits — use `grep -n "function ComponentName"` to confirm. The order below is the source order top-to-bottom.
+
+**Important**: There are two `src/app.jsx` files: the root `src/app.jsx` (authoritative, ~21,600 lines, used by Vite and deployed) and `Project/src/app.jsx` (older copy, ~14,000 lines, missing MyPerformance/Corp MBR features). Always edit the root `src/app.jsx`. The deploy skill copies from root to the deploy repo.
 
 | Range | Section | Key contents |
 |---|---|---|
@@ -504,7 +576,7 @@ The file is one ~14,000-line module. These ranges shift after edits — use `gre
 | ~8240-9265 | §12.6 Trends | `DOWCards`, `WeeklyTrendsPanel`, day-of-week analysis |
 | ~9265-9620 | §12.7 CampaignComparisonPanel | Month-over-month comparison |
 | ~9625 | (Section 12d tombstone) | "ProgramBySiteTab removed" comment |
-| ~9630-9950 | §13 DailyBreakdownPanel | 3-level date drill-down |
+| ~9630-9950 | §13 DailyBreakdownPanel | Date drill-down with Programs/Agents toggle, aggregated agent view |
 | ~10470-10620 | §13.5 ProgramSiteCompareCard | DR vs BZ scorecard for shared programs |
 | ~10620-11195 | §13 Slide | Program-level analytics page (overview/agents/teams/goals/daily) |
 | ~11195-12055 | §14 TVMode + TodayView | Live OTM data and TV display mode |
@@ -781,6 +853,24 @@ Returns:
 ### Math: Uncapped Sessions
 All X/Y metrics use **uncapped session sums** — an agent coached 8 times in one week contributes 8 to the numerator. This matches the Comcast `Coaching Sessions / Coachings Due` methodology and surfaces over-indexing (shown as indigo `#6366f1` when X > Y).
 
+### ORG-level KPI: Tableau parity (corrected 2026-05-19)
+
+The **Org Coaching tile** at the top of the Coaching Summary tab now sums `Coaching Sessions` and `Coachings Due` from the **Coaching Details** parse, per active month, exactly mirroring Tableau's "Completed %" and the Corp MBR slide. Per-month fallback: if `Coachings Due` is 0 or missing for a month (Coaching Details didn't load that month), we fall back to the weekly Yes/No count for that month only — preserves a renderable tile rather than 0/0.
+
+```js
+for (const month of activeMonths) {
+  const bucket = safeDetails[month] || {};
+  const monthSessions = Number(bucket["Coaching Sessions"]) || 0;
+  const monthDue = Number(bucket["Coachings Due"]) || 0;
+  if (monthDue > 0) { orgCoachingX += monthSessions; orgCoachingY += monthDue; }
+  else { /* fall back to per-week Yes/No count for this month */ }
+}
+```
+
+**Methodology divergence** — site rollups (`bySite`), supervisor rollups (`bySupervisor`), and the weekly grid still use the Yes/No agent-week coverage methodology. They WILL NOT sum to the Org number. This is intentional and matches how Tableau presents the data (Org-level KPI ≠ site rollup denominator). A small italic disclaimer renders directly under the KPI tile row in `CoachingSummaryTab` so the user sees the explanation in context.
+
+Before this fix, the Org tile used the agent-week Yes/No method — easier to reconcile with site rollups but consistently lower than Tableau's published number, which Comcast leadership uses as the source of truth. Don't "fix" the divergence by aligning site rollups to the Tableau method — site/supervisor breakouts need agent-week granularity for the drill-down view to make sense.
+
 ### Color Thresholds
 | State | Threshold | Color | Row tint (dark/light) |
 |---|---|---|---|
@@ -831,3 +921,231 @@ Per-week agent cells use count-based colors: 0=red, 1=green, 2+=indigo, null=gre
 ### Specs & Plans
 - Spec: `docs/superpowers/specs/2026-04-15-coaching-page-design.md`
 - Plan: `docs/superpowers/plans/2026-04-15-coaching-page.md`
+
+---
+
+## 20. Coaching Dedup + Per-Week Supervisor Tenure (shipped 2026-05-05)
+
+The source `MyPerf Coaching By Wk` CSV emits **2–3 duplicate rows per agent per fiscal-week** (a Tableau pivot artifact: each row reflects a different supervisor-history snapshot). Without dedup, denominators inflate ~3× and supervisor groupings collapse onto whatever the roster says today, ignoring real mid-period shifts.
+
+### Two-part fix
+
+**A. Dedup at parse time** — `parseCoachingWeekly` (~line 7543) collapses to one row per `(ntid, fiscalMonth, fiscalWeek)`. Tiebreak rule: prefer the row with non-empty `Supervisor.`; ties broken last-row-wins. Also added `normalizeSupervisorName` helper that flips `"Last, First" → "First Last"` so labels match the roster's convention.
+
+**B. Per-week supervisor-of-record** — `buildCoachingPageData` (~line 7784) now stores supervisor PER BUCKET in `agentBucketMap`, not per-agent. Priority: `row.supervisor` → `bp.supervisor` → `"Unassigned"`. The By Supervisor tab groups by per-bucket assignment, so an agent who shifted mid-period appears under EVERY supervisor they had — with cells outside that supervisor's tenure rendering `outsideTenure: true` (italic grey "N/A" via `WeekCell`).
+
+`lastSupervisorFor(ntid)` walks `rawBuckets` in reverse to pick the most recent assignment — used as the AllAgents tab's supervisor column.
+
+### Coaching page UI additions
+
+- **Supervisor totals row** — slim footer bar at the bottom of the By Supervisor table showing per-week X/Y aggregates + overall %. Respects the active site chip. Agent count uses unique ntids (an agent who shifted between supervisors counts once).
+- **NEW · {days}d hire-date pill** — small indigo badge next to agent name in `AgentRow` when `daysSinceHire <= 60`. Hover shows the hire date. Driven by `bp.hireDate`.
+- **New Hires toggle** on the All Agents tab (next to search) — filters to only agents within their first 60 days.
+
+### Gotchas
+
+- **Dup CSV rows for `Hernanadez` (typo) variants**: same NTID, different `displayName`. Dedup keys on ntid so they merge correctly.
+- **Roster vs CSV supervisor mismatch is normal**: e.g. Mccaully Shania's CSV `Supervisor.` is `Bradley, Kelsie` while her roster `bp.supervisor` may say `Tryon Gladden`. The new model uses CSV first, falls back to roster — meaning a supervisor's view now reflects who actually owned the agent that week, not the current roster snapshot.
+- **`agents.length >= 2` filter still applies**: single-agent supervisor groups (orphans, manager-role roster entries) hide. Combined with tenure splitting, an agent who shifted may produce a singleton group on the source side that filters out — that's expected.
+
+---
+
+## 21. Month Navigation (shipped 2026-05-05)
+
+A way to view finished historical months on the dashboard without re-pasting Sheet URLs, plus a richer MoM Compare panel that picks pairs from the saved list.
+
+### Storage
+
+| Key | Shape | Purpose |
+|---|---|---|
+| `perf_intel_historical_months_v1` | `Array<{id, label, agentUrl, goalsUrl}>` | Saved months list. `id` is `YYYY-MM`; `label` is free-text ("Apr '26"). |
+| `perf_intel_active_month_id` | `"current"` \| `<id>` | Which month the dashboard is currently rendering. |
+| `perf_intel_historical_months_data_v1` | `{ [id]: { agentRaw, goalsRaw, fetchedAt } }` | Cached raw CSV text per month. Survives reload. |
+| `perf_intel_mom_pair_v1` | `{ left: id, right: id }` | Persisted MoM Compare selection. |
+| `perf_intel_historical_months_seeded_v<N>` | `"true"` | One-shot flag. Once set, the seed-merge effect doesn't re-add deleted seeds. The version suffix is **bumped on each monthly rollover** (currently `_v2` as of 2026-05-26) so newly-added seeds merge into existing browsers automatically. |
+
+### Seed data
+
+`SEED_HISTORICAL_MONTHS` (~line 543) hard-codes Jan/Feb/Mar/Apr/**May '26** with their published-Sheet URLs. On first mount, a one-shot `useEffect` merges any seed entries missing from localStorage into the saved list, then sets `HISTORICAL_MONTHS_SEEDED_KEY` so user deletions persist across reloads. To force re-seed without bumping the version: clear both `perf_intel_historical_months_v1` and the seeded flag.
+
+**Monthly rollover pattern** — when a fiscal month closes (22nd of the calendar month):
+1. Append the just-ended month to `SEED_HISTORICAL_MONTHS` using the URLs that *were* in `VITE_DEFAULT_AGENT_SHEET_URL` / `VITE_DEFAULT_GOALS_SHEET_URL`.
+2. Bump the `HISTORICAL_MONTHS_SEEDED_KEY` version suffix (`_v2` → `_v3` next time) so the new seed merges for existing users.
+3. Rotate the four "current/prior" env vars: current → new month, prior → just-ended month.
+4. Optionally rotate `VITE_DEFAULT_CORP_PRIOR_MONTH_*` per the Reporting–1 rule (the dashboard's prior slot and Corp MBR's prior slot are independent).
+
+This procedure is also captured in the user's `project_monthly_rollover` memory.
+
+### Components
+
+| Component | Purpose |
+|---|---|
+| `HistoricalMonthsManager` | Settings sub-component: add/edit/remove months, pick active. Dropdown-driven label picker (recent prior calendar months, or "Other..." for manual entry). |
+| `HistoricalMonthsModal` | Standalone overlay wrapping the manager. Has its own backdrop + close button. Reached from the ⚙ menu's "📅 Historical months" entry OR by clicking the indigo `MonthPill` in the top nav. |
+| `MonthPill` | Indigo pill in `TopNav` between tNPS and the pacing pill, visible when `activeMonthId !== "current"`. Click opens the modal; the inline `×` reverts to Current. |
+| `ActiveMonthBanner` (inline IIFE in App) | Sticky banner just below `TopNav`: `"📅 Viewing Apr '26 (Final) · [Switch to Current]"`. Shows on every page when active != current. |
+
+### Active-month data swap
+
+App-level `activeAgentRaw` / `activeGoalsRaw` `useMemo`s (~line 20098) substitute the cached historical CSVs into `usePerformanceEngine` when `activeMonthId !== "current"`. The cache stores **raw CSV text**; the memos call `parseCSV()` before passing to the engine (the engine expects parsed row arrays — same shape `rawData`/`goalsRaw` always had).
+
+`fetchHistoricalMonth(month)` and `switchActiveMonth(newId)` are App-level callbacks. Fetch uses corsproxy.io fallback (mirroring `handleRefresh`). On error, active month is left unchanged — no half-loaded state. Toast surfaces in the manager via `monthSwitchError`.
+
+### Pages affected
+
+- **Affected**: `BusinessOverview`, `SiteDrilldown`, program `Slide` — anything driven by `perf.agents` / `perf.goalLookup`.
+- **Not affected**: TodayView (always live), Coaching, tNPS (cumulative feeds), MBR Export, Corp MBR Export.
+- **MoM Compare** uses its own pair-driven sourcing — see below.
+
+The banner shows on every page including the unaffected ones, so the user doesn't lose track of the dashboard-wide state.
+
+### MoM Compare refactor
+
+`CampaignComparisonPanel` was previously hardcoded to `currentAgents` + `priorAgents` props. It now takes `momMonthOptions`, `momPair`, and `setMomPair` instead. Internally:
+
+```js
+const leftSrc = momMonthOptions.find(o => o.id === momPair.left) || momMonthOptions[0] || { agents: [], goalLookup: null };
+const rightSrc = momMonthOptions.find(o => o.id === momPair.right) || null;
+const currentAgents = leftSrc.agents;
+const priorAgents = rightSrc ? rightSrc.agents : [];  // [] not null — avoids spread/filter crashes
+const priorGoalLookup = rightSrc ? rightSrc.goalLookup : null;
+```
+
+The rest of the panel's body (math, sort, drill-down) is byte-equivalent to the old version — only the source of these locals changed.
+
+`momMonthOptions` is built in App (~line 20322) as:
+1. `{ id: "current", label: "Current", agents: perf.agents, goalLookup: perf.goalLookup }` — always first
+2. One entry per cached historical month with `agents = normalizeAgents(parseCSV(cached.agentRaw))` and `goalLookup = buildGoalLookup(parseCSV(cached.goalsRaw))`
+3. **Legacy fallback** when historical list empty: `{ id: "legacy-prior", label: "Prior", agents: priorAgents, goalLookup: priorGoalLookup }` — uses the existing `priorMonthRaw`/`priorMonthGoalsRaw` slots
+
+The panel renders two `<select>` dropdowns + a Swap button at the top. Selection persists to `perf_intel_mom_pair_v1`.
+
+---
+
+## 22. Gainshare PPTX Export — Toggle Behavior (updated 2026-05-19)
+
+The `GainshareExportModal` has two metric toggles: **Include SPH Attainment** and **Include Hour Gate**. When either is unchecked, that metric's bonus contribution is simply omitted from `netBonus` — **tier tables stay unchanged** for Mobile, HSD, and Cost Per.
+
+```js
+// computeGainshareReport (~line 5921) — current
+function computeGainshareReport(agents, goalLookup, fiscalInfo, opts = {}) {
+  const { includeSPH = true, includeHourGate = true } = opts;
+  // …
+  const tiers = {
+    mobile:  mobileAttain  !== null ? getGainshareTier(mobileAttain,  true) : null,
+    hsd:     hsdAttain     !== null ? getGainshareTier(hsdAttain,     true) : null,
+    costPer: costPerAttain !== null ? getGainshareTier(costPerAttain, true) : null,
+    sph:     sphAttain     !== null ? getGainshareTier(sphAttain,     true) : null,
+    hour:    hourAttain    !== null ? getHourGateTier(hourAttain)            : null,
+  };
+  // tiersTable: GAINSHARE_SITE_TIERS (or GAINSHARE_TIERS for overall)
+}
+```
+
+### Historical note: the removed 2× Cost Per rule
+
+Between 2026-05-05 and 2026-05-19, `computeGainshareReport` doubled the Cost Per tier values whenever **both** SPH and Hour Gate toggles were off — on the theory that Cost Per absorbed their share of the bonus envelope. The rule was **removed on 2026-05-19** after Comcast clarified that the per-metric tier values stand on their own and unchecked toggles simply zero-out their own contribution. The vendor SPH site tiers were corrected in the same commit (`82ecde4`) — see §7 site tiers.
+
+If you encounter old gainshare decks from May 5–18 with inflated Cost Per bonuses on SPH+HG-off exports, those reflect the now-removed rule and should be regenerated from the current code path.
+
+**Scope reminder**: tier-table logic lives only inside `computeGainshareReport` (PPTX export pipeline). The dashboard's gainshare displays (`GainsharePanel`, `SiteDrilldown` gainshare card, `BusinessOverview` gainshare table, daily-targets tier selector) all call `getGainshareTier(...)` directly against the static constants — they never saw the doubled values and don't need any change.
+
+### Export modal: data source dropdown
+
+The export modal's data source (previously two radios: "Use loaded data" / "Fetch from Google Sheet CSV") is now a single dropdown:
+- `Loaded data (current dashboard)` — default
+- `Saved historical months` optgroup — one option per saved month from `historicalMonths`
+- `Custom Google Sheet URLs…` — reveals two URL inputs (legacy ad-hoc fetch path)
+
+Picking a historical month auto-fills both URLs internally and renames the output filename to `GCS-Gainshare-{id}.pptx` so the user doesn't accidentally overwrite the current-month deck.
+
+---
+
+## 23. TodayView Mobile Responsive (shipped 2026-05-05)
+
+A `useIsMobile()` hook driven by `matchMedia("(max-width: 479px)")` flips TodayView into a phone-friendly layout below 480px. Tablets and desktops are unaffected. TopNav and TVMode are intentionally **not** mobile-adapted (separate scope).
+
+The hook lives at module scope just above `TodayView`. matchMedia (rather than `resize` + `innerWidth`) is critical — Chrome DevTools device emulation reliably fires matchMedia change events on viewport flips but sometimes skips `resize` on first paint. Without matchMedia, mobile mode would intermittently fail to trigger on initial load.
+
+### What reflows at mobile
+
+| Section | Desktop | Mobile |
+|---|---|---|
+| Header | Title left, TV Mode + Refresh stacked right | Title above, two buttons in a flex row below |
+| KPI grid | `repeat(N, 1fr)` (5 or 6 cards in a row) | `1fr 1fr` (2 cols, 5th spans full when odd count) |
+| Programs | `<table>` | Card list with sort-chip strip (Hrs / Sales / % / GPH / CPS / RGU) |
+| Attendance & Region | 2-col grid when expanded | Single column |
+| Agent Leaderboard | `<table>` | Card list with sort-chip strip + inline stats line (`8.5h · 4 sales · 174% · $86`) |
+
+Outer wrapper padding shrinks (~32px → ~12px), and section padding tightens (~20px → ~12px). All other state (sort, filter, region chips, code chips, collapsibles) is unchanged.
+
+### CPS on every card
+
+Following user request, **every card type now includes CPS**:
+- Top KPI grid: 6th card, purple `#8b5cf6`, `$XX.XX` format. Hidden on LiveStats (no roster) — see §24.
+- Programs cards (mobile): 5-metric grid `Hours / Sales / GPH / CPS / RGU`. CPS color matches program attainment.
+- Region cards (Attendance & Region expanded): 6-metric grid (`Hours / Sales / GPH / CPS / RGU / % to Goal`). Color matches site avgPct.
+- Leaderboard cards (mobile): inline stats line ends with `· $XX`.
+- Programs aggregate summary panel: already had CPS; reflowed to `repeat(3, 1fr)` 2-row grid on mobile (6 stats: Campaigns / Agents / Hours / Sales / GPH / CPS).
+
+### Roster-aware rendering (LiveStats benefit)
+
+When `recentAgentNames.size === 0` (LiveStats's empty Set):
+- The **Absent KPI card** drops out of the grid (5 cards instead of 6).
+- The **"On Floor" sub-line** changes from `"X absent · Y new"` to `"agents on the floor"`.
+- The Attendance & Region collapsible's title becomes `"Region Detail"` (drops "Attendance & ").
+- The collapsible header summary becomes `"Y regions"` (drops "X absent · ").
+- The **Attendance panel itself** is suppressed inside the collapsible — only By Region renders. Grid template forces 1-col regardless of viewport.
+
+This same `recentAgentNames.size > 0` gate is reused throughout. Don't add new attendance UI without a similar guard.
+
+### TVMode tvSite persistence
+
+`TVMode` previously initialized `tvSite = "ALL"` on every mount. Any transient unmount/remount (paste-mode flip on failed auto-refresh, parent re-render that flips render branches) reset the site filter to All mid-rotation. Fixed by persisting to `today_tv_site` localStorage key.
+
+---
+
+## 24. LiveStats Standalone — Sync Pipeline (updated 2026-05-05)
+
+LiveStats deploys at **https://joshuaedgecomb-dev.github.io/livestats/** from `C:\Users\Josh Edgecomb\Desktop\Performance-Intel\livestats-deploy\deploy-package\`. The `extract-today.js` script lifts `TodayView`, `TVMode`, and their dependencies out of the main `app.jsx` into a standalone bundle.
+
+### Critical extract-today.js fixes (2026-05-05)
+
+1. **CRLF normalization** — main `app.jsx` is authored on Windows (CRLF line endings). The original script split by `\n`, leaving trailing `\r` on every line. The blank-line anchor `/^$/` then never matched, and section slices ballooned to the end of the file (~21k lines → 66k-line bundle, no syntax error but JS reference errors at runtime). Fix: `readFileSync(...).replace(/\r\n/g, "\n").split("\n")` before any anchor matching.
+
+2. **MBR helpers block** — `mbrSiteName`, `getMbrCategory`, and the `MBR_*` constants weren't being extracted but ARE used inside TodayView. Caused `ReferenceError: mbrSiteName is not defined` at LiveStats render time. Fix: added a new `mbrBlock` slice covering `function getMbrCategory` through the blank line after `function mbrSiteName` (lines 121–162), included in the output template before the region-mapping block.
+
+3. **Source path** — the `/deploy-LiveStats` skill points at `Project/src/app.jsx` (the older fossilized copy). When invoking the extract manually, **always pass the root `src/app.jsx`** as argv[2]. The skill's documented path is stale.
+
+### `.env.local` for goals URL
+
+LiveStats builds embed `import.meta.env.VITE_DEFAULT_GOALS_SHEET_URL` so the App shell can auto-fetch goals on load — driving program-level `% to Goal`, GPH, CPS calculations and per-agent `pctToGoal` in the leaderboard.
+
+`.env.local` lives at `livestats-deploy\deploy-package\.env.local` (gitignored). Contains a single line:
+
+```
+VITE_DEFAULT_GOALS_SHEET_URL=<copy from main project's .env.local>
+```
+
+If goals don't render after a deploy, first check this file exists and has the latest URL, then rerun `npm run deploy`.
+
+### Deploy steps
+
+```bash
+cd "C:/Users/Josh Edgecomb/Desktop/Performance-Intel/livestats-deploy/deploy-package/"
+node extract-today.js "C:/Users/Josh Edgecomb/Documents/Claude/Performance Intel/src/app.jsx" "src/app.jsx"
+git add -A && git commit -m "<summary>" && git push
+npm run deploy
+```
+
+**Always deploy LiveStats whenever you edit TodayView or TVMode.** Memory note: don't deploy main without also extracting + deploying LiveStats — the standalone goes stale otherwise.
+
+### What gets stripped automatically (no-roster behavior)
+
+LiveStats's App shell passes `recentAgentNames={new Set()}` and `historicalAgentMap={{}}`. Per §23 above, this auto-suppresses:
+- Absent KPI card (5 cards instead of 6)
+- "X absent · Y new" sub-line on On Floor card
+- Attendance panel inside the collapsible
+- "X absent" half of the collapsible's header summary
+
+By Region panel, all program/agent metrics, sort/filter chips, and TV Mode all work normally.
