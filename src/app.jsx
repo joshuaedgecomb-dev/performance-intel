@@ -176,6 +176,22 @@ function mbrQuartileColor(pctToGoal) {
 // ── Fiscal Month & Pacing Utilities ──────────────────────────────────────────
 // Fiscal period runs 22nd → 21st, counting only M–F business days.
 // datestrs = ["YYYY-MM-DD", ...] from agent.date fields in the dataset.
+// Returns true for US federal holidays observed by the BPO (campaigns dark).
+// Intentionally limited to the six the BPO honors — MLK, Presidents, Juneteenth,
+// Columbus, and Veterans Day are worked through.
+function isBpoHoliday(date) {
+  const m = date.getMonth();
+  const d = date.getDate();
+  const dw = date.getDay();
+  if (m === 0  && d === 1)                              return true; // New Year's Day
+  if (m === 6  && d === 4)                              return true; // Independence Day
+  if (m === 11 && d === 25)                             return true; // Christmas Day
+  if (m === 4  && dw === 1 && d + 7 > 31)               return true; // Memorial Day (last Mon of May)
+  if (m === 8  && dw === 1 && d <= 7)                   return true; // Labor Day (1st Mon of Sep)
+  if (m === 10 && dw === 4 && d >= 22 && d <= 28)       return true; // Thanksgiving (4th Thu of Nov)
+  return false;
+}
+
 function getFiscalMonthInfo(datestrs) {
   if (!datestrs || !datestrs.length) return null;
   const sorted = [...datestrs].filter(Boolean).sort();
@@ -196,7 +212,7 @@ function getFiscalMonthInfo(datestrs) {
     const end = new Date(b);
     while (cur <= end) {
       const dw = cur.getDay();
-      if (dw !== 0 && dw !== 6) n++;
+      if (dw !== 0 && dw !== 6 && !isBpoHoliday(cur)) n++;
       cur.setDate(cur.getDate() + 1);
     }
     return n;
@@ -10052,7 +10068,7 @@ function buildCorpCampaignHoursSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
     if (isMtd) {
       const b = fiscalBounds(label);
       if (b) {
-        // Count business days (Mon-Fri) — Comcast paces on business days only
+        // Count business days (Mon-Fri, excluding BPO-observed federal holidays).
         const bizDaysBetween = (start, end) => {
           const s = new Date(start); s.setHours(0, 0, 0, 0);
           const e = new Date(end); e.setHours(0, 0, 0, 0);
@@ -10061,7 +10077,7 @@ function buildCorpCampaignHoursSlide(pres, agentRaw, goalsRaw, priorAgentRaw, pr
           const d = new Date(s);
           while (d <= e) {
             const dow = d.getDay();
-            if (dow !== 0 && dow !== 6) count++;
+            if (dow !== 0 && dow !== 6 && !isBpoHoliday(d)) count++;
             d.setDate(d.getDate() + 1);
           }
           return count;
@@ -14225,12 +14241,12 @@ function buildSupInsights(s, supWeeks, crossProgramMap, lastDataDate, currentJob
     const ldWeekNum = String(Math.ceil(((ld - oneJan) / 86400000 + oneJan.getDay() + 1) / 7));
     // If this week number matches, the week is partial — count only elapsed bdays
     if (String(wk) === ldWeekNum || String(Number(wk)) === String(Number(ldWeekNum))) {
-      // Count Mon-Fri from Monday to lastDataDate
+      // Count Mon-Fri from Monday to lastDataDate (skip BPO-observed federal holidays).
       let elapsed = 0;
       const cur = new Date(ldMon);
       while (cur <= ld) {
         const dw = cur.getDay();
-        if (dw !== 0 && dw !== 6) elapsed++;
+        if (dw !== 0 && dw !== 6 && !isBpoHoliday(cur)) elapsed++;
         cur.setDate(cur.getDate() + 1);
       }
       return elapsed;
