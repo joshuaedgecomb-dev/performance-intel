@@ -639,12 +639,15 @@ function weekLabel(wk) { return WEEK_LABELS[String(wk)] || `Wk ${wk}`; }
 function weekDays(wk)  { return WEEK_BDAYS[String(wk)] ?? 5; }
 
 // ── Daily Breakdown product columns (data-driven from the CSV) ────────────────
-// Known CSV product columns → picker label + category. NewData (HSD) and XMLines
-// (XM) are intentionally absent: they're already shown as the HSD / XM columns.
+// Known CSV product columns → picker label + category. New HSD (NewData) and
+// New Mobile (XMLines) are offered here too even though HSD / XM also appear as
+// fixed table columns — selecting them adds a per-product column of the same data.
 const DAILY_PRODUCT_REGISTRY = [
   { col: "NewVideo",        label: "New Video",            category: "RGU / New Sales" },
+  { col: "NewData",         label: "New HSD",              category: "RGU / New Sales" },
   { col: "NewVoice",        label: "New Phone",            category: "RGU / New Sales" },
   { col: "NewSecurity",     label: "New XH",               category: "RGU / New Sales" },
+  { col: "XMLines",         label: "New Mobile",           category: "RGU / New Sales" },
   { col: "WifiPassSales",   label: "Wifi Pass",            category: "RGU / New Sales" },
   { col: "xFiSales",        label: "xFi Complete",         category: "RGU / New Sales" },
   { col: "StormReadySales", label: "Storm Ready",          category: "RGU / New Sales" },
@@ -660,12 +663,12 @@ const DAILY_PRODUCT_REGISTRY = [
   { col: "AddedXM",         label: "Added XM",             category: "Mobile (XM)" },
   { col: "XMPP",            label: "XM Protection Plan",   category: "Mobile (XM)" },
 ];
-// Columns that are NOT pickable products: all metadata + the two already-shown
-// product columns (NewData→HSD, XMLines→XM). Anything else is treated as a product.
+// Columns that are NOT pickable products: agent / metadata / metric columns only.
+// (NewData and XMLines ARE products now — surfaced as New HSD / New Mobile.)
 const DAILY_PRODUCT_DENYLIST = new Set([
   "Job","Date","Location","AgentTSR","AgentName","SupTSR","SupName","Dials","Goals",
   "Contacts","Finals","NonFinals","Hours","AHTSec","CloseRate","GPH","CPH","DPH","CPS",
-  "Region","Week Number","SPH Goal","Goals number","Job Type","NewData","XMLines",
+  "Region","Week Number","SPH Goal","Goals number","Job Type",
 ]);
 const DAILY_REGISTRY_BY_COL = Object.fromEntries(DAILY_PRODUCT_REGISTRY.map(e => [e.col, e]));
 // Ordered list of product columns actually present in the loaded rows.
