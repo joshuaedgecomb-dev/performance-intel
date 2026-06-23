@@ -552,7 +552,7 @@ const HISTORICAL_MONTHS_STORAGE_KEY = "perf_intel_historical_months_v1";
 const ACTIVE_MONTH_STORAGE_KEY = "perf_intel_active_month_id";
 const HISTORICAL_MONTHS_CACHE_KEY = "perf_intel_historical_months_data_v1";
 const MOM_PAIR_STORAGE_KEY = "perf_intel_mom_pair_v1";
-const HISTORICAL_MONTHS_SEEDED_KEY = "perf_intel_historical_months_seeded_v2";
+const HISTORICAL_MONTHS_SEEDED_KEY = "perf_intel_historical_months_seeded_v3";
 
 // Hard-coded seed entries for fiscal year 2026. Merged in once on first mount —
 // missing seeds (by label) get appended; already-present labels are left alone.
@@ -587,6 +587,13 @@ const SEED_HISTORICAL_MONTHS = [
     label: "May '26",
     agentUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRagC_XDSQ84y25onmWs6MUOZcEdWZNA6fVRRDFUzNWQp3ginYLtOIQsSrwmbAERkOJ-daTvbHqEtoy/pub?gid=667346347&single=true&output=csv",
     goalsUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vRagC_XDSQ84y25onmWs6MUOZcEdWZNA6fVRRDFUzNWQp3ginYLtOIQsSrwmbAERkOJ-daTvbHqEtoy/pub?gid=1685208822&single=true&output=csv",
+  },
+  {
+    id: "2026-06",
+    label: "Jun '26",
+    // fiscal June '26 — DR-only (Belize operations ended)
+    agentUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQjaD2_ETJm8FlNw2ZlgXOPgbb6bbVayOoK3xVOyo7F4Mx2Vmbem5kg1e0L66DxfQt8S6mTV4C2o7Zi/pub?gid=667346347&single=true&output=csv",
+    goalsUrl: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQjaD2_ETJm8FlNw2ZlgXOPgbb6bbVayOoK3xVOyo7F4Mx2Vmbem5kg1e0L66DxfQt8S6mTV4C2o7Zi/pub?gid=1685208822&single=true&output=csv",
   },
 ];
 // Data source URLs are loaded from .env.local (gitignored) via Vite's import.meta.env.
