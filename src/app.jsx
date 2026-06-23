@@ -17070,10 +17070,11 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
                         const byJob = {};
                         dateAgents.forEach(a => {
                           const jt = a.jobType || "Unknown";
-                          if (!byJob[jt]) byJob[jt] = { hrs: 0, goals: 0, goalsNum: 0, hsd: 0, xm: 0, agents: [] };
+                          if (!byJob[jt]) byJob[jt] = { hrs: 0, goals: 0, goalsNum: 0, hsd: 0, xm: 0, agents: [], products: {} };
                           byJob[jt].hrs += a.hours; byJob[jt].goals += a.goals; byJob[jt].goalsNum += a.goalsNum || 0;
                           byJob[jt].hsd += a.newXI || 0; byJob[jt].xm += a.xmLines || 0;
                           byJob[jt].agents.push(a);
+                          if (a.products) for (const k in a.products) byJob[jt].products[k] = (byJob[jt].products[k] || 0) + a.products[k];
                         });
                         const jobs = Object.entries(byJob).sort((a, b) => b[1].goals - a[1].goals);
                         return (
@@ -17109,6 +17110,9 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
                                     {["Program", "Agents", "Hours", "Sales", "GPH", "% Goal", "CPS", "HSD", "XM"].map(h => (
                                       <th key={h} style={{ padding: "0.3rem 0.5rem", textAlign: h === "Program" ? "left" : "right", color: `var(--text-faint)`, fontWeight: 400 }}>{h}</th>
                                     ))}
+                                    {activeProducts.map(p => (
+                                      <th key={p.col} title={p.label} style={{ padding: "0.3rem 0.5rem", textAlign: "right", color: `var(--text-faint)`, fontWeight: 400 }}>{p.label}</th>
+                                    ))}
                                   </tr></thead>
                                   <tbody>
                                     {jobs.map(([jt, data], ji) => {
@@ -17132,6 +17136,7 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
                                           <td style={{ padding: "0.3rem 0.5rem", textAlign: "right", color: pColor }}>${jCps.toFixed(2)}</td>
                                           <td style={{ padding: "0.3rem 0.5rem", textAlign: "right", color: data.hsd > 0 ? "#2563eb" : `var(--text-faint)` }}>{data.hsd || "\u2014"}</td>
                                           <td style={{ padding: "0.3rem 0.5rem", textAlign: "right", color: data.xm > 0 ? "#8b5cf6" : `var(--text-faint)` }}>{data.xm || "\u2014"}</td>
+                                          {activeProducts.map(p => { const val = data.products?.[p.col]; return <td key={p.col} style={{ padding: "0.3rem 0.5rem", textAlign: "right", color: val > 0 ? "var(--text-secondary)" : "var(--text-faint)" }}>{val || "\u2014"}</td>; })}
                                         </tr>);
                                     })}
                                   </tbody>
@@ -17151,6 +17156,9 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
                                       <thead><tr style={{ borderBottom: "1px solid var(--border)" }}>
                                         {["Agent","Supervisor","Hours","Sales","GPH","% Goal","CPS","HSD","XM"].map(h => (
                                           <th key={h} style={{ padding: "0.2rem 0.5rem", textAlign: h === "Agent" || h === "Supervisor" ? "left" : "right", color: `var(--text-faint)`, fontWeight: 400 }}>{h}</th>
+                                        ))}
+                                        {activeProducts.map(p => (
+                                          <th key={p.col} title={p.label} style={{ padding: "0.2rem 0.5rem", textAlign: "right", color: `var(--text-faint)`, fontWeight: 400 }}>{p.label}</th>
                                         ))}
                                       </tr></thead>
                                       <tbody>
@@ -17175,6 +17183,7 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
                                               <td style={{ padding: "0.2rem 0.5rem", textAlign: "right", color: pClr }}>${aCps.toFixed(2)}</td>
                                               <td style={{ padding: "0.2rem 0.5rem", textAlign: "right", color: (a.newXI || 0) > 0 ? "#2563eb" : `var(--text-faint)` }}>{a.newXI || "\u2014"}</td>
                                               <td style={{ padding: "0.2rem 0.5rem", textAlign: "right", color: (a.xmLines || 0) > 0 ? "#8b5cf6" : `var(--text-faint)` }}>{a.xmLines || "\u2014"}</td>
+                                              {activeProducts.map(p => { const val = a.products?.[p.col]; return <td key={p.col} style={{ padding: "0.2rem 0.5rem", textAlign: "right", color: val > 0 ? "var(--text-secondary)" : "var(--text-faint)" }}>{val || "\u2014"}</td>; })}
                                             </tr>);
                                         })}
                                       </tbody>
@@ -17187,13 +17196,14 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
                                 const agentMap = {};
                                 dateAgents.forEach(a => {
                                   const n = a.agentName;
-                                  if (!agentMap[n]) agentMap[n] = { agentName: n, supervisor: a.supervisor, quartile: a.quartile, hours: 0, goals: 0, goalsNum: 0, hsd: 0, xm: 0, programs: [] };
+                                  if (!agentMap[n]) agentMap[n] = { agentName: n, supervisor: a.supervisor, quartile: a.quartile, hours: 0, goals: 0, goalsNum: 0, hsd: 0, xm: 0, programs: [], products: {} };
                                   agentMap[n].hours += a.hours;
                                   agentMap[n].goals += a.goals;
                                   agentMap[n].goalsNum += a.goalsNum || 0;
                                   agentMap[n].hsd += a.newXI || 0;
                                   agentMap[n].xm += a.xmLines || 0;
                                   agentMap[n].programs.push(a);
+                                  if (a.products) for (const k in a.products) agentMap[n].products[k] = (agentMap[n].products[k] || 0) + a.products[k];
                                 });
                                 const collapsed = Object.values(agentMap).sort((x, y) => y.hours - x.hours);
                                 return (
@@ -17201,6 +17211,9 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
                                     <thead><tr style={{ borderBottom: "1px solid var(--border)" }}>
                                       {["Agent","Programs","Supervisor","Hours","Sales","GPH","CPS","HSD","XM"].map(h => (
                                         <th key={h} style={{ padding: "0.2rem 0.5rem", textAlign: h === "Agent" || h === "Programs" || h === "Supervisor" ? "left" : "right", color: `var(--text-faint)`, fontWeight: 400 }}>{h}</th>
+                                      ))}
+                                      {activeProducts.map(p => (
+                                        <th key={p.col} title={p.label} style={{ padding: "0.2rem 0.5rem", textAlign: "right", color: `var(--text-faint)`, fontWeight: 400 }}>{p.label}</th>
                                       ))}
                                     </tr></thead>
                                     <tbody>
@@ -17227,6 +17240,7 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
                                             <td style={{ padding: "0.2rem 0.5rem", textAlign: "right", color: pClr }}>${aCps.toFixed(2)}</td>
                                             <td style={{ padding: "0.2rem 0.5rem", textAlign: "right", color: ag.hsd > 0 ? "#2563eb" : `var(--text-faint)` }}>{ag.hsd || "\u2014"}</td>
                                             <td style={{ padding: "0.2rem 0.5rem", textAlign: "right", color: ag.xm > 0 ? "#8b5cf6" : `var(--text-faint)` }}>{ag.xm || "\u2014"}</td>
+                                            {activeProducts.map(p => { const val = ag.products?.[p.col]; return <td key={p.col} style={{ padding: "0.2rem 0.5rem", textAlign: "right", color: val > 0 ? "var(--text-secondary)" : "var(--text-faint)" }}>{val || "\u2014"}</td>; })}
                                           </tr>
                                           {isExpanded && ag.programs.length > 1 && ag.programs.sort((x, y) => y.hours - x.hours).map((p, pi) => {
                                             const pGph = p.hours > 0 ? p.goals / p.hours : 0;
@@ -17243,6 +17257,7 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
                                                 <td style={{ padding: "0.15rem 0.5rem", textAlign: "right", color: ppClr, fontSize: "0.82rem" }}>${pCps.toFixed(2)}</td>
                                                 <td style={{ padding: "0.15rem 0.5rem", textAlign: "right", color: (p.newXI || 0) > 0 ? "#2563eb" : `var(--text-faint)`, fontSize: "0.82rem" }}>{p.newXI || "\u2014"}</td>
                                                 <td style={{ padding: "0.15rem 0.5rem", textAlign: "right", color: (p.xmLines || 0) > 0 ? "#8b5cf6" : `var(--text-faint)`, fontSize: "0.82rem" }}>{p.xmLines || "\u2014"}</td>
+                                                {activeProducts.map(pc => { const val = p.products?.[pc.col]; return <td key={pc.col} style={{ padding: "0.15rem 0.5rem", textAlign: "right", color: val > 0 ? "var(--text-secondary)" : "var(--text-faint)", fontSize: "0.82rem" }}>{val || "\u2014"}</td>; })}
                                               </tr>
                                             );
                                           })}
