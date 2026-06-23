@@ -16629,19 +16629,22 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
       const byDate = {};
       rows.forEach(r => {
         if (!r.date) return;
-        if (!byDate[r.date]) byDate[r.date] = { hours: 0, goals: 0, hsd: 0, xm: 0, agents: new Set() };
+        if (!byDate[r.date]) byDate[r.date] = { hours: 0, goals: 0, hsd: 0, xm: 0, agents: new Set(), products: {} };
         byDate[r.date].hours += r.hours;
         byDate[r.date].goals += r.goals;
         byDate[r.date].hsd   += r.newXI || 0;
         byDate[r.date].xm    += r.xmLines || 0;
         byDate[r.date].agents.add(r.agentName);
+        if (r.products) for (const k in r.products) {
+          byDate[r.date].products[k] = (byDate[r.date].products[k] || 0) + r.products[k];
+        }
       });
       return allDates.map(date => {
         const d = byDate[date];
-        if (!d) return { date, hours: 0, goals: 0, hsd: 0, xm: 0, agentCount: 0, gph: null, absent: true };
+        if (!d) return { date, hours: 0, goals: 0, hsd: 0, xm: 0, agentCount: 0, gph: null, absent: true, products: {} };
         const gph = d.hours > 0 ? d.goals / d.hours : 0;
         return { date, hours: d.hours, goals: d.goals, hsd: d.hsd, xm: d.xm,
-                 agentCount: d.agents.size, gph, absent: false };
+                 agentCount: d.agents.size, gph, absent: false, products: d.products };
       });
     };
 
@@ -16691,11 +16694,17 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
   };
 
   const displayLabel = dailyProgram !== "All" ? dailyProgram : jobType;
+  const sumProducts = (days) => days.reduce((acc, d) => {
+    if (d && d.products) for (const k in d.products) acc[k] = (acc[k] || 0) + d.products[k];
+    return acc;
+  }, {});
+
   const worked = days.filter(d => !d.absent);
   const totalHrs = worked.reduce((s, d) => s + d.hours, 0);
   const totalGoals = worked.reduce((s, d) => s + d.goals, 0);
   const totalHsd = worked.reduce((s, d) => s + d.hsd, 0);
   const totalXm = worked.reduce((s, d) => s + d.xm, 0);
+  const totalProducts = sumProducts(worked);
   const overallGph = totalHrs > 0 ? totalGoals / totalHrs : 0;
 
   // Prior agents filtered to match current program selection
@@ -16878,6 +16887,7 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
                 const wGoals = wWorked.reduce((s, d) => s + d.goals, 0);
                 const wHsd = wWorked.reduce((s, d) => s + d.hsd, 0);
                 const wXm = wWorked.reduce((s, d) => s + d.xm, 0);
+                const wProducts = sumProducts(wWorked);
                 const wAgentCount = wWorked.length > 0 ? Math.round(wWorked.reduce((s, d) => s + d.agentCount, 0) / wWorked.length) : 0;
                 const wGph = wHrs > 0 ? wGoals / wHrs : 0;
                 const wPct = sg && wHrs > 0 ? (wGph / sg) * 100 : null;
