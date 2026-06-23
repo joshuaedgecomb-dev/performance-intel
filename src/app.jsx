@@ -708,6 +708,14 @@ function normalizeAgents(rows = []) {
       const dayGoals   = parseNum(r.Goals);
       const dayPct     = goalsNum > 0 ? (dayGoals / goalsNum) * 100 : 0;
 
+      const products = {};
+      for (const k in r) {
+        if (!DAILY_PRODUCT_DENYLIST.has(k)) {
+          const n = Number(r[k]);
+          if (Number.isFinite(n)) products[k] = n;
+        }
+      }
+
       return {
         ...r,
         hours:      parseNum(r.Hours),
@@ -727,6 +735,7 @@ function normalizeAgents(rows = []) {
         dayGph:      parseNum(r.GPH),
         dayPctToGoal: dayPct,              // Goals / Goals number for this day
         isSpanishCallback: (r["Job Type"] || "").trim() === "Spanish Callback",
+        products,
       };
     }).filter(Boolean);
 
