@@ -16679,6 +16679,19 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
     return { allDates, combined, byRegion };
   }, [activeAgents, regionInfo]);
 
+  // Product columns + prior-agent filtering — declared BEFORE the early return
+  // so the hook order stays stable across empty/populated renders (rules of hooks).
+  const availableProducts = useMemo(() => getDailyProductCols(activeAgents), [activeAgents]);
+  const activeProducts = useMemo(
+    () => availableProducts.filter(p => selectedProducts.has(p.col)),
+    [availableProducts, selectedProducts]
+  );
+  const priorAgentsFiltered = useMemo(() => {
+    if (!priorAgents || priorAgents.length === 0) return [];
+    if (dailyProgram !== "All") return priorAgents.filter(a => a.jobType === dailyProgram);
+    return priorAgents.filter(a => !a.isSpanishCallback);
+  }, [priorAgents, dailyProgram]);
+
   if (!dailyData || dailyData.allDates.length === 0) {
     return (
       <div style={{ background: `var(--bg-secondary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-lg, 16px)", padding: "2rem", textAlign: "center", color: `var(--text-faint)`, fontFamily: "var(--font-ui, Inter, sans-serif)" }}>
@@ -16724,20 +16737,6 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
   const totalXm = worked.reduce((s, d) => s + d.xm, 0);
   const totalProducts = sumProducts(worked);
   const overallGph = totalHrs > 0 ? totalGoals / totalHrs : 0;
-
-  // Part B — available + active products (activeAgents feeds buildDayStats)
-  const availableProducts = useMemo(() => getDailyProductCols(activeAgents), [activeAgents]);
-  const activeProducts = useMemo(
-    () => availableProducts.filter(p => selectedProducts.has(p.col)),
-    [availableProducts, selectedProducts]
-  );
-
-  // Prior agents filtered to match current program selection
-  const priorAgentsFiltered = useMemo(() => {
-    if (!priorAgents || priorAgents.length === 0) return [];
-    if (dailyProgram !== "All") return priorAgents.filter(a => a.jobType === dailyProgram);
-    return priorAgents.filter(a => !a.isSpanishCallback);
-  }, [priorAgents, dailyProgram]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
