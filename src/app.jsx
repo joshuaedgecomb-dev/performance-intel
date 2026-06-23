@@ -16548,6 +16548,24 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
   const [dailyDrillMode, setDailyDrillMode] = useState("program"); // "program" | "agent"
   const [expandedAgentName, setExpandedAgentName] = useState(null); // agent name for drill-down in agent mode
 
+  // Part A — product column picker state
+  const [selectedProducts, _setSelectedProducts] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem("perf_intel_daily_product_cols_v1")) || []); }
+    catch(e) { return new Set(); }
+  });
+  const toggleProduct = useCallback(col => {
+    _setSelectedProducts(prev => {
+      const n = new Set(prev); if (n.has(col)) n.delete(col); else n.add(col);
+      try { localStorage.setItem("perf_intel_daily_product_cols_v1", JSON.stringify([...n])); } catch(e) {}
+      return n;
+    });
+  }, []);
+  const setSelectedProductsPersisted = useCallback(next => {
+    _setSelectedProducts(next);
+    try { localStorage.setItem("perf_intel_daily_product_cols_v1", JSON.stringify([...next])); } catch(e) {}
+  }, []);
+  const [productDropOpen, setProductDropOpen] = useState(false);
+
   // Determine active agents: filter by selected program, then by ROC if drilled down
   const activeAgents = useMemo(() => {
     let filtered = allAgentsProp;
@@ -16706,6 +16724,13 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
   const totalXm = worked.reduce((s, d) => s + d.xm, 0);
   const totalProducts = sumProducts(worked);
   const overallGph = totalHrs > 0 ? totalGoals / totalHrs : 0;
+
+  // Part B — available + active products (activeAgents feeds buildDayStats)
+  const availableProducts = useMemo(() => getDailyProductCols(activeAgents), [activeAgents]);
+  const activeProducts = useMemo(
+    () => availableProducts.filter(p => selectedProducts.has(p.col)),
+    [availableProducts, selectedProducts]
+  );
 
   // Prior agents filtered to match current program selection
   const priorAgentsFiltered = useMemo(() => {
@@ -16870,14 +16895,116 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
           ))}
         </div>
 
+        {/* Part C — Product Code Columns picker */}
+        {availableProducts.length > 0 && (
+          <div style={{ background: `var(--bg-primary)`, border: "1px solid var(--border)", borderRadius: "var(--radius-md, 10px)", padding: "0.75rem 1rem", marginBottom: "0.75rem" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", color: `var(--text-muted)`, letterSpacing: "0.12em", textTransform: "uppercase" }}>
+                Product Code Columns
+              </div>
+              <div style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
+                {selectedProducts.size > 0 && (
+                  <button onClick={() => setSelectedProductsPersisted(new Set())}
+                    style={{ background: "transparent", border: "1px solid var(--text-faint)", borderRadius: "var(--radius-sm, 6px)", color: `var(--text-muted)`, padding: "0.15rem 0.5rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", cursor: "pointer" }}>
+                    Clear
+                  </button>
+                )}
+                <button onClick={() => setSelectedProductsPersisted(new Set(availableProducts.map(p => p.col)))}
+                  style={{ background: "transparent", border: "1px solid var(--text-faint)", borderRadius: "var(--radius-sm, 6px)", color: `var(--text-muted)`, padding: "0.15rem 0.5rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", cursor: "pointer" }}>
+                  Show All
+                </button>
+                <button onClick={() => setProductDropOpen(v => !v)}
+                  style={{ background: productDropOpen ? "#d9770620" : "transparent", border: `1px solid ${productDropOpen ? "#d97706" : `var(--text-faint)`}`, borderRadius: "var(--radius-sm, 6px)",
+                    color: productDropOpen ? "#d97706" : `var(--text-muted)`, padding: "0.15rem 0.6rem", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.8rem", cursor: "pointer" }}>
+                  {productDropOpen ? `▲ Close (${selectedProducts.size})` : `▼ Select Columns`}{!productDropOpen && selectedProducts.size > 0 ? ` (${selectedProducts.size})` : ""}
+                </button>
+              </div>
+            </div>
+            {/* Selected product chips */}
+            {selectedProducts.size > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem", marginTop: "0.5rem" }}>
+                {availableProducts.filter(p => selectedProducts.has(p.col)).map(p => (
+                  <span key={p.col} onClick={() => toggleProduct(p.col)}
+                    style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", padding: "0.15rem 0.45rem", borderRadius: "3px",
+                      background: "#d9770620", border: "1px solid #d9770650", color: "#d97706", cursor: "pointer" }}
+                    title="Click to remove">
+                    {p.label} ×
+                  </span>
+                ))}
+              </div>
+            )}
+            {/* Dropdown — categorized */}
+            {productDropOpen && (() => {
+              const PROD_CATEGORIES = [
+                { label: "RGU / New Sales", color: "#16a34a" },
+                { label: "Tier Upgrades", color: "#6366f1" },
+                { label: "Mobile (XM)", color: "#ec4899" },
+                { label: "Other", color: "#94a3b8" },
+              ];
+              const catBtnStyle = (active) => ({
+                background: active ? "#d9770620" : "transparent", border: `1px solid ${active ? "#d97706" : "var(--border)"}`,
+                borderRadius: "var(--radius-sm, 6px)", color: active ? "#d97706" : `var(--text-dim)`, padding: "0.2rem 0.55rem",
+                fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.82rem", cursor: "pointer", textAlign: "center",
+                width: "100%", transition: "all 0.1s"
+              });
+              return (
+                <div style={{ marginTop: "0.75rem", borderTop: "1px solid var(--bg-tertiary)", paddingTop: "0.75rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                  {PROD_CATEGORIES.map(cat => {
+                    const visible = availableProducts.filter(p => p.category === cat.label);
+                    if (visible.length === 0) return null;
+                    const allSel = visible.every(p => selectedProducts.has(p.col));
+                    const someSel = visible.some(p => selectedProducts.has(p.col));
+                    const toggleCat = () => {
+                      const next = new Set(selectedProducts);
+                      if (allSel) { visible.forEach(p => next.delete(p.col)); }
+                      else { visible.forEach(p => next.add(p.col)); }
+                      setSelectedProductsPersisted(next);
+                    };
+                    return (
+                      <div key={cat.label}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.35rem" }}>
+                          <button onClick={toggleCat}
+                            style={{ background: "transparent", border: "none", cursor: "pointer", padding: "0.1rem 0.3rem",
+                              fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.72rem",
+                              color: allSel ? cat.color : someSel ? cat.color + "90" : `var(--text-faint)`,
+                              fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                            {allSel ? "✓" : "○"}
+                          </button>
+                          <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.75rem", color: cat.color,
+                            fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+                            {cat.label}
+                          </div>
+                          <div style={{ flex: 1, height: "1px", background: cat.color + "30" }} />
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: "0.25rem", paddingLeft: "0.25rem" }}>
+                          {visible.map(p => (
+                            <button key={p.col} onClick={() => toggleProduct(p.col)} style={catBtnStyle(selectedProducts.has(p.col))}>
+                              {p.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem" }}>
             <thead>
               <tr style={{ borderBottom: "2px solid var(--border)" }}>
-                {["Date","Day","Agents","Hours","Goals","GPH","HSD","XM","% to Goal"].map(h => (
+                {["Date","Day","Agents","Hours","Goals","GPH","HSD","XM"].map(h => (
                   <th key={h} style={{ padding: "0.4rem 0.6rem", textAlign: h === "Date" || h === "Day" ? "left" : "right",
                     fontWeight: 400, color: `var(--text-dim)`, whiteSpace: "nowrap" }}>{h}</th>
                 ))}
+                {activeProducts.map(p => (
+                  <th key={p.col} style={{ padding: "0.4rem 0.6rem", textAlign: "right",
+                    fontWeight: 400, color: `var(--text-dim)`, whiteSpace: "nowrap" }} title={p.label}>{p.label}</th>
+                ))}
+                <th style={{ padding: "0.4rem 0.6rem", textAlign: "right", fontWeight: 400, color: `var(--text-dim)`, whiteSpace: "nowrap" }}>% to Goal</th>
               </tr>
             </thead>
             <tbody>
@@ -16898,7 +17025,7 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
                         <tr key={d.date} style={{ background: `var(--bg-primary)`, opacity: 0.4 }}>
                           <td style={{ padding: "0.35rem 0.6rem", color: `var(--text-faint)` }}>{d.date?.slice(5)}</td>
                           <td style={{ padding: "0.35rem 0.6rem", color: `var(--text-faint)` }}>{dayLabel(d.date)}</td>
-                          <td colSpan={7} style={{ padding: "0.35rem 0.6rem", textAlign: "center", color: `var(--text-faint)`, fontStyle: "italic" }}>no activity</td>
+                          <td colSpan={7 + activeProducts.length} style={{ padding: "0.35rem 0.6rem", textAlign: "center", color: `var(--text-faint)`, fontStyle: "italic" }}>no activity</td>
                         </tr>
                       );
                     }
@@ -16918,6 +17045,9 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
                         <td style={{ padding: "0.35rem 0.6rem", textAlign: "right", color: gphColor, fontWeight: 600 }}>{d.gph > 0 ? d.gph.toFixed(3) : "—"}</td>
                         <td style={{ padding: "0.35rem 0.6rem", textAlign: "right", color: d.hsd > 0 ? "#2563eb" : `var(--text-faint)`, fontWeight: d.hsd > 0 ? 700 : 400 }}>{d.hsd || "—"}</td>
                         <td style={{ padding: "0.35rem 0.6rem", textAlign: "right", color: d.xm > 0 ? "#8b5cf6" : `var(--text-faint)`, fontWeight: d.xm > 0 ? 700 : 400 }}>{d.xm || "—"}</td>
+                        {activeProducts.map(p => (
+                          <td key={p.col} style={{ padding: "0.35rem 0.6rem", textAlign: "right", color: (d.products && d.products[p.col]) ? `var(--text-secondary)` : `var(--text-faint)`, fontWeight: (d.products && d.products[p.col]) ? 700 : 400 }}>{(d.products && d.products[p.col]) ? d.products[p.col] : "—"}</td>
+                        ))}
                         <td style={{ padding: "0.35rem 0.6rem", textAlign: "right" }}>
                           {pct !== null ? (
                             <span style={{ color: pctColor, fontWeight: 700, background: pctColor + "12", border: `1px solid ${pctColor}30`, borderRadius: "3px", padding: "0.1rem 0.35rem" }}>
@@ -16945,7 +17075,7 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
                         });
                         const jobs = Object.entries(byJob).sort((a, b) => b[1].goals - a[1].goals);
                         return (
-                          <tr><td colSpan={9} style={{ padding: 0 }}>
+                          <tr><td colSpan={9 + activeProducts.length} style={{ padding: 0 }}>
                             <div style={{ padding: "0.6rem 1rem", background: "#d9770608", borderLeft: "3px solid #d97706" }}>
                               <div style={{ fontFamily: "var(--font-ui, Inter, sans-serif)", fontSize: "0.85rem", color: `var(--text-faint)`, letterSpacing: "0.08em", marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
                                 <span>
@@ -17140,6 +17270,9 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
                       <td style={{ padding: "0.4rem 0.6rem", textAlign: "right", color: sg ? attainColor((wGph / sg) * 100) : `var(--text-dim)`, fontWeight: 700 }}>{wGph > 0 ? wGph.toFixed(3) : "—"}</td>
                       <td style={{ padding: "0.4rem 0.6rem", textAlign: "right", color: wHsd > 0 ? "#2563eb" : `var(--text-faint)`, fontWeight: 700 }}>{wHsd || "—"}</td>
                       <td style={{ padding: "0.4rem 0.6rem", textAlign: "right", color: wXm > 0 ? "#8b5cf6" : `var(--text-faint)`, fontWeight: 700 }}>{wXm || "—"}</td>
+                      {activeProducts.map(p => (
+                        <td key={p.col} style={{ padding: "0.4rem 0.6rem", textAlign: "right", color: (wProducts[p.col]) ? `var(--text-secondary)` : `var(--text-faint)`, fontWeight: 700 }}>{wProducts[p.col] ? wProducts[p.col] : "—"}</td>
+                      ))}
                       <td style={{ padding: "0.4rem 0.6rem", textAlign: "right" }}>
                         {wPct !== null ? (
                           <span style={{ color: attainColor(wPct), fontWeight: 700 }}>{Math.round(wPct)}%</span>
@@ -17159,6 +17292,9 @@ function DailyBreakdownPanel({ agents: allAgentsProp, regions, jobType, sphGoal,
                 <td style={{ padding: "0.5rem 0.6rem", textAlign: "right", color: sg ? attainColor((overallGph / sg) * 100) : `var(--text-dim)`, fontWeight: 700 }}>{overallGph > 0 ? overallGph.toFixed(3) : "—"}</td>
                 <td style={{ padding: "0.5rem 0.6rem", textAlign: "right", color: totalHsd > 0 ? "#2563eb" : `var(--text-faint)`, fontWeight: 700 }}>{totalHsd || "—"}</td>
                 <td style={{ padding: "0.5rem 0.6rem", textAlign: "right", color: totalXm > 0 ? "#8b5cf6" : `var(--text-faint)`, fontWeight: 700 }}>{totalXm || "—"}</td>
+                {activeProducts.map(p => (
+                  <td key={p.col} style={{ padding: "0.5rem 0.6rem", textAlign: "right", color: (totalProducts[p.col]) ? `var(--text-secondary)` : `var(--text-faint)`, fontWeight: 700 }}>{totalProducts[p.col] ? totalProducts[p.col] : "—"}</td>
+                ))}
                 <td style={{ padding: "0.5rem 0.6rem", textAlign: "right" }}>
                   {sg && overallGph > 0 ? (
                     <span style={{ color: attainColor((overallGph / sg) * 100), fontWeight: 700, background: attainColor((overallGph / sg) * 100) + "12", border: `1px solid ${attainColor((overallGph / sg) * 100)}30`, borderRadius: "3px", padding: "0.1rem 0.35rem" }}>
