@@ -8,10 +8,10 @@
 
 ## 1. What This Tool Is
 
-Performance Intel is a **single-file React artifact** (`src/app.jsx`, ~21,600 lines) powering a telesales performance analytics dashboard for a BPO managing outbound **Xfinity** campaigns. It serves two geographic sites:
+Performance Intel is a **single-file React artifact** (`src/app.jsx`, ~21,600 lines) powering a telesales performance analytics dashboard for a BPO managing outbound **Xfinity** campaigns. It serves one active geographic site, with full support for an **optional second site**:
 
-- **DR (SD-Xfinity)** — Santo Domingo, Dominican Republic
-- **BZ (Belize)** — Three sub-sites: Belize City-XOTM, OW-XOTM, San Ignacio-XOTM
+- **DR (SD-Xfinity)** — Santo Domingo, Dominican Republic. The active site.
+- **BZ (Belize)** — *Optional second site.* Three sub-sites: Belize City-XOTM, OW-XOTM, San Ignacio-XOTM. Belize operations ceased as of **fiscal June 2026** (May 22 – Jun 21, 2026), so current-period data is DR-only. The codebase fully supports BZ — it still renders for historical months (≤ fiscal May '26) and the site can be reactivated — so absent BZ rows in a current snapshot are expected, not a data error.
 
 The tool processes CSV and JSON data for agent performance, goals, and roster tracking, rendering interactive pages (BusinessOverview, SiteDrilldown, program slides, MoM compare, tNPS), drill-down analytics, and a real-time live operational view (TodayView).
 
@@ -109,8 +109,8 @@ const VALID_REGIONS = new Set(["SD-Xfinity", "Belize City-XOTM", "OW-XOTM", "San
 | San Ignacio-XOTM | BZ | Belize |
 
 ### Detection Logic
-- BZ: `region.toUpperCase().includes("XOTM")`
-- DR: any non-XOTM region (currently only "SD-Xfinity")
+- BZ: `region.toUpperCase().includes("XOTM")` — the optional second site; inactive since fiscal June '26 (no XOTM rows in current data), but detection stays in place for historical months and possible reactivation
+- DR: any non-XOTM region (currently only "SD-Xfinity") — the active site
 - Display uses "Dom. Republic" / "Belize" but **data keys remain "DR"/"BZ"** throughout goal lookups
 
 ### Auto-Corrections & Remapping
@@ -404,7 +404,7 @@ Overview | All Agents | Teams | Ranking | Daily (no By Site — removed)
 | Component | Purpose |
 |-----------|---------|
 | `ProgramSiteCompareCard` | DR vs BZ scorecard at top of program slides; only renders when both sites dial the program; includes winner-per-metric line |
-| `DailyBreakdownPanel` | Date drill-down with Programs/Agents toggle; agent mode aggregates multi-program agents with expandable per-program detail (`singleProgram` skips toggle, shows agents directly) |
+| `DailyBreakdownPanel` | Date drill-down with Programs/Agents toggle; agent mode aggregates multi-program agents with expandable per-program detail (`singleProgram` skips toggle, shows agents directly). **Product Code Columns picker** (TodayView-style, data-driven from the CSV) appends selected per-product columns (New Video, Tier Upgrades, XM types…) across day rows / weekly subtotals / TOTAL, inserted between `XM` and `% to Goal`. Defaults to none selected (table unchanged until used); selection persisted to `perf_intel_daily_product_cols_v1`. Shared by all 3 usages (Overview Daily, SiteDrilldown, program Slide). |
 | `GainsharePanel` | 5 metrics + hour gate with tier display |
 | `RankingAgentTray` | Expandable agent tray with campaign drill-down |
 | `SupervisorCard` | Teams tab card with sparklines and coaching insights |
@@ -426,6 +426,7 @@ Overview | All Agents | Teams | Ranking | Daily (no By Site — removed)
 | `computeFunderScaling(siteAgents, siteGoalRows)` | §7.5 corp SPH-scaled goal helper. Returns funders[] with per-campaign + scaled rollups + triggered flag. Single source of truth for the funder-gate rule across dashboard and gainshare export. |
 | `computeGainshareReport(agents, goalLookup, fiscalInfo, opts)` | Pure data function for gainshare PPTX export. Returns structured per-site report with attain/tiers/netBonus/totals/funders. Consumed by `addGainshareCoverSlide`, `addGainshareSiteTableSlide`, `addGainshareCampaignDetailsSlide`. |
 | `addGainshareSlideFooter(pres, slide, report)` | Common footer for every gainshare slide: data source line, GCS \| Performance Intel tagline, GCS logo bottom-right. |
+| `DAILY_PRODUCT_REGISTRY`, `DAILY_PRODUCT_DENYLIST`, `getDailyProductCols(rows)` | Drive the Daily Breakdown **Product Code Columns** picker. Registry maps CSV product column → `{label, category}` (categories: RGU / New Sales, Tier Upgrades, Mobile (XM), Other). `normalizeAgents` attaches a `products` map (`{csvCol: number}` of non-denylisted numeric columns) to each row; `buildDayStats` sums it per day, and rollups sum per week + TOTAL. `getDailyProductCols(rows)` returns the products present in the loaded rows (registry order first, then any unknown non-denylisted column under "Other" — so the picker **auto-grows** as columns are added to the Sheet, no code change). `NewData` and `XMLines` are denylisted (already shown as the HSD / XM columns). Sourced from the monthly CSV only — the live OTM feed is today-only (no date dimension), so granular product *history* can't come from it. |
 
 ---
 
@@ -456,6 +457,7 @@ Overview | All Agents | Teams | Ranking | Daily (no By Site — removed)
 | `perf_intel_hours_auto` | Auto-scale hours threshold by fiscal day |
 | `perf-intel-current-page` | Current navigation page `{ section, program? }` — restored on reload |
 | `today_raw_data` / `today_codes` / `today_last_refresh` | TodayView state |
+| `perf_intel_daily_product_cols_v1` | Daily Breakdown selected product columns (independent of TodayView's `today_selected_codes`) |
 
 ---
 
