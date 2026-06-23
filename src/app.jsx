@@ -638,6 +638,48 @@ const WEEK_BDAYS = { "52": 3, "4": 3, "5": 5, "6": 5, "7": 5, "8": 5, "9": 5, "1
 function weekLabel(wk) { return WEEK_LABELS[String(wk)] || `Wk ${wk}`; }
 function weekDays(wk)  { return WEEK_BDAYS[String(wk)] ?? 5; }
 
+// ── Daily Breakdown product columns (data-driven from the CSV) ────────────────
+// Known CSV product columns → picker label + category. NewData (HSD) and XMLines
+// (XM) are intentionally absent: they're already shown as the HSD / XM columns.
+const DAILY_PRODUCT_REGISTRY = [
+  { col: "NewVideo",        label: "New Video",            category: "RGU / New Sales" },
+  { col: "NewVoice",        label: "New Phone",            category: "RGU / New Sales" },
+  { col: "NewSecurity",     label: "New XH",               category: "RGU / New Sales" },
+  { col: "WifiPassSales",   label: "Wifi Pass",            category: "RGU / New Sales" },
+  { col: "xFiSales",        label: "xFi Complete",         category: "RGU / New Sales" },
+  { col: "StormReadySales", label: "Storm Ready",          category: "RGU / New Sales" },
+  { col: "UpgradeVideo",    label: "Tier Upgrade – Video", category: "Tier Upgrades" },
+  { col: "UpgradeData",     label: "Tier Upgrade – HSD",   category: "Tier Upgrades" },
+  { col: "UpgradeVoice",    label: "Tier Upgrade – Phone", category: "Tier Upgrades" },
+  { col: "UpgradeSecurity", label: "Tier Upgrade – XH",    category: "Tier Upgrades" },
+  { col: "XMUpgrade",       label: "Tier Upgrade – Mobile",category: "Tier Upgrades" },
+  { col: "DeviceUpgrade",   label: "Device Upgrade",       category: "Tier Upgrades" },
+  { col: "XMSales",         label: "XM Sales",             category: "Mobile (XM)" },
+  { col: "NewXM",           label: "New XM",               category: "Mobile (XM)" },
+  { col: "SavedXM",         label: "Saved XM",             category: "Mobile (XM)" },
+  { col: "AddedXM",         label: "Added XM",             category: "Mobile (XM)" },
+  { col: "XMPP",            label: "XM Protection Plan",   category: "Mobile (XM)" },
+];
+// Columns that are NOT pickable products: all metadata + the two already-shown
+// product columns (NewData→HSD, XMLines→XM). Anything else is treated as a product.
+const DAILY_PRODUCT_DENYLIST = new Set([
+  "Job","Date","Location","AgentTSR","AgentName","SupTSR","SupName","Dials","Goals",
+  "Contacts","Finals","NonFinals","Hours","AHTSec","CloseRate","GPH","CPH","DPH","CPS",
+  "Region","Week Number","SPH Goal","Goals number","Job Type","NewData","XMLines",
+]);
+const DAILY_REGISTRY_BY_COL = Object.fromEntries(DAILY_PRODUCT_REGISTRY.map(e => [e.col, e]));
+// Ordered list of product columns actually present in the loaded rows.
+function getDailyProductCols(rows) {
+  if (!rows || !rows.length) return [];
+  const present = new Set();
+  for (const r of rows) { if (r && r.products) for (const k in r.products) present.add(k); }
+  const known = DAILY_PRODUCT_REGISTRY.filter(e => present.has(e.col));
+  const knownCols = new Set(DAILY_PRODUCT_REGISTRY.map(e => e.col));
+  const unknown = [...present].filter(c => !knownCols.has(c))
+    .sort().map(c => ({ col: c, label: c, category: "Other" }));
+  return [...known, ...unknown];
+}
+
 function normalizeAgents(rows = []) {
   // ── Pass 1: normalize each row individually ─────────────────────────────────
   const normalized = rows
